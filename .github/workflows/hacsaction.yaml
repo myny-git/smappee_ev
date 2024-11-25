@@ -17,6 +17,7 @@ jobs:
         with:
           # Semantic version range syntax or exact version of a Python version
           python-version: '3.x'
+      - name: Display Python version
         run: python -c "import sys; print(sys.version)"
       - name: HACS Action
         uses: "hacs/action@main"
