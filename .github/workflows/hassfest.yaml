@@ -18,5 +18,7 @@ jobs:
             python-version: '3.x'
         - name: Display Python version
           run: python -c "import sys; print(sys.version)"
+        - name: Install libturbojpeg
+          run: sudo apt-get install -y libturbojpeg
         - uses: "actions/checkout@main"
         - uses: "home-assistant/actions/hassfest@master"
