@@ -13,4 +13,4 @@ jobs:
         - uses: "actions/checkout@main"
         - uses: "home-assistant/actions/hassfest@master"
         - name: Display Python version
-           run: python -c "import sys; print(sys.version)"
+          run: python -c "import sys; print(sys.version)"
