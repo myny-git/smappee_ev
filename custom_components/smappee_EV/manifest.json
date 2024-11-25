@@ -1,1 +1,10 @@
-
+{
+  "domain": "smappee_EV",
+  "name": "Smappee EV",
+  "codeowners": ["gvnuland"],
+  "dependencies": [],
+  "documentation": "https://www.example.com",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "requirements": []
+}
