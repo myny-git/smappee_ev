@@ -15,3 +15,5 @@ jobs:
         uses: "hacs/action@main"
         with:
           category: "integration"
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
