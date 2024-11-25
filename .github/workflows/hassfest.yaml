@@ -18,6 +18,8 @@ jobs:
           with:
           # Semantic version range syntax or exact version of a Python version
             python-version: '3.x'
+        - name: Install Pyspeex-noise
+          run: pip install pyspeex-noise
         - name: Display Python version
           run: python -c "import sys; print(sys.version)"
         - uses: "actions/checkout@main"
