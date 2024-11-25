@@ -23,4 +23,4 @@ jobs:
         - name: Display Python version
           run: python -c "import sys; print(sys.version)"
         - uses: "actions/checkout@main"
-        - uses: "home-assistant/actions/hassfest@main"
+        - uses: "home-assistant/actions/hassfest@master"
