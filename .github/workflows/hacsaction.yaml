@@ -11,9 +11,9 @@ jobs:
     name: HACS Action
     runs-on: "ubuntu-latest"
     steps:
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
       - name: HACS Action
         uses: "hacs/action@main"
         with:
           category: "integration"
-      - name: Display Python version
-        run: python -c "import sys; print(sys.version)"
