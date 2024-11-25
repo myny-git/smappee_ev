@@ -10,6 +10,8 @@ jobs:
   validate:
     runs-on: "ubuntu-latest"
     steps:
+        - name: Install libturbojpeg
+          run: sudo apt-get install -y libturbojpeg
         - name: Set up Python
           # This is the version of the action for setting up Python, not the Python version.
           uses: actions/setup-python@v5
@@ -18,7 +20,5 @@ jobs:
             python-version: '3.x'
         - name: Display Python version
           run: python -c "import sys; print(sys.version)"
-        - name: Install libturbojpeg
-          run: sudo apt-get install -y libturbojpeg
         - uses: "actions/checkout@main"
         - uses: "home-assistant/actions/hassfest@master"
