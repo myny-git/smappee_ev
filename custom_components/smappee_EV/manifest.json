@@ -3,9 +3,9 @@
   "name": "Smappee EV",
   "codeowners": [@gvnuland],
   "dependencies": [],
-  "documentation": "https://www.example.com",
+  "documentation": "https://github.com/gvnuland/Smappee_EV",
   "integration_type": "device",
   "iot_class": "cloud_polling",
-  "requirements": []
+  "requirements": ["requests"]
   "version": 1.0
 }
