@@ -1,7 +1,7 @@
 {
   "domain": "smappee_EV",
   "name": "Smappee EV",
-  "codeowners": [@gvnuland],
+  "codeowners": ["@gvnuland"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/gvnuland/Smappee_EV",
