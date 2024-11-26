@@ -1,4 +1,8 @@
 {
   "name": "smappee_EV",
   "content_in_root": false,
+  "homeassistant": "2024.1.0",
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "smappee_ev.zip"
 }
