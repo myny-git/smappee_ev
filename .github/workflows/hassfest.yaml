@@ -4,23 +4,11 @@ on:
   push:
   pull_request:
   schedule:
-    - cron:  "0 0 * * *"
+    - cron:  '0 0 * * *'
 
 jobs:
   validate:
     runs-on: "ubuntu-latest"
     steps:
-        - name: Install libturbojpeg
-          run: sudo apt-get install -y libturbojpeg
-        - name: Set up Python
-          # This is the version of the action for setting up Python, not the Python version.
-          uses: actions/setup-python@v5
-          with:
-          # Semantic version range syntax or exact version of a Python version
-            python-version: '3.x'
-        - name: Install Pyspeex-noise
-          run: pip install pyspeex-noise
-        - name: Display Python version
-          run: python -c "import sys; print(sys.version)"
-        - uses: "actions/checkout@main"
+        - uses: "actions/checkout@v4"
         - uses: "home-assistant/actions/hassfest@master"
