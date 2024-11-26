@@ -1,443 +1,277 @@
+"""ENTSO-e current electricity and gas price information service."""
+
 from __future__ import annotations
-from typing import Final
-from homeassistant.helpers.device_registry import DeviceInfo
-from .const import DOMAIN
+
 import logging
-import datetime
-_LOGGER: Final = logging.getLogger(__name__)
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any
 
 from homeassistant.components.sensor import (
+    DOMAIN,
+    RestoreSensor,
     SensorDeviceClass,
-    SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import PERCENTAGE
+from homeassistant.core import HassJob, HomeAssistant
+from homeassistant.helpers import event
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import utcnow
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    hub = hass.data[DOMAIN][config_entry.entry_id]
-    new_devices = []
-    new_devices.append(IPSensor(hub))
-    new_devices.append(SystimeSensor(hub))
-    new_devices.append(HeapSensor(hub))
-    new_devices.append(RecordcountSensor(hub))
-    new_devices.append(DBsizeSensor(hub))
-    new_devices.append(LitefsfreeSensor(hub))
-    new_devices.append(APWifiRssiSensor(hub))
-    new_devices.append(APStateSensor(hub))
-    new_devices.append(APRunStateSensor(hub))
-    new_devices.append(APWifiStatusSensor(hub))
-    new_devices.append(APWifiSssidSensor(hub))
-    for esls in hub.esls:
-        new_devices.append(LastSeenSensor(esls,hub))
-        new_devices.append(NextUpdateSensor(esls,hub))
-        new_devices.append(NextCheckinSensor(esls,hub))
-        new_devices.append(PendingSensor(esls,hub))
-        new_devices.append(WakeupReasonSensor(esls,hub))
-        new_devices.append(CapabilitiesSensor(esls,hub))
-        if (hub.data[esls]["lqi"] != 100 or hub.data[esls]["rssi"] != 100) and hub.data[esls]["hwtype"] != 224 and hub.data[esls]["hwtype"] != 240:
-            new_devices.append(TempSensor(esls,hub))
-            new_devices.append(RssiSensor(esls,hub))
-            new_devices.append(BatteryVoltageSensor(esls,hub))
-            new_devices.append(BatteryPercentageSensor(esls,hub))
-            new_devices.append(LqiSensor(esls,hub))
-    async_add_entities(new_devices)
-    
-class IPSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_ip"
-        self._attr_name = "AP IP"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")},
-            "configuration_url": "http://" + self._hub.data["ap"]["ip"],
-            "name": "OpenEpaperLink AP",
-            "model": "esp32",
-            "manufacturer": "OpenEpaperLink",
-        }
+from .const import (
+    ATTRIBUTION,
+    CONF_CURRENCY,
+    CONF_ENERGY_SCALE,
+    CONF_ENTITY_NAME,
+    DEFAULT_CURRENCY,
+    DEFAULT_ENERGY_SCALE,
+    DOMAIN,
+)
+from .coordinator import EntsoeCoordinator
 
-    def update(self) -> None:
-        self._attr_native_value = self._hub.data["ap"]["ip"]
+_LOGGER = logging.getLogger(__name__)
 
-class APWifiRssiSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_wifirssi"
-        self._attr_name = "AP Wifi RSSI"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = "dB"
-        self._attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        self._attr_native_value = self._hub.data["ap"]["rssi"]
-        
-class APStateSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_state"
-        self._attr_name = "AP State"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        lut = {0: "offline",1: "online",2: "flashing",3: "wait for reset",4: "requires power cycle",5: "failed",6: "coming online", 7: "no radio"}
-        self._attr_native_value = lut[self._hub.data["ap"]["apstate"]]
-        
-class APRunStateSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_runstate"
-        self._attr_name = "AP Run State"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        lut = {0: "stopped",1: "pause",2: "running",3: "init"}
-        self._attr_native_value = lut[self._hub.data["ap"]["runstate"]]
-        
-class APTempSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_aptemp"
-        self._attr_name = "AP Temp"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_device_class = SensorDeviceClass.TEMPERATURE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        temp = self._hub.data["ap"]["temp"]
-        if temp:
-            self._attr_native_value = round(temp,1)
-        
-class APWifiStatusSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_wifistate"
-        self._attr_name = "AP Wifi State"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        lut = {3: "connected"}
-        self._attr_native_value = lut[self._hub.data["ap"]["wifistatus"]]
-        
-class APWifiSssidSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_wifissid"
-        self._attr_name = "AP Wifi SSID"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        self._attr_native_value = self._hub.data["ap"]["wifissid"]
-        
-class SystimeSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_systime"
-        self._attr_name = "AP Systime"
-        self._hub = hub
-        self._attr_device_class = SensorDeviceClass.TIMESTAMP
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        self._attr_native_value = datetime.datetime.fromtimestamp(self._hub.data["ap"]["systime"], datetime.timezone.utc)
-        
-class HeapSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_heap"
-        self._attr_name = "AP free Heap"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = "kB"
-        self._attr_device_class = SensorDeviceClass.DATA_SIZE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        self._attr_native_value = round(int(self._hub.data["ap"]["heap"]) / 1024,1)
 
-class RecordcountSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_recordcount"
-        self._attr_name = "AP Recordcount"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        self._attr_native_value = self._hub.data["ap"]["recordcount"]
-        
-class DBsizeSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_dbsize"
-        self._attr_name = "AP DBSize"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = "kB"
-        self._attr_device_class = SensorDeviceClass.DATA_SIZE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        self._attr_native_value = round(int(self._hub.data["ap"]["dbsize"]) / 1024,1)
-        
-class LitefsfreeSensor(SensorEntity):
-    def __init__(self, hub):
-        self._attr_unique_id = "ap_littlefsfree"
-        self._attr_name = "AP Free Space"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = "kB"
-        self._attr_device_class = SensorDeviceClass.DATA_SIZE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, "ap")}
-        }
-    def update(self) -> None:
-        self._attr_native_value = round(int(self._hub.data["ap"]["littlefsfree"]) / 1024,1)
+@dataclass
+class EntsoeEntityDescription(SensorEntityDescription):
+    """Describes ENTSO-e sensor entity."""
 
-class TempSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_temp"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Temperature"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_device_class = SensorDeviceClass.TEMPERATURE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = self._hub.data[eslid]["temperature"]
+    value_fn: Callable[[dict], StateType] = None
 
-class RssiSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_rssi"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Rssi"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = "dB"
-        self._attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = self._hub.data[eslid]["rssi"]
-        
-class BatteryVoltageSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_batteryvoltage"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Battery Voltage"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = "V"
-        self._attr_device_class = SensorDeviceClass.VOLTAGE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = self._hub.data[eslid]["battery"] / 1000
-        
-class LqiSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_lqi"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Link Quality Index"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = ""
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = self._hub.data[eslid]["lqi"]
-        
-class ContentModeSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_contentmode"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Content Mode"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = ""
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = self._hub.data[eslid]["contentmode"]
-        
-class LastSeenSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_lastseen"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Last Seen"
-        self._hub = hub
-        self._attr_device_class = SensorDeviceClass.TIMESTAMP
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-            "name": self._hub.data[self._eslid]["tagname"],
-            "sw_version": hex(self._hub.data[self._eslid]["ver"]),
-            "serial_number": self._eslid,
-            "model": self._hub.data[self._eslid]["hwstring"],
-            "manufacturer": "OpenEpaperLink",
-            "via_device": (DOMAIN, "ap")
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = datetime.datetime.fromtimestamp(self._hub.data[eslid]["lastseen"],datetime.timezone.utc)
 
-class NextUpdateSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_nextupdate"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Next Update"
-        self._hub = hub
-        self._attr_device_class = SensorDeviceClass.TIMESTAMP
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = datetime.datetime.fromtimestamp(self._hub.data[eslid]["nextupdate"],datetime.timezone.utc)
+def sensor_descriptions(
+    currency: str, energy_scale: str
+) -> tuple[EntsoeEntityDescription, ...]:
+    """Construct EntsoeEntityDescription."""
+    return (
+        EntsoeEntityDescription(
+            key="current_price",
+            name="Current electricity market price",
+            native_unit_of_measurement=f"{currency}/{energy_scale}",
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:currency-eur",
+            suggested_display_precision=3,
+            value_fn=lambda coordinator: coordinator.get_current_hourprice(),
+        ),
+        EntsoeEntityDescription(
+            key="next_hour_price",
+            name="Next hour electricity market price",
+            native_unit_of_measurement=f"{currency}/{energy_scale}",
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:currency-eur",
+            suggested_display_precision=3,
+            value_fn=lambda coordinator: coordinator.get_next_hourprice(),
+        ),
+        EntsoeEntityDescription(
+            key="min_price",
+            name="Lowest energy price",
+            native_unit_of_measurement=f"{currency}/{energy_scale}",
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:currency-eur",
+            suggested_display_precision=3,
+            value_fn=lambda coordinator: coordinator.get_min_price(),
+        ),
+        EntsoeEntityDescription(
+            key="max_price",
+            name="Highest energy price",
+            native_unit_of_measurement=f"{currency}/{energy_scale}",
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:currency-eur",
+            suggested_display_precision=3,
+            value_fn=lambda coordinator: coordinator.get_max_price(),
+        ),
+        EntsoeEntityDescription(
+            key="avg_price",
+            name="Average electricity price",
+            native_unit_of_measurement=f"{currency}/{energy_scale}",
+            state_class=SensorStateClass.MEASUREMENT,
+            icon="mdi:currency-eur",
+            suggested_display_precision=3,
+            value_fn=lambda coordinator: coordinator.get_avg_price(),
+        ),
+        EntsoeEntityDescription(
+            key="percentage_of_max",
+            name="Current percentage of highest electricity price",
+            native_unit_of_measurement=f"{PERCENTAGE}",
+            icon="mdi:percent",
+            suggested_display_precision=1,
+            state_class=SensorStateClass.MEASUREMENT,
+            value_fn=lambda coordinator: coordinator.get_percentage_of_max(),
+        ),
+        EntsoeEntityDescription(
+            key="percentage_of_range",
+            name="Current percentage in electricity price range",
+            native_unit_of_measurement=f"{PERCENTAGE}",
+            icon="mdi:percent",
+            suggested_display_precision=1,
+            state_class=SensorStateClass.MEASUREMENT,
+            value_fn=lambda coordinator: coordinator.get_percentage_of_range(),
+        ),
+        EntsoeEntityDescription(
+            key="highest_price_time_today",
+            name="Time of highest price",
+            device_class=SensorDeviceClass.TIMESTAMP,
+            icon="mdi:clock",
+            value_fn=lambda coordinator: coordinator.get_max_time(),
+        ),
+        EntsoeEntityDescription(
+            key="lowest_price_time_today",
+            name="Time of lowest price",
+            device_class=SensorDeviceClass.TIMESTAMP,
+            icon="mdi:clock",
+            value_fn=lambda coordinator: coordinator.get_min_time(),
+        ),
+    )
 
-class NextCheckinSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_nextcheckin"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Next Checkin"
-        self._hub = hub
-        self._attr_device_class = SensorDeviceClass.TIMESTAMP
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = datetime.datetime.fromtimestamp(self._hub.data[eslid]["nextcheckin"],datetime.timezone.utc)
 
-class PendingSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_pending"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Pending Transfer"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = ""
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up ENTSO-e price sensor entries."""
+    entsoe_coordinator = hass.data[DOMAIN][config_entry.entry_id]
+
+    entities = []
+    entity = {}
+    for description in sensor_descriptions(
+        currency=config_entry.options.get(CONF_CURRENCY, DEFAULT_CURRENCY),
+        energy_scale=config_entry.options.get(CONF_ENERGY_SCALE, DEFAULT_ENERGY_SCALE),
+    ):
+        entity = description
+        entities.append(
+            EntsoeSensor(
+                entsoe_coordinator, entity, config_entry.options[CONF_ENTITY_NAME]
+            )
+        )
+
+    # Add an entity for each sensor type
+    async_add_entities(entities, True)
+
+
+class EntsoeSensor(CoordinatorEntity, RestoreSensor):
+    """Representation of a ENTSO-e sensor."""
+
+    _attr_attribution = ATTRIBUTION
+
+    def __init__(
+        self,
+        coordinator: EntsoeCoordinator,
+        description: EntsoeEntityDescription,
+        name: str = "",
+    ) -> None:
+        """Initialize the sensor."""
+        self.description = description
+        self.last_update_success = True
+
+        if name not in (None, ""):
+            # The Id used for addressing the entity in the ui, recorder history etc.
+            self.entity_id = f"{DOMAIN}.{name}_{description.name}"
+            # unique id in .storage file for ui configuration.
+            self._attr_unique_id = f"entsoe.{name}_{description.key}"
+            self._attr_name = f"{description.name} ({name})"
+        else:
+            self.entity_id = f"{DOMAIN}.{description.name}"
+            self._attr_unique_id = f"entsoe.{description.key}"
+            self._attr_name = f"{description.name}"
+
+        self.entity_description: EntsoeEntityDescription = description
+        self._attr_icon = description.icon
+        self._attr_suggested_display_precision = (
+            description.suggested_display_precision
+            if description.suggested_display_precision is not None
+            else 2
+        )
+
+        self._attr_device_info = DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={
+                (
+                    DOMAIN,
+                    f"{coordinator.config_entry.entry_id}_entsoe",
+                )
+            },
+            manufacturer="entso-e",
+            model="",
+            name="entso-e" + ((" (" + name + ")") if name != "" else ""),
+        )
+
+        self._update_job = HassJob(self.async_schedule_update_ha_state)
+        self._unsub_update = None
+
+        super().__init__(coordinator)
+
+    async def async_update(self) -> None:
+        """Get the latest data and updates the states."""
+        # _LOGGER.debug(f"update function for '{self.entity_id} called.'")
+
+        # Cancel the currently scheduled event if there is any
+        if self._unsub_update:
+            self._unsub_update()
+            self._unsub_update = None
+
+        # Schedule the next update at exactly the next whole hour sharp
+        self._unsub_update = event.async_track_point_in_utc_time(
+            self.hass,
+            self._update_job,
+            utcnow().replace(minute=0, second=0) + timedelta(hours=1),
+        )
+
+        # ensure the calculated data is refreshed by the changing hour
+        self.coordinator.sync_calculator()
+
+        if (
+            self.coordinator.data is not None
+            and self.coordinator.today_data_available()
+        ):
+            value: Any = None
+            try:
+                # _LOGGER.debug(f"current coordinator.data value: {self.coordinator.data}")
+                value = self.entity_description.value_fn(self.coordinator)
+
+                self._attr_native_value = value
+                self.last_update_success = True
+                _LOGGER.debug(f"updated '{self.entity_id}' to value: {value}")
+
+            except Exception as exc:
+                # No data available
+                self.last_update_success = False
+                _LOGGER.warning(
+                    f"Unable to update entity '{self.entity_id}', value: {value} and error: {exc}, data: {self.coordinator.data}"
+                )
+        else:
+            _LOGGER.warning(
+                f"Unable to update entity '{self.entity_id}': No valid data for today available."
+            )
+            self.last_update_success = False
+
+        try:
+            if (
+                self.description.key == "avg_price"
+                and self._attr_native_value is not None
+                and self.coordinator.data is not None
+            ):
+                self._attr_extra_state_attributes = {
+                    "prices_today": self.coordinator.get_prices_today(),
+                    "prices_tomorrow": self.coordinator.get_prices_tomorrow(),
+                    "prices": self.coordinator.get_prices(),
+                }
+                _LOGGER.debug(
+                    f"attributes updated: {self._attr_extra_state_attributes}"
+                )
+        except Exception as exc:
+            _LOGGER.warning(
+                f"Unable to update attributes of the average entity, error: {exc}, data: {self.coordinator.data}"
+            )
+
     @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = self._hub.data[eslid]["pending"]
-        
-class WakeupReasonSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_wakeupReason"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Wakeup Reason"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        lut = {0: "TIMED",1: "BOOT",2: "GPIO",3: "NFC",4: "BUTTON1",5: "BUTTON2",252: "FIRSTBOOT",253: "NETWORK_SCAN",254: "WDT_RESET"}
-        wr = lut[self._hub.data[eslid]["wakeupReason"]]
-        self._attr_native_value = wr
-        
-class CapabilitiesSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_capabilities"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Capabilities"
-        self._hub = hub
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        self._attr_native_value = self._hub.data[eslid]["capabilities"]
-        
-class BatteryPercentageSensor(SensorEntity):
-    def __init__(self, esls,hub):
-        self._attr_unique_id = f"{esls}_battery"
-        self._eslid = esls
-        self._attr_name = hub.data[esls]["tagname"] + " Battery"
-        self._hub = hub
-        self._attr_native_unit_of_measurement = "%"
-        self._attr_device_class = SensorDeviceClass.BATTERY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._eslid)},
-        }
-    def update(self) -> None:
-        eslid = self._eslid
-        bperc = ((self._hub.data[eslid]["battery"] / 1000) - 2.20) * 250
-        if bperc > 100:
-            bperc = 100
-        if bperc < 0:
-            bperc = 0
-        bperc = int(bperc)
-        self._attr_native_value = bperc
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.last_update_success
