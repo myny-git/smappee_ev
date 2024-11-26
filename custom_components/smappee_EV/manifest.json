@@ -5,7 +5,6 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/gvnuland/Smappee_EV",
-  "integration_type": "device",
   "iot_class": "cloud_polling",
   "requirements": ["requests"]
   "version": 1.0
