@@ -11,14 +11,6 @@ jobs:
     name: HACS Action
     runs-on: "ubuntu-latest"
     steps:
-      - name: Set up Python
-        # This is the version of the action for setting up Python, not the Python version.
-        uses: actions/setup-python@v5
-        with:
-          # Semantic version range syntax or exact version of a Python version
-          python-version: '3.x'
-      - name: Display Python version
-        run: python -c "import sys; print(sys.version)"
       - name: HACS Action
         uses: "hacs/action@main"
         with:
