@@ -1,17 +1,12 @@
-get_energy_prices:
+set_charging_mode:
+  description: "Set the charging mode of a connector."
   fields:
-    config_entry:
-      required: true
-      selector:
-        config_entry:
-          integration: entsoe
-    start:
-      required: false
-      example: "2023-01-01 00:00:00"
-      selector:
-        datetime:
-    end:
-      required: false
-      example: "2023-01-01 00:00:00"
-      selector:
-        datetime:
+    serial:
+      description: "Serial number of the charging station"
+      example: "6220001089"
+    mode:
+      description: "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, PAUSED)"
+      example: "NORMAL"
+    limit:
+      description: "Current limit in amperes"
+      example: 10
