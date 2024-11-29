@@ -4,22 +4,23 @@
       "smappee_connection": {
         "description": "Please add the Smappee Platform API key",
         "data": {
-          "api_key": "Your API Key",
-          "evserial": "The serial number of your charging point"
+          "client_id": "Your API client id",
+          "client_secret": "Your client secret",
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard"
         }
       }
     },
     "error": {
-      "already_configured": "Integration instance with the same name already exists"
+      "auth_failed": "Authorisation failed"
     }
   },
   "options": {
     "step": {
       "init": {
-        "description": "Please add the Smappee Platform API key",
+        "description": "Please add the serial of your Smappee EV",
         "data": {
-          "api_key": "Your API Key",
-          "evserial": "The serial number of your charging point"
+          "serial": "The serial number of your charging point"
         }
       }
     },
