@@ -1,0 +1,50 @@
+{
+  "config": {
+    "step": {
+      "smappee_connection": {
+        "description": "Please add the Smappee Platform API key",
+        "data": {
+          "api_key": "Your API Key",
+          "evserial": "The serial number of your charging point"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Integration instance with the same name already exists"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Please add the Smappee Platform API key",
+        "data": {
+          "api_key": "Your API Key",
+          "evserial": "The serial number of your charging point",
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Integration instance with the same name already exists"
+    }
+  },
+  "services": {
+    "set_charging_mode": {
+      "name": "Set charging mode",
+      "description": "Set the charging mode of a connector.",
+      "fields": {
+        "serial": {
+          "name": "Name",
+          "description": "serial number of charging station"
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, PAUSED)"
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Current limit in amperes"
+        }
+      }
+    }
+  }
+}
