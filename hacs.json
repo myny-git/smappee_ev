@@ -1,6 +1,6 @@
 {
   "name": "smappee_ev",
   "render_readme": true,
-  "zip_release": true,
-  "filename": "smappee_ev.zip"
+#  "zip_release": true,
+#  "filename": "smappee_ev.zip"
 }
