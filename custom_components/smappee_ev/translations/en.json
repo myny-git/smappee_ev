@@ -19,7 +19,7 @@
         "description": "Please add the Smappee Platform API key",
         "data": {
           "api_key": "Your API Key",
-          "evserial": "The serial number of your charging point",
+          "evserial": "The serial number of your charging point"
         }
       }
     },
