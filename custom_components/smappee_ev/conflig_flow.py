@@ -6,8 +6,8 @@ import homeassistant.helpers.config_validation as cv
 from .oauth import OAuth2Client  # Ensure this import works
 from .const import DOMAIN  # Ensure const.py exists with DOMAIN defined
 
-class SmappeeChargingProfilesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for smappee charging profiles."""
+class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for smappee ev"""
 
     VERSION = 1
 
@@ -34,15 +34,15 @@ class SmappeeChargingProfilesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
         user_input["access_token"] = tokens["access_token"]
         user_input["refresh_token"] = tokens["refresh_token"]
 
-        return self.async_create_entry(title="Smappee Charging Profiles", data=user_input)
+        return self.async_create_entry(title="Smappee EV", data=user_input)
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return SmappeeChargingProfilesOptionsFlowHandler(config_entry)
+        return smappee_evFlowHandler(config_entry)
 
 
-class SmappeeChargingProfilesOptionsFlowHandler(config_entries.OptionsFlow):
+class smappee_evFlowHandler(config_entries.OptionsFlow):
     """Handle the options flow."""
 
     def __init__(self, config_entry):
