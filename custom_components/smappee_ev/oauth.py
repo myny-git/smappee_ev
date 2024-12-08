@@ -10,7 +10,7 @@ class OAuth2Client:
     def __init__(self, data):
         self.client_id = data.get("client_id")
         self.client_secret = data.get("client_secret")
-        _LOGGER.info("Client_id: %s Secret: %s", self.client_id, self.client_secret)    
+        _LOGGER.debug("Client_id: %s Secret: %s", self.client_id, self.client_secret)    
 
         self.access_token = data.get("access_token")
         self.refresh_token = data.get("refresh_token")
@@ -20,7 +20,7 @@ class OAuth2Client:
         )
         self.username = data.get("username")
         self.password = data.get("password")
-        _LOGGER.info("Username: %s Password: %s", self.username, self.password)    
+        _LOGGER.debug("Username: %s Password: %s", self.username, self.password)    
 
         self.token_expires_at = None  # Store the expiry time
         self.max_refresh_attempts = 3
