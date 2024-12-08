@@ -15,7 +15,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         if user_input is None:
             return self.async_show_form(
-                step_id="smappee_connection",
+                step_id="user",
                 data_schema=vol.Schema({
                     vol.Required("client_id"): str,
                     vol.Required("client_secret"): str,
@@ -29,7 +29,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         tokens = await oauth_client.authenticate()
 
         if not tokens:
-            return self.async_show_form(step_id="smappee_connection", errors={"base": "auth_failed"})
+            return self.async_show_form(step_id="user", errors={"base": "auth_failed"})
 
         user_input["access_token"] = tokens["access_token"]
         user_input["refresh_token"] = tokens["refresh_token"]
