@@ -1,7 +1,7 @@
 {
   "config": {
     "step": {
-      "smappee_connection": {
+      "user": {
         "description": "Please add the Smappee Platform API key",
         "data": {
           "client_id": "Your API client id",
