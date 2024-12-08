@@ -23,7 +23,7 @@ class OAuth2Client:
 
     async def authenticate(self):
         """Authenticate using client credentials and return tokens."""
-        _LOGGER.debug(
+        _LOGGER.info(
             "Starting authentication with client_id: %s, username: %s",
             self.client_id,
             self.username,
@@ -39,11 +39,11 @@ class OAuth2Client:
                     "client_secret": self.client_secret,
                 }
 
-                _LOGGER.debug("Sending payload: %s", payload)
+                _LOGGER.info("Sending payload: %s", payload)
 
                 response = await session.post(self.token_url, data=payload)
 
-                _LOGGER.debug("Received response: %s", await response.text())
+                _LOGGER.info("Received response: %s", await response.text())
 
                 if response.status != 200:
                     _LOGGER.error(
@@ -52,7 +52,7 @@ class OAuth2Client:
                     return None
 
                 tokens = await response.json()
-                _LOGGER.debug("Received tokens: %s", tokens)
+                _LOGGER.info("Received tokens: %s", tokens)
 
                 if "access_token" in tokens:
                     self.access_token = tokens["access_token"]
@@ -71,7 +71,7 @@ class OAuth2Client:
 
     async def _refresh_token(self):
         """Refresh the access token if needed, with a retry limit."""
-        _LOGGER.debug("Refreshing access token using refresh token.")
+        _LOGGER.info("Refreshing access token using refresh token.")
 
         for attempt in range(self.max_refresh_attempts):
             try:
@@ -127,7 +127,7 @@ class OAuth2Client:
     async def ensure_token_valid(self):
         """Ensure the access token is valid, refreshing if necessary."""
         if not self.access_token or not self.token_expires_at or time.time() >= self.token_expires_at:
-            _LOGGER.debug("Access token expired or missing, refreshing...")
+            _LOGGER.info("Access token expired or missing, refreshing...")
             await self._refresh_token()
         else:
-            _LOGGER.debug("Access token is still valid until %s", self.token_expires_at)
+            _LOGGER.info("Access token is still valid until %s", self.token_expires_at)
