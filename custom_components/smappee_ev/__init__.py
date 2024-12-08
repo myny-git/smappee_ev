@@ -11,11 +11,15 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up Smappee Charging Profiles from a config entry."""
     
-    _LOGGER.debug("Setting up entry for Smappee Charging Profiles.")
+    _LOGGER.debug("Setting up entry for Smappee EV.")
     
     # Initialize the API client
+    _LOGGER.info("Init OAuth...")
     oauth_client = OAuth2Client(entry.data)
+    _LOGGER.info("Init OAuth...done")
+    _LOGGER.info("Init API...")    
     api_client = SmappeeApiClient(oauth_client)
+    _LOGGER.info("Init API...done")    
     
     # Store the API client in hass.data
     if DOMAIN not in hass.data:
