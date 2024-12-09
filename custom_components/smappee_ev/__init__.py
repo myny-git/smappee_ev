@@ -31,10 +31,6 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     
     # Register the service/action in Home Assistant
     _LOGGER.debug("Set charging mode in HA...")    
-    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
-    _LOGGER.debug("Set charging mode in HA...done")    
-
-    return True
     
     # Register the set_charging_mode service (now called actions in Home Assistant)
     async def set_charging_mode_service(call):
@@ -54,3 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
             _LOGGER.error(f"Failed to set charging mode for {serial}: {e}")
             raise  # Ensures that the exception is re-raised and properly logged
 
+    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
+    _LOGGER.debug("Set charging mode in HA...done")    
+
+    return True
