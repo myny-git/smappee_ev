@@ -20,12 +20,14 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     _LOGGER.debug("Init API...")    
     api_client = SmappeeApiClient(oauth_client)
     _LOGGER.debug("Init API...done")    
-    
+
+    _LOGGER.debug("Store API client in hass.data...") 
     # Store the API client in hass.data
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
     hass.data[DOMAIN][entry.entry_id] = api_client
+    _LOGGER.debug("Store API client in hass.data...done") 
     
     # Register the service/action in Home Assistant
     _LOGGER.debug("Set charging mode in HA...")    
