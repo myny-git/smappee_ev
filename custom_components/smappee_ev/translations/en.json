@@ -7,7 +7,8 @@
           "client_id": "Your API client id",
           "client_secret": "Your client secret",
           "username": "Your username on Smappee dashboard",
-          "password": "Your password on Smappee dashboard"
+          "password": "Your password on Smappee dashboard",
+          "serial": "The serial number of your charging point"
         }
       }
     },
@@ -17,9 +18,13 @@
   },
   "options": {
     "step": {
-      "init": {
-        "description": "Please add the serial of your Smappee EV",
+      "user": {
+        "description": "Please add the Smappee Platform API key",
         "data": {
+          "client_id": "Your API client id",
+          "client_secret": "Your client secret",
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard",
           "serial": "The serial number of your charging point"
         }
       }
