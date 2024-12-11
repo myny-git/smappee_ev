@@ -22,8 +22,7 @@ def async_setup_entry(
     config_entry: ConfigEntry, 
     async_add_entities: AddEntitiesCallback,
 ) -> None:    
-  
-     """Set up the Hello State component. """
+    """Set up the Hello State component. """
     # Get the text from the configuration. Use DEFAULT_TEXT if no name is provided.
     text = DEFAULT_TEXT
 
