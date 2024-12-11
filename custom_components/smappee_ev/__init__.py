@@ -30,7 +30,9 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     _LOGGER.debug("Store API client in hass.data...done") 
     
     # Register the service/action in Home Assistant
-    _LOGGER.debug("Set charging mode in HA...")    
+    _LOGGER.debug("Set charging mode in HA...")
+    
+    hass.states.set("smappee_ev.Hello_State", "Test GVN")
     
     # Register the set_charging_mode service (now called actions in Home Assistant)
     async def set_charging_mode_service(call):
