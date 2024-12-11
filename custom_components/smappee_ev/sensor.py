@@ -8,10 +8,9 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-
-DOMAIN = "smappee_ev"
 
 CONF_TEXT = "text"
 DEFAULT_TEXT = "No text!"
