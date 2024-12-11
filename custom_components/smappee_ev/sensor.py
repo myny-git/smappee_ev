@@ -17,7 +17,11 @@ CONF_TEXT = "text"
 DEFAULT_TEXT = "No text!"
 
 
-def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:    
+def async_setup_entry(
+    hass: HomeAssistant, 
+    config_entry: ConfigEntry, 
+    async_add_entities: AddEntitiesCallback,
+) -> None:    
   
      """Set up the Hello State component. """
     # Get the text from the configuration. Use DEFAULT_TEXT if no name is provided.
