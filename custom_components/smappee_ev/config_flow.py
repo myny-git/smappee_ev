@@ -53,8 +53,8 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id="init",
                 data_schema=vol.Schema({
-                    vol.Optional("serial", default=self.config_entry.data.get("serial")): str,
+                    vol.Required("serial", default=self.config_entry.data.get("serial")): str,
                 })
             )
 
-        return self.async_create_entry(title="", data=user_input)
+        return self.async_create_entry(title="Smappee EV", data=user_input)
