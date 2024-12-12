@@ -57,12 +57,12 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id="init",
                 data_schema=vol.Schema({
+                    vol.Required("client_id", default=self.config_entry.data.get("client_id")): str,
+                    vol.Required("client_secret", default=self.config_entry.data.get("client_secret")): str,
+                    vol.Required("username", default=self.config_entry.data.get("username")): str,
+                    vol.Required("password", default=self.config_entry.data.get("password")): str,
                     vol.Required("serial", default=self.config_entry.data.get("serial")): str,
                 })
             )
-        _LOGGER.debug("evFlowHandler_start...")
-        self.async_create_entry(title="Smappee EV", data=user_input)
-        _LOGGER.debug("evFlowHandler_start...done")
-        _LOGGER.debug(f"{serial}")
 
-        return True
+        return self.async_create_entry(title="Smappee EV", data=user_input)
