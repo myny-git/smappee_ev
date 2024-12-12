@@ -64,7 +64,11 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
                     vol.Required("serial", default=self.config_entry.data.get("serial")): str,
                 })
             )
+        _LOGGER.debug("Set unique ID...")
+        self.async_set_unique_id(user_input.get("serial"))
+        _LOGGER.debug("Set unique ID...done")
         self.config_entry.data["serial"] = user_input.get("serial")
         _LOGGER.debug(self.config_entry.data.get("client_id"))
         _LOGGER.debug(self.config_entry.data.get("serial"))
+
         return self.async_create_entry(title="Smappee EV", data=user_input)
