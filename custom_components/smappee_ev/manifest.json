@@ -2,7 +2,7 @@
   "domain": "smappee_ev",
   "name": "Smappee EV",
   "codeowners": ["@gvnuland"],
-  "config_flow": true,
+  "config_flow": false,
   "dependencies": [],
   "documentation": "https://github.com/gvnuland/Smappee_EV",
   "iot_class": "cloud_polling",
