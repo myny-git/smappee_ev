@@ -21,6 +21,10 @@
       "init": {
         "description": "Please add the serial of your Smappee EV",
         "data": {
+          "client_id": "Your API client id",
+          "client_secret": "Your client secret",
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard",
           "serial": "The serial number of your charging point"
         }
       }
