@@ -6,6 +6,10 @@ import homeassistant.helpers.config_validation as cv
 from .oauth import OAuth2Client  # Ensure this import works
 from .const import DOMAIN  # Ensure const.py exists with DOMAIN defined
 
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+
 class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for smappee ev"""
 
@@ -56,5 +60,5 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
                     vol.Required("serial", default=self.config_entry.data.get("serial")): str,
                 })
             )
-
+        _LOGGER.debug("evFlowHandler_start...")
         return self.async_create_entry(title="Smappee EV", data=user_input)
