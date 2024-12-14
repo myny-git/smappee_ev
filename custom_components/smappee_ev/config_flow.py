@@ -64,7 +64,8 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
                     vol.Required("serial", default=self.config_entry.data.get("serial")): str,
                 })
             )
-        _LOGGER.debug("Serial: ".user_input.get("serial"))
+        _LOGGER.debug("Serial: ")
+        _LOGGER.debug(user_input.get("serial"))
         #self.config_entry.data["serial"] = user_input.get("serial")
 
         return self.async_create_entry(title="Smappee EV", data=user_input)
