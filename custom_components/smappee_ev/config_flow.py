@@ -67,6 +67,5 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug("Serial: ")
         _LOGGER.debug(user_input.get("serial"))
         #self.config_entry.data["serial"] = user_input.get("serial")
-        return True
         
-        #return self.async_create_entry(title="Smappee EV", data=user_input)
+        return self.async_create_entry(title="Smappee EV", data=user_input)
