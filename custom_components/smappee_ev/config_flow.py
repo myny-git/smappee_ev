@@ -24,7 +24,8 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required("client_id"): str,
                     vol.Required("client_secret"): str,
                     vol.Required("username"): str,
-                    vol.Required("password"): str
+                    vol.Required("password"): str,
+                    vol.Required("serial"): str
                 })
             )
 
