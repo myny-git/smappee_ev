@@ -67,7 +67,7 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
         #_LOGGER.debug("Set unique ID...")
         #self.async_set_unique_id(user_input.get("serial"))
         #_LOGGER.debug("Set unique ID...done")
-        hass.states.set("smappee_ev.Hello_State", user_input.get("serial"))
+        self.hass.states.set("smappee_ev.Hello_State", user_input.get("serial"))
         #self.config_entry.data["serial"] = user_input.get("serial")
 
         return True
