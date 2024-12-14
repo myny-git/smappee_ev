@@ -11,8 +11,8 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up Smappee Charging Profiles from a config entry."""
     
-    _LOGGER.debug("Setting up entry for Smappee EV.")
-    
+    _LOGGER.debug("Setting up entry for Smappee EV. Serial: ")
+    _LOGGER.debug(entry.data.get("serial"))
     # Initialize the API client
     _LOGGER.debug("Init OAuth...")
     oauth_client = OAuth2Client(entry.data)
@@ -51,7 +51,6 @@ async def async_setup_entry(hass: HomeAssistant, entry):
             raise  # Ensures that the exception is re-raised and properly logged
     
     _LOGGER.debug("Set charging mode in HA2...")
-    hass.states.set("smappee_ev.Hello_State", "TEST GVN")
     hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
     _LOGGER.debug("Set charging mode in HA...done")    
 
