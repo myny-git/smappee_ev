@@ -7,6 +7,15 @@ from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, C
 
 _LOGGER = logging.getLogger(__name__)
 
+def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Setup our skeleton component."""
+    _LOGGER.debug("Setting up entry for Smappee EV. DUMMY !!!...")
+    # States are in the format DOMAIN.OBJECT_ID.
+    hass.states.async_set('smappee_ev.Hello_World', 'Works!')
+    _LOGGER.debug("Setting up entry for Smappee EV. DUMMY !!!...done")
+    
+    # Return boolean to indicate that initialization was successfully.
+    return True
 
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up Smappee Charging Profiles from a config entry."""
