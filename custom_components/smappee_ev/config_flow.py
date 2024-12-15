@@ -4,7 +4,7 @@ from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 
 from .oauth import OAuth2Client  # Ensure this import works
-from .const import DOMAIN  # Ensure const.py exists with DOMAIN defined
+from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
 import logging
 
@@ -21,11 +21,11 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(
                 step_id="user",
                 data_schema=vol.Schema({
-                    vol.Required("client_id"): str,
-                    vol.Required("client_secret"): str,
-                    vol.Required("username"): str,
-                    vol.Required("password"): str,
-                    vol.Required("serial"): str
+                    vol.Required(CONF_CLIENT_ID): str,
+                    vol.Required(CONF_CLIENT_SECRET): str,
+                    vol.Required(CONF_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str,
+                    vol.Required(CONF_SERIAL): str
                 })
             )
 
@@ -58,15 +58,15 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id="init",
                 data_schema=vol.Schema({
-                    vol.Required("client_id", default=self.config_entry.data.get("client_id")): str,
-                    vol.Required("client_secret", default=self.config_entry.data.get("client_secret")): str,
-                    vol.Required("username", default=self.config_entry.data.get("username")): str,
-                    vol.Required("password", default=self.config_entry.data.get("password")): str,
-                    vol.Required("serial", default=self.config_entry.data.get("serial")): str,
+                    vol.Required("client_id", default=self.config_entry.data.get(CONF_CLIENT_ID)): str,
+                    vol.Required("client_secret", default=self.config_entry.data.get(CONF_CLIENT_SECRET)): str,
+                    vol.Required("username", default=self.config_entry.data.get(CONF_USERNAME)): str,
+                    vol.Required("password", default=self.config_entry.data.get(CONF_PASSWORD)): str,
+                    vol.Required("serial", default=self.config_entry.data.get(CONF_SERIAL)): str,
                 })
             )
         _LOGGER.debug("Serial: ")
-        _LOGGER.debug(user_input.get("serial"))
-        #self.config_entry.data["serial"] = user_input.get("serial")
+        _LOGGER.debug(user_input.get(CONF_SERIAL))
+        #self.config_entry.data[CONF_SERIAL] = user_input.get(CONF_SERIAL)
         
         return self.async_create_entry(title="Smappee EV", data=user_input)
