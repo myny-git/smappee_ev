@@ -30,7 +30,7 @@ class SmappeeChargerCoordinator(DataUpdateCoordinator):
         self.oauth_client = OAuth2Client(config_entry.data)
         _LOGGER.debug("Init OAuth...done")
         _LOGGER.debug("Init API...")    
-        self.api_client = SmappeeApiClient(self.oauth_client)
+        self._smappee = SmappeeApiClient(self.oauth_client)
         _LOGGER.debug("Init API...done")    
       
         self.scan_interval: int = 30
@@ -47,32 +47,32 @@ class SmappeeChargerCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         await self.async_check_and_refresh_token()
-        self.api_client.update()
+        self._smappee.update()
         return self.data
 
     async def async_update_all(self) -> None:
         await self.async_check_and_refresh_token()
         await self.hass.async_add_executor_job(
-            self.api_client.update_all
+            self._smappee.update_all
         )
         await self.async_refresh()
 
     async def async_force_update_all(self) -> None:
         await self.async_check_and_refresh_token()
         await self.hass.async_add_executor_job(
-            self.api_client.force_update_all
+            self._smappee.force_update_all
         )
         await self.async_refresh()
 
     async def async_check_and_refresh_token(self):
         await self.hass.async_add_executor_job(
-            self.api_client.check_and_refresh_token
+            self._smappee.check_and_refresh_token
         )
 
     async def async_await_action_and_refresh(self, chargingmode, action_id):
         try:
             await self.hass.async_add_executor_job(
-                self.api_client.check_action_status,
+                self._smappee.check_action_status,
                 chargingmode,
                 action_id,
                 True,
@@ -84,7 +84,7 @@ class SmappeeChargerCoordinator(DataUpdateCoordinator):
     async def async_lock_vehicle(self, chargingmode: str):
         await self.async_check_and_refresh_token()
         action_id = await self.hass.async_add_executor_job(
-            self.api_client.chargingmode, chargingmode
+            self._smappee.chargingmode, chargingmode
         )
         self.hass.async_create_task(
             self.async_await_action_and_refresh(chargingmode, action_id)
