@@ -63,7 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
             raise  # Ensures that the exception is re-raised and properly logged
     
     _LOGGER.debug("Set charging mode in HA2...")
-    hass.states.async_set('smappee_ev.Hello_World', 'Works!')
+    hass.states.set('smappee_ev.Hello_World', 'Works!')
 #    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
     _LOGGER.debug("Set charging mode in HA...done")    
 
