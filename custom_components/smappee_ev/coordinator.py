@@ -4,16 +4,16 @@ import logging
 
 from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
-from .const import DOMAIN
+from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    "client_id",
-    "client_secret",
-    "username",
-    "password",
-    "serial",
+    CONF_CLIENT_ID,
+    CONF_CLIENT_SECRET,
+    CONF_USERNAME,
+    CONF_PASSWORD,
+    CONF_SERIAL,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
