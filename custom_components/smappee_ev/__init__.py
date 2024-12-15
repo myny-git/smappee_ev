@@ -1,5 +1,6 @@
 import logging
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType
 
 from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
