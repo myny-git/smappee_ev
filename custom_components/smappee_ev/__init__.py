@@ -1,4 +1,6 @@
 import logging
+import asyncio
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
@@ -8,6 +10,7 @@ from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, C
 
 _LOGGER = logging.getLogger(__name__)
 
+@asyncio.coroutine
 def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Setup our skeleton component."""
     _LOGGER.debug("Setting up entry for Smappee EV. DUMMY !!!...")
