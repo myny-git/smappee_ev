@@ -6,6 +6,7 @@ from homeassistant.helpers.typing import ConfigType
 from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
 from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
+from homeassistant.const import Platform
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR]
