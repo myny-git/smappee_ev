@@ -64,7 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     
     _LOGGER.debug("Set charging mode in HA2...")
     hass.states.async_set('smappee_ev.Hello_World', 'Works!')
-    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
+#    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
     _LOGGER.debug("Set charging mode in HA...done")    
 
     return True
