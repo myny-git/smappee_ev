@@ -49,6 +49,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         except Exception as e:
             _LOGGER.error(f"Failed to set charging mode for {serial}: {e}")
             raise  # Ensures that the exception is re-raised and properly logged
-    
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+  
 #    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
     return True
