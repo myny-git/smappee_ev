@@ -1,7 +1,7 @@
 import logging
 
 from .coordinator import SmappeeChargerCoordinator
-from .const import DOMAIN
+from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 #from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -19,6 +19,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:    
     _LOGGER.debug("Sensor async_setup_entry init...")
+    _LOGGER.debug(config_entry.data.get(CONF_SERIAL))
     new_devices = []
     new_devices.append(ChargingPointSensor(config_entry))
     if new_devices:
@@ -34,7 +35,7 @@ class SensorBase(Entity):
 
     @property
     def device_info(self):
-        return {"identifiers": {(DOMAIN, self._config_entry.get(CONF_SERIAL))}}
+        return {"identifiers": {(DOMAIN, self._config_entry.data.get(CONF_SERIAL))}}
 
     @property
     def available(self) -> bool:
@@ -42,11 +43,11 @@ class SensorBase(Entity):
 
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
-        self._smappee.register_callback(self.async_write_ha_state)
+        self._config_entry.register_callback(self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self):
         # The opposite of async_added_to_hass. Remove any registered call backs here.
-        self._smappee.remove_callback(self.async_write_ha_state)
+        self._config_entry.remove_callback(self.async_write_ha_state)
 
 class ChargingPointSensor(SensorBase):
     device_class = SensorDeviceClass.ENERGY
@@ -56,8 +57,8 @@ class ChargingPointSensor(SensorBase):
         """Initialize the sensor."""
         _LOGGER.debug("ChargingPointSensor init...")
         super().__init__(config_entry)
-        self._attr_unique_id = f"{config_entry.get(CONF_SERIAL)}_counter"
-        self._attr_name = f"{config_entry.get(CONF_SERIAL)} Charging point counter"
+        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
+        self._attr_name = f"{config_entry.data.get(CONF_SERIAL)} Charging point counter"
         self._state = random.randint(0, 100)
         _LOGGER.debug("ChargingPointSensor init...done")
 
