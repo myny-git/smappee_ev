@@ -1,6 +1,6 @@
 import logging
 
-from . import SmappeeChargerCoordinator
+from .coordinator import SmappeeChargerCoordinator
 from .const import DOMAIN
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 _LOGGER = logging.getLogger(__name__)
 
-def async_setup_entry(
+async def async_setup_entry(
     hass: HomeAssistant, 
     config_entry: ConfigEntry, 
     async_add_entities: AddEntitiesCallback,
