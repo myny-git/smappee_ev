@@ -20,7 +20,7 @@ async def async_setup_entry(
 ) -> None:    
     _LOGGER.debug("Sensor async_setup_entry init...")
     new_devices = []
-    new_devices.append(ChargingPointSensor(hass, config_entry.runtime_data.smappee))
+    new_devices.append(ChargingPointSensor(hass, config_entry))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
@@ -52,9 +52,10 @@ class ChargingPointSensor(SensorBase):
     device_class = SensorDeviceClass.ENERGY
     _attr_unit_of_measurement = "kWh"
 
-    def __init__(self, smappee):
+    def __init__(self, config_entry):
         """Initialize the sensor."""
         _LOGGER.debug("ChargingPointSensor init...")
+        smappee = config_entry.runtime_data.smappee
         super().__init__(smappee)
         self._attr_unique_id = f"{self._smappee.serial}_counter"
         self._attr_name = f"{self._smappee.name} Charging point counter"
