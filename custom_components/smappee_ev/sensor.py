@@ -29,16 +29,16 @@ async def async_setup_entry(
 class SensorBase(Entity):
     should_poll = True
 
-    def __init__(self, smappee):
-        self._smappee = smappee
+    def __init__(self, config_entry):
+        self._config_entry = config_entry
 
     @property
     def device_info(self):
-        return {"identifiers": {(DOMAIN, self._smappee.serial)}}
+        return {"identifiers": {(DOMAIN, self._config_entry.get(CONF_SERIAL))}}
 
     @property
     def available(self) -> bool:
-        return self._smappee.online
+        return self._config_entry.online
 
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
@@ -56,12 +56,12 @@ class ChargingPointSensor(SensorBase):
         """Initialize the sensor."""
         _LOGGER.debug("ChargingPointSensor init...")
         super().__init__(config_entry)
-        self._attr_unique_id = f"{self._smappee.serial}_counter"
-        self._attr_name = f"{self._smappee.name} Charging point counter"
+        self._attr_unique_id = f"{self._config_entry.get(CONF_SERIAL)}_counter"
+        self._attr_name = f"{self._config_entry.get(CONF_SERIAL)} Charging point counter"
         self._state = random.randint(0, 100)
         _LOGGER.debug("ChargingPointSensor init...done")
 
     @property
     def state(self):
         """Return the state of the sensor."""
-        return self._smappee.cp_counter
+        return self._config_entry.cp_counter
