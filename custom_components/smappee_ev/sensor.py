@@ -20,7 +20,7 @@ async def async_setup_entry(
 ) -> None:    
     _LOGGER.debug("Sensor async_setup_entry init...")
     new_devices = []
-    new_devices.append(ChargingPointSensor(config_entry.runtime_data.smappee))
+    new_devices.append(ChargingPointSensor(hass, config_entry.runtime_data.smappee))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
