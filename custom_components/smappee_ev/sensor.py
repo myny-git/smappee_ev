@@ -56,8 +56,8 @@ class ChargingPointSensor(SensorBase):
         """Initialize the sensor."""
         _LOGGER.debug("ChargingPointSensor init...")
         super().__init__(config_entry)
-        self._attr_unique_id = f"{self._config_entry.get(CONF_SERIAL)}_counter"
-        self._attr_name = f"{self._config_entry.get(CONF_SERIAL)} Charging point counter"
+        self._attr_unique_id = f"{config_entry.get(CONF_SERIAL)}_counter"
+        self._attr_name = f"{config_entry.get(CONF_SERIAL)} Charging point counter"
         self._state = random.randint(0, 100)
         _LOGGER.debug("ChargingPointSensor init...done")
 
