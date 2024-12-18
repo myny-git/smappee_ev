@@ -40,7 +40,7 @@ class SensorBase(Entity):
 
     @property
     def available(self) -> bool:
-        return self._config_entry.online
+        return True
 
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
@@ -60,10 +60,10 @@ class ChargingPointSensor(SensorBase):
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
         self._attr_name = f"{config_entry.data.get(CONF_SERIAL)} Charging point counter"
-        self._state = random.randint(0, 100)
+        self.native_value = random.randint(0, 100)
         _LOGGER.debug("ChargingPointSensor init...done")
 
     @property
     def state(self):
         """Return the state of the sensor."""
-        return self._config_entry.cp_counter
+        return random.randint(0,100)
