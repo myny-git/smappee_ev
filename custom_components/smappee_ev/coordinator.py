@@ -27,8 +27,8 @@ class SmappeeChargerCoordinator(DataUpdateCoordinator):
         self._smappee = SmappeeApiClient(self.oauth_client)
         _LOGGER.debug("Init API...done")    
       
-        self.scan_interval: int = 30
-        self.force_refresh_interval: int = 60
+        self.scan_interval: int = 5
+        self.force_refresh_interval: int = 10
       
         super().__init__(
             hass,
