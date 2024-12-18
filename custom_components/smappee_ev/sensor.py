@@ -59,7 +59,7 @@ class ChargingPointSensor(SensorBase):
         _LOGGER.debug("ChargingPointSensor init...")
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
-        self._attr_name = f"{config_entry.data.get(CONF_SERIAL)} Charging point counter"
+        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
         _LOGGER.debug("ChargingPointSensor init...done")
 
     @property
