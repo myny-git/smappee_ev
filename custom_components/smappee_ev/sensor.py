@@ -60,7 +60,6 @@ class ChargingPointSensor(SensorBase):
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
         self._attr_name = f"{config_entry.data.get(CONF_SERIAL)} Charging point counter"
-        self.native_value = random.randint(0, 100)
         _LOGGER.debug("ChargingPointSensor init...done")
 
     @property
