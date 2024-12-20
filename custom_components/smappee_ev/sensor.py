@@ -1,7 +1,7 @@
 import logging
 import random
 
-from .coordinator import SmappeeChargerCoordinator
+#from .coordinator import SmappeeChargerCoordinator
 from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
