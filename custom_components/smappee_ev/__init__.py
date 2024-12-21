@@ -21,7 +21,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     oauth_client = OAuth2Client(entry.data)
     _LOGGER.debug("Init OAuth...done")
     _LOGGER.debug("Init API...")    
-    api_client = SmappeeApiClient(oauth_client)
+    api_client = SmappeeApiClient(oauth_client, entry.data.get(CONF_SERIAL))
     _LOGGER.debug("Init API...done")    
 
     _LOGGER.debug("Store API client in hass.data...") 
