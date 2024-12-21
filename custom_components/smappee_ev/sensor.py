@@ -60,9 +60,12 @@ class ChargingPointSensor(SensorBase):
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
+        # Initialize the API client
+        self.oauth_client = OAuth2Client(config_entry.data)
+        self.api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
         _LOGGER.debug("ChargingPointSensor init...done")
 
     @property
     def state(self):
         """Return the state of the sensor."""
-        return random.randint(0,100)
+        return self.api_client.fetchLatestSessionCounter()
