@@ -29,29 +29,30 @@ class SmappeeApiClient:
     def fetchLatestSessionCounter(self):
         """Set the charging mode for the given serial number and connector."""
         # Ensure token is refreshed if needed
-        await self.oauth_client.ensure_token_valid()
+        return 15
+#        await self.oauth_client.ensure_token_valid()
 
-        url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={midnight.timestamp()}"
-        headers = {
-            "Authorization": f"Bearer {self.oauth_client.access_token}",
-            "Content-Type": "application/json",
-        }
-        _LOGGER.debug(f"Sending request to {url}")
+#        url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={midnight.timestamp()}"
+#        headers = {
+#            "Authorization": f"Bearer {self.oauth_client.access_token}",
+#            "Content-Type": "application/json",
+#        }
+#        _LOGGER.debug(f"Sending request to {url}")
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                response = await session.get(url, headers=headers)
-                if response.status != 200:
-                    if response.status == 401:
-                        raise Exception("Token expired")
-                    error_message = await response.text()
-                    _LOGGER.error(f"Failed to set charging mode: {error_message}")
-                    raise Exception(f"Error setting charging mode: {error_message}")
-                _LOGGER.debug(response.text())
-                return 10
-        except Exception as e:
-            _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
-            return 0
+#        try:
+#            async with aiohttp.ClientSession() as session:
+#                response = await session.get(url, headers=headers)
+#                if response.status != 200:
+#                    if response.status == 401:
+#                        raise Exception("Token expired")
+#                    error_message = await response.text()
+#                    _LOGGER.error(f"Failed to set charging mode: {error_message}")
+#                    raise Exception(f"Error setting charging mode: {error_message}")
+#                _LOGGER.debug(response.text())
+#                return 10
+#        except Exception as e:
+#            _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
+#            raise
     
     async def set_charging_mode(self, serial, mode, limit):
         """Set the charging mode for the given serial number and connector."""
