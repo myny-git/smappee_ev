@@ -46,11 +46,11 @@ class SensorBase(Entity):
 
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
-        self._config_entry.register_callback(self.async_write_ha_state)
+        super().register_callback(self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self):
         # The opposite of async_added_to_hass. Remove any registered call backs here.
-        self._config_entry.remove_callback(self.async_write_ha_state)
+        super().remove_callback(self.async_write_ha_state)
 
 class ChargingPointSensor(SensorBase):
     device_class = SensorDeviceClass.ENERGY
