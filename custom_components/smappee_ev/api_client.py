@@ -29,8 +29,8 @@ class SmappeeApiClient:
     def fetchLatestSessionCounter(self):
         """Set the charging mode for the given serial number and connector."""
         # Ensure token is refreshed if needed
-        return 15
-#        await self.oauth_client.ensure_token_valid()
+        await self.oauth_client.ensure_token_valid()
+        return 16
 
 #        url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={midnight.timestamp()}"
 #        headers = {
