@@ -26,7 +26,7 @@ class SmappeeApiClient:
     async def check_action_status():
         return True
 
-    async def fetchLatestSessionCounter(self):
+    def fetchLatestSessionCounter(self):
         """Set the charging mode for the given serial number and connector."""
         # Ensure token is refreshed if needed
         await self.oauth_client.ensure_token_valid()
@@ -51,7 +51,7 @@ class SmappeeApiClient:
                 return 10
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
-            raise
+            return 0
     
     async def set_charging_mode(self, serial, mode, limit):
         """Set the charging mode for the given serial number and connector."""
