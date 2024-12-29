@@ -34,9 +34,7 @@ class SensorBase(Entity):
     should_poll = True
 
     def __init__(self, config_entry):
-        super().__init__(config_entry)
         self._config_entry = config_entry
-        self._callbacks = set()
         
     @property
     def device_info(self):
