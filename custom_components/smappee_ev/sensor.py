@@ -73,4 +73,5 @@ class ChargingPointSensor(SensorBase):
     @property
     async def state(self):
         """Return the state of the sensor."""
-        return self.api_client.fetchLatestSessionCounter()
+        #return self.api_client.fetchLatestSessionCounter()
+        return 1
