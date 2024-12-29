@@ -34,6 +34,7 @@ class SensorBase(Entity):
     should_poll = True
 
     def __init__(self, config_entry):
+        super().__init__(config_entry)
         self._config_entry = config_entry
         self._callbacks = set()
         
@@ -70,6 +71,8 @@ class SensorBase(Entity):
     async def async_will_remove_from_hass(self):
         # The opposite of async_added_to_hass. Remove any registered call backs here.
         self.remove_callback(self.async_write_ha_state)
+
+
 
 class ChargingPointSensor(SensorBase):
     device_class = SensorDeviceClass.ENERGY
