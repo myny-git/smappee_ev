@@ -54,11 +54,13 @@ class SensorBase(Entity):
 
     def register_callback(self, callback: callable[[], None]) -> None:
         """Register callback, called when Roller changes state."""
-        self._callbacks.add(callback)
+        #self._callbacks.add(callback)
+        return True
 
     def remove_callback(self, callback: callable[[], None]) -> None:
         """Remove previously registered callback."""
-        self._callbacks.discard(callback)
+        #self._callbacks.discard(callback)
+        return True
 
     async def publish_updates(self) -> None:
         for callback in self._callbacks:
