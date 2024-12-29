@@ -1,6 +1,7 @@
 import aiohttp
 import logging
 import random
+import async_timeout
 
 _LOGGER = logging.getLogger(__name__)
 
