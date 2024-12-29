@@ -35,7 +35,8 @@ class SensorBase(Entity):
 
     def __init__(self, config_entry):
         self._config_entry = config_entry
-
+        self._callbacks = set()
+        
     @property
     def device_info(self):
         return {"identifiers": {(DOMAIN, self._config_entry.data.get(CONF_SERIAL))}}
@@ -44,13 +45,31 @@ class SensorBase(Entity):
     def available(self) -> bool:
         return True
 
+    async def delayed_update(self) -> None:
+        """Publish updates, with a random delay to emulate interaction with device."""
+        await asyncio.sleep(random.randint(1, 10))
+        self.moving = 0
+        await self.publish_updates()
+
+    def register_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback, called when Roller changes state."""
+        self._callbacks.add(callback)
+
+    def remove_callback(self, callback: Callable[[], None]) -> None:
+        """Remove previously registered callback."""
+        self._callbacks.discard(callback)
+
+    async def publish_updates(self) -> None:
+        for callback in self._callbacks:
+            callback()
+
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
-        super().register_callback(self.async_write_ha_state)
+        self.register_callback(self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self):
         # The opposite of async_added_to_hass. Remove any registered call backs here.
-        super().remove_callback(self.async_write_ha_state)
+        self.remove_callback(self.async_write_ha_state)
 
 class ChargingPointSensor(SensorBase):
     device_class = SensorDeviceClass.ENERGY
