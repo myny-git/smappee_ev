@@ -27,6 +27,7 @@ class SmappeeApiClient:
     async def check_action_status():
         return True
 
+    @property
     def fetchLatestSessionCounter(self) -> int:
         """Set the charging mode for the given serial number and connector."""
         # Ensure token is refreshed if needed
