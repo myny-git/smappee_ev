@@ -42,10 +42,8 @@ class SmappeeApiClient:
 
         try:
             async with async_timeout.timeout(10):
-                result = await hass.async_add_executor_job(syncUpdate)
-                thisdict = result
-                # Filling the dict with all the data
-                return thisdict
+            result = await hass.async_add_executor_job(syncUpdate)
+            return result
         except Exception as e:
             raise UpdateFailed("Error communicating with API")
         
