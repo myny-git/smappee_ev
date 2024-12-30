@@ -23,7 +23,7 @@ class SmappeeApiClient:
     def serial_id(self) -> str:
         return self.serial
 
-    async def enable(self) -> None:
+    def enable(self) -> None:
         self._latestSessionCounter = random.randint(1, 10)   
         _LOGGER.info("SmappeeApiClient enable...")
         await self.publish_updates()
