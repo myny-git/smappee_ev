@@ -31,23 +31,9 @@ class SmappeeApiClient:
     @property
     def fetchLatestSessionCounter(self) -> int:
         """Set the charging mode for the given serial number and connector."""
-
-        def syncUpdate():
-            try:
-                # Ensure token is refreshed if needed
-                await self.oauth_client.ensure_token_valid()
-                return random.randint(20, 100)
-            except Exception as e:
-                raise UpdateFailed("Error communicating with API")
-
-        try:
-            async with async_timeout.timeout(10):
-            result = await hass.async_add_executor_job(syncUpdate)
-            return result
-        except Exception as e:
-            raise UpdateFailed("Error communicating with API")
-        
-        
+        # Ensure token is refreshed if needed
+        await self.oauth_client.ensure_token_valid()
+        return random.randint(20, 100)
         
 #        url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={midnight.timestamp()}"
 #        headers = {
