@@ -15,6 +15,7 @@ class SmappeeApiClient:
         self.serial = serial
         self._callbacks = set()
         self._loop = asyncio.get_event_loop()
+        self._latestSessionCounter = 0
 
     @property
     def serial_id(self) -> str:
@@ -27,7 +28,7 @@ class SmappeeApiClient:
     async def delayed_update(self) -> None:
         """Publish updates, with a random delay to emulate interaction with device."""
         await asyncio.sleep(random.randint(1, 10))
-        self.LatestSessionCounter = random.randint(20, 100)        
+        self._latestSessionCounter = random.randint(20, 100)        
         await self.publish_updates()
 
     # In a real implementation, this library would call it's call backs when it was
@@ -53,7 +54,7 @@ class SmappeeApiClient:
 
     @property
     def fetchLatestSessionCounter(self) -> int:
-        return self.LatestSessionCounter
+        return self._latestSessionCounter
 
         # Ensure token is refreshed if needed
 #        asyncio.run(self.oauth_client.ensure_token_valid())
