@@ -35,6 +35,9 @@ class SensorBase(Entity):
 
     def __init__(self, config_entry):
         self._config_entry = config_entry
+        # Initialize the API client
+        self.oauth_client = OAuth2Client(config_entry.data)
+        self.api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
         
     @property
     def device_info(self):
@@ -46,11 +49,11 @@ class SensorBase(Entity):
 
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
-        self.register_callback(self.async_write_ha_state)
+        self.api_client.register_callback(self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self):
         # The opposite of async_added_to_hass. Remove any registered call backs here.
-        self.remove_callback(self.async_write_ha_state)
+        self.api_client.remove_callback(self.async_write_ha_state)
 
 
 class ChargingPointSensor(SensorBase):
@@ -63,9 +66,6 @@ class ChargingPointSensor(SensorBase):
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
-        # Initialize the API client
-        self.oauth_client = OAuth2Client(config_entry.data)
-        self.api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
         _LOGGER.debug("ChargingPointSensor init...done")
 
     @property
