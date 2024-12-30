@@ -22,14 +22,18 @@ class SmappeeApiClient:
         return self.serial
 
     async def enable(self) -> None:
+        _LOGGER.info("SmappeeApiCleint enable...")
         await self.publish_updates()
         self._loop.create_task(self.delayed_update())
-
+        _LOGGER.info("SmappeeApiCleint enable...done")
+    
     async def delayed_update(self) -> None:
         """Publish updates, with a random delay to emulate interaction with device."""
+        _LOGGER.info("SmappeeApiClient delayed_update...)
         await asyncio.sleep(random.randint(1, 10))
         self._latestSessionCounter = random.randint(20, 100)        
         await self.publish_updates()
+        _LOGGER.info("SmappeeApiClient delayed_update...done)
 
     # In a real implementation, this library would call it's call backs when it was
     # notified of any state changeds for the relevant device.
