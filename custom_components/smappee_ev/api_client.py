@@ -26,7 +26,7 @@ class SmappeeApiClient:
     def enable(self) -> None:
         self._latestSessionCounter = random.randint(1, 10)   
         _LOGGER.info("SmappeeApiClient enable...")
-        await self.publish_updates()
+        #self.publish_updates()
         self._loop.create_task(self.delayed_update())
         _LOGGER.info("SmappeeApiClient enable...done")
     
