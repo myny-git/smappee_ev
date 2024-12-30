@@ -31,7 +31,7 @@ async def async_setup_entry(
     return True
 
 class SensorBase(Entity):
-    should_poll = False
+    should_poll = True
 
     def __init__(self, config_entry):
         _LOGGER.info("Sensor init...")
