@@ -52,11 +52,11 @@ class SmappeeApiClient:
     async def check_action_status():
         return True
 
-    def register_callback(self, callback: Callable[[], None]) -> None:
+    def register_callback(self, callback: callable[[], None]) -> None:
         """Register callback, called when Roller changes state."""
         self._callbacks.add(callback)
 
-    def remove_callback(self, callback: Callable[[], None]) -> None:
+    def remove_callback(self, callback: callable[[], None]) -> None:
         """Remove previously registered callback."""
         self._callbacks.discard(callback)
 
