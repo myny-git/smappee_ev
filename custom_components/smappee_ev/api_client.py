@@ -20,30 +20,19 @@ class SmappeeApiClient:
     def serial_id(self) -> str:
         return self.serial
 
-    async def set_position(self, position: int) -> None:
-        """
-        Set dummy cover to the given position.
-
-        State is announced a random number of seconds later.
-        """
-        self._target_position = position
-
-        # Update the moving status, and broadcast the update
-#        self.moving = position - 50
+    async def enable(self) -> None:
         await self.publish_updates()
-
         self._loop.create_task(self.delayed_update())
 
     async def delayed_update(self) -> None:
         """Publish updates, with a random delay to emulate interaction with device."""
         await asyncio.sleep(random.randint(1, 10))
-#        self.moving = 0
+        self.LatestSessionCounter = random.randint(20, 100)        
         await self.publish_updates()
 
     # In a real implementation, this library would call it's call backs when it was
     # notified of any state changeds for the relevant device.
     async def publish_updates(self) -> None:
-        """Schedule call all registered callbacks."""
         for callback in self._callbacks:
             callback()
             
@@ -64,8 +53,7 @@ class SmappeeApiClient:
 
     @property
     def fetchLatestSessionCounter(self) -> int:
-        """Set the charging mode for the given serial number and connector."""
-        return random.randint(20, 100)
+        return self.LatestSessionCounter
 
         # Ensure token is refreshed if needed
 #        asyncio.run(self.oauth_client.ensure_token_valid())
