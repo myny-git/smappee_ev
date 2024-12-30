@@ -31,7 +31,7 @@ async def async_setup_entry(
     return True
 
 class SensorBase(Entity):
-    should_poll = True
+    should_poll = False
 
     def __init__(self, config_entry):
         self._config_entry = config_entry
@@ -44,13 +44,13 @@ class SensorBase(Entity):
     def available(self) -> bool:
         return True
 
-    #async def async_added_to_hass(self):
+    async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
-        #self.register_callback(self.async_write_ha_state)
+        self.register_callback(self.async_write_ha_state)
 
-    #async def async_will_remove_from_hass(self):
+    async def async_will_remove_from_hass(self):
         # The opposite of async_added_to_hass. Remove any registered call backs here.
-        #self.remove_callback(self.async_write_ha_state)
+        self.remove_callback(self.async_write_ha_state)
 
 
 class ChargingPointSensor(SensorBase):
