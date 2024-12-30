@@ -39,8 +39,7 @@ class SensorBase(Entity):
         # Initialize the API client
         self.oauth_client = OAuth2Client(config_entry.data)
         self.api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
-        await self.api_client.enable
-        _LOGGER.info(self.api_client.serial_id)
+        self.api_client.enable
         _LOGGER.info("Sensor init...done")
         
     @property
