@@ -3,6 +3,8 @@ import logging
 import random
 import asyncio
 
+from homeassistant.core import HomeAssistant
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -52,11 +54,11 @@ class SmappeeApiClient:
     async def check_action_status():
         return True
 
-    def register_callback(self, callback: callable[[], None]) -> None:
+    def register_callback(self, callback: Callable[[], None]) -> None:
         """Register callback, called when Roller changes state."""
         self._callbacks.add(callback)
 
-    def remove_callback(self, callback: callable[[], None]) -> None:
+    def remove_callback(self, callback: Callable[[], None]) -> None:
         """Remove previously registered callback."""
         self._callbacks.discard(callback)
 
