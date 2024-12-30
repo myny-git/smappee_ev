@@ -24,16 +24,14 @@ class SmappeeApiClient:
         return self.serial
 
     async def enable(self) -> None:
-        _LOGGER.info("SmappeeApiCleint enable...")
+        _LOGGER.info("SmappeeApiClient enable...")
         self._latestSessionCounter = random.randint(1, 10)   
         await self.publish_updates()
         self._loop.create_task(self.delayed_update())
-        _LOGGER.info("SmappeeApiCleint enable...done")
+        _LOGGER.info("SmappeeApiClient enable...done")
     
     async def delayed_update(self) -> None:
-        """Publish updates, with a random delay to emulate interaction with device."""
         _LOGGER.info("SmappeeApiClient delayed_update...")
-        await asyncio.sleep(random.randint(1, 10))
         self._latestSessionCounter = random.randint(20, 100)        
         await self.publish_updates()
         _LOGGER.info("SmappeeApiClient delayed_update...done")
