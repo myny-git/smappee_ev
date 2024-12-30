@@ -60,6 +60,7 @@ class SmappeeApiClient:
     @property
     def fetchLatestSessionCounter(self) -> int:
         self._latestSessionCounter = self._latestSessionCounter + 0.1
+        self._loop.create_task(self.delayed_update())
         return self._latestSessionCounter
 
         # Ensure token is refreshed if needed
