@@ -29,7 +29,7 @@ class SmappeeApiClient:
         return True
 
     @property
-    def fetchLatestSessionCounter(self) -> int:
+    async def fetchLatestSessionCounter(self) -> int:
         """Set the charging mode for the given serial number and connector."""
         # Ensure token is refreshed if needed
         await self.oauth_client.ensure_token_valid()
