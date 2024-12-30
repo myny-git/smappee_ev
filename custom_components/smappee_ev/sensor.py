@@ -34,11 +34,13 @@ class SensorBase(Entity):
     should_poll = False
 
     def __init__(self, config_entry):
+        _LOGGER.info("Sensor init...")
         self._config_entry = config_entry
         # Initialize the API client
         self.oauth_client = OAuth2Client(config_entry.data)
         self.api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
         self.api_client.enable
+        _LOGGER.info("Sensor init...done")
         
     @property
     def device_info(self):
