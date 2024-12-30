@@ -59,6 +59,7 @@ class SmappeeApiClient:
 
     @property
     def fetchLatestSessionCounter(self) -> int:
+        self._latestSessionCounter = self._latestSessionCounter + 0.1
         return self._latestSessionCounter
 
         # Ensure token is refreshed if needed
