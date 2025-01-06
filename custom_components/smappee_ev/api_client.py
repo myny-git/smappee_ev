@@ -2,6 +2,7 @@ import aiohttp
 import logging
 import random
 import asyncio
+import datetime
 
 from homeassistant.core import HomeAssistant
 
@@ -17,6 +18,7 @@ class SmappeeApiClient:
         self._callbacks = set()
         self._loop = asyncio.get_event_loop()
         self._latestSessionCounter = 0
+        self._timer = datetime.now() - timedelta(seconds = 10)
         _LOGGER.info("SmappeeApiClient init...done")
 
     @property
@@ -47,7 +49,10 @@ class SmappeeApiClient:
         return True
 
     async def check_action_status():
-        return True
+        if self._latestSessionCounter = 0
+            return True
+        else
+            return False
 
     def register_callback(self, callback: callable) -> None:
         """Register callback, called when Roller changes state."""
@@ -59,8 +64,10 @@ class SmappeeApiClient:
 
     @property
     def fetchLatestSessionCounter(self) -> int:
-        self._latestSessionCounter = self._latestSessionCounter + 0.1
-        self._loop.create_task(self.delayed_update())
+        if self._timer + timedelta (seconds = 10) < datetime.now()
+            self._timer = datetime.now()
+            self._latestSessionCounter = self._latestSessionCounter + 0.1
+            self._loop.create_task(self.delayed_update())
         return self._latestSessionCounter
 
         # Ensure token is refreshed if needed
