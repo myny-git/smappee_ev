@@ -2,7 +2,7 @@ import aiohttp
 import logging
 import random
 import asyncio
-import datetime
+from datetime import datetime
 
 from homeassistant.core import HomeAssistant
 
