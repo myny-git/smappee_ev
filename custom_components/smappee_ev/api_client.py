@@ -18,7 +18,7 @@ class SmappeeApiClient:
         self._callbacks = set()
         self._loop = asyncio.get_event_loop()
         self._latestSessionCounter = 0
-        self._timer = datetime.now() - datetime.timedelta(seconds = 10)
+        self._timer = datetime.now() - timedelta(seconds = 10)
         _LOGGER.info("SmappeeApiClient init...done")
 
     @property
@@ -64,7 +64,7 @@ class SmappeeApiClient:
 
     @property
     def fetchLatestSessionCounter(self) -> int:
-        if self._timer + datetime.timedelta (seconds = 10) < datetime.now():
+        if self._timer + timedelta (seconds = 10) < datetime.now():
             self._timer = datetime.now()
             self._latestSessionCounter = self._latestSessionCounter + 0.1
             self._loop.create_task(self.delayed_update())
