@@ -49,7 +49,7 @@ class SmappeeApiClient:
         return True
 
     async def check_action_status():
-        if (self._latestSessionCounter == 0)
+        if self._latestSessionCounter == 0:
             return True
         else
             return False
@@ -64,7 +64,7 @@ class SmappeeApiClient:
 
     @property
     def fetchLatestSessionCounter(self) -> int:
-        if self._timer + timedelta (seconds = 10) < datetime.now()
+        if self._timer + timedelta (seconds = 10) < datetime.now():
             self._timer = datetime.now()
             self._latestSessionCounter = self._latestSessionCounter + 0.1
             self._loop.create_task(self.delayed_update())
