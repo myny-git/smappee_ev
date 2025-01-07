@@ -51,7 +51,7 @@ class SmappeeApiClient:
     async def check_action_status():
         if self._latestSessionCounter == 0:
             return True
-        else
+        else:
             return False
 
     def register_callback(self, callback: callable) -> None:
