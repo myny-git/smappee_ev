@@ -49,7 +49,7 @@ class SmappeeApiClient:
         return True
 
     async def check_action_status():
-        if self._latestSessionCounter = 0
+        if self._latestSessionCounter == 0
             return True
         else
             return False
