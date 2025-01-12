@@ -34,6 +34,31 @@ class SmappeeApiClient:
     
     async def delayed_update(self) -> None:
         _LOGGER.info("SmappeeApiClient delayed_update...")
+        self.oauth_client.ensure_token_valid()
+
+        _LOGGER.debug(midnight.timestamp())
+        url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={midnight.timestamp()}"
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json",
+        }
+        _LOGGER.debug(f"Sending request to {url}")
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                response = await session.get(url, headers=headers)
+                if response.status != 200:
+                    if response.status == 401:
+                        raise Exception("Token expired")
+                    error_message = await response.text()
+                    _LOGGER.error(f"Failed to get charging sessions: {error_message}")
+                    raise Exception(f"Failed to get charging sessions: {error_message}")
+                _LOGGER.debug(response.text())
+        except Exception as e:
+            _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
+            raise
+        
+#DUMMY TEST VALUE
         self._latestSessionCounter = random.randint(20, 100)        
         await self.publish_updates()
         _LOGGER.info("SmappeeApiClient delayed_update...done")
