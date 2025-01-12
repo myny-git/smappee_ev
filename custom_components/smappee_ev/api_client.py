@@ -39,9 +39,9 @@ class SmappeeApiClient:
         # Get the current time
         now = datetime.now()
         midnight = datetime(now.year, now.month, now.day)
-        _LOGGER.debug(midnight.timestamp())
+        _LOGGER.debug(int(midnight.timestamp()))
 
-        url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={midnight.timestamp()}"
+        url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={int(midnight.timestamp())}"
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json",
