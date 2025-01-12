@@ -2,6 +2,7 @@ import aiohttp
 import logging
 import random
 import asyncio
+import json
 from datetime import datetime, timedelta
 
 from homeassistant.core import HomeAssistant
@@ -57,7 +58,7 @@ class SmappeeApiClient:
                     error_message = await response.text()
                     _LOGGER.error(f"Failed to get charging sessions: {error_message}")
                     raise Exception(f"Failed to get charging sessions: {error_message}")
-                _LOGGER.debug(await response.text())
+                _LOGGER.debug(f"Response API: {json.dumps(await response.json(), indent=5)}")
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
