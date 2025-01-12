@@ -43,11 +43,11 @@ class OAuth2Client:
                     "client_secret": self.client_secret,
                 }
 
-                _LOGGER.info("Sending payload: %s", payload)
+                _LOGGER.debug("Sending payload: %s", payload)
 
                 response = await session.post(self.token_url, data=payload)
 
-                _LOGGER.info("Received response: %s", await response.text())
+                _LOGGER.debug("Received response: %s", await response.text())
 
                 if response.status != 200:
                     _LOGGER.error(
@@ -56,7 +56,7 @@ class OAuth2Client:
                     return None
 
                 tokens = await response.json()
-                _LOGGER.info("Received tokens: %s", tokens)
+                _LOGGER.debug("Received tokens: %s", tokens)
 
                 if "access_token" in tokens:
                     self.access_token = tokens["access_token"]
