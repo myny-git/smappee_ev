@@ -40,7 +40,7 @@ class SmappeeApiClient:
         # Get the current time
         now = datetime.now()
         midnight = datetime(now.year, now.month, now.day)
-        _LOGGER.debug(int(midnight.timestamp()))
+#        _LOGGER.debug(int(midnight.timestamp()))
 
         url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={int(midnight.timestamp())}"
         headers = {
@@ -58,7 +58,7 @@ class SmappeeApiClient:
                     error_message = await response.text()
                     _LOGGER.error(f"Failed to get charging sessions: {error_message}")
                     raise Exception(f"Failed to get charging sessions: {error_message}")
-                _LOGGER.debug(f"Response API: {json.dumps(await response.json(), indent=5)}")
+                _LOGGER.debug(f"200 Response API: {json.dumps(await response.json(), indent=5)}")
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
