@@ -34,9 +34,13 @@ class SmappeeApiClient:
     
     async def delayed_update(self) -> None:
         _LOGGER.info("SmappeeApiClient delayed_update...")
-        self.oauth_client.ensure_token_valid()
+        await self.oauth_client.ensure_token_valid()
 
+        # Get the current time
+        now = datetime.now()
+        midnight = datetime(now.year, now.month, now.day)
         _LOGGER.debug(midnight.timestamp())
+
         url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=true&range={midnight.timestamp()}"
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
