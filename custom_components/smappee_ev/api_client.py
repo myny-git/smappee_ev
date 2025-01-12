@@ -57,7 +57,7 @@ class SmappeeApiClient:
                     error_message = await response.text()
                     _LOGGER.error(f"Failed to get charging sessions: {error_message}")
                     raise Exception(f"Failed to get charging sessions: {error_message}")
-                _LOGGER.debug(response.text())
+                _LOGGER.debug(await response.text())
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
