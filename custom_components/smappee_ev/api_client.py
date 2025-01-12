@@ -58,13 +58,15 @@ class SmappeeApiClient:
                     error_message = await response.text()
                     _LOGGER.error(f"Failed to get charging sessions: {error_message}")
                     raise Exception(f"Failed to get charging sessions: {error_message}")
-                _LOGGER.debug(f"200 Response API: {json.dumps(await response.json(), indent=5)}")
+#                _LOGGER.debug(f"200 Response API: {json.dumps(await response.json(), indent=5)}")
+                sessions = await response.json()
+                self._latestSessionCounter = sessions[0]["stopReading"]
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
         
 #DUMMY TEST VALUE
-        self._latestSessionCounter = random.randint(20, 100)        
+#        self._latestSessionCounter = random.randint(20, 100)        
         await self.publish_updates()
         _LOGGER.info("SmappeeApiClient delayed_update...done")
 
