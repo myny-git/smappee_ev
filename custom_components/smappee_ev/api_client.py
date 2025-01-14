@@ -60,7 +60,7 @@ class SmappeeApiClient:
                     raise Exception(f"Failed to get charging sessions: {error_message}")
 #                _LOGGER.debug(f"200 Response API: {json.dumps(await response.json(), indent=5)}")
                 sessions = await response.json()
-                self._latestSessionCounter = sessions[0]["startreading"]+sessions[0]["energy"]
+                self._latestSessionCounter = sessions[0]["startReading"]+sessions[0]["energy"]
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
