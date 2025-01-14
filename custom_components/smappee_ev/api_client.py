@@ -115,7 +115,7 @@ class SmappeeApiClient:
         # Create the base payload with the mode
         if mode == "NORMAL_PERCENTAGE":
             payload = {"mode": "NORMAL"}
-        else
+        else:
             payload = {"mode": mode}
         
         # Add the limit only if the mode is NORMAL
