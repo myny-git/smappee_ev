@@ -39,7 +39,7 @@ class SmappeeApiClient:
 
         # Get the current time
         now = datetime.now()
-        startsession = int(datetime(now.year-1, 6, 1))
+        startsession = int(datetime(now.year-1, 6, 1).timestamp())
 #        _LOGGER.debug(int(midnight.timestamp()))
 
         url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=false&range={startsession}"
