@@ -98,7 +98,6 @@ class SmappeeApiClient:
     def fetchLatestSessionCounter(self) -> int:
         if self._timer + timedelta (seconds = 10) < datetime.now():
             self._timer = datetime.now()
-            self._latestSessionCounter = self._latestSessionCounter + 0.1
             self._loop.create_task(self.delayed_update())
         return self._latestSessionCounter
 
