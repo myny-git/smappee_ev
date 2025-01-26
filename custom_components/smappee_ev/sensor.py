@@ -1,13 +1,11 @@
 import logging
 import random
 
-#from .coordinator import SmappeeChargerCoordinator
 from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
 from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
-#from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -24,7 +22,8 @@ async def async_setup_entry(
     _LOGGER.debug("Sensor async_setup_entry init...")
     _LOGGER.debug(config_entry.data.get(CONF_SERIAL))
     new_devices = []
-    new_devices.append(ChargingPointSensor(config_entry))
+    new_devices.append(ChargingPointLatestCounter(config_entry))
+    new_devices.append(ChargingPointState(config_entry))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
@@ -37,6 +36,8 @@ class SensorBase(Entity):
         _LOGGER.info("Sensor init...")
         self._config_entry = config_entry
         # Initialize the API client
+        self.username = config_entry.data.get(CONF_USERNAME)
+        self.pasw = config_entry.data.get(CONF_PASSWORD)
         self.oauth_client = OAuth2Client(config_entry.data)
         self.api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
         _LOGGER.info("Sensor init...done")
@@ -58,18 +59,18 @@ class SensorBase(Entity):
         self.api_client.remove_callback(self.async_write_ha_state)
 
 
-class ChargingPointSensor(SensorBase):
+class ChargingPointLatestCounter(SensorBase):
     device_class = SensorDeviceClass.ENERGY
     _attr_unit_of_measurement = "kWh"
 
     def __init__(self, config_entry):
         """Initialize the sensor."""
-        _LOGGER.debug("ChargingPointSensor init...")
+        _LOGGER.debug("ChargingPointLatestCounter init...")
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
         self.api_client.enable
-        _LOGGER.debug("ChargingPointSensor init...done")
+        _LOGGER.debug("ChargingPointLatestCounter init...done")
 
     @property
     def available(self) -> bool:
@@ -80,5 +81,29 @@ class ChargingPointSensor(SensorBase):
     @property
     def state(self):
         """Return the state of the sensor."""
-        _LOGGER.debug("Get ChargingPointSensor.state...")
+        _LOGGER.debug("Get ChargingPointLatestCounter.state...")
         return self.api_client.fetchLatestSessionCounter
+
+class ChargingPointState(SensorBase):
+    native_unit_of_measurement = "str"
+
+    def __init__(self, config_entry):
+        """Initialize the sensor."""
+        _LOGGER.debug("ChargingPointState init...")
+        super().__init__(config_entry)
+        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_state"
+        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} state"
+        #self.api_client.enable
+        _LOGGER.debug("ChargingPointState init...done")
+
+    @property
+    def available(self) -> bool:
+        #if self.api_client.fetchLatestSessionCounter == 0: 
+        #    return False
+        return True
+
+    @property
+    def state(self):
+        """Return the state of the sensor."""
+        _LOGGER.debug("Get ChargingPointState.state...")
+        return "TEST_STATE"
