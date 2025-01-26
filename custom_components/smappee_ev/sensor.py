@@ -61,6 +61,7 @@ class SensorBase(Entity):
 
 class ChargingPointLatestCounter(SensorBase):
     device_class = SensorDeviceClass.ENERGY
+    _device_class = SensorDeviceClass.ENERGY
     _attr_unit_of_measurement = "kWh"
 
     def __init__(self, config_entry):
@@ -85,7 +86,8 @@ class ChargingPointLatestCounter(SensorBase):
         return self.api_client.fetchLatestSessionCounter
 
 class ChargingPointState(SensorBase):
-    native_unit_of_measurement = "str"
+    _native_value = "str"
+    _native_unit_of_measurement = "str"
 
     def __init__(self, config_entry):
         """Initialize the sensor."""
