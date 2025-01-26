@@ -43,10 +43,6 @@ class SensorBase(Entity):
         _LOGGER.info("Sensor init...done")
         
     @property
-    def device_info(self):
-        return {"identifiers": {(DOMAIN, self._config_entry.data.get(CONF_SERIAL))}}
-
-    @property
     def available(self) -> bool:
         return True
 
@@ -74,6 +70,10 @@ class ChargingPointLatestCounter(SensorBase):
         _LOGGER.debug("ChargingPointLatestCounter init...done")
 
     @property
+    def device_info(self):
+        return {"identifiers": {(DOMAIN, "SESSION COUNTER", self._config_entry.data.get(CONF_SERIAL))}}
+
+    @property
     def available(self) -> bool:
         if self.api_client.fetchLatestSessionCounter == 0: 
             return False
@@ -99,10 +99,14 @@ class ChargingPointState(SensorBase):
         _LOGGER.debug("ChargingPointState init...done")
 
     @property
-    def available(self) -> bool:
+    def device_info(self):
+        return {"identifiers": {(DOMAIN, "CURRENT STATE", self._config_entry.data.get(CONF_SERIAL))}}
+
+    #@property
+    #def available(self) -> bool:
         #if self.api_client.fetchLatestSessionCounter == 0: 
         #    return False
-        return True
+    #    return True
 
     @property
     def state(self):
