@@ -105,7 +105,9 @@ class SmappeeApiClient:
 
     @property
     def getState(self) -> str:
-        _LOGGER.debug(f"getState return: {self._state}")
+        if self._timer + timedelta (seconds = 10) < datetime.now():
+            self._timer = datetime.now()
+            self._loop.create_task(self.delayed_update())
         return self._state
    
     async def set_charging_mode(self, mode, limit):
