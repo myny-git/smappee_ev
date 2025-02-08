@@ -65,8 +65,6 @@ class SmappeeApiClient:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
         
-#DUMMY TEST VALUE
-#        self._latestSessionCounter = random.randint(20, 100)        
         await self.publish_updates()
         _LOGGER.info("SmappeeApiClient delayed_update...done")
 
@@ -100,6 +98,10 @@ class SmappeeApiClient:
             self._timer = datetime.now()
             self._loop.create_task(self.delayed_update())
         return self._latestSessionCounter
+
+    @property
+    def getState(self) -> str:
+        return "TEST_STATE_API"
    
     async def set_charging_mode(self, mode, limit):
         """Set the charging mode for the given serial number and connector."""
