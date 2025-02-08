@@ -62,6 +62,7 @@ class SmappeeApiClient:
                 #_LOGGER.debug(f"200 Response API: {json.dumps(await response.json(), indent=5)}")
                 sessions = await response.json()
                 _LOGGER.debug("Set status...")
+                _LOGGER.debug(f"Previous status: {self._state}")
                 self._state = str(sessions[0]["status"])
                 _LOGGER.debug(f"State: JSON {sessions[0]["status"]} VAR {self._state}")
                 self._latestSessionCounter = sessions[0]["startReading"]+sessions[0]["energy"]
