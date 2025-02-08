@@ -95,7 +95,7 @@ class ChargingPointState(SensorBase):
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_state"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} state"
-        #self.api_client.enable
+        self.api_client.enable
         _LOGGER.debug("ChargingPointState init...done")
 
     #@property
@@ -108,4 +108,4 @@ class ChargingPointState(SensorBase):
     def state(self):
         """Return the state of the sensor."""
         _LOGGER.debug("Get ChargingPointState.state...")
-        return "TEST_STATE"
+        return self.api_client.getState
