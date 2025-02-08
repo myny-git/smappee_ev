@@ -63,7 +63,7 @@ class SmappeeApiClient:
                 sessions = await response.json()
                 _LOGGER.debug("Set status...")
                 self._state = str(sessions[0]["status"])
-                _LOGGER.debug(sessions[0]["status"])
+                _LOGGER.debug(f"State: JSON {sessions[0]["status"]} VAR {self._state}")
                 self._latestSessionCounter = sessions[0]["startReading"]+sessions[0]["energy"]
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
