@@ -23,15 +23,10 @@ async def async_setup_entry(
     _LOGGER.debug(config_entry.data.get(CONF_SERIAL))
 
     #Initialize the API client
-    username = config_entry.data.get(CONF_USERNAME)
-    pasw = config_entry.data.get(CONF_PASSWORD)
-    oauth_client = OAuth2Client(config_entry.data)
-    api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
-    api_client.enable
     
     new_devices = []
-    new_devices.append(ChargingPointLatestCounter(config_entry, api_client))
-    new_devices.append(ChargingPointState(config_entry, api_client))
+    new_devices.append(ChargingPointLatestCounter(config_entry))
+    new_devices.append(ChargingPointState(config_entry))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
@@ -40,10 +35,14 @@ async def async_setup_entry(
 class SensorBase(Entity):
     should_poll = True
 
-    def __init__(self, config_entry, api_client):
+    def __init__(self, config_entry):
         _LOGGER.info("Sensor init...")
         self._config_entry = config_entry
-        self.api_client = api_client
+        self.username = config_entry.data.get(CONF_USERNAME)
+        self.pasw = config_entry.data.get(CONF_PASSWORD)
+        self.oauth_client = OAuth2Client(config_entry.data)
+        self.api_client = SmappeeApiClient(self.oauth_client, config_entry.data.get(CONF_SERIAL))
+        self.api_client.enable
         _LOGGER.info("Sensor init...done")
         
     @property
@@ -68,10 +67,10 @@ class ChargingPointLatestCounter(SensorBase):
     _device_class = SensorDeviceClass.ENERGY
     _attr_unit_of_measurement = "kWh"
 
-    def __init__(self, config_entry, api_client):
+    def __init__(self, config_entry):
         """Initialize the sensor."""
         _LOGGER.debug("ChargingPointLatestCounter init...")
-        super().__init__(config_entry, api_client)
+        super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
         _LOGGER.debug("ChargingPointLatestCounter init...done")
@@ -92,10 +91,10 @@ class ChargingPointState(SensorBase):
     _native_value = "str"
     _native_unit_of_measurement = "str"
 
-    def __init__(self, config_entry, api_client):
+    def __init__(self, config_entry):
         """Initialize the sensor."""
         _LOGGER.debug("ChargingPointState init...")
-        super().__init__(config_entry, api_client)
+        super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_state"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} state"
         _LOGGER.debug("ChargingPointState init...done")
