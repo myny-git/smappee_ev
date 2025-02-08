@@ -62,7 +62,7 @@ class SmappeeApiClient:
                 #_LOGGER.debug(f"200 Response API: {json.dumps(await response.json(), indent=5)}")
                 sessions = await response.json()
                 _LOGGER.debug("Set status...")
-                self._state = sessions[0]["status"]
+                self._state = str(sessions[0]["status"])
                 _LOGGER.debug(sessions[0]["status"])
                 self._latestSessionCounter = sessions[0]["startReading"]+sessions[0]["energy"]
         except Exception as e:
