@@ -19,6 +19,7 @@ class SmappeeApiClient:
         self._callbacks = set()
         self._loop = asyncio.get_event_loop()
         self._latestSessionCounter = 0
+        self._state = "Unavailable"
         self._timer = datetime.now() - timedelta(seconds = 10)
         _LOGGER.info("SmappeeApiClient init...done")
 
@@ -61,6 +62,7 @@ class SmappeeApiClient:
 #                _LOGGER.debug(f"200 Response API: {json.dumps(await response.json(), indent=5)}")
                 sessions = await response.json()
                 self._latestSessionCounter = sessions[0]["startReading"]+sessions[0]["energy"]
+                self._state = sessions[0]["status"]
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
@@ -101,7 +103,7 @@ class SmappeeApiClient:
 
     @property
     def getState(self) -> str:
-        return "TEST_STATE_API"
+        return self._state
    
     async def set_charging_mode(self, mode, limit):
         """Set the charging mode for the given serial number and connector."""
