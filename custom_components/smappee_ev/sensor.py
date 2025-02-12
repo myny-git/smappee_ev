@@ -26,7 +26,7 @@ async def async_setup_entry(
     
     new_devices = []
     new_devices.append(ChargingPointLatestCounter(config_entry))
-    new_devices.append(ChargingPointState(config_entry))
+    new_devices.append(ChargingPointSessionState(config_entry))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
@@ -87,26 +87,20 @@ class ChargingPointLatestCounter(SensorBase):
         _LOGGER.debug("Get ChargingPointLatestCounter.state...")
         return self.api_client.fetchLatestSessionCounter
 
-class ChargingPointState(SensorBase):
+class ChargingPointSessionState(SensorBase):
     _native_value = "str"
     _native_unit_of_measurement = "str"
 
     def __init__(self, config_entry):
         """Initialize the sensor."""
-        _LOGGER.debug("ChargingPointState init...")
+        _LOGGER.debug("ChargingPointSessionState init...")
         super().__init__(config_entry)
-        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_state"
-        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} state"
-        _LOGGER.debug("ChargingPointState init...done")
-
-    #@property
-    #def available(self) -> bool:
-        #if self.api_client.fetchLatestSessionCounter == 0: 
-        #    return False
-    #    return True
+        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_session_state"
+        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} session state"
+        _LOGGER.debug("ChargingPointSessionState init...done")
 
     @property
     def state(self):
         """Return the state of the sensor."""
-        _LOGGER.debug("Get ChargingPointState.state...")
-        return self.api_client.getState
+        _LOGGER.debug("Get ChargingPointSessionState.state...")
+        return self.api_client.getSessionState
