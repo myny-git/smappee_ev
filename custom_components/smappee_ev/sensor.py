@@ -25,8 +25,12 @@ async def async_setup_entry(
     #Initialize the API client
     
     new_devices = []
-    new_devices.append(ChargingPointLatestCounter(config_entry))
     new_devices.append(ChargingPointSessionState(config_entry))
+    if new_devices:
+        async_add_entities(new_devices)    
+
+    new_devices = []
+    new_devices.append(ChargingPointLatestCounter(config_entry))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
