@@ -10,7 +10,7 @@ from homeassistant.const import Platform
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR]
-             
+            
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up Smappee Charging Profiles from a config entry."""
     
@@ -31,10 +31,12 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 
     hass.data[DOMAIN][entry.entry_id] = api_client
     _LOGGER.debug("Store API client in hass.data...done") 
-      
+
+
     # Register the set_charging_mode service (now called actions in Home Assistant)
     async def set_charging_mode_service(call):
         """Handle the action to set the charging mode."""
+        _LOGGER.debug('SET CHARGING MODE SERVICE: Received data', call.data)
         serial = call.data.get(CONF_SERIAL)
         mode = call.data.get("mode")
         limit = call.data.get("limit", 0)
@@ -52,5 +54,5 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
   
-#    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
+    hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
     return True
