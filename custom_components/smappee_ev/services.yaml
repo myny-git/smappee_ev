@@ -5,7 +5,7 @@ set_charging_mode:
       description: "Serial number of the charging station"
       example: "6220001089"
     mode:
-      description: "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, PAUSED)"
+      description: "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, SOLAR)"
       example: "NORMAL"
     limit:
       description: "Current limit in amperes"
