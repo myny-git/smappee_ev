@@ -11,10 +11,12 @@ set_charging_mode:
       description: "Current limit in amperes"
       example: 10
 lock:
+  description: "Test LOCK"
   fields:
     device_id:
       required: false
 unlock:
+  description: "Test UNLOCK"
   fields:
     device_id:
       required: false
