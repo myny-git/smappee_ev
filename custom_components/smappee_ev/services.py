@@ -2,8 +2,6 @@ import logging
 from typing import cast
 from datetime import datetime
 
-
-from homeassistant.const 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import ServiceCall, callback, HomeAssistant
 from homeassistant.helpers import device_registry
