@@ -40,17 +40,6 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the an async service example component."""
-    @callback
-    def my_service(call: ServiceCall) -> None:
-        """My first service."""
-        _LOGGER.info('Received data', call.data)
-
-    # Register our service with Home Assistant.
-    _LOGGER.info('Register demo service...')
-    hass.services.async_register(DOMAIN, 'demo', my_service)
-    _LOGGER.info('Register demo service...done')
-            
     # Register the set_charging_mode service (now called actions in Home Assistant)
     @callback
     def set_charging_mode_service(call):
