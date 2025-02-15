@@ -53,7 +53,7 @@
       }
     },
     "lock": {
-      "name": "Test Lock TRANSLATION ",
+      "name": "Test Lock TRANSLATION",
       "description": "Test LOCK Translation",
       "fields": {
         "serial": {
@@ -63,7 +63,7 @@
       }
     },
     "unlock": {
-      "name": "Test UnLock TRANSLATION ",
+      "name": "Test UnLock TRANSLATION",
       "description": "Test UNLOCK Translation",
       "fields": {
         "serial": {
