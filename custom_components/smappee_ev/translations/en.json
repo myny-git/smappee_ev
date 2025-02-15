@@ -71,6 +71,12 @@
           "description": "serial number of charging station"
         }
       }
+    },
+    "demo": {
+      "name": "Demo TRANSLATION",
+      "description": "Demo Translation",
+      "fields": {
+      }
     }
   }
 }
