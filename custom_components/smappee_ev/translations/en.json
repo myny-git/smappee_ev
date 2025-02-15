@@ -50,7 +50,8 @@
           "name": "Limit",
           "description": "Current limit in amperes"
         }
-      },
+      }
+    },
     "lock": {
       "name": "Test Lock TRANSLATION ",
       "description": "Test LOCK Translation",
