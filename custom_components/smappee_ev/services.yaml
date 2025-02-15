@@ -13,10 +13,12 @@ set_charging_mode:
 lock:
   description: "Test LOCK"
   fields:
-    device_id:
+    serial:
+      description: "Serial number of the charging station"
       required: false
 unlock:
   description: "Test UNLOCK"
   fields:
-    device_id:
+    serial:
+      description: "Serial number of the charging station"
       required: false
