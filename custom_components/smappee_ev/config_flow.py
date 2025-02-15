@@ -51,6 +51,7 @@ class smappee_evFlowHandler(config_entries.OptionsFlow):
     """Handle the options flow."""
 
     def __init__(self, config_entry):
+        _LOGGER.debug('evFlowHandler...empty')
         #self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
