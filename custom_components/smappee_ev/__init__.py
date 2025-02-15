@@ -1,5 +1,4 @@
 import logging
-from __future__ import annotations
 
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers.typing import ConfigType
