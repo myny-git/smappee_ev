@@ -33,9 +33,14 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     _LOGGER.debug("Store API client in hass.data...done") 
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
 
+            
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+            
     # Register the set_charging_mode service (now called actions in Home Assistant)
-    async def set_charging_mode_service(call):
+    @callback
+    def set_charging_mode_service(call):
         """Handle the action to set the charging mode."""
         _LOGGER.debug('SET CHARGING MODE SERVICE: Received data', call.data)
         serial = call.data.get(CONF_SERIAL)
