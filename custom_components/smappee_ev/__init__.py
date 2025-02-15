@@ -37,7 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     return True
 
 # Use empty_config_schema because the component does not have any config options
-#CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
+CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the an async service example component."""
