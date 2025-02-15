@@ -10,18 +10,3 @@ set_charging_mode:
     limit:
       description: "Current limit in amperes"
       example: 10
-lock:
-  description: "Test LOCK"
-  fields:
-    serial:
-      description: "Serial number of the charging station"
-      required: false
-unlock:
-  description: "Test UNLOCK"
-  fields:
-    serial:
-      description: "Serial number of the charging station"
-      required: false
-demo:
-  description: "DEMO GVN"
-  
