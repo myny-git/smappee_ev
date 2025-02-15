@@ -51,12 +51,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
        
         api_client = hass.data[DOMAIN][entry.entry_id]
     
-        try:
-            await api_client.set_charging_mode(serial, mode, limit)
+        #try:
+        #    await api_client.set_charging_mode(serial, mode, limit)
             _LOGGER.info(f"Charging mode set successfully for {serial}")
-        except Exception as e:
+        #except Exception as e:
             _LOGGER.error(f"Failed to set charging mode for {serial}: {e}")
-            raise  # Ensures that the exception is re-raised and properly logged
+        #    raise  # Ensures that the exception is re-raised and properly logged
             
     _LOGGER.debug('Set charging mode service in HA...')
     hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
