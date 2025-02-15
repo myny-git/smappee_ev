@@ -50,6 +50,25 @@
           "name": "Limit",
           "description": "Current limit in amperes"
         }
+      },
+    "lock": {
+      "name": "Test Lock TRANSLATION ",
+      "description": "Test LOCK Translation",
+      "fields": {
+        "serial": {
+          "name": "Name",
+          "description": "serial number of charging station"
+        }
+      }
+    },
+    "unlock": {
+      "name": "Test UnLock TRANSLATION ",
+      "description": "Test UNLOCK Translation",
+      "fields": {
+        "serial": {
+          "name": "Name",
+          "description": "serial number of charging station"
+        }
       }
     }
   }
