@@ -104,6 +104,12 @@ class ChargingPointSessionState(SensorBase):
         _LOGGER.debug("ChargingPointSessionState init...done")
 
     @property
+    def available(self) -> bool:
+        if self.api_client.fetchLatestSessionCounter == 0: 
+            return False
+        return True
+    
+    @property
     def state(self):
         """Return the state of the sensor."""
         _LOGGER.debug("Get ChargingPointSessionState.state...")
