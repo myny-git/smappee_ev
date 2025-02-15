@@ -22,3 +22,6 @@ unlock:
     serial:
       description: "Serial number of the charging station"
       required: false
+demo:
+  description: "DEMO GVN"
+  
