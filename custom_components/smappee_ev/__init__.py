@@ -35,6 +35,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
+# Use empty_config_schema because the component does not have any config options
+CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the an async service example component."""
@@ -44,8 +46,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _LOGGER.info('Received data', call.data)
 
     # Register our service with Home Assistant.
+    _LOGGER.info('Register demo service...')
     hass.services.async_register(DOMAIN, 'demo', my_service)
-
+    _LOGGER.info('Register demo service...done')
+            
     # Return boolean to indicate that initialization was successfully.
     return True
 
