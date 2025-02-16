@@ -15,6 +15,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 _LOGGER = logging.getLogger(__name__)
+SCAN_INTERVAL = timedelta(seconds=20)
 
 async def async_setup_entry(
     hass: HomeAssistant, 
@@ -38,9 +39,10 @@ async def async_setup_entry(
     _LOGGER.debug("Sensor async_setup_entry init...done")
     return True
 
+
 class SensorBase(Entity):
     should_poll = True
-    update_interval = timedelta(seconds=20)
+    _attr_should_poll = True
     
     def __init__(self, config_entry):
         _LOGGER.info("Sensor init...")
