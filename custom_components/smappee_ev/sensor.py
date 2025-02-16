@@ -40,7 +40,7 @@ async def async_setup_entry(
 
 class SensorBase(Entity):
     should_poll = True
-    SCAN_INTERVAL = timedelta(minutes=2)
+    update_interval = timedelta(seconds=20)
     
     def __init__(self, config_entry):
         _LOGGER.info("Sensor init...")
