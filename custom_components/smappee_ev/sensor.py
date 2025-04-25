@@ -7,7 +7,7 @@ from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
 from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
+from homeassistant.components.sensor import (SensorEntity, SensorDeviceClass, SensorStateClass)
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
