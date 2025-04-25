@@ -90,6 +90,7 @@ class ChargingPointLatestCounter(SensorBase):
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_icon = "mdi:ev-station"
         self._attr_unit_of_measurement = "kWh"
         _LOGGER.debug("ChargingPointLatestCounter init...done")
 
