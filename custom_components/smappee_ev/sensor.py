@@ -74,11 +74,9 @@ class SensorBase(Entity):
 class ChargingPointLatestCounter(SensorBase):
     device_class = SensorDeviceClass.ENERGY
     _device_class = SensorDeviceClass.ENERGY
-    _attr_device_class = SensorDeviceClass.ENERGY
     _attr_unit_of_measurement = "kWh"
     _state_class = SensorStateClass.TOTAL_INCREASING
     state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     def __init__(self, config_entry):
         """Initialize the sensor."""
@@ -86,6 +84,9 @@ class ChargingPointLatestCounter(SensorBase):
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
+        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_device_class = SensorDeviceClass.ENERGY
+        self._attr_unit_of_measurement = "kWh"
         _LOGGER.debug("ChargingPointLatestCounter init...done")
 
     @property
