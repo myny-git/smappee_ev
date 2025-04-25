@@ -61,11 +61,7 @@ class SensorBase(Entity):
     @property
     def available(self) -> bool:
         return True
-
-    @property
-    def state_class(self) -> str:
-        return SensorStateClass.TOTAL_INCREASING
-        
+     
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
         self.api_client.register_callback(self.async_write_ha_state)
@@ -105,6 +101,10 @@ class ChargingPointLatestCounter(SensorBase):
         """Return the state of the sensor."""
         _LOGGER.debug("Get ChargingPointLatestCounter.state...")
         return self.api_client.fetchLatestSessionCounter
+
+    @property
+    def state_class(self) -> str:
+        return SensorStateClass.TOTAL_INCREASING
 
 class ChargingPointSessionState(SensorBase):
     _native_value = "str"
