@@ -62,6 +62,10 @@ class SensorBase(Entity):
     def available(self) -> bool:
         return True
 
+    @property
+    def state_class(self) -> str:
+        return SensorStateClass.TOTAL_INCREASING
+        
     async def async_added_to_hass(self):
         # Sensors should also register callbacks to HA when their state changes
         self.api_client.register_callback(self.async_write_ha_state)
