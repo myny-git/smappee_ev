@@ -91,6 +91,10 @@ class ChargingPointLatestCounter(SensorBase):
         return True
 
     @property
+    def device_class(self) -> str | None:
+        return self._attr_device_class
+        
+    @property
     def state(self):
         """Return the state of the sensor."""
         _LOGGER.debug("Get ChargingPointLatestCounter.state...")
