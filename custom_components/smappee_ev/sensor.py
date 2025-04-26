@@ -72,12 +72,6 @@ class SensorBase(Entity):
 
 
 class ChargingPointLatestCounter(SensorBase):
-    device_class = SensorDeviceClass.ENERGY
-    _device_class = SensorDeviceClass.ENERGY
-    _attr_unit_of_measurement = "kWh"
-    _state_class = SensorStateClass.TOTAL_INCREASING
-    state_class = SensorStateClass.TOTAL_INCREASING
-
     def __init__(self, config_entry):
         """Initialize the sensor."""
         _LOGGER.debug("ChargingPointLatestCounter init...")
@@ -104,7 +98,7 @@ class ChargingPointLatestCounter(SensorBase):
 
     @property
     def state_class(self) -> str:
-        return SensorStateClass.TOTAL_INCREASING
+        return self._attr_state_class
 
 class ChargingPointSessionState(SensorBase):
     _native_value = "str"
