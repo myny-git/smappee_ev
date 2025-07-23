@@ -58,8 +58,6 @@ I am also looking into EVCC integration.
 
 Contributions, feedback, or bug reports are very welcome! I am not a programmer, but I'll do my best.
 
----
-
 ## ☕ Support
 
 If this integration is useful to you, feel free to support its development:
