@@ -21,7 +21,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     _LOGGER.debug("Init OAuth...")
     oauth_client = OAuth2Client(entry.data)
     _LOGGER.debug("Init OAuth...done")
-   # === get the serviceLocationId ===
+    # === get the serviceLocationId ===
     if "service_location_id" not in entry.data:
         try:
             _LOGGER.info("No service_location_id found, attempting to auto-detect...")
