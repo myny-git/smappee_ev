@@ -1,12 +1,12 @@
 {
   "domain": "smappee_ev",
   "name": "Smappee EV",
-  "codeowners": ["@gvnuland"],
+  "codeowners": ["@gvnuland,@myny-git"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/gvnuland/Smappee_EV",
+  "documentation": "https://github.com/myny-git/Smappee_EV",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/gvnuland/Smappee_EV/issues",
+  "issue_tracker": "https://github.com/myny-git/Smappee_EV/issues",
   "loggers": ["custom_components.smappee_ev"],
   "requirements": ["requests"],
   "version": "1.0"
