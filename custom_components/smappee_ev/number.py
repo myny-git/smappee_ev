@@ -22,16 +22,20 @@ class SmappeeCurrentLimitNumber(NumberEntity):
         self._attr_name = "Smappee Current Limit"
         self._attr_unique_id = f"{api_client.serial_id}_current_limit"
         self._attr_native_unit_of_measurement = "A"
-        self._attr_native_min_value = 6  # Adjust as needed
-        self._attr_native_max_value = 32  # Adjust as needed
+        self._attr_native_min_value = 6  # Pas aan indien nodig
+        self._attr_native_max_value = 32  # Pas aan indien nodig
+        # Startwaarde: laad uit api_client of default
+        self._current_value = getattr(api_client, "current_limit", 6)
 
     @property
     def native_value(self):
-        # Replace with actual retrieval from api_client
-        return self.api_client.current_limit
+        return self._current_value
 
     async def async_set_native_value(self, value):
-        await self.api_client.set_charging_mode("NORMAL", int(value))
+        # Alleen waarde onthouden, niet direct de API aanroepen!
+        self._current_value = value
+        # Optioneel: ook opslaan in api_client voor ophalen door button
+        self.api_client.selected_current_limit = value
         self.async_write_ha_state()
 
 class SmappeePercentageLimitNumber(NumberEntity):
@@ -42,12 +46,16 @@ class SmappeePercentageLimitNumber(NumberEntity):
         self._attr_native_unit_of_measurement = "%"
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
+        # Startwaarde: laad uit api_client of default
+        self._current_value = getattr(api_client, "percentage_limit", 0)
 
     @property
     def native_value(self):
-        # Replace with actual retrieval from api_client
-        return self.api_client.percentage_limit
+        return self._current_value
 
     async def async_set_native_value(self, value):
-        await self.api_client.set_charging_mode("SOLAR", int(value))
+        # Alleen waarde onthouden, niet direct de API aanroepen!
+        self._current_value = value
+        # Optioneel: ook opslaan in api_client voor ophalen door button
+        self.api_client.selected_percentage_limit = value
         self.async_write_ha_state()
