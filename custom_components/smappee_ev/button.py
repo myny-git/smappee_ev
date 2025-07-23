@@ -28,8 +28,6 @@ class SmappeeSetChargingModeButton(ButtonEntity):
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
             "name": "Smappee EV Wallbox",
             "manufacturer": "Smappee",
-            "model": "EV Charger",  # optioneel
-            # "sw_version": "1.0.0",  # optioneel
         }    
 
     async def async_press(self) -> None:
