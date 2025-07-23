@@ -11,7 +11,6 @@ class SmappeeModeSelect(SelectEntity):
     def __init__(self, api_client):
         self.api_client = api_client
         self._attr_name = f"Smappee Charging Mode {api_client.serial_id}"
-        self._attr_name = f"Smappee Charging Mode {api_client.serial_id}"
         self._attr_options = MODES
         self._selected_mode = MODES[0] 
         self._attr_unique_id = f"{api_client.serial_id or 'unknown'}_mode_select"
