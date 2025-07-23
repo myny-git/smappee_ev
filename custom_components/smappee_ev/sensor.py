@@ -52,7 +52,7 @@ class SensorBase(Entity):
         self.oauth_client = OAuth2Client(config_entry.data)
         self.api_client = SmappeeApiClient(
             self.oauth_client, 
-            config_entry.data.get(CONF_SERIAL);
+            config_entry.data.get(CONF_SERIAL),
             config_entry.data.get("smart_device_uuid"),
             config_entry.data.get("service_location_id")
         )
