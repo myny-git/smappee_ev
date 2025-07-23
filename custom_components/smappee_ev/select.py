@@ -16,8 +16,11 @@ class SmappeeModeSelect(SelectEntity):
 
     @property
     def current_option(self):
-        return self.api_client.getSessionState  # Of hoe je huidige mode uit je api_client leest
+        return self._selected_mode
 
     async def async_select_option(self, option):
-        await self.api_client.set_charging_mode(option, 0)  # 0 als default limit, of kies passend
+        # Alleen selectie onthouden, niet meteen API aanroepen!
+        self._selected_mode = option
+        
+        self.api_client.selected_mode = option
         self.async_write_ha_state()
