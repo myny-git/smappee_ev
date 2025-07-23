@@ -116,9 +116,10 @@ class SmappeeApiClient:
         """Set the charging mode for the given serial number and connector."""
         # Ensure token is refreshed if needed
         await self.oauth_client.ensure_token_valid()
-
+        _LOGGER.debug(f"Lets start setting the charger")
 
         if mode in ["SMART", "SOLAR"]:
+            _LOGGER.debug(f"Debugging mode")
         # Special API call for SMART and SOLAR modes
             url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
             headers = {
