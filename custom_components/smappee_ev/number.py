@@ -67,8 +67,8 @@ class SmappeePercentageLimitNumber(NumberEntity):
         # Optioneel: ook opslaan in api_client voor ophalen door button
         self.api_client.selected_percentage_limit = value
         self.async_write_ha_state()
-        @property
         
+    @property
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
