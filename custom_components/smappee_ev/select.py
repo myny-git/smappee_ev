@@ -12,7 +12,8 @@ class SmappeeModeSelect(SelectEntity):
         self.api_client = api_client
         self._attr_name = "Smappee Charging Mode"
         self._attr_options = MODES
-        self._attr_unique_id = f"{api_client.serial_id}_mode_select"
+        self._selected_mode = MODES[0] 
+        self._attr_unique_id = f"{api_client.serial_id or 'unknown'}_mode_select"
 
     @property
     def current_option(self):
@@ -24,3 +25,12 @@ class SmappeeModeSelect(SelectEntity):
         
         self.api_client.selected_mode = option
         self.async_write_ha_state()
+    
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }    
