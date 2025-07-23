@@ -55,7 +55,7 @@ During setup, you will be prompted to enter:
 ## ✅ To Do
 
 - [ ] Add a **Pause Charging** button entity
-- [ ] Add a **STOP Charing** button entity
+- [ ] Add a **Stop Charging** button entity
 - [ ] Expose **EVCC charging status** as a sensor or binary sensor  
 
 ## 💡 Notes
