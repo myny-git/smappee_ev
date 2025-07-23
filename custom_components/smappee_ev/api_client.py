@@ -117,7 +117,7 @@ class SmappeeApiClient:
         # Ensure token is refreshed if needed
         await self.oauth_client.ensure_token_valid()
 
-        xxxxxxxxxxx
+
         if mode in ["SMART", "SOLAR"]:
         # Special API call for SMART and SOLAR modes
             url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
