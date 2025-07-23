@@ -52,6 +52,12 @@ During setup, you will be prompted to enter:
 - **Serial number** of your charging station  
 → You can find it in the Smappee dashboard (go to EV line → click to view serial number)
 
+## ✅ To Do
+
+- [ ] Add a **Pause Charging** button entity
+- [ ] Add a **STOP Charing** button entity
+- [ ] Expose **EVCC charging status** as a sensor or binary sensor  
+
 ## 💡 Notes
 
 I built this fork because I own a **Smappee EV Wall Home** and wanted deeper control through Home Assistant.  
