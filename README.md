@@ -21,6 +21,8 @@ The original Home Assistant Smappee integration does **not** allow control over 
 - `SMART`
 - `STANDARD` (also known as "normal" mode), where you can set a percentage or a current.
 
+It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview).
+
 ✅ Tested on: **Smappee EV Wall Home**, single cable version.
 
 ---
