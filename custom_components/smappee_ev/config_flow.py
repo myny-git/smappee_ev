@@ -10,7 +10,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-class smappee_evConfigFlow(config_entries.ConfigFlow, domain="smappee_ev"):
+class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for smappee ev"""
 
     VERSION = 1
