@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
             _LOGGER.error(f"Failed to auto-detect service_location_id: {e}")
             raise
                     
-     if "smart_device_uuid" not in entry.data:
+    if "smart_device_uuid" not in entry.data:
         try:
             token = await oauth_client.async_get_access_token()
             headers = {
