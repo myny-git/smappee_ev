@@ -150,7 +150,7 @@ class SmappeeApiClient:
                 _LOGGER.error(f"Exception occurred while setting {mode} charging mode: {str(e)}")
                 raise
         
-            else:
+        else:
 
         
         url = f"{self.base_url}/chargingstations/{self.serial}/connectors/1/mode"
