@@ -1,4 +1,4 @@
-import logging 
+import logging
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
