@@ -73,7 +73,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             _LOGGER.info(f"Setting charging mode for serial {serial} to {mode}.")
         else:
             _LOGGER.info(f"Setting charging mode for serial {serial} to {mode} with limit {limit}.")
-       
+        hass.async_create_task(api_client.set_charging_mode(mode,limit))
         #api_client = hass.data[DOMAIN][entry.entry_id]
     
         #try:
