@@ -52,6 +52,33 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         except Exception as e:
             _LOGGER.error(f"Failed to auto-detect service_location_id: {e}")
             raise
+                    
+     if "smart_device_uuid" not in entry.data:
+        try:
+            token = await oauth_client.async_get_access_token()
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+
+            service_location_id = entry.data["service_location_id"]
+            session = hass.helpers.aiohttp_client.async_get_clientsession(hass)
+            url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/metering"
+            resp = await session.get(url, headers=headers)
+            resp.raise_for_status()
+            data = await resp.json()
+
+            # retrieve UUID 
+            smart_device_uuid = data["chargingStations"][0]["chargers"][0]["uuid"]
+            _LOGGER.info(f"Detected smart device UUID: {smart_device_uuid}")
+
+            # Update entry 
+            new_data = {**entry.data, "smart_device_uuid": smart_device_uuid}
+            hass.config_entries.async_update_entry(entry, data=new_data)
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to auto-detect smart device UUID: {e}")
+            raise
          
     _LOGGER.debug("Init API...")    
     api_client = SmappeeApiClient(oauth_client, entry.data.get(CONF_SERIAL))
