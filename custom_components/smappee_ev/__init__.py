@@ -10,7 +10,7 @@ from .api_client import SmappeeApiClient
 from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = [Platform.SENSOR, Platform.NUMBER]
+PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT]
             
 async def async_setup_entry(hass: HomeAssistant, entry):
     """Set up Smappee Charging Profiles from a config entry."""
