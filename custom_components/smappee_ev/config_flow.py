@@ -84,7 +84,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input["service_location_id"] = service_location_id
         except Exception as e:
             _LOGGER.error(f"Exception while retrieving service_location_id: {e}")
-            erors = {}
+            errors = {}
             errors["base"] = "servicelocation_failed"
             return self.async_show_form(
                 step_id="user",
@@ -100,7 +100,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Retrieving the UUID
         try:
-            url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/metering"
+            url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/meteringconfiguration"
             async with aiohttp.ClientSession() as session:
                 resp = await session.get(url, headers=headers)
                 if resp.status != 200:
@@ -137,7 +137,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input["smart_device_uuid"] = smart_device_uuid
         except Exception as e:
             _LOGGER.error(f"Exception while retrieving smart_device_uuid: {e}")
-            erors = {}
+            errors = {}
             errors["base"] = "uuid_failed"
             return self.async_show_form(
                 step_id="user",
