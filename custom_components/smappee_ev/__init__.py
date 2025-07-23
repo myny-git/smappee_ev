@@ -21,6 +21,38 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     _LOGGER.debug("Init OAuth...")
     oauth_client = OAuth2Client(entry.data)
     _LOGGER.debug("Init OAuth...done")
+   # === get the serviceLocationId ===
+    if "service_location_id" not in entry.data:
+        try:
+            _LOGGER.info("No service_location_id found, attempting to auto-detect...")
+
+            token = await oauth_client.async_get_access_token()
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+
+            session = hass.helpers.aiohttp_client.async_get_clientsession(hass)
+            resp = await session.get("https://app1pub.smappee.net/dev/v3/servicelocation", headers=headers)
+            resp.raise_for_status()
+            data = await resp.json()
+
+            locations = data.get("serviceLocations", [])
+            if not locations:
+                raise RuntimeError("No service locations found.")
+
+            first_location = locations[0]
+            service_location_id = first_location.get("serviceLocationId")
+            _LOGGER.info(f"Detected serviceLocationId: {service_location_id}")
+
+            # Update entry with service_location_id
+            new_data = {**entry.data, "service_location_id": service_location_id}
+            hass.config_entries.async_update_entry(entry, data=new_data)
+
+        except Exception as e:
+            _LOGGER.error(f"Failed to auto-detect service_location_id: {e}")
+            raise
+         
     _LOGGER.debug("Init API...")    
     api_client = SmappeeApiClient(oauth_client, entry.data.get(CONF_SERIAL))
     _LOGGER.debug("Init API...done")    
