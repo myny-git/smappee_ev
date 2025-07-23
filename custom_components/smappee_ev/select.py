@@ -1,7 +1,7 @@
 from homeassistant.components.select import SelectEntity
 from .const import DOMAIN
 
-MODES = ["SMART", "SOLAR", "NORMAL", "NORMAL2"]  # Voeg toe wat je ondersteunt!
+MODES = ["SMART", "SOLAR", "NORMAL", "NORMAL_PERCENTAGE"]  # Voeg toe wat je ondersteunt!
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     api_client = hass.data[DOMAIN][config_entry.entry_id]
