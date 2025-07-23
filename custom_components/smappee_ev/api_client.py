@@ -121,34 +121,34 @@ class SmappeeApiClient:
         if mode in ["SMART", "SOLAR"]:
         # Special API call for SMART and SOLAR modes
             url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
-                headers = {
-                    "Authorization": f"Bearer {self.oauth_client.access_token}",
-                    "Content-Type": "application/json",
+            headers = {
+                "Authorization": f"Bearer {self.oauth_client.access_token}",
+                "Content-Type": "application/json",
+            }
+            payload = [
+                {
+                    "spec": {
+                        "name": "mode",
+                        "species": "String"
+                    },
+                    "value": mode
                 }
-                payload = [
-                    {
-                        "spec": {
-                            "name": "mode",
-                            "species": "String"
-                        },
-                        "value": mode
-                    }
-                ]
-                _LOGGER.debug(f"Sending POST to {url} with payload: {payload}")
+            ]
+            _LOGGER.debug(f"Sending POST to {url} with payload: {payload}")
         
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        response = await session.post(url, json=payload, headers=headers)
-                        if response.status != 200:
-                            if response.status == 401:
-                                raise Exception("Token expired")
-                            error_message = await response.text()
-                            _LOGGER.error(f"Failed to set {mode} charging mode: {error_message}")
-                            raise Exception(f"Error setting {mode} charging mode: {error_message}")
-                        _LOGGER.debug(f"Successfully set {mode} charging mode")
-                except Exception as e:
-                    _LOGGER.error(f"Exception occurred while setting {mode} charging mode: {str(e)}")
-                    raise
+            try:
+                async with aiohttp.ClientSession() as session:
+                    response = await session.post(url, json=payload, headers=headers)
+                    if response.status != 200:
+                        if response.status == 401:
+                            raise Exception("Token expired")
+                        error_message = await response.text()
+                        _LOGGER.error(f"Failed to set {mode} charging mode: {error_message}")
+                        raise Exception(f"Error setting {mode} charging mode: {error_message}")
+                    _LOGGER.debug(f"Successfully set {mode} charging mode")
+            except Exception as e:
+                _LOGGER.error(f"Exception occurred while setting {mode} charging mode: {str(e)}")
+                raise
         
             else:
 
