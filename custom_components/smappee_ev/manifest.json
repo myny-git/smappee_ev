@@ -12,6 +12,7 @@
   "loggers": ["custom_components.smappee_ev"],
   "platforms": [
     "sensor",
-    "number"
+    "number",
+    "select"
   ]
 }
