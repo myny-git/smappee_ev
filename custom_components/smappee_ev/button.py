@@ -23,7 +23,6 @@ class SmappeeSetChargingModeButton(ButtonEntity):
         self._attr_unique_id = f"{api_client.serial_id}_set_charging_mode"
 
     async def async_press(self) -> None:
-        # Entity IDs
         serial = self.api_client.serial_id
         mode_entity_id = f"select.smappee_charging_mode_{serial}"
         current_entity_id = f"number.smappee_current_limit_{serial}"
@@ -34,18 +33,21 @@ class SmappeeSetChargingModeButton(ButtonEntity):
         percent_state = self.hass.states.get(percent_entity_id)
 
         if mode_state is None:
-            # Log error if not found
-            self.hass.components.persistent_notification.create(
-                f"Kan mode entity '{mode_entity_id}' niet vinden.", "Smappee Button"
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": f"Kan mode entity '{mode_entity_id}' niet vinden.",
+                    "title": "Smappee Button"
+                },
+                blocking=True,
             )
             return
 
         mode = mode_state.state
 
-        # Read values, with safe fallback
         current = None
         percent = None
-
         if current_state is not None:
             try:
                 current = float(current_state.state)
@@ -57,12 +59,11 @@ class SmappeeSetChargingModeButton(ButtonEntity):
             except (ValueError, TypeError):
                 percent = None
 
-        # Select the correct limit based on mode
         if mode == "NORMAL":
-            limit = current if current is not None else 6  # fallback to min current
+            limit = current if current is not None else 6
         elif mode == "NORMAL_PERCENTAGE":
-            limit = percent if percent is not None else 10  # fallback to min percentage
+            limit = percent if percent is not None else 10
         else:
-            limit = 0  # For SMART, SOLAR, etc.
+            limit = 0
 
         await self.api_client.set_charging_mode(mode, limit)
