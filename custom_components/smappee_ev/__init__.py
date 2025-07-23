@@ -27,7 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
             _LOGGER.info("No service_location_id found, attempting to auto-detect...")
 
             headers = {
-                "Authorization": f"Bearer {token}",
+                "Authorization": f"Bearer {self.oauth_client.access_token}",
                 "Content-Type": "application/json",
             }
 
@@ -56,7 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         try:
             token = await oauth_client.async_get_access_token()
             headers = {
-                "Authorization": f"Bearer {token}",
+                "Authorization": f"Bearer {self.oauth_client.access_token}",
                 "Content-Type": "application/json",
             }
 
