@@ -12,22 +12,22 @@ async def async_setup_entry(
 ) -> None:
     api_client = hass.data[DOMAIN][config_entry.entry_id]
     async_add_entities([
-        SmappeeSetChargingModeButton(api_client, hass, config_entry.entry_id)
+        SmappeeSetChargingModeButton(api_client, hass)
     ])
 
 class SmappeeSetChargingModeButton(ButtonEntity):
-    def __init__(self, api_client, hass, entry_id):
+    def __init__(self, api_client, hass):
         self.api_client = api_client
         self.hass = hass
-        self.entry_id = entry_id
         self._attr_name = "Set Charging Mode"
         self._attr_unique_id = f"{api_client.serial_id}_set_charging_mode"
 
     async def async_press(self) -> None:
         # Entity IDs
-        mode_entity_id = f"select.smappee_charging_mode_{self.api_client.serial_id}"
-        current_entity_id = f"number.smappee_current_limit_{self.api_client.serial_id}"
-        percent_entity_id = f"number.smappee_percentage_limit_{self.api_client.serial_id}"
+        serial = self.api_client.serial_id
+        mode_entity_id = f"select.smappee_charging_mode_{serial}"
+        current_entity_id = f"number.smappee_current_limit_{serial}"
+        percent_entity_id = f"number.smappee_percentage_limit_{serial}"
 
         mode_state = self.hass.states.get(mode_entity_id)
         current_state = self.hass.states.get(current_entity_id)
@@ -35,31 +35,34 @@ class SmappeeSetChargingModeButton(ButtonEntity):
 
         if mode_state is None:
             # Log error if not found
+            self.hass.components.persistent_notification.create(
+                f"Kan mode entity '{mode_entity_id}' niet vinden.", "Smappee Button"
+            )
             return
 
         mode = mode_state.state
 
-        # Default values
-        current = 6
-        percent = 10
+        # Read values, with safe fallback
+        current = None
+        percent = None
 
         if current_state is not None:
             try:
                 current = float(current_state.state)
             except (ValueError, TypeError):
-                current = 0
+                current = None
         if percent_state is not None:
             try:
                 percent = float(percent_state.state)
             except (ValueError, TypeError):
-                percent = 0
+                percent = None
 
         # Select the correct limit based on mode
         if mode == "NORMAL":
-            limit = current
+            limit = current if current is not None else 6  # fallback to min current
         elif mode == "NORMAL_PERCENTAGE":
-            limit = percent
+            limit = percent if percent is not None else 10  # fallback to min percentage
         else:
-            limit = current
+            limit = 0  # For SMART, SOLAR, etc.
 
         await self.api_client.set_charging_mode(mode, limit)
