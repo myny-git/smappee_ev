@@ -22,6 +22,16 @@ class SmappeeSetChargingModeButton(ButtonEntity):
         self._attr_name = "Set Charging Mode"
         self._attr_unique_id = f"{api_client.serial_id}_set_charging_mode"
 
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+            "model": "EV Charger",  # optioneel
+            # "sw_version": "1.0.0",  # optioneel
+        }    
+
     async def async_press(self) -> None:
         serial = self.api_client.serial_id
         mode_entity_id = f"select.smappee_charging_mode_{serial}"
