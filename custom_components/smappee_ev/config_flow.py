@@ -84,6 +84,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input["service_location_id"] = service_location_id
         except Exception as e:
             _LOGGER.error(f"Exception while retrieving service_location_id: {e}")
+            erors = {}
             errors["base"] = "servicelocation_failed"
             return self.async_show_form(
                 step_id="user",
@@ -136,6 +137,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input["smart_device_uuid"] = smart_device_uuid
         except Exception as e:
             _LOGGER.error(f"Exception while retrieving smart_device_uuid: {e}")
+            erors = {}
             errors["base"] = "uuid_failed"
             return self.async_show_form(
                 step_id="user",
