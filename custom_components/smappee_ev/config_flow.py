@@ -38,6 +38,115 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain="smappee_ev"):
 
         user_input["access_token"] = tokens["access_token"]
         user_input["refresh_token"] = tokens["refresh_token"]
+        
+        # Retrieving the servicelocation_id
+        try:
+            headers = {
+                "Authorization": f"Bearer {tokens['access_token']}",
+                "Content-Type": "application/json",
+            }
+            async with aiohttp.ClientSession() as session:
+                resp = await session.get(
+                    "https://app1pub.smappee.net/dev/v3/servicelocation",
+                    headers=headers,
+                )
+                if resp.status != 200:
+                    _LOGGER.error("Failed to retrieve service locations: %s", await resp.text())
+                    errors["base"] = "servicelocation_failed"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=vol.Schema({
+                            vol.Required(CONF_CLIENT_ID): str,
+                            vol.Required(CONF_CLIENT_SECRET): str,
+                            vol.Required(CONF_USERNAME): str,
+                            vol.Required(CONF_PASSWORD): str,
+                            vol.Required(CONF_SERIAL): str
+                        }),
+                        errors=errors
+                    )
+                data = await resp.json()
+                locations = data.get("serviceLocations", [])
+                if not locations:
+                    errors["base"] = "no_locations"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=vol.Schema({
+                            vol.Required(CONF_CLIENT_ID): str,
+                            vol.Required(CONF_CLIENT_SECRET): str,
+                            vol.Required(CONF_USERNAME): str,
+                            vol.Required(CONF_PASSWORD): str,
+                            vol.Required(CONF_SERIAL): str
+                        }),
+                        errors=errors
+                    )
+                service_location_id = locations[0].get("serviceLocationId")
+                user_input["service_location_id"] = service_location_id
+        except Exception as e:
+            _LOGGER.error(f"Exception while retrieving service_location_id: {e}")
+            errors["base"] = "servicelocation_failed"
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema({
+                    vol.Required(CONF_CLIENT_ID): str,
+                    vol.Required(CONF_CLIENT_SECRET): str,
+                    vol.Required(CONF_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str,
+                    vol.Required(CONF_SERIAL): str
+                }),
+                errors=errors
+            )
+
+        # Retrieving the UUID
+        try:
+            url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/metering"
+            async with aiohttp.ClientSession() as session:
+                resp = await session.get(url, headers=headers)
+                if resp.status != 200:
+                    _LOGGER.error("Failed to retrieve metering info: %s", await resp.text())
+                    errors["base"] = "uuid_failed"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=vol.Schema({
+                            vol.Required(CONF_CLIENT_ID): str,
+                            vol.Required(CONF_CLIENT_SECRET): str,
+                            vol.Required(CONF_USERNAME): str,
+                            vol.Required(CONF_PASSWORD): str,
+                            vol.Required(CONF_SERIAL): str
+                        }),
+                        errors=errors
+                    )
+                data = await resp.json()
+                # Controleer of er chargingStations en chargers zijn
+                charging_stations = data.get("chargingStations", [])
+                if not charging_stations or not charging_stations[0].get("chargers"):
+                    errors["base"] = "no_chargers"
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=vol.Schema({
+                            vol.Required(CONF_CLIENT_ID): str,
+                            vol.Required(CONF_CLIENT_SECRET): str,
+                            vol.Required(CONF_USERNAME): str,
+                            vol.Required(CONF_PASSWORD): str,
+                            vol.Required(CONF_SERIAL): str
+                        }),
+                        errors=errors
+                    )
+                smart_device_uuid = charging_stations[0]["chargers"][0].get("uuid")
+                user_input["smart_device_uuid"] = smart_device_uuid
+        except Exception as e:
+            _LOGGER.error(f"Exception while retrieving smart_device_uuid: {e}")
+            errors["base"] = "uuid_failed"
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema({
+                    vol.Required(CONF_CLIENT_ID): str,
+                    vol.Required(CONF_CLIENT_SECRET): str,
+                    vol.Required(CONF_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str,
+                    vol.Required(CONF_SERIAL): str
+                }),
+                errors=errors
+            )
 
         return self.async_create_entry(title="Smappee EV", data=user_input)
 
