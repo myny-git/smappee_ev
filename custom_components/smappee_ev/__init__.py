@@ -64,8 +64,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         # serial = call.data.get("serial")
         mode = call.data.get("mode")
         limit = call.data.get("limit", 0)
+        api_client = list(hass.data[DOMAIN].values())[0]
+        serial = api_client.serial_id
 
-        _LOGGER.info(f"Setting charging mode for serial {serial} to {mode} with limit {limit}.")
+                
+                    
+        if mode in ["SMART", "SOLAR"]:
+            _LOGGER.info(f"Setting charging mode for serial {serial} to {mode}.")
+        else:
+            _LOGGER.info(f"Setting charging mode for serial {serial} to {mode} with limit {limit}.")
        
         #api_client = hass.data[DOMAIN][entry.entry_id]
     
