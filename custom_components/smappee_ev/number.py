@@ -19,7 +19,7 @@ async def async_setup_entry(
 class SmappeeCurrentLimitNumber(NumberEntity):
     def __init__(self, api_client):
         self.api_client = api_client
-        self._attr_name = "Smappee Current Limit {api_client.serial_id}"
+        self._attr_name = f"Smappee Current Limit {api_client.serial_id}"
         self._attr_unique_id = f"{api_client.serial_id}_current_limit"
         self._attr_native_unit_of_measurement = "A"
         self._attr_native_min_value = 6  # Pas aan indien nodig
@@ -49,7 +49,7 @@ class SmappeeCurrentLimitNumber(NumberEntity):
 class SmappeePercentageLimitNumber(NumberEntity):
     def __init__(self, api_client):
         self.api_client = api_client
-        self._attr_name = "Smappee Percentage Limit {api_client.serial_id}"
+        self._attr_name = f"Smappee Percentage Limit {api_client.serial_id}"
         self._attr_unique_id = f"{api_client.serial_id}_percentage_limit"
         self._attr_native_unit_of_measurement = "%"
         self._attr_native_min_value = 0
