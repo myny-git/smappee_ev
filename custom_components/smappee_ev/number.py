@@ -38,6 +38,14 @@ class SmappeeCurrentLimitNumber(NumberEntity):
         self.api_client.selected_current_limit = value
         self.async_write_ha_state()
 
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
+
 class SmappeePercentageLimitNumber(NumberEntity):
     def __init__(self, api_client):
         self.api_client = api_client
@@ -59,3 +67,11 @@ class SmappeePercentageLimitNumber(NumberEntity):
         # Optioneel: ook opslaan in api_client voor ophalen door button
         self.api_client.selected_percentage_limit = value
         self.async_write_ha_state()
+        @property
+        
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
