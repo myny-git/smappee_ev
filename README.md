@@ -4,7 +4,7 @@ Smappee EV Home Assistant Integration (HACS)
 This is a fork of gvnuland / smappee_ev, so all credits for the initial version to @gvnuland.
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-blue.svg?style=flat-square)](https://hacs.xyz)
-[![hainstall][https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total]][https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev]
+[![hainstall](https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev)
 <!--
 > [!NOTE]  
 [![GitHub](https://img.shields.io/badge/Source-GitHub-black?logo=github&style=flat-square)](https://github.com/sponsors/myny-git) // to be set!
