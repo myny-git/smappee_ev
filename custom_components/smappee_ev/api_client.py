@@ -23,6 +23,7 @@ class SmappeeApiClient:
         self._latestSessionCounter = 0
         self._sessionstate = "Initialize"
         self._timer = datetime.now() - timedelta(seconds = 30) # maybe at some moment, make this a variable
+        self._set_mode_select_callback = None        
         _LOGGER.info("SmappeeApiClient init...done")
 
     @property
@@ -211,6 +212,10 @@ class SmappeeApiClient:
                     _LOGGER.error(f"Failed to pause charging: {error_message}")
                     raise Exception(f"Error pausing charging: {error_message}")
                 _LOGGER.debug("Successfully paused charging")
+                
+                # Also set mode to NORMAL in select entity
+                if self._set_mode_select_callback:
+                    await self._set_mode_select_callback("NORMAL")            
         except Exception as e:
             _LOGGER.error(f"Exception occurred while pausing charging: {str(e)}")
             raise
