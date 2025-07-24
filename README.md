@@ -10,8 +10,8 @@ This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev
 <!--
 > [!NOTE]  
 [![GitHub](https://img.shields.io/badge/Source-GitHub-black?logo=github&style=flat-square)](https://github.com/sponsors/myny-git) // to be set!
-[![BuyMeACoffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-donate-yellow?logo=buymeacoffee&style=flat-square)](https://www.buymeacoffee.com/YOURUSERNAME)  // to be set
-[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&style=flat-square)](https://www.paypal.me/YOURUSERNAME) 
+[![BuyMeACoffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-donate-yellow?logo=buymeacoffee&style=flat-square)](https://www.buymeacoffee.com/mynygit)  
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&style=flat-square)](https://www.paypal.me/mynygit) 
 -->
 
 ## 🔧 Features
@@ -21,13 +21,14 @@ The original Home Assistant Smappee integration does **not** allow control over 
 - `SMART`
 - `STANDARD` (also known as "normal" mode), where you can set a percentage or a current.
 
+The new version also includes **Pausing charging** via service call and a button. 
+
 It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview).
 
 ✅ Tested on: **Smappee EV Wall Home**, single cable version.
 
----
 
-> ## ⚠️ [!IMPORTANT]
+> ## ⚠️ Important
 > This is a HACS custom integration.
 > Do **not** try to add this repository as an **add-on** in Home Assistant - it won't work that way.
 
@@ -54,9 +55,39 @@ During setup, you will be prompted to enter:
 - **Serial number** of your charging station  
 → You can find it in the Smappee dashboard (go to EV line → click to view serial number)
 
+## ⚙️ How the integration works
+
+This integration creates **7 entities** and **2 services**, and behaves similarly to the Smappee app.
+
+### 🧩 Entities
+
+#### ✅ Controls (5 entities)
+- **Set Charging Mode** – button entity
+- **Charging Mode** – `select` entity with options: `SMART`, `SOLAR`, `NORMAL`, `NORMAL_PERCENTAGE`
+- **Charging Current (A)** – `number` entity for ampere setting (used in NORMAL mode)
+- **Charging Percentage (%)** – `number` entity for percentage setting (used in NORMAL_PERCENTAGE mode)
+
+#### 📈 Sensors (2 entities)
+- **Charging Point Total Counter** – total energy delivered in kWh
+- **Charging Point Session State** – current session status (e.g., `CHARGING`, `PAUSED`, 'SUSPENDED')
+I will use the later one later to create the EVCC state.
+
+### 🛠️ Services
+
+#### `smappee_ev.set_charging_mode`
+Pushes the selected mode (`SMART`, `SOLAR`, `NORMAL`, or `NORMAL_PERCENTAGE`) to the Smappee EV Wallbox.  
+Works just like the app: select the mode and press **Set Charging Mode**.
+
+#### `smappee_ev.pause_charging`
+Pauses charging on the Wallbox.
+
+> ⚠️ **Take care**: just like in the app, pressing **Pause Charging** will also change the charging mode to `NORMAL`.  
+> If you want to **resume charging**, be sure to manually set the desired mode again (e.g., `SMART`) and press **Set Charging Mode**.
+
+
 ## ✅ To Do
 
-- [ ] Add a **Pause Charging** button entity
+- [x] Add a **Pause Charging** button entity
 - [ ] Add a **Stop Charging** button entity
 - [ ] Expose **EVCC charging status** as a sensor or binary sensor  
 
@@ -72,5 +103,5 @@ Contributions, feedback, or bug reports are very welcome! I am not a programmer,
 
 If this integration is useful to you, feel free to support its development:
 
-- Buy Me a Coffee: _Coming soon_
-- PayPal: _Coming soon_
+[![BuyMeACoffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-donate-yellow?logo=buymeacoffee&style=flat-square)](https://www.buymeacoffee.com/mynygit)  [![PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&style=flat-square)](https://www.paypal.me/mynygit) 
+
