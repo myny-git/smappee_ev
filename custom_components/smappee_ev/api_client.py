@@ -223,3 +223,36 @@ class SmappeeApiClient:
         except Exception as e:
             _LOGGER.error(f"Exception occurred while pausing charging: {str(e)}")
             raise
+            
+    async def stop_charging(self):
+        """Stop charging via the Smappee API."""
+        await self.oauth_client.ensure_token_valid()
+        _LOGGER.debug(f"Let's start stopping the charger")
+
+        url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/stopCharging"
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json"
+        }
+        payload = []
+
+        _LOGGER.debug(f"Sending stopCharging POST to {url} with empty payload")
+    
+        try:
+            async with aiohttp.ClientSession() as session:
+                response = await session.post(url, json=payload, headers=headers)
+                if response.status != 200:
+                    if response.status == 401:
+                        raise Exception("Token expired")
+                    error_message = await response.text()
+                    _LOGGER.error(f"Failed to stop charging: {error_message}")
+                    raise Exception(f"Error stopping charging: {error_message}")
+                _LOGGER.debug("Successfully stopped charging")
+    
+            if self._set_mode_select_callback:
+                self._set_mode_select_callback("NORMAL")
+    
+        except Exception as e:
+            _LOGGER.error(f"Exception occurred while stopping charging: {str(e)}")
+            raise
+
