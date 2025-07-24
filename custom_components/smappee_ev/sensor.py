@@ -132,8 +132,8 @@ class ChargingPointEvccStatus(SensorBase, SensorEntity):
     def __init__(self, config_entry):
         _LOGGER.debug("ChargingPointEvccStatus init...")
         super().__init__(config_entry)
-        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_evcc_status"
-        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} EVCC status"
+        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_evcc_state"
+        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} EVCC state"
         _LOGGER.debug("ChargingPointEvccStatus init...done")
 
     @property
