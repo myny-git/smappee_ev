@@ -218,10 +218,8 @@ class SmappeeApiClient:
                 
                 # Also set mode to NORMAL in select entity
                 if self._set_mode_select_callback:
-                    if asyncio.iscoroutinefunction(self._set_mode_select_callback):
-                        await self._set_mode_select_callback("NORMAL")
-                    else:
-                        self._set_mode_select_callback("NORMAL")    
+                    self._set_mode_select_callback("NORMAL")    
+                    
         except Exception as e:
             _LOGGER.error(f"Exception occurred while pausing charging: {str(e)}")
             raise
