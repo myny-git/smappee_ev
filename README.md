@@ -22,6 +22,8 @@ The original Home Assistant Smappee integration does **not** allow control over 
 
 The new version also includes **Pausing charging** and **Stop charging** via service call and a button. 
 
+It also includes a sensor for EVCC, to inform about the status.
+
 It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview).
 
 ✅ Tested on: **Smappee EV Wall Home**, single cable version.
@@ -56,7 +58,7 @@ During setup, you will be prompted to enter:
 
 ## ⚙️ How the integration works
 
-This integration creates **8 entities** and **2 services**, and behaves similarly to the Smappee app.
+This integration creates **9 entities** and **3 services**, and behaves similarly to the Smappee app.
 
 ### 🧩 Entities
 
@@ -71,7 +73,8 @@ This integration creates **8 entities** and **2 services**, and behaves similarl
 #### 📈 Sensors (2 entities)
 - **Charging Point Total Counter** – total energy delivered in kWh
 - **Charging Point Session State** – current session status (e.g., `CHARGING`, `PAUSED`, 'SUSPENDED')
-I will use the later one later to create the EVCC state.
+It seems that, when you cable is connected, it is mostly 'SUSPENDED'.
+- **Charging Point EVCC State** – EVCC charger state (A, B, C or E)
 
 ### 🛠️ Services
 
@@ -82,6 +85,9 @@ Works just like the app: select the mode and press **Set Charging Mode**.
 #### `smappee_ev.pause_charging`
 Pauses charging on the Wallbox.
 
+#### `smappee_ev.stop_charging`
+Stops the charging on the Wallbox.
+
 > ⚠️ **Take care**: just like in the app, pressing **Pause Charging** will also change the charging mode to `NORMAL`.  
 > If you want to **resume charging**, be sure to manually set the desired mode again (e.g., `SMART`) and press **Set Charging Mode**.
 
@@ -91,7 +97,7 @@ Pauses charging on the Wallbox.
 - [x] Add a **Pause Charging** button entity
 - [x] Add a **Stop Charging** button entity
 - [ ] Add a **Start Charging** button entity
-- [ ] Expose **EVCC charging status** as a sensor or binary sensor  
+- [x] Expose **EVCC charging status** as a sensor or binary sensor  
 
 ## 💡 Notes
 
