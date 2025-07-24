@@ -89,6 +89,9 @@ class SmappeeApiClient:
             return True
         else:
             return False
+    
+    def set_mode_select_callback(self, callback):
+        self._set_mode_select_callback = callback
 
     def register_callback(self, callback: callable) -> None:
         """Register callback, called when Roller changes state."""
@@ -215,7 +218,7 @@ class SmappeeApiClient:
                 
                 # Also set mode to NORMAL in select entity
                 if self._set_mode_select_callback:
-                    await self._set_mode_select_callback("NORMAL")            
+                    self._set_mode_select_callback("NORMAL")            
         except Exception as e:
             _LOGGER.error(f"Exception occurred while pausing charging: {str(e)}")
             raise
