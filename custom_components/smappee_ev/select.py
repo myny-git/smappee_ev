@@ -28,7 +28,7 @@ class SmappeeModeSelect(SelectEntity):
         self.api_client.selected_mode = option
         self.async_write_ha_state()
 
-    async def set_selected_mode(self, option: str):
+    def set_selected_mode(self, option: str):
         """Externally set the selected mode from the API client."""
         self._selected_mode = option
         self.async_write_ha_state()
