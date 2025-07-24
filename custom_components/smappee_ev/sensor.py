@@ -28,7 +28,7 @@ async def async_setup_entry(
     new_devices = []
     new_devices.append(ChargingPointSessionState(config_entry))
     new_devices.append(ChargingPointLatestCounter(config_entry))
-    new_devices.append(ChargingPointEvccStatus(config_entry))
+    new_devices.append(ChargingPointEvccState(config_entry))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
@@ -128,17 +128,17 @@ class ChargingPointSessionState(SensorBase):
         _LOGGER.debug("Get ChargingPointSessionState.state...")
         return self.api_client.getSessionState
 
-class ChargingPointEvccStatus(SensorBase, SensorEntity):
+class ChargingPointEvccState(SensorBase, SensorEntity):
     def __init__(self, config_entry):
-        _LOGGER.debug("ChargingPointEvccStatus init...")
+        _LOGGER.debug("ChargingPointEvccState init...")
         super().__init__(config_entry)
         self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_evcc_state"
         self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} EVCC state"
-        _LOGGER.debug("ChargingPointEvccStatus init...done")
+        _LOGGER.debug("ChargingPointEvccState init...done")
 
     @property
     def state(self):
-        _LOGGER.debug("Get ChargingPointEvccStatus.state...")
+        _LOGGER.debug("Get ChargingPointEvccState.state...")
         session_state = self.api_client.getSessionState
         if session_state in ["INITIAL", "STOPPED"]:
             return "A"
