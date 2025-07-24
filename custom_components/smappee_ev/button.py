@@ -98,6 +98,7 @@ class SmappeePauseChargingButton(ButtonEntity):
 
     async def async_press(self) -> None:
         serial = self.api_client.serial_id
+        await self.api_client.pause_charging()
 
 class SmappeeStopChargingButton(ButtonEntity):
     def __init__(self, api_client, hass):
