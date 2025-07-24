@@ -8,8 +8,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     select_entity = SmappeeModeSelect(api_client)
     async_add_entities([SmappeeModeSelect(api_client)], update_before_add=True)
 
-    # Register the callback so the API can update the select
-    api_client.set_mode_select_callback(select_entity.set_selected_mode)
+    # Register the callback only AFTER the entity is added
+    # Use hass.async_create_task to defer it until entity is fully set up
+    def register_callback_later(_):
+        api_client.set_mode_select_callback(select_entity.set_selected_mode)
+
+    hass.bus.async_listen_once("homeassistant_started", register_callback_later)
 
 class SmappeeModeSelect(SelectEntity):
     def __init__(self, api_client):
@@ -18,6 +22,7 @@ class SmappeeModeSelect(SelectEntity):
         self._attr_options = MODES
         self._selected_mode = MODES[0] 
         self._attr_unique_id = f"{api_client.serial_id or 'unknown'}_mode_select"
+        # self._attr_should_poll = False  # Disable polling if updates come from callback
 
     @property
     def current_option(self):
@@ -34,6 +39,9 @@ class SmappeeModeSelect(SelectEntity):
         # Make sure entity is added before calling this to avoid hass==None
         if self.hass:
             self.async_write_ha_state()
+        else:
+            # Delay update until hass is set
+            _LOGGER.warning("Tried to update mode select before entity was added.")
 
     @property
     def device_info(self):
