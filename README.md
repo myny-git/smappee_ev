@@ -4,8 +4,7 @@
 This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"".
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-blue.svg?style=flat-square)](https://hacs.xyz)
-[![hainstall](https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev)
-[![GitHub release](https://img.shields.io/github/v/release/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/releases)
+[![hainstall](https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev) [![GitHub release](https://img.shields.io/github/v/release/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/releases)
 
 <!--
 > [!NOTE]  
@@ -21,7 +20,7 @@ The original Home Assistant Smappee integration does **not** allow control over 
 - `SMART`
 - `STANDARD` (also known as "normal" mode), where you can set a percentage or a current.
 
-The new version also includes **Pausing charging** via service call and a button. 
+The new version also includes **Pausing charging** and **Stop charging** via service call and a button. 
 
 It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview).
 
@@ -57,12 +56,14 @@ During setup, you will be prompted to enter:
 
 ## ⚙️ How the integration works
 
-This integration creates **7 entities** and **2 services**, and behaves similarly to the Smappee app.
+This integration creates **8 entities** and **2 services**, and behaves similarly to the Smappee app.
 
 ### 🧩 Entities
 
-#### ✅ Controls (5 entities)
+#### ✅ Controls (6 entities)
 - **Set Charging Mode** – button entity
+- **Pause Charging** – button entity
+- **Stop Charging** – button entity
 - **Charging Mode** – `select` entity with options: `SMART`, `SOLAR`, `NORMAL`, `NORMAL_PERCENTAGE`
 - **Charging Current (A)** – `number` entity for ampere setting (used in NORMAL mode)
 - **Charging Percentage (%)** – `number` entity for percentage setting (used in NORMAL_PERCENTAGE mode)
@@ -88,7 +89,8 @@ Pauses charging on the Wallbox.
 ## ✅ To Do
 
 - [x] Add a **Pause Charging** button entity
-- [ ] Add a **Stop Charging** button entity
+- [x] Add a **Stop Charging** button entity
+- [ ] Add a **Start Charging** button entity
 - [ ] Expose **EVCC charging status** as a sensor or binary sensor  
 
 ## 💡 Notes
