@@ -144,7 +144,7 @@ class ChargingPointEvccState(SensorBase, SensorEntity):
             return "A"
         elif session_state in ["STARTED", "STOPPING"]:
             return "B"
-        elif session_state == ["SUSPENDED", "CHARGING"]:
+        elif session_state in ["SUSPENDED", "CHARGING"]:
             return "C"
         else:
             return "E"
