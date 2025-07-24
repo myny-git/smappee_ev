@@ -17,7 +17,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     
     _LOGGER.debug("Setting up entry for Smappee EV. Serial: ")
     _LOGGER.debug(entry.data.get(CONF_SERIAL))
-    # Initialize the API client
+    
+    # Initialize the API/OAuth2 client
     _LOGGER.debug("Init OAuth...")
     oauth_client = OAuth2Client(entry.data)
     _LOGGER.debug("Init OAuth...done")
@@ -29,18 +30,18 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 
     # Evaluate if everything is present
     if not serial or not service_location_id or not smart_device_uuid:
-        _LOGGER.error("Vereiste entry data ontbreekt: serial (%s), service_location_id (%s), smart_device_uuid (%s)",
+        _LOGGER.error("Missing required entry data: serial (%s), service_location_id (%s), smart_device_uuid (%s)",
                       serial, service_location_id, smart_device_uuid)
         return False
          
-    _LOGGER.debug("Init API...")    
+    _LOGGER.debug("Init API client...")    
     api_client = SmappeeApiClient(
         oauth_client, 
         serial,
         smart_device_uuid,
         service_location_id)
-    _LOGGER.debug("Init API...done")    
-
+    _LOGGER.debug("API client initialized.")    
+   
     _LOGGER.debug("Store API client in hass.data...") 
     # Store the API client in hass.data
     if DOMAIN not in hass.data:
@@ -56,12 +57,12 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    # Register the set_charging_mode service (now called actions in Home Assistant)
+    """Set up the Smappee EV services - now actions in Home Assistant."""
+    
     @callback
     def set_charging_mode_service(call):
         """Handle the action to set the charging mode."""
-        _LOGGER.debug('SET CHARGING MODE SERVICE: Received data', call.data)
-        # serial = call.data.get("serial")
+        _LOGGER.debug('SET CHARGING MODE SERVICE: Received data %s', call.data)
         mode = call.data.get("mode")
         limit = call.data.get("limit", 0)
         api_client = list(hass.data[DOMAIN].values())[0]
@@ -74,16 +75,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         else:
             _LOGGER.info(f"Setting charging mode for serial {serial} to {mode} with limit {limit}.")
         hass.async_create_task(api_client.set_charging_mode(mode,limit))
-        #api_client = hass.data[DOMAIN][entry.entry_id]
-    
-        #try:
-        #    await api_client.set_charging_mode(serial, mode, limit)
-        #    _LOGGER.info(f"Charging mode set successfully for {serial}")
-        #except Exception as e:
-        #    _LOGGER.error(f"Failed to set charging mode for {serial}: {e}")
-        #    raise  # Ensures that the exception is re-raised and properly logged
+
             
-    _LOGGER.debug('Set charging mode service in HA...')
+    _LOGGER.debug('Registering set_charging_mode service...')
     hass.services.async_register(DOMAIN, "set_charging_mode", set_charging_mode_service)
-    _LOGGER.debug('Set charging mode service in HA...done')
+    _LOGGER.debug('set_charging_mode service registered.')
+
+
+    @callback
+    def pause_charging_service(call):
+        """Handle the action to pause charging."""
+        _LOGGER.debug("PAUSE CHARGING SERVICE: Triggered")
+        api_client = list(hass.data[DOMAIN].values())[0]
+        hass.async_create_task(api_client.pause_charging())
+
+    _LOGGER.debug("Registering pause_charging service...")
+    hass.services.async_register(DOMAIN, "pause_charging", pause_charging_service)
+    _LOGGER.debug("pause_charging service registered.")
+
     return True
