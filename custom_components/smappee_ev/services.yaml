@@ -10,3 +10,9 @@ set_charging_mode:
     limit:
       description: "Current limit in amperes"
       example: 10
+
+pause_charging:
+  name: Pause Charging
+  description: "Pauses charging via the Smappee API."
+
+
