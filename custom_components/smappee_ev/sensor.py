@@ -142,9 +142,9 @@ class ChargingPointEvccStatus(SensorBase, SensorEntity):
         session_state = self.api_client.getSessionState
         if session_state in ["INITIAL", "STOPPED"]:
             return "A"
-        elif session_state in ["STARTED", "SUSPENDED", "STOPPING"]:
+        elif session_state in ["STARTED", "STOPPING"]:
             return "B"
-        elif session_state == "CHARGING":
+        elif session_state == ["SUSPENDED", "CHARGING"]:
             return "C"
         else:
             return "E"
