@@ -2,13 +2,11 @@ import logging
 import random
 
 from datetime import datetime, timedelta
-
 from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
 from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
 
 from homeassistant.components.sensor import (SensorEntity, SensorDeviceClass, SensorStateClass)
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
@@ -29,11 +27,8 @@ async def async_setup_entry(
     
     new_devices = []
     new_devices.append(ChargingPointSessionState(config_entry))
-    if new_devices:
-        async_add_entities(new_devices)    
-
-    new_devices = []
     new_devices.append(ChargingPointLatestCounter(config_entry))
+    new_devices.append(ChargingPointEvccStatus(config_entry))
     if new_devices:
         async_add_entities(new_devices)    
     _LOGGER.debug("Sensor async_setup_entry init...done")
@@ -132,3 +127,32 @@ class ChargingPointSessionState(SensorBase):
         """Return the state of the sensor."""
         _LOGGER.debug("Get ChargingPointSessionState.state...")
         return self.api_client.getSessionState
+
+class ChargingPointEvccStatus(SensorBase, SensorEntity):
+    def __init__(self, config_entry):
+        _LOGGER.debug("ChargingPointEvccStatus init...")
+        super().__init__(config_entry)
+        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_evcc_status"
+        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} EVCC status"
+        _LOGGER.debug("ChargingPointEvccStatus init...done")
+
+    @property
+    def state(self):
+        _LOGGER.debug("Get ChargingPointEvccStatus.state...")
+        session_state = self.api_client.getSessionState
+        if session_state in ["INITIAL", "STOPPED"]:
+            return "A"
+        elif session_state in ["STARTED", "SUSPENDED", "STOPPING"]:
+            return "B"
+        elif session_state == "CHARGING":
+            return "C"
+        else:
+            return "E"
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "raw_session_state": self.api_client.getSessionState,
+            "evcc_mapped_state": self.state,
+        }
+
