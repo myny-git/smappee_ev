@@ -15,4 +15,9 @@ pause_charging:
   name: Pause Charging
   description: "Pauses charging via the Smappee API."
 
+stop_charging:
+  name: Stop Charging
+  description: "Stops charging via the Smappee API."
+
+
 
