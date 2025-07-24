@@ -1,5 +1,9 @@
+import logging
+
 from homeassistant.components.select import SelectEntity
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 MODES = ["SMART", "SOLAR", "NORMAL", "NORMAL_PERCENTAGE"]  # include what is supported
 
