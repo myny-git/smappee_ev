@@ -10,7 +10,7 @@ MODES = ["SMART", "SOLAR", "NORMAL", "NORMAL_PERCENTAGE"]  # include what is sup
 async def async_setup_entry(hass, config_entry, async_add_entities):
     api_client = hass.data[DOMAIN][config_entry.entry_id]
     select_entity = SmappeeModeSelect(api_client)
-    async_add_entities([SmappeeModeSelect(api_client)], update_before_add=True)
+    async_add_entities([select_entity], update_before_add=True)
 
     # Register the callback only AFTER the entity is added
     # Use hass.async_create_task to defer it until entity is fully set up
@@ -42,6 +42,7 @@ class SmappeeModeSelect(SelectEntity):
         self._selected_mode = option
         # Make sure entity is added before calling this to avoid hass==None
         if self.hass:
+            _LOGGER.debug("Updating HA state")
             self.async_write_ha_state()
         else:
             # Delay update until hass is set
