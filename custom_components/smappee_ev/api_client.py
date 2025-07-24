@@ -22,7 +22,7 @@ class SmappeeApiClient:
         self._loop = asyncio.get_event_loop()
         self._latestSessionCounter = 0
         self._sessionstate = "Initialize"
-        self._timer = datetime.now() - timedelta(seconds = 10)
+        self._timer = datetime.now() - timedelta(seconds = 30) # maybe at some moment, make this a variable
         _LOGGER.info("SmappeeApiClient init...done")
 
     @property
@@ -43,7 +43,6 @@ class SmappeeApiClient:
         # Get the current time
         now = datetime.now()
         startsession = int(datetime(now.year-1, 6, 1).timestamp())
-#        _LOGGER.debug(int(midnight.timestamp()))
 
         url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=false&range={startsession}"
         headers = {
@@ -100,14 +99,14 @@ class SmappeeApiClient:
 
     @property
     def fetchLatestSessionCounter(self) -> int:
-        if self._timer + timedelta (seconds = 10) < datetime.now():
+        if self._timer + timedelta (seconds = 30) < datetime.now(): # same timer!
             self._timer = datetime.now()
             self._loop.create_task(self.delayed_update())
         return self._latestSessionCounter
 
     @property
     def getSessionState(self) -> str:
-        if self._timer + timedelta (seconds = 10) < datetime.now():
+        if self._timer + timedelta (seconds = 30) < datetime.now(): # same timer!
             self._timer = datetime.now()
             self._loop.create_task(self.delayed_update())
         return self._sessionstate
@@ -119,8 +118,7 @@ class SmappeeApiClient:
         _LOGGER.debug(f"Lets start setting the charger")
 
         if mode in ["SMART", "SOLAR"]:
-            _LOGGER.debug(f"Debugging mode")
-        # Special API call for SMART and SOLAR modes
+            # Special API call for SMART and SOLAR modes
             url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
             headers = {
                 "Authorization": f"Bearer {self.oauth_client.access_token}",
@@ -153,7 +151,6 @@ class SmappeeApiClient:
         
         else:
 
-        
             url = f"{self.base_url}/chargingstations/{self.serial}/connectors/1/mode"
             headers = {
                 "Authorization": f"Bearer {self.oauth_client.access_token}",
@@ -188,3 +185,32 @@ class SmappeeApiClient:
             except Exception as e:
                 _LOGGER.error(f"Exception occurred while setting charging mode: {str(e)}")
                 raise
+
+    async def pause_charging(self):
+        """Pause charging via the Smappee API."""
+        # Ensure token is refreshed if needed
+        await self.oauth_client.ensure_token_valid()
+        _LOGGER.debug(f"Lets start pausing the charger")
+
+        url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/pauseCharging"
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json"
+        }
+        payload = []
+
+        _LOGGER.debug(f"Sending pauseCharging POST to {url} with empty payload")
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                response = await session.post(url, json=payload, headers=headers)
+                if response.status != 200:
+                    if response.status == 401:
+                        raise Exception("Token expired")
+                    error_message = await response.text()
+                    _LOGGER.error(f"Failed to pause charging: {error_message}")
+                    raise Exception(f"Error pausing charging: {error_message}")
+                _LOGGER.debug("Successfully paused charging")
+        except Exception as e:
+            _LOGGER.error(f"Exception occurred while pausing charging: {str(e)}")
+            raise
