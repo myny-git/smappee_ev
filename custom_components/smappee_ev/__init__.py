@@ -93,4 +93,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(DOMAIN, "pause_charging", pause_charging_service)
     _LOGGER.debug("pause_charging service registered.")
 
+
+    @callback
+    def stop_charging_service(call: ServiceCall):
+        """Handle the action to stop charging."""
+        _LOGGER.debug("STOP CHARGING SERVICE: Triggered")
+        api_client = list(hass.data[DOMAIN].values())[0]
+        hass.async_create_task(api_client.stop_charging())
+
+    _LOGGER.debug("Registering stop_charging service...")
+    hass.services.async_register(DOMAIN, "stop_charging", stop_charging_service)
+    _LOGGER.debug("stop_charging service registered.")
+
     return True
