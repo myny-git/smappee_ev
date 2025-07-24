@@ -248,9 +248,9 @@ class SmappeeApiClient:
                     _LOGGER.error(f"Failed to stop charging: {error_message}")
                     raise Exception(f"Error stopping charging: {error_message}")
                 _LOGGER.debug("Successfully stopped charging")
-    
-            if self._set_mode_select_callback:
-                self._set_mode_select_callback("NORMAL")
+                # Also set mode to NORMAL in select entity
+                if self._set_mode_select_callback:
+                    self._set_mode_select_callback("NORMAL")
     
         except Exception as e:
             _LOGGER.error(f"Exception occurred while stopping charging: {str(e)}")
