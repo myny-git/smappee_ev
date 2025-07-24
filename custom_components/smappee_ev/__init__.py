@@ -60,7 +60,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Smappee EV services - now actions in Home Assistant."""
     
     @callback
-    def set_charging_mode_service(call):
+    def set_charging_mode_service(call: ServiceCall):
         """Handle the action to set the charging mode."""
         _LOGGER.debug('SET CHARGING MODE SERVICE: Received data %s', call.data)
         mode = call.data.get("mode")
@@ -83,7 +83,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
     @callback
-    def pause_charging_service(call):
+    def pause_charging_service(call: ServiceCall):
         """Handle the action to pause charging."""
         _LOGGER.debug("PAUSE CHARGING SERVICE: Triggered")
         api_client = list(hass.data[DOMAIN].values())[0]
