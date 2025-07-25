@@ -141,5 +141,14 @@ class SmappeeStartChargingButton(ButtonEntity):
 
     async def async_press(self) -> None:
         serial = self.api_client.serial_id
-        await self.api_client.start_charging()
+        percent_entity_id = f"number.smappee_percentage_limit_{serial}"
+        percent_state = self.hass.states.get(percent_entity_id)   
+               
+        try:
+            percentage = float(percent_state.state) if percent_state else 100
+        except (ValueError, TypeError):
+            percentage = 100
+
+        
+        await self.api_client.start_charging(percentage)
 
