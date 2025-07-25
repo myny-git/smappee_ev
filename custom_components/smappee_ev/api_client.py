@@ -324,3 +324,50 @@ class SmappeeApiClient:
             _LOGGER.error(f"Exception occurred while starting charging: {str(e)}")
             raise
 
+    async def set_brightness(self, brightness: int):
+        await self.oauth_client.ensure_token_valid()
+        url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setBrightness"
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json"
+        }
+        payload = [{
+            "spec": {
+                "name": "etc.smart.device.type.car.charger.led.config.brightness",
+                "species": "Integer"
+            },
+            "value": brightness
+        }]
+        async with aiohttp.ClientSession() as session:
+            response = await session.post(url, json=payload, headers=headers)
+            if response.status != 200:
+                error_message = await response.text()
+                raise Exception(f"Failed to set brightness: {error_message}")
+    
+    async def set_available(self):
+        await self.oauth_client.ensure_token_valid()
+        url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setAvailable"
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json"
+        }
+        async with aiohttp.ClientSession() as session:
+            response = await session.post(url, json=[], headers=headers)
+            if response.status != 200:
+                error_message = await response.text()
+                raise Exception(f"Failed to set available: {error_message}")
+    
+    async def set_unavailable(self):
+        await self.oauth_client.ensure_token_valid()
+        url = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setUnavailable"
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json"
+        }
+        async with aiohttp.ClientSession() as session:
+            response = await session.post(url, json=[], headers=headers)
+            if response.status != 200:
+                error_message = await response.text()
+                raise Exception(f"Failed to set unavailable: {error_message}")
+
+
