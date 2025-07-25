@@ -26,4 +26,17 @@ start_charging:
       description: "Percentage limit for charging"
       example: 80
 
+set_brightness:
+  description: Set the LED brightness of the charger.
+  fields:
+    brightness:
+      description: Brightness level (0-100)
+      example: 70
+
+set_available:
+  description: Set the smart charger to available state.
+
+set_unavailable:
+  description: Set the smart charger to unavailable state.
+
 
