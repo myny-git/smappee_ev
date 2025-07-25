@@ -107,4 +107,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(DOMAIN, "stop_charging", stop_charging_service)
     _LOGGER.debug("stop_charging service registered.")
 
+    @callback
+    def start_charging_service(call: ServiceCall):
+           
+        """Handle the action to start charging with optional percentage."""
+        _LOGGER.debug("START CHARGING SERVICE: Triggered with data %s", call.data)
+        limit = call.data.get("limit", 100)
+        api_client = list(hass.data[DOMAIN].values())[0]
+        hass.async_create_task(api_client.start_charging(percentage))
+
+    _LOGGER.debug("Registering start_charging service...")
+    hass.services.async_register(DOMAIN, "start_charging", start_charging_service)
+    _LOGGER.debug("start_charging service registered.")
+    
+
     return True
