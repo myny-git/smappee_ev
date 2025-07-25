@@ -112,7 +112,7 @@ chargers:
           "limit": {{ .maxcurrent }}
         }
       insecure: true  
-    power: # not mandatory, but take the power sensor of the smappee charger.
+    power: # not mandatory, but take the power sensor of the smappee charger.(see the Smappee_modbus.md for more info)
       source: http
       uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_power_total_car
       method: GET
