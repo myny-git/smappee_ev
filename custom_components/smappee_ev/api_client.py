@@ -363,6 +363,7 @@ class SmappeeApiClient:
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json"
         }
+        payload = []
         _LOGGER.debug(f"Sending setAvailable POST to {url}")
         try:
             async with aiohttp.ClientSession() as session:
@@ -391,7 +392,7 @@ class SmappeeApiClient:
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json"
         }
-        
+        payload = []
         _LOGGER.debug(f"Sending setUnavailable POST to {url}")
         try:
             async with aiohttp.ClientSession() as session:
