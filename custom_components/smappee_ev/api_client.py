@@ -25,6 +25,8 @@ class SmappeeApiClient:
         self._sessionstate = "Initialize"
         self._timer = datetime.now() - timedelta(seconds = 30) # maybe at some moment, make this a variable
         self._set_mode_select_callback = None        
+        self._charging_point_session_state = None
+        
         _LOGGER.info("SmappeeApiClient init...done")
 
     @property
@@ -44,9 +46,12 @@ class SmappeeApiClient:
 
         # Get the current time
         now = datetime.now()
+        # Start session time from June 1 of last year (seems hardcoded, maybe configurable)
         startsession = int(datetime(now.year-1, 6, 1).timestamp())
 
         url = f"{self.base_url}/chargingstations/{self.serial}/sessions?active=false&range={startsession}"
+        ## new API-call for a better up to date charging poitn session state
+        url_session_state = f"{self.base_url}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}" 
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json",
@@ -68,6 +73,31 @@ class SmappeeApiClient:
                 self._sessionstate = sessions[0]["status"]
                 _LOGGER.debug(f"SessionState: JSON {sessions[0]["status"]} VAR {self._sessionstate}")
                 self._latestSessionCounter = sessions[0]["startReading"]+sessions[0]["energy"]
+                       
+
+                _LOGGER.debug(f"Sending request to {url_session_state} for charging point session state")
+                response_state = await session.get(url_session_state, headers=headers)
+                if response_state.status != 200:
+                    if response_state.status == 401:
+                        raise Exception("Token expired")
+                    error_message = await response_state.text()
+                    _LOGGER.error(f"Failed to get charging point session state: {error_message}")
+                    raise Exception(f"Failed to get charging point session state: {error_message}")
+
+                # retrieve propoerties and search for chargingState
+                session_state_data = await response_state.json()
+                properties = session_state_data.get("properties", [])
+                charging_state_value = None
+                for prop in properties:
+                    if prop.get("spec", {}).get("name") == "chargingState":
+                        charging_state_value = prop.get("value")
+                        break
+                        
+                self._charging_point_session_state = session_state_data
+                _LOGGER.debug(f"Charging point session state updated: {self._charging_point_session_state}")
+                
+        
+        
         except Exception as e:
             _LOGGER.error(f"Exception occurred while getting latest session counter: {str(e)}")
             raise
