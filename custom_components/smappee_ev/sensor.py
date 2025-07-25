@@ -49,6 +49,7 @@ class SensorBase(Entity):
             self.oauth_client, 
             config_entry.data.get(CONF_SERIAL),
             config_entry.data.get("smart_device_uuid"),
+            config_entry.data.get("smart_device_id"),            
             config_entry.data.get("service_location_id")
         )
         self.api_client.enable
