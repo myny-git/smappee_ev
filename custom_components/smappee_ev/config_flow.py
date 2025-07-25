@@ -174,7 +174,7 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 found = False
                 for dev in smartdevices:
                     if dev.get("uuid") == smart_device_uuid:
-                        user_input["smartdevice_id"] = dev.get("id") 
+                        user_input["smart_device_id"] = dev.get("id") 
                         found = True
                         break
                 if not found:
