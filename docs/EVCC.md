@@ -18,6 +18,21 @@ All details can be found in following link: 🔗 [Home Assistant as EVCC Source]
 ### ✅ Step 3: Define Your Charger in `evcc.yaml`
 
 This is a full example for a Smappee Wallbox:
+This is an important one. It works, however, I am in search to have EVCC controlling the charging current. It now uses the MaxCurrent.
+enable: # also mandatory, this is to enable the charging mode. I created an entry to two services.
+      source: http
+      uri: http://HAlocalIP:8123/api/services/smappee_ev/{{ if .enable }}set_charging_mode{{ else }}pause_charging{{ end }}
+      method: POST
+      headers:
+        - Authorization: Bearer long_lived_TOKEN
+        - Content-Type: application/json
+      body: >
+        {{ if .enable }}
+        { "mode": "NORMAL" }
+        {{ else }}
+        {}
+        {{ end }}
+      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
 
 ```yaml
 # see https://docs.evcc.io/docs/devices/chargers
