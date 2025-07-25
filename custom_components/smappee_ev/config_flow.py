@@ -98,9 +98,10 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors=errors
             )
 
-        # Retrieving the UUID
+        # Retrieving the UUID and ID
         try:
-            url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/meteringconfiguration"
+            #url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/meteringconfiguration"
+            url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/smartdevices"
             async with aiohttp.ClientSession() as session:
                 resp = await session.get(url, headers=headers)
                 if resp.status != 200:
@@ -118,9 +119,12 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         errors=errors
                     )
                 data = await resp.json()
-                # Controleer of er chargingStations en chargers zijn
-                charging_stations = data.get("chargingStations", [])
-                if not charging_stations or not charging_stations[0].get("chargers"):
+                # Check if there are any CARCHARGER
+                #charging_stations = data.get("chargingStations", [])
+                #charging_stations = data.get("CARCHARGER", [])
+                smart_devices = data
+                #if not charging_stations or not charging_stations[0].get("chargers"):
+                if not smart_devices:
                     errors["base"] = "no_chargers"
                     return self.async_show_form(
                         step_id="user",
@@ -133,68 +137,14 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         }),
                         errors=errors
                     )
-                smart_device_uuid = charging_stations[0]["chargers"][0].get("uuid")
+                smart_device_uuid = smart_devices[0].get("uuid")
+                smart_device_id = smart_devices[0].get("id")
                 user_input["smart_device_uuid"] = smart_device_uuid
+                user_input["smart_device_id"] = smart_device_id                
         except Exception as e:
             _LOGGER.error(f"Exception while retrieving smart_device_uuid: {e}")
             errors = {}
             errors["base"] = "uuid_failed"
-            return self.async_show_form(
-                step_id="user",
-                data_schema=vol.Schema({
-                    vol.Required(CONF_CLIENT_ID): str,
-                    vol.Required(CONF_CLIENT_SECRET): str,
-                    vol.Required(CONF_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str,
-                    vol.Required(CONF_SERIAL): str
-                }),
-                errors=errors
-            )
-
-        # Retrieving smartdevice_id after UUID
-        try:
-            smartdevice_url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/smartdevices"
-            async with aiohttp.ClientSession() as session:
-                resp = await session.get(smartdevice_url, headers=headers)
-                if resp.status != 200:
-                    _LOGGER.error("Failed to retrieve smartdevices: %s", await resp.text())
-                    errors = {"base": "smartdevice_failed"}
-                    return self.async_show_form(
-                        step_id="user",
-                        data_schema=vol.Schema({
-                            vol.Required(CONF_CLIENT_ID): str,
-                            vol.Required(CONF_CLIENT_SECRET): str,
-                            vol.Required(CONF_USERNAME): str,
-                            vol.Required(CONF_PASSWORD): str,
-                            vol.Required(CONF_SERIAL): str
-                        }),
-                        errors=errors
-                    )
-                smartdevices = await resp.json()
-                found = False
-                for dev in smartdevices:
-                    if dev.get("uuid") == smart_device_uuid:
-                        smart_device_id = charging_stations[0]["chargers"][0].get("id")
-                        user_input["smart_device_id"] = smart_device_id
-                        found = True
-                        break
-                if not found:
-                    _LOGGER.error(f"No smartdevice found matching uuid {smart_device_uuid}")
-                    errors = {"base": "smartdevice_not_found"}
-                    return self.async_show_form(
-                        step_id="user",
-                        data_schema=vol.Schema({
-                            vol.Required(CONF_CLIENT_ID): str,
-                            vol.Required(CONF_CLIENT_SECRET): str,
-                            vol.Required(CONF_USERNAME): str,
-                            vol.Required(CONF_PASSWORD): str,
-                            vol.Required(CONF_SERIAL): str
-                        }),
-                        errors=errors
-                    )
-        except Exception as e:
-            _LOGGER.error(f"Exception while retrieving smartdevice_id: {e}")
-            errors = {"base": "smartdevice_failed"}
             return self.async_show_form(
                 step_id="user",
                 data_schema=vol.Schema({
