@@ -338,11 +338,23 @@ class SmappeeApiClient:
             },
             "value": brightness
         }]
-        async with aiohttp.ClientSession() as session:
-            response = await session.post(url, json=payload, headers=headers)
-            if response.status != 200:
-                error_message = await response.text()
-                raise Exception(f"Failed to set brightness: {error_message}")
+        _LOGGER.debug(f"Sending setBrightness POST to {url} with payload {payload}")
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                response = await session.post(url, json=payload, headers=headers)
+                if response.status != 200:
+                    if response.status == 401:
+                        raise Exception("Token expired")
+                    error_message = await response.text()
+                    _LOGGER.error(f"Failed to start charging: {error_message}")
+                    raise Exception(f"Error starting charging: {error_message}")
+                _LOGGER.debug("Successfully changed brightness")
+        except Exception as e:
+            _LOGGER.error(f"Exception occurred while changing brightness: {str(e)}")
+            raise
+        
+
     
     async def set_available(self):
         await self.oauth_client.ensure_token_valid()
@@ -351,6 +363,21 @@ class SmappeeApiClient:
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json"
         }
+        _LOGGER.debug(f"Sending setAvailable POST to {url} with payload {payload}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                response = await session.post(url, json=payload, headers=headers)
+                if response.status != 200:
+                    if response.status == 401:
+                        raise Exception("Token expired")
+                    error_message = await response.text()
+                    _LOGGER.error(f"Failed to start charging: {error_message}")
+                    raise Exception(f"Error starting charging: {error_message}")
+                _LOGGER.debug("Successfully made available")
+        except Exception as e:
+            _LOGGER.error(f"Exception occurred while trying to make it available: {str(e)}")
+            raise
+        
         async with aiohttp.ClientSession() as session:
             response = await session.post(url, json=[], headers=headers)
             if response.status != 200:
@@ -364,10 +391,20 @@ class SmappeeApiClient:
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json"
         }
-        async with aiohttp.ClientSession() as session:
-            response = await session.post(url, json=[], headers=headers)
-            if response.status != 200:
-                error_message = await response.text()
-                raise Exception(f"Failed to set unavailable: {error_message}")
+        
+       _LOGGER.debug(f"Sending setUnavailable POST to {url} with payload {payload}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                response = await session.post(url, json=payload, headers=headers)
+                if response.status != 200:
+                    if response.status == 401:
+                        raise Exception("Token expired")
+                    error_message = await response.text()
+                    _LOGGER.error(f"Failed to start charging: {error_message}")
+                    raise Exception(f"Error starting charging: {error_message}")
+                _LOGGER.debug("Successfully made unavailable")
+        except Exception as e:
+            _LOGGER.error(f"Exception occurred while trying to make it unavailable: {str(e)}")
+            raise
 
 
