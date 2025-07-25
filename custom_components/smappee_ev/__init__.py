@@ -119,6 +119,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     _LOGGER.debug("Registering start_charging service...")
     hass.services.async_register(DOMAIN, "start_charging", start_charging_service)
     _LOGGER.debug("start_charging service registered.")
-    
+
+    @callback
+    def set_brightness_service(call: ServiceCall):
+        brightness = call.data.get("brightness", 10)
+        api_client = list(hass.data[DOMAIN].values())[0]
+        hass.async_create_task(api_client.set_brightness(brightness))
+
+    hass.services.async_register(DOMAIN, "set_brightness", set_brightness_service)
+
+    @callback
+    def set_available_service(call: ServiceCall):
+        api_client = list(hass.data[DOMAIN].values())[0]
+        hass.async_create_task(api_client.set_available())
+
+    hass.services.async_register(DOMAIN, "set_available", set_available_service)
+
+    @callback
+    def set_unavailable_service(call: ServiceCall):
+        api_client = list(hass.data[DOMAIN].values())[0]
+        hass.async_create_task(api_client.set_unavailable())
+
+    hass.services.async_register(DOMAIN, "set_unavailable", set_unavailable_service)
+
 
     return True
