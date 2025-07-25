@@ -48,7 +48,7 @@ It goes far beyond the official integration, which seemingly misses the complete
   - Should work similarly on other Smappee Home chargers using the same API
  
 ## 📘 More Information
-- [EVCC information](./docs/evcc.md) – Learn how to use these Home Assistant sensors for EVCC.
+- [EVCC information](./docs/EVCC.md) – Learn how to use these Home Assistant sensors for EVCC.
 
 > ## ⚠️ Important
 > This is a HACS custom integration.
