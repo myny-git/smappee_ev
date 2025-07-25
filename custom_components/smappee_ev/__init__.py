@@ -40,6 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         oauth_client, 
         serial,
         smart_device_uuid,
+        smart_device_id,
         service_location_id)
     _LOGGER.debug("API client initialized.")    
    
