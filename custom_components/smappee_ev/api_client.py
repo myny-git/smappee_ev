@@ -392,7 +392,7 @@ class SmappeeApiClient:
             "Content-Type": "application/json"
         }
         
-       _LOGGER.debug(f"Sending setUnavailable POST to {url} with payload {payload}")
+        _LOGGER.debug(f"Sending setUnavailable POST to {url} with payload {payload}")
         try:
             async with aiohttp.ClientSession() as session:
                 response = await session.post(url, json=payload, headers=headers)
