@@ -93,7 +93,7 @@ class SmappeeApiClient:
                         charging_state_value = prop.get("value")
                         break
                         
-                self._charging_point_session_state = session_state_data
+                self._charging_point_session_state = charging_state_value
                 _LOGGER.debug(f"Charging point session state updated: {self._charging_point_session_state}")
                 
         
