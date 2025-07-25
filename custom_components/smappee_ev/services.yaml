@@ -22,13 +22,8 @@ stop_charging:
 start_charging:
   description: "Start charging with optional percentage limit"
   fields:
-    percentage:
+    percentageLimit:
       description: "Percentage limit for charging"
       example: 80
-      required: false
-      selector:
-        number:
-          min: 1
-          max: 100
 
 
