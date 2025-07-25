@@ -17,7 +17,9 @@ All details can be found in following link: 🔗 [Home Assistant as EVCC Source]
 
 ### ✅ Step 3: Define Your Charger in `evcc.yaml`
 
-Below, you can find a full example for a Smappee EV Wallbox. The configuration was recently set up and is currently undergoing testing.
+Below, you can find a full example for a Smappee EV Wallbox. The configuration was recently set up and is currently undergoing testing. The main idea is following:
+
+We do not use the smart functions of the Smappee app, in contrary, we use it in Standard mode, with specific current targets.
 
 🔌 Key Item: Charging Enable Control
 
