@@ -288,7 +288,7 @@ class SmappeeApiClient:
             _LOGGER.error(f"Exception occurred while stopping charging: {str(e)}")
             raise
 
-    async def start_charging(self, limit=100):
+    async def start_charging(self, limit):
         """Start charging via the Smappee API with optional limit."""
         await self.oauth_client.ensure_token_valid()
         _LOGGER.debug(f"Let's start charging with limit {limit}")
