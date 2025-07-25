@@ -14,20 +14,41 @@ This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev
 -->
 
 ## 🔧 Features
-The original Home Assistant Smappee integration does **not** allow control over the EV charger. This fork adds support for selecting charging modes:
 
-- `SOLAR`
-- `SMART`
-- `STANDARD` (also known as "normal" mode), where you can set a percentage or a current.
+This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant.  
+It goes far beyond the official integration, which seemingly misses the complete EV chargers. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview).
 
-The new version also includes **Pausing charging** and **Stop charging** via service call and a button. 
+### ✅ Charging Mode Control
+- Switch between all official Smappee charging modes:
+  - `SMART` – Dynamic smart charging based on usage and pricing
+  - `SOLAR` – Charge using only excess solar energy
+  - `STANDARD` (also called `NORMAL`) – Fixed current or percentage charging
+- Set mode via service or select entity
+- Apply selected mode with **Set Charging Mode** button
 
-It also includes a sensor for EVCC, to inform about the status.
+### ✅ Direct Charger Control
+- Start, Pause, or Stop charging sessions from Home Assistant
+- Set fixed charging **percentage** or **current** (in Amps)
+- Automatically switches to `NORMAL_PERCENTAGE` or `NORMAL` based on input
+- Change Wallbox availability (set available/unavailable)
 
-It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview).
+### ✅ LED Brightness Control
+- Adjust LED ring brightness (%)
+- Set via number input and apply via button
 
-✅ Tested on: **Smappee EV Wall Home**, single cable version.
+### ✅ Charger State Feedback
+- Real-time **Session State**:
+  - `CHARGING`, `PAUSED`, `SUSPENDED`, etc.
+- **EVCC State** for in-depth diagnostics (e.g. state A/B/C/E)
 
+### ✅ Built-in Safeguards & Notes
+- Charging mode resets to `NORMAL` when paused — same as in the Smappee app
+- Integration tested on:
+  - **Smappee EV Wall Home** (single cable)
+  - Should work similarly on other Smappee Home chargers using the same API
+ 
+## 📘 More Information
+- [EVCC information](./evcc.md) – Learn how to use these Home Assistant sensors for EVCC.
 
 > ## ⚠️ Important
 > This is a HACS custom integration.
@@ -56,48 +77,51 @@ During setup, you will be prompted to enter:
 - **Serial number** of your charging station  
 → You can find it in the Smappee dashboard (go to EV line → click to view serial number)
 
-## ⚙️ How the integration works
+## ⚙️ How the Integration Works
 
-This integration creates **9 entities** and **3 services**, and behaves similarly to the Smappee app.
+This integration behaves like the official Smappee app and exposes several **entities** and **services** to control your EV charger directly from Home Assistant.
 
 ### 🧩 Entities
 
-#### ✅ Controls (6 entities)
-- **Set Charging Mode** – button entity
-- **Pause Charging** – button entity
-- **Stop Charging** – button entity
-- **Charging Mode** – `select` entity with options: `SMART`, `SOLAR`, `NORMAL`, `NORMAL_PERCENTAGE`
-- **Charging Current (A)** – `number` entity for ampere setting (used in NORMAL mode)
-- **Charging Percentage (%)** – `number` entity for percentage setting (used in NORMAL_PERCENTAGE mode)
+#### Controls
 
-#### 📈 Sensors (2 entities)
-- **Charging Point Total Counter** – total energy delivered in kWh
-- **Charging Point Session State** – current session status (e.g., `CHARGING`, `PAUSED`, 'SUSPENDED')
-It seems that, when you cable is connected, it is mostly 'SUSPENDED'.
-- **Charging Point EVCC State** – EVCC charger state (A, B, C or E)
+| Entity                     | Type     | Description                                                                 |
+|----------------------------|----------|-----------------------------------------------------------------------------|
+| `button.set_charging_mode`| Button   | Apply the selected charging mode                                            |
+| `button.start_charging`   | Button   | Starts charging using the set percentage                                    |
+| `button.pause_charging`   | Button   | Pauses the current charging session                                         |
+| `button.stop_charging`    | Button   | Stops the current charging session                                          |
+| `button.set_led_brightness`| Button  | Apply the set LED brightness level                                          |
+| `select.charging_mode`    | Select   | Choose between `SMART`, `SOLAR`, `NORMAL`, `NORMAL_PERCENTAGE`             |
+| `number.charging_current` | Number   | Set current in Amps for `NORMAL` mode                                       |
+| `number.charging_percentage`| Number | Set percentage limit for `NORMAL_PERCENTAGE` or Start Charging             |
+| `number.led_brightness`   | Number   | Brightness percentage used in Set LED Brightness                           |
+| `button.set_available`    | Button   | Make the Wallbox available for use                                          |
+| `button.set_unavailable`  | Button   | Make the Wallbox unavailable for use                                        |
+
+#### Sensors
+
+| Entity                             | Type    | Description                                                                 |
+|------------------------------------|---------|-----------------------------------------------------------------------------|
+| `sensor.total_counter`             | Sensor  | Total energy delivered in kWh                                               |
+| `sensor.session_state`             | Sensor  | Current session state (`CHARGING`, `PAUSED`, `SUSPENDED`, ...)             |
+| `sensor.evcc_state`                | Sensor  | EVCC state of the charger (`A`, `B`, `C`, `E`)                              |
 
 ### 🛠️ Services
 
-#### `smappee_ev.set_charging_mode`
-Pushes the selected mode (`SMART`, `SOLAR`, `NORMAL`, or `NORMAL_PERCENTAGE`) to the Smappee EV Wallbox.  
-Works just like the app: select the mode and press **Set Charging Mode**.
+| Service                             | Description                                                                 |
+|-------------------------------------|-----------------------------------------------------------------------------|
+| `smappee_ev.set_charging_mode`      | Pushes selected mode: `SMART`, `SOLAR`, `NORMAL`, or `NORMAL_PERCENTAGE`   |
+| `smappee_ev.start_charging`         | Starts charging with the given percentage limit                            |
+| `smappee_ev.pause_charging`         | Pauses current charging session                                            |
+| `smappee_ev.stop_charging`          | Stops the charging session                                                 |
+| `smappee_ev.set_available`          | Makes the Wallbox available                                                |
+| `smappee_ev.set_unavailable`        | Makes the Wallbox unavailable                                              |
+| `smappee_ev.set_brightness`         | Sets LED brightness (%) on the Wallbox                                     |
 
-#### `smappee_ev.pause_charging`
-Pauses charging on the Wallbox.
-
-#### `smappee_ev.stop_charging`
-Stops the charging on the Wallbox.
-
-> ⚠️ **Take care**: just like in the app, pressing **Pause Charging** will also change the charging mode to `NORMAL`.  
-> If you want to **resume charging**, be sure to manually set the desired mode again (e.g., `SMART`) and press **Set Charging Mode**.
-
-
-## ✅ To Do
-
-- [x] Add a **Pause Charging** button entity
-- [x] Add a **Stop Charging** button entity
-- [ ] Add a **Start Charging** button entity
-- [x] Expose **EVCC charging status** as a sensor or binary sensor  
+> ⚠️ **Note**  
+> Like in the Smappee app, pressing **Pause Charging** changes the mode to `NORMAL`.  
+> To resume smart charging, manually set the mode again (e.g., `SMART`) and press **Set Charging Mode**.
 
 ## 💡 Notes
 
