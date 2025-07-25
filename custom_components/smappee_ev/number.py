@@ -14,7 +14,7 @@ async def async_setup_entry(
     async_add_entities([
         SmappeeCurrentLimitNumber(api_client),
         SmappeePercentageLimitNumber(api_client),
-        SmappeeBrightnessNumber(NumberEntity)        
+        SmappeeBrightnessNumber(api_client)        
     ])
 
 class SmappeeCurrentLimitNumber(NumberEntity):
