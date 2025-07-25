@@ -18,6 +18,17 @@ pause_charging:
 stop_charging:
   name: Stop Charging
   description: "Stops charging via the Smappee API."
-
+  
+start_charging:
+  description: "Start charging with optional percentage limit"
+  fields:
+    percentage:
+      description: "Percentage limit for charging"
+      example: 80
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100
 
 
