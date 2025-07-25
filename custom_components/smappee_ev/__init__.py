@@ -27,11 +27,12 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     serial = entry.data.get(CONF_SERIAL)
     service_location_id = entry.data.get("service_location_id")
     smart_device_uuid = entry.data.get("smart_device_uuid")
+    smart_device_id = entry.data.get("smart_device_id") 
 
     # Evaluate if everything is present
-    if not serial or not service_location_id or not smart_device_uuid:
-        _LOGGER.error("Missing required entry data: serial (%s), service_location_id (%s), smart_device_uuid (%s)",
-                      serial, service_location_id, smart_device_uuid)
+    if not serial or not service_location_id or not smart_device_uuid or not smart_device_id:
+        _LOGGER.error("Missing required entry data: serial (%s), service_location_id (%s), smart_device_uuid (%s), smart_device_id (%s)",
+                      serial, service_location_id, smart_device_uuid, smart_device_id)
         return False
          
     _LOGGER.debug("Init API client...")    
