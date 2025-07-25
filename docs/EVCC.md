@@ -77,7 +77,6 @@ chargers:
       source: http
       uri: http://HAlocalIP:8123/api/services/smappee_ev/set_charging_mode
       method: POST
-      body: "{\"entity_id\": \"number.smappee_current_limit_YOURSERIAL\", \"value\": \"${maxcurrent}\"}"
       headers:
         - Authorization: Bearer long_lived_TOKEN
         - Content-Type: application/json
