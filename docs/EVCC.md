@@ -108,7 +108,7 @@ Therefore, I integrated this via Modbus.
 
 The Smappee Infinity/Genius also supports MQTT, which is nicely explained by Smappee.
 
-👉 Please see the new [document](./smappee_modbus.md) for details on using Modbus sensors in Home Assistant with Smappee Connect.
+👉 Please see the new [document](./Smappee_modbus.md) for details on using Modbus sensors in Home Assistant with Smappee Connect.
 
 Other options to consider as input for EVCC include:
 - Your P1 meter
