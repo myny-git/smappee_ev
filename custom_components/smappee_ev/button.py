@@ -14,7 +14,8 @@ async def async_setup_entry(
     async_add_entities([
         SmappeeSetChargingModeButton(api_client, hass),
         SmappeePauseChargingButton(api_client, hass),
-        SmappeeStopChargingButton(api_client, hass)
+        SmappeeStopChargingButton(api_client, hass),
+        SmappeeStartChargingButton(api_client, hass)
     ])
 
 class SmappeeSetChargingModeButton(ButtonEntity):
@@ -120,4 +121,25 @@ class SmappeeStopChargingButton(ButtonEntity):
     async def async_press(self) -> None:
         serial = self.api_client.serial_id
         await self.api_client.stop_charging()
+
+class SmappeeStartChargingButton(ButtonEntity):
+    def __init__(self, api_client, hass):
+        self.api_client = api_client
+        self.hass = hass
+        self._attr_name = "Start Charging"
+        self._attr_unique_id = f"{api_client.serial_id}_start_charging"
+        self._attr_icon = "mdi:play"
+
+ 
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
+
+    async def async_press(self) -> None:
+        serial = self.api_client.serial_id
+        await self.api_client.start_charging()
 
