@@ -151,6 +151,61 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors=errors
             )
 
+        # Retrieving smartdevice_id after UUID
+        try:
+            smartdevice_url = f"https://app1pub.smappee.net/dev/v3/servicelocation/{service_location_id}/smartdevices"
+            async with aiohttp.ClientSession() as session:
+                resp = await session.get(smartdevice_url, headers=headers)
+                if resp.status != 200:
+                    _LOGGER.error("Failed to retrieve smartdevices: %s", await resp.text())
+                    errors = {"base": "smartdevice_failed"}
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=vol.Schema({
+                            vol.Required(CONF_CLIENT_ID): str,
+                            vol.Required(CONF_CLIENT_SECRET): str,
+                            vol.Required(CONF_USERNAME): str,
+                            vol.Required(CONF_PASSWORD): str,
+                            vol.Required(CONF_SERIAL): str
+                        }),
+                        errors=errors
+                    )
+                smartdevices = await resp.json()
+                found = False
+                for dev in smartdevices:
+                    if dev.get("uuid") == smart_device_uuid:
+                        user_input["smartdevice_id"] = dev.get("id") 
+                        found = True
+                        break
+                if not found:
+                    _LOGGER.error(f"No smartdevice found matching uuid {smart_device_uuid}")
+                    errors = {"base": "smartdevice_not_found"}
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=vol.Schema({
+                            vol.Required(CONF_CLIENT_ID): str,
+                            vol.Required(CONF_CLIENT_SECRET): str,
+                            vol.Required(CONF_USERNAME): str,
+                            vol.Required(CONF_PASSWORD): str,
+                            vol.Required(CONF_SERIAL): str
+                        }),
+                        errors=errors
+                    )
+        except Exception as e:
+            _LOGGER.error(f"Exception while retrieving smartdevice_id: {e}")
+            errors = {"base": "smartdevice_failed"}
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema({
+                    vol.Required(CONF_CLIENT_ID): str,
+                    vol.Required(CONF_CLIENT_SECRET): str,
+                    vol.Required(CONF_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str,
+                    vol.Required(CONF_SERIAL): str
+                }),
+                errors=errors
+            )
+
         return self.async_create_entry(title="Smappee EV", data=user_input)
 
     @staticmethod
