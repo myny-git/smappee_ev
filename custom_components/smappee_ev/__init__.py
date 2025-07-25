@@ -112,7 +112,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
            
         """Handle the action to start charging with optional percentage."""
         _LOGGER.debug("START CHARGING SERVICE: Triggered with data %s", call.data)
-        limit = call.data.get("limit", 100)
+        percentage = call.data.get("percentageLimit", 100)
         api_client = list(hass.data[DOMAIN].values())[0]
         hass.async_create_task(api_client.start_charging(percentage))
 
