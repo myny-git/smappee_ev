@@ -138,8 +138,8 @@ class smappee_evConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         errors=errors
                     )
                 _LOGGER.debug(f"Smart devices data: {smart_devices}")
-                smart_device_id = smart_devices[0].get("uuid")
-                smart_device_uuid = smart_devices[0].get("id")
+                smart_device_id = smart_devices[0].get("id")
+                smart_device_uuid = smart_devices[0].get("uuid")
                 user_input["smart_device_uuid"] = smart_device_uuid
                 user_input["smart_device_id"] = smart_device_id     
                 _LOGGER.debug(f"UUID: {smart_devices[0].get('uuid')}")
