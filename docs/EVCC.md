@@ -75,12 +75,17 @@ chargers:
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
     maxcurrent: # I take this value from the smappee_current_limit
       source: http
-      uri: http://HAlocalIP:8123/api/services/number/set_value
+      uri: http://HAlocalIP:8123/api/services/smappee_ev/set_charging_mode
       method: POST
       body: "{\"entity_id\": \"number.smappee_current_limit_YOURSERIAL\", \"value\": \"${maxcurrent}\"}"
       headers:
         - Authorization: Bearer long_lived_TOKEN
         - Content-Type: application/json
+      body: >
+        {
+          "mode": "NORMAL",
+          "limit": {{ .maxcurrent }}
+        }
       insecure: true  
     power: # not mandatory, but take the power sensor of the smappee charger.
       source: http
@@ -113,7 +118,7 @@ circuits:
   maxPower: 4500 # max power I like to allow
   meter: Grid_smappee
 ```
-The peak shaving and current control do not optimally yet — this is work in progress. Feel free to experiment and suggest improvements!
+The peak shaving and current control do not function optimally yet — this is work in progress. Feel free to experiment and suggest improvements!
 
 ## ⚠️ EVCC requires high update rates for sensors
 
