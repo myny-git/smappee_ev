@@ -15,7 +15,10 @@ async def async_setup_entry(
         SmappeeSetChargingModeButton(api_client, hass),
         SmappeePauseChargingButton(api_client, hass),
         SmappeeStopChargingButton(api_client, hass),
-        SmappeeStartChargingButton(api_client, hass)
+        SmappeeStartChargingButton(api_client, hass),
+        SmappeeSetBrightnessButton(api_client, hass),
+        SmappeeSetAvailableButton(api_client, hass),
+        SmappeeSetUnavailableButton(api_client, hass)        
     ])
 
 class SmappeeSetChargingModeButton(ButtonEntity):
@@ -151,4 +154,42 @@ class SmappeeStartChargingButton(ButtonEntity):
 
         
         await self.api_client.start_charging(percentage)
+
+class SmappeeSetBrightnessButton(ButtonEntity):
+    def __init__(self, api_client, hass):
+        self.api_client = api_client
+        self.hass = hass
+        self._attr_name = "Set LED Brightness"
+        self._attr_unique_id = f"{api_client.serial_id}_set_led_brightness"
+
+    async def async_press(self) -> None:
+        entity_id = f"number.smappee_led_brightness_{self.api_client.serial_id}"
+        state = self.hass.states.get(entity_id)
+        try:
+            brightness = int(float(state.state)) if state else 70
+        except (ValueError, TypeError):
+            brightness = 70
+        await self.api_client.set_brightness(brightness)
+
+
+class SmappeeSetAvailableButton(ButtonEntity):
+    def __init__(self, api_client, hass):
+        self.api_client = api_client
+        self.hass = hass
+        self._attr_name = "Set Available"
+        self._attr_unique_id = f"{api_client.serial_id}_set_available"
+
+    async def async_press(self) -> None:
+        await self.api_client.set_available()
+
+class SmappeeSetUnavailableButton(ButtonEntity):
+    def __init__(self, api_client, hass):
+        self.api_client = api_client
+        self.hass = hass
+        self._attr_name = "Set Unavailable"
+        self._attr_unique_id = f"{api_client.serial_id}_set_unavailable"
+
+    async def async_press(self) -> None:
+        await self.api_client.set_unavailable()
+
 
