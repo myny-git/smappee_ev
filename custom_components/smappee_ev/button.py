@@ -161,7 +161,16 @@ class SmappeeSetBrightnessButton(ButtonEntity):
         self.hass = hass
         self._attr_name = "Set LED Brightness"
         self._attr_unique_id = f"{api_client.serial_id}_set_led_brightness"
+        self._attr_icon = "mdi:brightness-6"
 
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
+    
     async def async_press(self) -> None:
         entity_id = f"number.smappee_led_brightness_{self.api_client.serial_id}"
         state = self.hass.states.get(entity_id)
@@ -178,8 +187,19 @@ class SmappeeSetAvailableButton(ButtonEntity):
         self.hass = hass
         self._attr_name = "Set Available"
         self._attr_unique_id = f"{api_client.serial_id}_set_available"
-
+        
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
+        
     async def async_press(self) -> None:
+        entity_id = f"number.smappee_led_brightness_{self.api_client.serial_id}"
+        state = self.hass.states.get(entity_id)
+
         await self.api_client.set_available()
 
 class SmappeeSetUnavailableButton(ButtonEntity):
@@ -188,7 +208,15 @@ class SmappeeSetUnavailableButton(ButtonEntity):
         self.hass = hass
         self._attr_name = "Set Unavailable"
         self._attr_unique_id = f"{api_client.serial_id}_set_unavailable"
-
+        
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
+        
     async def async_press(self) -> None:
         await self.api_client.set_unavailable()
 
