@@ -1,4 +1,4 @@
-# ⚡ Integrate Smappee with EVCC
+# 🚗 EVCC Custom Charger and a Smappee EV Wallbox
 
 Welcome! 🎉 This page helps you integrate your **Smappee Wallbox** into [EVCC](https://evcc.io) using data from **Home Assistant**. It's still a work in progress, and I welcome **all suggestions and feedback**!
 
@@ -17,22 +17,48 @@ All details can be found in following link: 🔗 [Home Assistant as EVCC Source]
 
 ### ✅ Step 3: Define Your Charger in `evcc.yaml`
 
-This is a full example for a Smappee Wallbox:
-This is an important one. It works, however, I am in search to have EVCC controlling the charging current. It now uses the MaxCurrent.
-enable: # also mandatory, this is to enable the charging mode. I created an entry to two services.
-      source: http
-      uri: http://HAlocalIP:8123/api/services/smappee_ev/{{ if .enable }}set_charging_mode{{ else }}pause_charging{{ end }}
-      method: POST
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      body: >
-        {{ if .enable }}
-        { "mode": "NORMAL" }
-        {{ else }}
-        {}
-        {{ end }}
-      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
+Below, you can find a full example for a Smappee EV Wallbox. The configuration was recently set up and is currently undergoing testing.
+
+🔌 Key Item: Charging Enable Control
+
+The `enable` block is **mandatory** and controls whether the wallbox should allow charging. This setup makes use of **two Home Assistant services**, dynamically selected via Go templating:
+```yaml
+enable:
+  source: http
+  uri: http://<HAlocalIP>:8123/api/services/smappee_ev/{{ if .enable }}set_charging_mode{{ else }}pause_charging{{ end }}
+  method: POST
+  headers:
+    - Authorization: Bearer <long_lived_TOKEN>
+    - Content-Type: application/json
+  body: >
+    {{ if .enable }}
+    { "mode": "NORMAL" }
+    {{ else }}
+    {}
+    {{ end }}
+  timeout: 2s
+```
+### 🔧 Behavior
+
+- Enable Charging
+  When `.enable` is `true`, EVCC will:  
+  1. Call the `smappee_ev.set_charging_mode` service  
+  2. Send payload:  
+     ```json
+     {
+       "mode": "NORMAL"
+     }
+     ```
+- Pause Charging*
+  When `.enable` is `false`, EVCC will:  
+  1. Call the `smappee_ev.pause_charging` service  
+  2. Send payload:  
+     ```json
+     {}
+     ```
+Maybe, we need to modify this, but at the moment, it does the job.
+
+Below is the full yaml for the charger.
 
 ```yaml
 # see https://docs.evcc.io/docs/devices/chargers
@@ -73,7 +99,7 @@ chargers:
         {}
         {{ end }}
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    maxcurrent: # I take this value from the smappee_current_limit
+    maxcurrent: # set charging mode to normal and provide the current.
       source: http
       uri: http://HAlocalIP:8123/api/services/smappee_ev/set_charging_mode
       method: POST
