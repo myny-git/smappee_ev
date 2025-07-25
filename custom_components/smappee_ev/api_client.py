@@ -11,12 +11,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SmappeeApiClient:
-    def __init__(self, oauth_client, serial, smart_device_uuid, service_location_id):
+    def __init__(self, oauth_client, serial, smart_device_uuid, smart_device_id, service_location_id):
         _LOGGER.info("SmappeeApiClient init...")
         self.oauth_client = oauth_client
         self.base_url = "https://app1pub.smappee.net/dev/v3"
         self.serial = serial
         self.smart_device_uuid = smart_device_uuid
+        self.smart_device_id = smart_device_id        
         self.service_location_id = service_location_id
         self._callbacks = set()
         self._loop = asyncio.get_event_loop()
