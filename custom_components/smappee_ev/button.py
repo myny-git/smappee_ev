@@ -145,7 +145,7 @@ class SmappeeStartChargingButton(ButtonEntity):
         percent_state = self.hass.states.get(percent_entity_id)   
                
         try:
-            percentage = float(percent_state.state) if percent_state else 100
+            percentage = int(float(percent_state.state)) if percent_state else 100
         except (ValueError, TypeError):
             percentage = 100
 
