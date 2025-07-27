@@ -67,7 +67,7 @@ class ChargingPointSessionState(SmappeeSensorBase):
 
     @property
     def available(self) -> bool:
-        return self.api_client.latest_session_counter != 0
+        return True   
 
     @property
     def native_value(self):
@@ -96,6 +96,10 @@ class ChargingPointEvccState(SmappeeSensorBase):
             return "C"
         else:
             return "E"
+
+    @property
+    def available(self) -> bool:
+        return True           
 
     @property
     def extra_state_attributes(self):
