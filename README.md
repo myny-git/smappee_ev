@@ -6,7 +6,7 @@
 > **This integration has been completely refactored.**
 > - **Not compatible with old configs or entities from the original fork**
 > - Please remove any previous Smappee EV integrations and re-add/configure from scratch
-> - All entity names, services, and options have been improved and modernized
+> - All entity names, services, and options have been improved
 
 ---
 
