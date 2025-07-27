@@ -224,13 +224,10 @@ class SmappeeApiClient:
         await self.oauth_client.ensure_token_valid()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
-        payload = []
-        if percentage != 100:
-            payload.append({
-                "spec": {"name": "limit", "species": "Integer"},
-                "value": percentage
-            })
-        try:
+        payload = [{
+            "spec": {"name": "percentageLimit", "species": "Integer"},
+            "value": percentage
+        }]
             async with aiohttp.ClientSession() as session:
                 resp = await session.post(url, json=payload, headers=headers)
                 if resp.status != 200:
