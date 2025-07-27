@@ -59,9 +59,9 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
     async def async_press(self) -> None:
         """Set charging mode based on current select/numbers in HA."""
         serial = self.api_client.serial_id
-        mode_entity_id = f"select.smappee_charging_mode_{serial}"
-        current_entity_id = f"number.smappee_current_limit_{serial}"
-        percent_entity_id = f"number.smappee_percentage_limit_{serial}"
+        mode_entity_id = f"select.smappee_ev_wallbox_smappee_charging_mode_{serial}"
+        current_entity_id = f"number.smappee_ev_wallbox_smappee_current_limit_{serial}"
+        percent_entity_id = f"number.smappee_ev_wallbox_smappee_percentage_limit_{serial}"
 
         mode_state = self.hass.states.get(mode_entity_id)
         current_state = self.hass.states.get(current_entity_id)
@@ -137,7 +137,7 @@ class SmappeeStartChargingButton(SmappeeBaseButton):
 
     async def async_press(self) -> None:
         serial = self.api_client.serial_id
-        percent_entity_id = f"number.smappee_percentage_limit_{serial}"
+        percent_entity_id = f"number.smappee_ev_wallbox_smappee_percentage_limit_{serial}"
         percent_state = self.hass.states.get(percent_entity_id)
         try:
             percentage = int(percent_state.state) if percent_state else 100
@@ -155,7 +155,8 @@ class SmappeeSetBrightnessButton(SmappeeBaseButton):
         )
 
     async def async_press(self) -> None:
-        entity_id = f"number.smappee_led_brightness_{self.api_client.serial_id}"
+        serial = self.api_client.serial_id
+        entity_id = f"number.smappee_ev_wallbox_smappee_led_brightness_{serial}"
         state = self.hass.states.get(entity_id)
         try:
             brightness = int(state.state) if state else 70

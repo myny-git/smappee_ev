@@ -163,7 +163,6 @@ class SmappeeApiClient:
             else:
                 payload = {"mode": mode}
             async_method = "put"
-
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json",
@@ -172,9 +171,9 @@ class SmappeeApiClient:
         try:
             async with aiohttp.ClientSession() as session:
                 method = getattr(session, async_method)
-                response = await method(url, json=payload, headers=headers)
-                if response.status != 200:
-                    text = await response.text()
+                resp = await method(url, json=payload, headers=headers)
+                if resp.status != 200:
+                    text = await resp.text()
                     _LOGGER.error("Failed to set charging mode: %s", text)
                     raise Exception(f"Set charging mode error: {text}")
                 _LOGGER.debug("Charging mode set successfully")
