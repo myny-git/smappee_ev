@@ -5,15 +5,15 @@ DOMAIN = "smappee_ev"
 UPDATE_INTERVAL_DEFAULT: Final = 30 
 
 # Config keys
-CONF_CLIENT_ID: "client_id"
-CONF_CLIENT_SECRET: "client_secret"
-CONF_USERNAME: "username"
-CONF_PASSWORD: "password"
-CONF_SERIAL: "serial"
-CONF_SERVICE_LOCATION_ID = "service_location_id"      
-CONF_SMART_DEVICE_UUID = "smart_device_uuid"              
-CONF_SMART_DEVICE_ID = "smart_device_id"   
-CONF_UPDATE_INTERVAL = "update_interval"
+CONF_CLIENT_ID: str = "client_id"
+CONF_CLIENT_SECRET: str = "client_secret"
+CONF_USERNAME: str = "username"
+CONF_PASSWORD: str = "password"
+CONF_SERIAL: str = "serial"
+CONF_SERVICE_LOCATION_ID: str = "service_location_id"
+CONF_SMART_DEVICE_UUID: str = "smart_device_uuid"
+CONF_SMART_DEVICE_ID: str = "smart_device_id"
+CONF_UPDATE_INTERVAL: str = "update_interval"
 
 # Service names
 SERVICE_SET_CHARGING_MODE = "set_charging_mode"
