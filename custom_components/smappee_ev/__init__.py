@@ -101,62 +101,88 @@ def get_api_client(hass: HomeAssistant, entry_id: str | None = None) -> SmappeeA
 def register_services(hass: HomeAssistant) -> None:
     """Register all Smappee EV services."""
 
-    async def call_service(call: ServiceCall, action: str):
-        """Central dispatcher for all services."""
+    async def async_set_charging_mode_service(call: ServiceCall):
         api_client = get_api_client(hass)
         if not api_client:
-            _LOGGER.error("No Smappee API client found for '%s' service.", action)
+            _LOGGER.error("No Smappee API client found for 'set_charging_mode' service.")
             return
-
-        if action == SERVICE_SET_CHARGING_MODE:
-            mode = call.data.get("mode")
-            if mode in ["SMART", "SOLAR"]:
-                _LOGGER.debug("Service: set_charging_mode (mode=%s)", mode)
-                hass.async_create_task(api_client.set_charging_mode(mode))  # limit not necessary
-            else:
-                limit = call.data.get("limit", 0)
-                _LOGGER.debug("Service: set_charging_mode (mode=%s, limit=%s)", mode, limit)
-                hass.async_create_task(api_client.set_charging_mode(mode, limit))
-        elif action == SERVICE_PAUSE_CHARGING:
-            _LOGGER.debug("Service: pause_charging")
-            hass.async_create_task(api_client.pause_charging())
-        elif action == SERVICE_STOP_CHARGING:
-            _LOGGER.debug("Service: stop_charging")
-            hass.async_create_task(api_client.stop_charging())
-        elif action == SERVICE_START_CHARGING:
-            percentage = call.data.get("percentageLimit", 100)
-            _LOGGER.debug("Service: start_charging (percentage=%s)", percentage)
-            hass.async_create_task(api_client.start_charging(percentage))
-        elif action == SERVICE_SET_BRIGHTNESS:
-            brightness = call.data.get("brightness", 10)
-            _LOGGER.debug("Service: set_brightness (brightness=%s)", brightness)
-            hass.async_create_task(api_client.set_brightness(brightness))
-        elif action == SERVICE_SET_AVAILABLE:
-            _LOGGER.debug("Service: set_available")
-            hass.async_create_task(api_client.set_available())
-        elif action == SERVICE_SET_UNAVAILABLE:
-            _LOGGER.debug("Service: set_unavailable")
-            hass.async_create_task(api_client.set_unavailable())
-        elif action == SERVICE_RELOAD:
-            _LOGGER.info("Service: reload called - reloading all Smappee EV entries.")
-            current_entries = hass.config_entries.async_entries(DOMAIN)
-            reload_tasks = [
-                hass.config_entries.async_reload(entry.entry_id)
-                for entry in current_entries
-            ]
-            await asyncio.gather(*reload_tasks)
+        mode = call.data.get("mode")
+        if mode in ["SMART", "SOLAR"]:
+            _LOGGER.debug("Service: set_charging_mode (mode=%s)", mode)
+            await api_client.set_charging_mode(mode)
         else:
-            _LOGGER.warning("Unknown service action: %s", action)
-  
-    # Registreer de services via de constants
-    hass.services.async_register(DOMAIN, SERVICE_SET_CHARGING_MODE, lambda call: call_service(call, SERVICE_SET_CHARGING_MODE))
-    hass.services.async_register(DOMAIN, SERVICE_PAUSE_CHARGING, lambda call: call_service(call, SERVICE_PAUSE_CHARGING))
-    hass.services.async_register(DOMAIN, SERVICE_STOP_CHARGING, lambda call: call_service(call, SERVICE_STOP_CHARGING))
-    hass.services.async_register(DOMAIN, SERVICE_START_CHARGING, lambda call: call_service(call, SERVICE_START_CHARGING))
-    hass.services.async_register(DOMAIN, SERVICE_SET_BRIGHTNESS, lambda call: call_service(call, SERVICE_SET_BRIGHTNESS))
-    hass.services.async_register(DOMAIN, SERVICE_SET_AVAILABLE, lambda call: call_service(call, SERVICE_SET_AVAILABLE))
-    hass.services.async_register(DOMAIN, SERVICE_SET_UNAVAILABLE, lambda call: call_service(call, SERVICE_SET_UNAVAILABLE))
-    hass.services.async_register(DOMAIN, SERVICE_RELOAD, lambda call: call_service(call, SERVICE_RELOAD))
+            limit = call.data.get("limit", 0)
+            _LOGGER.debug("Service: set_charging_mode (mode=%s, limit=%s)", mode, limit)
+            await api_client.set_charging_mode(mode, limit)
+
+    async def async_pause_charging_service(call: ServiceCall):
+        api_client = get_api_client(hass)
+        if not api_client:
+            _LOGGER.error("No Smappee API client found for 'pause_charging' service.")
+            return
+        _LOGGER.debug("Service: pause_charging")
+        await api_client.pause_charging()
+
+    async def async_stop_charging_service(call: ServiceCall):
+        api_client = get_api_client(hass)
+        if not api_client:
+            _LOGGER.error("No Smappee API client found for 'stop_charging' service.")
+            return
+        _LOGGER.debug("Service: stop_charging")
+        await api_client.stop_charging()
+
+    async def async_start_charging_service(call: ServiceCall):
+        api_client = get_api_client(hass)
+        if not api_client:
+            _LOGGER.error("No Smappee API client found for 'start_charging' service.")
+            return
+        percentage = call.data.get("percentageLimit", 100)
+        _LOGGER.debug("Service: start_charging (percentage=%s)", percentage)
+        await api_client.start_charging(percentage)
+
+    async def async_set_brightness_service(call: ServiceCall):
+        api_client = get_api_client(hass)
+        if not api_client:
+            _LOGGER.error("No Smappee API client found for 'set_brightness' service.")
+            return
+        brightness = call.data.get("brightness", 10)
+        _LOGGER.debug("Service: set_brightness (brightness=%s)", brightness)
+        await api_client.set_brightness(brightness)
+
+    async def async_set_available_service(call: ServiceCall):
+        api_client = get_api_client(hass)
+        if not api_client:
+            _LOGGER.error("No Smappee API client found for 'set_available' service.")
+            return
+        _LOGGER.debug("Service: set_available")
+        await api_client.set_available()
+
+    async def async_set_unavailable_service(call: ServiceCall):
+        api_client = get_api_client(hass)
+        if not api_client:
+            _LOGGER.error("No Smappee API client found for 'set_unavailable' service.")
+            return
+        _LOGGER.debug("Service: set_unavailable")
+        await api_client.set_unavailable()
+
+    async def async_reload_service(call: ServiceCall):
+        _LOGGER.info("Service: reload called - reloading all Smappee EV entries.")
+        current_entries = hass.config_entries.async_entries(DOMAIN)
+        reload_tasks = [
+            hass.config_entries.async_reload(entry.entry_id)
+            for entry in current_entries
+        ]
+        await asyncio.gather(*reload_tasks)
+
+    # Register each service with its own handler
+    hass.services.async_register(DOMAIN, SERVICE_SET_CHARGING_MODE, async_set_charging_mode_service)
+    hass.services.async_register(DOMAIN, SERVICE_PAUSE_CHARGING, async_pause_charging_service)
+    hass.services.async_register(DOMAIN, SERVICE_STOP_CHARGING, async_stop_charging_service)
+    hass.services.async_register(DOMAIN, SERVICE_START_CHARGING, async_start_charging_service)
+    hass.services.async_register(DOMAIN, SERVICE_SET_BRIGHTNESS, async_set_brightness_service)
+    hass.services.async_register(DOMAIN, SERVICE_SET_AVAILABLE, async_set_available_service)
+    hass.services.async_register(DOMAIN, SERVICE_SET_UNAVAILABLE, async_set_unavailable_service)
+    hass.services.async_register(DOMAIN, SERVICE_RELOAD, async_reload_service)
     _LOGGER.debug("All Smappee EV services registered.")
 
 def unregister_services(hass: HomeAssistant) -> None:
