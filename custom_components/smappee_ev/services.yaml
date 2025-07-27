@@ -39,4 +39,6 @@ set_available:
 set_unavailable:
   description: Set the smart charger to unavailable state.
 
-
+reload:
+  name: Reload integration
+  description: Reload all Smappee EV entries and refresh the integration.

@@ -1,146 +1,93 @@
 import logging
-import random
 
-from datetime import datetime, timedelta
-from .oauth import OAuth2Client
-from .api_client import SmappeeApiClient
-from .const import (DOMAIN, CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_USERNAME, CONF_PASSWORD, CONF_SERIAL)
-
-from homeassistant.components.sensor import (SensorEntity, SensorDeviceClass, SensorStateClass)
+from datetime import timedelta
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorDeviceClass,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .const import DOMAIN, CONF_SERIAL
+
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(seconds=20)
+#SCAN_INTERVAL = timedelta(seconds=20)
 
 async def async_setup_entry(
-    hass: HomeAssistant, 
-    config_entry: ConfigEntry, 
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-) -> None:    
-    _LOGGER.debug("Sensor async_setup_entry init...")
-    _LOGGER.debug(config_entry.data.get(CONF_SERIAL))
+) -> None:
+    """Set up Smappee EV sensors from a config entry.""" 
+    api_client = hass.data[DOMAIN][config_entry.entry_id]
 
-    #Initialize the API client
-    
-    new_devices = []
-    new_devices.append(ChargingPointSessionState(config_entry))
-    new_devices.append(ChargingPointLatestCounter(config_entry))
-    new_devices.append(ChargingPointEvccState(config_entry))
-    if new_devices:
-        async_add_entities(new_devices)    
-    _LOGGER.debug("Sensor async_setup_entry init...done")
-    return True
+    async_add_entities([
+        ChargingPointSessionState(api_client, config_entry),
+        ChargingPointEvccState(api_client, config_entry),
+        # --- ENERGIESENSOR REACTIVATE---
+        # ChargingPointLatestCounter(api_client, config_entry),  
+        # ------------------------
+    ])
 
+class SmappeeSensorBase(SensorEntity):
+    """Base class for Smappee EV sensors."""
 
-class SensorBase(Entity):
-    should_poll = True
-    _attr_should_poll = True
-    
-    def __init__(self, config_entry):
-        _LOGGER.info("Sensor init...")
+    _attr_should_poll = False  # Event-driven, no polling
+
+    def __init__(self, api_client, config_entry):
+        self.api_client = api_client
         self._config_entry = config_entry
-        self.username = config_entry.data.get(CONF_USERNAME)
-        self.pasw = config_entry.data.get(CONF_PASSWORD)
-        self.oauth_client = OAuth2Client(config_entry.data)
-        self.api_client = SmappeeApiClient(
-            self.oauth_client, 
-            config_entry.data.get(CONF_SERIAL),
-            config_entry.data.get("smart_device_uuid"),
-            config_entry.data.get("smart_device_id"),            
-            config_entry.data.get("service_location_id")
-        )
-        self.api_client.enable
-        _LOGGER.info("Sensor init...done")
-        
+        self._serial = config_entry.data.get(CONF_SERIAL)
+
     @property
     def device_info(self):
-        return {"identifiers": {(DOMAIN, self._config_entry.data.get(CONF_SERIAL))}}
+        return {
+            "identifiers": {(DOMAIN, self._serial)},
+            "name": f"Smappee EV Wallbox {self._serial}",
+            "manufacturer": "Smappee",
+        }
 
-    @property
-    def available(self) -> bool:
-        return True
-     
     async def async_added_to_hass(self):
-        # Sensors should also register callbacks to HA when their state changes
         self.api_client.register_callback(self.async_write_ha_state)
 
     async def async_will_remove_from_hass(self):
-        # The opposite of async_added_to_hass. Remove any registered call backs here.
         self.api_client.remove_callback(self.async_write_ha_state)
 
+class ChargingPointSessionState(SmappeeSensorBase):
+    """Sensor for the current session state."""
 
-class ChargingPointLatestCounter(SensorBase):
-    def __init__(self, config_entry):
-        """Initialize the sensor."""
-        _LOGGER.debug("ChargingPointLatestCounter init...")
-        super().__init__(config_entry)
-        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_counter"
-        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} total counter"
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_icon = "mdi:ev-station"
-        self._attr_unit_of_measurement = "kWh"
-        _LOGGER.debug("ChargingPointLatestCounter init...done")
+    _attr_icon = "mdi:ev-station"
+
+    def __init__(self, api_client, config_entry):
+        super().__init__(api_client, config_entry)
+        self._attr_unique_id = f"{self._serial}_session_state"
+        self._attr_name = f"Charging point {self._serial} session state"
 
     @property
     def available(self) -> bool:
-        if self.api_client.fetchLatestSessionCounter == 0: 
-            return False
-        return True
+        return self.api_client.latest_session_counter != 0
 
     @property
-    def device_class(self) -> str | None:
-        return self._attr_device_class
-        
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        _LOGGER.debug("Get ChargingPointLatestCounter.state...")
-        return self.api_client.fetchLatestSessionCounter
+    def native_value(self):
+        """Return the current session state."""
+        return self.api_client.session_state
+
+class ChargingPointEvccState(SmappeeSensorBase):
+    """Sensor mapping session state to EVCC state."""
+
+    _attr_icon = "mdi:ev-plug-type2"
+
+    def __init__(self, api_client, config_entry):
+        super().__init__(api_client, config_entry)
+        self._attr_unique_id = f"{self._serial}_evcc_state"
+        self._attr_name = f"Charging point {self._serial} EVCC state"
 
     @property
-    def state_class(self) -> str:
-        return self._attr_state_class
-
-class ChargingPointSessionState(SensorBase):
-    _native_value = "str"
-    _native_unit_of_measurement = "str"
-
-    def __init__(self, config_entry):
-        """Initialize the sensor."""
-        _LOGGER.debug("ChargingPointSessionState init...")
-        super().__init__(config_entry)
-        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_session_state"
-        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} session state"
-        _LOGGER.debug("ChargingPointSessionState init...done")
-
-    @property
-    def available(self) -> bool:
-        if self.api_client.fetchLatestSessionCounter == 0: 
-            return False
-        return True
-    
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        _LOGGER.debug("Get ChargingPointSessionState.state...")
-        return self.api_client.getSessionState
-
-class ChargingPointEvccState(SensorBase, SensorEntity):
-    def __init__(self, config_entry):
-        _LOGGER.debug("ChargingPointEvccState init...")
-        super().__init__(config_entry)
-        self._attr_unique_id = f"{config_entry.data.get(CONF_SERIAL)}_evcc_state"
-        self._attr_name = f"Charging point {config_entry.data.get(CONF_SERIAL)} EVCC state"
-        _LOGGER.debug("ChargingPointEvccState init...done")
-
-    @property
-    def state(self):
-        _LOGGER.debug("Get ChargingPointEvccState.state...")
-        session_state = self.api_client.getSessionState
+    def native_value(self):
+        """Return the EVCC mapped state."""
+        session_state = self.api_client.session_state
         if session_state in ["INITIAL", "STOPPED"]:
             return "A"
         elif session_state in ["STARTED", "STOPPING"]:
@@ -153,7 +100,29 @@ class ChargingPointEvccState(SensorBase, SensorEntity):
     @property
     def extra_state_attributes(self):
         return {
-            "raw_session_state": self.api_client.getSessionState,
-            "evcc_mapped_state": self.state,
+            "raw_session_state": self.api_client.session_state,
+            "evcc_mapped_state": self.native_value,
         }
 
+# --- SENSOR DISABLED, as MQTT or MODBUS is available ---
+# class ChargingPointLatestCounter(SmappeeSensorBase):
+#     """Sensor for the total energy delivered by the charging point."""
+#
+#     _attr_state_class = SensorStateClass.TOTAL_INCREASING
+#     _attr_device_class = SensorDeviceClass.ENERGY
+#     _attr_icon = "mdi:ev-station"
+#     _attr_native_unit_of_measurement = "kWh"
+#
+#     def __init__(self, api_client, config_entry):
+#         super().__init__(api_client, config_entry)
+#         self._attr_unique_id = f"{self._serial}_counter"
+#         self._attr_name = f"Charging point {self._serial} total counter"
+#
+#     @property
+#     def available(self) -> bool:
+#         return self.api_client.latest_session_counter != 0
+#
+#     @property
+#     def native_value(self):
+#         """Return the latest session counter."""
+#         return self.api_client.latest_session_counter

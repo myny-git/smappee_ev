@@ -1,15 +1,20 @@
+import logging
+
+from typing import Any
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up Smappee EV buttons from a config entry."""
     api_client = hass.data[DOMAIN][config_entry.entry_id]
     async_add_entities([
         SmappeeSetChargingModeButton(api_client, hass),
@@ -18,25 +23,41 @@ async def async_setup_entry(
         SmappeeStartChargingButton(api_client, hass),
         SmappeeSetBrightnessButton(api_client, hass),
         SmappeeSetAvailableButton(api_client, hass),
-        SmappeeSetUnavailableButton(api_client, hass)        
+        SmappeeSetUnavailableButton(api_client, hass),
     ])
 
-class SmappeeSetChargingModeButton(ButtonEntity):
-    def __init__(self, api_client, hass):
+class SmappeeBaseButton(ButtonEntity):
+    """Base button for Smappee EV actions."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, api_client: Any, hass: HomeAssistant, name: str, unique_id: str, icon: str = None) -> None:
         self.api_client = api_client
         self.hass = hass
-        self._attr_name = "Set Charging Mode"
-        self._attr_unique_id = f"{api_client.serial_id}_set_charging_mode"
+        self._attr_name = name
+        self._attr_unique_id = unique_id
+        if icon:
+            self._attr_icon = icon
 
     @property
     def device_info(self):
+        """Return device info for the wallbox."""
         return {
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
             "name": "Smappee EV Wallbox",
             "manufacturer": "Smappee",
-        }    
+        }
+
+class SmappeeSetChargingModeButton(SmappeeBaseButton):
+    def __init__(self, api_client: Any, hass: HomeAssistant):
+        super().__init__(
+            api_client, hass,
+            "Set Charging Mode",
+            f"{api_client.serial_id}_set_charging_mode"
+        )
 
     async def async_press(self) -> None:
+        """Set charging mode based on current select/numbers in HA."""
         serial = self.api_client.serial_id
         mode_entity_id = f"select.smappee_charging_mode_{serial}"
         current_entity_id = f"number.smappee_current_limit_{serial}"
@@ -59,19 +80,18 @@ class SmappeeSetChargingModeButton(ButtonEntity):
             return
 
         mode = mode_state.state
-
         current = None
         percent = None
         if current_state is not None:
             try:
-                current = float(current_state.state)
+                current = int(current_state.state)
             except (ValueError, TypeError):
-                current = None
+                pass
         if percent_state is not None:
             try:
-                percent = float(percent_state.state)
+                percent = int(percent_state.state)
             except (ValueError, TypeError):
-                percent = None
+                pass
 
         if mode == "NORMAL":
             limit = current if current is not None else 6
@@ -82,142 +102,85 @@ class SmappeeSetChargingModeButton(ButtonEntity):
 
         await self.api_client.set_charging_mode(mode, limit)
 
-
-class SmappeePauseChargingButton(ButtonEntity):
-    def __init__(self, api_client, hass):
-        self.api_client = api_client
-        self.hass = hass
-        self._attr_name = "Pause Charging"
-        self._attr_unique_id = f"{api_client.serial_id}_pause_charging"
-        self._attr_icon = "mdi:pause"
-
- 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
+class SmappeePauseChargingButton(SmappeeBaseButton):
+    def __init__(self, api_client: Any, hass: HomeAssistant):
+        super().__init__(
+            api_client, hass,
+            "Pause Charging",
+            f"{api_client.serial_id}_pause_charging",
+            icon="mdi:pause"
+        )
 
     async def async_press(self) -> None:
-        serial = self.api_client.serial_id
         await self.api_client.pause_charging()
 
-class SmappeeStopChargingButton(ButtonEntity):
-    def __init__(self, api_client, hass):
-        self.api_client = api_client
-        self.hass = hass
-        self._attr_name = "Stop Charging"
-        self._attr_unique_id = f"{api_client.serial_id}_stop_charging"
-        self._attr_icon = "mdi:stop"
-
- 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
+class SmappeeStopChargingButton(SmappeeBaseButton):
+    def __init__(self, api_client: Any, hass: HomeAssistant):
+        super().__init__(
+            api_client, hass,
+            "Stop Charging",
+            f"{api_client.serial_id}_stop_charging",
+            icon="mdi:stop"
+        )
 
     async def async_press(self) -> None:
-        serial = self.api_client.serial_id
         await self.api_client.stop_charging()
 
-class SmappeeStartChargingButton(ButtonEntity):
-    def __init__(self, api_client, hass):
-        self.api_client = api_client
-        self.hass = hass
-        self._attr_name = "Start Charging"
-        self._attr_unique_id = f"{api_client.serial_id}_start_charging"
-        self._attr_icon = "mdi:play"
-
- 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
+class SmappeeStartChargingButton(SmappeeBaseButton):
+    def __init__(self, api_client: Any, hass: HomeAssistant):
+        super().__init__(
+            api_client, hass,
+            "Start Charging",
+            f"{api_client.serial_id}_start_charging",
+            icon="mdi:play"
+        )
 
     async def async_press(self) -> None:
         serial = self.api_client.serial_id
         percent_entity_id = f"number.smappee_percentage_limit_{serial}"
-        percent_state = self.hass.states.get(percent_entity_id)   
-               
+        percent_state = self.hass.states.get(percent_entity_id)
         try:
-            percentage = int(float(percent_state.state)) if percent_state else 100
+            percentage = int(percent_state.state) if percent_state else 100
         except (ValueError, TypeError):
             percentage = 100
-
-        
         await self.api_client.start_charging(percentage)
 
-class SmappeeSetBrightnessButton(ButtonEntity):
-    def __init__(self, api_client, hass):
-        self.api_client = api_client
-        self.hass = hass
-        self._attr_name = "Set LED Brightness"
-        self._attr_unique_id = f"{api_client.serial_id}_set_led_brightness"
-        self._attr_icon = "mdi:brightness-6"
+class SmappeeSetBrightnessButton(SmappeeBaseButton):
+    def __init__(self, api_client: Any, hass: HomeAssistant):
+        super().__init__(
+            api_client, hass,
+            "Set LED Brightness",
+            f"{api_client.serial_id}_set_led_brightness",
+            icon="mdi:brightness-6"
+        )
 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
-    
     async def async_press(self) -> None:
         entity_id = f"number.smappee_led_brightness_{self.api_client.serial_id}"
         state = self.hass.states.get(entity_id)
         try:
-            brightness = int(float(state.state)) if state else 70
+            brightness = int(state.state) if state else 70
         except (ValueError, TypeError):
             brightness = 70
         await self.api_client.set_brightness(brightness)
 
+class SmappeeSetAvailableButton(SmappeeBaseButton):
+    def __init__(self, api_client: Any, hass: HomeAssistant):
+        super().__init__(
+            api_client, hass,
+            "Set Available",
+            f"{api_client.serial_id}_set_available"
+        )
 
-class SmappeeSetAvailableButton(ButtonEntity):
-    def __init__(self, api_client, hass):
-        self.api_client = api_client
-        self.hass = hass
-        self._attr_name = "Set Available"
-        self._attr_unique_id = f"{api_client.serial_id}_set_available"
-        
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
-        
     async def async_press(self) -> None:
-        entity_id = f"number.smappee_led_brightness_{self.api_client.serial_id}"
-        state = self.hass.states.get(entity_id)
-
         await self.api_client.set_available()
 
-class SmappeeSetUnavailableButton(ButtonEntity):
-    def __init__(self, api_client, hass):
-        self.api_client = api_client
-        self.hass = hass
-        self._attr_name = "Set Unavailable"
-        self._attr_unique_id = f"{api_client.serial_id}_set_unavailable"
-        
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
-        
+class SmappeeSetUnavailableButton(SmappeeBaseButton):
+    def __init__(self, api_client: Any, hass: HomeAssistant):
+        super().__init__(
+            api_client, hass,
+            "Set Unavailable",
+            f"{api_client.serial_id}_set_unavailable"
+        )
+
     async def async_press(self) -> None:
         await self.api_client.set_unavailable()
-
-

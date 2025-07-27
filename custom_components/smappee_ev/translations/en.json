@@ -8,7 +8,8 @@
           "client_secret": "Your client secret",
           "username": "Your username on Smappee dashboard",
           "password": "Your password on Smappee dashboard",
-          "serial": "The serial number of your charging point"
+          "serial": "The serial number of your charging point",
+          "update_interval": "Update interval (seconds)"
         }
       }
     },
@@ -25,7 +26,8 @@
           "client_secret": "Your client secret",
           "username": "Your username on Smappee dashboard",
           "password": "Your password on Smappee dashboard",
-          "serial": "The serial number of your charging point"
+          "serial": "The serial number of your charging point",
+          "update_interval": "Update interval (seconds)"
         }
       }
     },
@@ -39,18 +41,59 @@
       "description": "Set the charging mode of a connector.",
       "fields": {
         "serial": {
-          "name": "Name",
-          "description": "serial number of charging station"
+          "name": "Serial",
+          "description": "Serial number of charging station"
         },
         "mode": {
           "name": "Mode",
-          "description": "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, PAUSED)"
+          "description": "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, SOLAR)"
         },
         "limit": {
           "name": "Limit",
-          "description": "Current limit in amperes"
+          "description": "Current limit (Ampere or %)"
         }
       }
+    },
+    "pause_charging": {
+      "name": "Pause charging",
+      "description": "Pause charging for the selected connector."
+    },
+    "stop_charging": {
+      "name": "Stop charging",
+      "description": "Stop charging for the selected connector."
+    },
+    "start_charging": {
+      "name": "Start charging",
+      "description": "Start charging with an optional percentage limit.",
+      "fields": {
+        "percentage": {
+          "name": "Percentage limit",
+          "description": "Percentage at which to stop charging (optional)"
+        }
+      }
+    },
+    "set_brightness": {
+      "name": "Set LED brightness",
+      "description": "Set the LED brightness for the wallbox.",
+      "fields": {
+        "brightness": {
+          "name": "Brightness",
+          "description": "Brightness value (0-100)"
+        }
+      }
+    },
+    "set_available": {
+      "name": "Set available",
+      "description": "Make the charger available for charging."
+    },
+    "set_unavailable": {
+      "name": "Set unavailable",
+      "description": "Make the charger unavailable for charging."
+    },
+    "reload": {
+      "name": "Reload",
+      "description": "Reload all Smappee EV entries."
     }
   }
 }
+
