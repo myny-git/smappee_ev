@@ -96,6 +96,7 @@ class SmappeeApiClient:
                     raise Exception(f"Charging point session state error: {text}")
 
                 # retrieve propoerties and search for chargingState
+                session_state_data = await resp_state.json() 
                 self._session_state = next(
                     (prop.get("value") for prop in session_state_data.get("properties", [])
                      if prop.get("spec", {}).get("name") == "chargingState"),
