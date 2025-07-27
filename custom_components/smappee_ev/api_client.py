@@ -145,6 +145,8 @@ class SmappeeApiClient:
             self._loop.create_task(self.delayed_update())
         return self._session_state
   
+    # --- API-calls (set_charging_mode, start/pause/stop charging, set_brightness, ...) ---
+
     async def set_charging_mode(self, mode: str, limit: Optional[int] = None) -> None:
         """Set the charging mode for the charger."""
         await self.oauth_client.ensure_token_valid()

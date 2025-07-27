@@ -45,7 +45,7 @@ class SmappeeSensorBase(SensorEntity):
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self._serial)},
-            "name": f"Smappee EV Wallbox {self._serial}",
+            "name": f"Smappee EV Wallbox",
             "manufacturer": "Smappee",
         }
 
@@ -63,7 +63,7 @@ class ChargingPointSessionState(SmappeeSensorBase):
     def __init__(self, api_client, config_entry):
         super().__init__(api_client, config_entry)
         self._attr_unique_id = f"{self._serial}_session_state"
-        self._attr_name = f"Charging point {self._serial} session state"
+        self._attr_name = f"Session state"
 
     @property
     def available(self) -> bool:
@@ -82,7 +82,7 @@ class ChargingPointEvccState(SmappeeSensorBase):
     def __init__(self, api_client, config_entry):
         super().__init__(api_client, config_entry)
         self._attr_unique_id = f"{self._serial}_evcc_state"
-        self._attr_name = f"Charging point {self._serial} EVCC state"
+        self._attr_name = f"EVCC state"
 
     @property
     def native_value(self):

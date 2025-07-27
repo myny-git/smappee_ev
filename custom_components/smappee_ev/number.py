@@ -68,7 +68,7 @@ class SmappeeCurrentLimitNumber(SmappeeBaseNumber):
     def __init__(self, api_client: Any):
         super().__init__(
             api_client,
-            f"Smappee Current Limit {api_client.serial_id}",
+            f"Current Limit",
             f"{api_client.serial_id}_current_limit",
             "A",
             min_value=6,
@@ -87,7 +87,7 @@ class SmappeePercentageLimitNumber(SmappeeBaseNumber):
     def __init__(self, api_client: Any):
         super().__init__(
             api_client,
-            f"Smappee Percentage Limit {api_client.serial_id}",
+            f"Percentage Limit",
             f"{api_client.serial_id}_percentage_limit",
             "%",
             min_value=0,
@@ -106,7 +106,7 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
     def __init__(self, api_client: Any):
         super().__init__(
             api_client,
-            f"Smappee LED Brightness {api_client.serial_id}",
+            f"LED Brightness",
             f"{api_client.serial_id}_led_brightness",
             "%",
             min_value=0,

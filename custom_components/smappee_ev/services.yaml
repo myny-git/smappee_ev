@@ -9,7 +9,7 @@ set_charging_mode:
       example: "NORMAL"
     limit:
       description: "Current limit in amperes"
-      example: 10
+      example: 6
 
 pause_charging:
   name: Pause Charging
@@ -24,14 +24,14 @@ start_charging:
   fields:
     percentageLimit:
       description: "Percentage limit for charging"
-      example: 80
+      example: 5
 
 set_brightness:
   description: Set the LED brightness of the charger.
   fields:
     brightness:
       description: Brightness level (0-100)
-      example: 70
+      example: 15
 
 set_available:
   description: Set the smart charger to available state.
