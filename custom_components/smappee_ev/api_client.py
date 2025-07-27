@@ -217,6 +217,29 @@ class SmappeeApiClient:
             _LOGGER.error("Exception in stop_charging: %s", exc)
             raise
 
+    async def start_charging(self, percentage: int = 100) -> None:
+        """Start charging via the Smappee API (optionally with percentage limit)."""
+        await self.oauth_client.ensure_token_valid()
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
+        headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
+        payload = []
+        if percentage != 100:
+            payload.append({
+                "spec": {"name": "limit", "species": "Integer"},
+                "value": percentage
+            })
+        try:
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(url, json=payload, headers=headers)
+                if resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.error("Failed to start charging: %s", text)
+                    raise Exception(f"Start charging error: {text}")
+                _LOGGER.debug("Started charging successfully")
+        except Exception as exc:
+            _LOGGER.error("Exception in start_charging: %s", exc)
+            raise            
+
     async def set_brightness(self, brightness: int) -> None:
         """Set LED brightness via the Smappee API."""
         await self.oauth_client.ensure_token_valid()
