@@ -68,9 +68,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
-    if not getattr(hass.data[DOMAIN], "services_registered", False):
+    if not hass.data[DOMAIN].get("services_registered", False):
         register_services(hass)
-        hass.data[DOMAIN].services_registered = True
+        hass.data[DOMAIN]["services_registered"] = True
 
     entry.async_on_unload(entry.add_update_listener(async_entry_update_listener))    
 
