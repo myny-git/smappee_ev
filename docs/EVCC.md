@@ -147,6 +147,17 @@ circuits:
 ```
 The peak shaving and current control do not function optimally yet — this is work in progress. Feel free to experiment and suggest improvements!
 
+
+You still have to include a loadpoint:
+```yaml
+loadpoints:
+    - title: Carport # display name for UI
+      charger: smappee # charger
+      vehicle: Ford_explorer # default vehicle
+      circuit: main
+      phases: 0  ## to allow for 1 and 3 phases - again, to be evaluated
+```
+
 ## ⚠️ EVCC requires high update rates for sensors
 
 The original Smappee integration (with Smappee Infinity/Connect) does not provide sufficiently fast updates.
