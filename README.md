@@ -67,9 +67,9 @@ The main ambition is to integrate these sensors in other energy management syste
   - Should work similarly on other Smappee chargers using the same API
 
 ## 📘 Integration into other energy management systems
-- [EVCC information](./docs/EVCC.md) – Learn how to use these Home Assistant sensors for EVCC.
-- https://github.com/Lamarqe/ha_openems
-- https://github.com/davidusb-geek/emhass
+- [EVCC integration](./docs/EVCC.md) – Learn how to use these Home Assistant sensors for EVCC.
+- [openEMS integration](./docs/openEMS.md) - Learn how to use these Home Assistant sensors for openEMS. (under construction)
+- [emhass integration](./docs/emhass.md) - Learn how to use these Home Assistant sensors for emhass. (under construction)
 
 > ## ⚠️ Important
 > This is a HACS custom integration.
