@@ -11,7 +11,7 @@
 ---
 
 ## 🧠 Credits
-This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"".
+This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". The complete code has been completely refactored, therefore this fork became a new integration which is not compatible with the old configs or entities from the original fork.
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-blue.svg?style=flat-square)](https://hacs.xyz)
 [![hainstall](https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev) [![GitHub release](https://img.shields.io/github/v/release/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/releases)
@@ -26,7 +26,9 @@ This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev
 ## 🔧 Features
 
 This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant.  
-It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview).
+It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview). 
+
+The main ambition is to integrate these sensors in other energy management systems. The howto is written below. 
 
 ### ✅ Charging Mode Control
 - Switch between all official Smappee charging modes:
@@ -64,8 +66,10 @@ It goes far beyond the official integration, which lacks support for the full EV
   - **Smappee EV Wall Home** (single cable)
   - Should work similarly on other Smappee chargers using the same API
 
-## 📘 More Information
+## 📘 Integration into other energy management systems
 - [EVCC information](./docs/EVCC.md) – Learn how to use these Home Assistant sensors for EVCC.
+- https://github.com/Lamarqe/ha_openems
+- https://github.com/davidusb-geek/emhass
 
 > ## ⚠️ Important
 > This is a HACS custom integration.
