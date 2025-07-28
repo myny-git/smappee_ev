@@ -12,16 +12,16 @@
 
 ## 🧠 Credits
 This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". The complete code has been completely refactored, therefore this fork became a new integration which is not compatible with the old configs or entities from the original fork.
+<div align="center">
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-blue.svg?style=flat-square)](https://hacs.xyz)
-[![hainstall](https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev) [![GitHub release](https://img.shields.io/github/v/release/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/releases)
+[![HACS](https://img.shields.io/badge/HACS-Default-blue.svg?style=flat-square)](https://hacs.xyz)
+[![Release](https://img.shields.io/github/v/release/myny-git/smappee_ev?color=green&style=flat-square)](https://github.com/myny-git/smappee_ev/releases)
+[![Issues](https://img.shields.io/github/issues/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/issues)
+[![Usage](https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev)
+[![Hassfest](https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/hassfest.yaml?label=Hassfest&style=flat-square)](https://github.com/myny-git/smappee_ev/actions/workflows/hassfest.yaml)
 
-<!--
-> [!NOTE]  
-[![GitHub](https://img.shields.io/badge/Source-GitHub-black?logo=github&style=flat-square)](https://github.com/sponsors/myny-git) // to be set!
-[![BuyMeACoffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-donate-yellow?logo=buymeacoffee&style=flat-square)](https://www.buymeacoffee.com/mynygit)  
-[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&style=flat-square)](https://www.paypal.me/mynygit) 
--->
+
+</div>
 
 ## 🔧 Features
 
