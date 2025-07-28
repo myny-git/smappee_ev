@@ -19,7 +19,7 @@ This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev
 [![Issues](https://img.shields.io/github/issues/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/issues)
 [![Usage](https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev)
 [![Hassfest](https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/hassfest.yaml?label=Hassfest&style=flat-square)](https://github.com/myny-git/smappee_ev/actions/workflows/hassfest.yaml)
-
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 </div>
 
