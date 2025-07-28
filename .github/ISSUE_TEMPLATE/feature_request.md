@@ -10,7 +10,7 @@ assignees: myny-git
 ##  📢 Before You Begin
 
 ❗ **This form is for feature requests only.**  
-👉 If you're experiencing a bug or technical issue, please use the "[Smappee EV Problem Report](https://github.com/myny-git/smappee_ev/issues/new?assignees=&labels=bug%smappee-ev-bug-report.md)" template instead.
+👉 If you're experiencing a bug or technical issue, please use the "[Smappee EV Problem Report template](https://github.com/myny-git/smappee_ev/blob/main/.github/ISSUE_TEMPLATE/smappee-ev-bug-report.md)" template instead.
 
 ## 💡 What is the problem you're trying to solve?
 
