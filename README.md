@@ -14,7 +14,7 @@
 This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". The complete code has been completely refactored, therefore this fork became a new integration which is not compatible with the old configs or entities from the original fork.
 <div align="center">
 
-[![HACS](https://img.shields.io/badge/HACS-Default-blue.svg?style=flat-square)](https://hacs.xyz)
+[![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg?style=flat-square)](https://hacs.xyz)
 [![Release](https://img.shields.io/github/v/release/myny-git/smappee_ev?color=green&style=flat-square)](https://github.com/myny-git/smappee_ev/releases)
 [![Issues](https://img.shields.io/github/issues/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/issues)
 [![Usage](https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev)
