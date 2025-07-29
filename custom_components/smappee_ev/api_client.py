@@ -117,16 +117,15 @@ class SmappeeApiClient:
                 if resp_devices.status == 200:
                     data = await resp_devices.json()
                     for device in data:
-                        if device.get("uuid") == self.serial:
-                            for prop in device.get("configurationProperties", []):
-                                spec = prop.get("spec", {})
-                                if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
-                                    new_brightness = int(prop.get("value", 70))
-                                    if new_brightness != getattr(self, "led_brightness", 70):
-                                        _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
-                                        self.led_brightness = new_brightness
-                                        update_required = True
-                                    break
+                        for prop in device.get("configurationProperties", []):
+                            spec = prop.get("spec", {})
+                            if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
+                                new_brightness = int(prop.get("value", 70))
+                                if new_brightness != getattr(self, "led_brightness", 70):
+                                    _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                                    self.led_brightness = new_brightness
+                                    update_required = True
+                                break
                 else:
                     _LOGGER.warning("Failed to fetch smartdevices: %s", resp_devices.status)
                 
@@ -140,7 +139,6 @@ class SmappeeApiClient:
         else:
             _LOGGER.debug("No update needed.")
 
-        await self.publish_updates()
         _LOGGER.info("Delayed update done.")
 
     async def publish_updates(self) -> None:
