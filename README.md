@@ -10,16 +10,24 @@
 
 ---
 
+> [!IMPORTANT]
+> This is a personal project developed by me and is not affiliated with, maintained, authorized, or endorsed by Smappee in any way. Use at your own risk.
+
 ## 🧠 Credits
 This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". The complete code has been completely refactored, therefore this fork became a new integration which is not compatible with the old configs or entities from the original fork.
 <div align="center">
 
-[![HACS](https://img.shields.io/badge/HACS-Custom-blue.svg?style=flat-square)](https://hacs.xyz)
-[![Release](https://img.shields.io/github/v/release/myny-git/smappee_ev?color=green&style=flat-square)](https://github.com/myny-git/smappee_ev/releases)
-[![Issues](https://img.shields.io/github/issues/myny-git/smappee_ev?style=flat-square)](https://github.com/myny-git/smappee_ev/issues)
-[![Usage](https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total)](https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev)
-[![Hassfest](https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/hassfest.yaml?label=Hassfest&style=flat-square)](https://github.com/myny-git/smappee_ev/actions/workflows/hassfest.yaml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![HACS][hacs-shield]][hacs-url]
+[![Release][release-shield]][release-url]
+[![Issues][issues-shield]][issues-url]
+[![Usage][usage-shield]][usage-url]
+[![Hassfest][hassfest-shield]][hassfest-url]
+[![License][license-shield]][license-url]
+
+[![Commits][commits-shield]][commits-url]
+[![Stars][stars-shield]][stars-url]
+[![Pull Requests][pulls-shield]][pulls-url]
+
 
 </div>
 
@@ -78,13 +86,23 @@ The main ambition is to integrate these sensors in other energy management syste
 ## 📦 Installation Instructions
 ### Step 1. Add the Integration via HACS
 
-[![Open your Home Assistant instance and adding repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=myny-git&repository=smappee_ev&category=integration)
+> [!NOTE]  
+> 🚀 Great news! The integration has been **officially approved by HACS**, no need to add it manually anymore! 🎉
+
+[![Add to my Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=myny-git&repository=smappee_ev&category=integration)
+
+### Method 1: Install via HACS (Recommended)
 
 1. In Home Assistant, go to **HACS** → **Integrations**.
-2. Click the **three-dot menu** (⋮) in the top right → **Custom Repositories**.
-3. Add this repository: https://github.com/myny-git/smappee_ev. Set the category to **Integration¨¨.
-4. After adding, search for `Smappee EV` in the HACS Integrations list and install it.
-5. Restart Home Assistant.
+2. Search for `Smappee EV`.
+3. Click the **download** button in the right bottom side
+4. Restart Home Assistant.
+
+### Method 2: Manual Installation
+
+1. Download the latest release from GitHub.
+2. Copy the `smappee_ev` folder to your Home Assistant `custom_components` directory.
+3. Restart Home Assistant.
 
 ### Step 2. Configure the Integration
 
@@ -158,5 +176,41 @@ Contributions, feedback, or bug reports are very welcome! I am not a programmer,
 
 If this integration is useful to you, feel free to support its development:
 
-[![BuyMeACoffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-donate-yellow?logo=buymeacoffee&style=flat-square)](https://www.buymeacoffee.com/mynygit)  [![PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&style=flat-square)](https://www.paypal.me/mynygit) 
+[![BuyMeACoffee][coffee-shield]][coffee-url]
+[![PayPal][paypal-shield]][paypal-url]
+
+<!-- Shields -->
+
+[hacs-shield]: https://img.shields.io/badge/HACS-Default-blue.svg?style=flat-square
+[hacs-url]: https://hacs.xyz
+
+[release-shield]: https://img.shields.io/github/v/release/myny-git/smappee_ev?color=green&style=flat-square
+[release-url]: https://github.com/myny-git/smappee_ev/releases
+
+[issues-shield]: https://img.shields.io/github/issues/myny-git/smappee_ev?style=flat-square
+[issues-url]: https://github.com/myny-git/smappee_ev/issues
+
+[usage-shield]: https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total
+[usage-url]: https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev
+
+[hassfest-shield]: https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/hassfest.yaml?label=Hassfest&style=flat-square
+[hassfest-url]: https://github.com/myny-git/smappee_ev/actions/workflows/hassfest.yaml
+
+[license-shield]: https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square
+[license-url]: https://opensource.org/licenses/MIT
+
+[commits-shield]: https://img.shields.io/github/commit-activity/t/myny-git/smappee_ev?style=flat-square
+[commits-url]: https://github.com/myny-git/smappee_ev/commits/main
+
+[stars-shield]: https://img.shields.io/github/stars/myny-git/smappee_ev?style=flat-square
+[stars-url]: https://github.com/myny-git/smappee_ev/stargazers
+
+[pulls-shield]: https://img.shields.io/github/issues-pr/myny-git/smappee_ev?style=flat-square
+[pulls-url]: https://github.com/myny-git/smappee_ev/pulls
+
+[coffee-shield]: https://img.shields.io/badge/Buy%20me%20a%20coffee-donate-yellow?logo=buymeacoffee&style=flat-square
+[coffee-url]: https://www.buymeacoffee.com/mynygit
+
+[paypal-shield]: https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&style=flat-square
+[paypal-url]: https://www.paypal.me/mynygit
 
