@@ -2,7 +2,6 @@ import aiohttp
 import logging
 import random
 import asyncio
-import aiohttp
 
 from datetime import datetime, timedelta
 from typing import Callable, Optional, Set
@@ -38,6 +37,9 @@ class SmappeeApiClient:
         self._timer = datetime.now() - timedelta(seconds=self.update_interval)
         self._set_mode_select_callback = None        
         self._charging_point_session_state = None
+
+        # Store brightness for number.py
+        self.led_brightness = 70        
         
         _LOGGER.info(
             "SmappeeApiClient initialized for serial: %s with update interval: %s seconds",
@@ -68,11 +70,14 @@ class SmappeeApiClient:
         # ------------ TILL HERE ----------------------
         ## new API-call for a better up to date charging poitn session state
         url_session_state = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
+        url_all_devices = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
 
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json",
         }
+
+        update_required = False
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -88,7 +93,7 @@ class SmappeeApiClient:
                 #self._latest_session_counter = sessions[0].get("startReading", 0) + sessions[0].get("energy", 0)
                 # ------------ TILL HERE ----------------------
                        
-                # Device session state
+                # --- Charging session state ---
                 resp_state = await session.get(url_session_state, headers=headers)
                 if resp_state.status != 200:
                     text = await resp_state.text()
@@ -97,17 +102,44 @@ class SmappeeApiClient:
 
                 # retrieve propoerties and search for chargingState
                 session_state_data = await resp_state.json() 
-                self._session_state = next(
+                new_session_state = next(
                     (prop.get("value") for prop in session_state_data.get("properties", [])
                      if prop.get("spec", {}).get("name") == "chargingState"),
                     "unknown"
                 )
-                _LOGGER.debug("Charging point session state updated: %s", self._session_state)
+                if new_session_state != self._session_state:
+                    _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, new_session_state)
+                    self._session_state = new_session_state
+                    update_required = True
+
+                # --- LED Brightness ---
+                resp_devices = await session.get(url_all_devices, headers=headers)
+                if resp_devices.status == 200:
+                    data = await resp_devices.json()
+                    for device in data:
+                        if device.get("uuid") == self.serial:
+                            for prop in device.get("configurationProperties", []):
+                                spec = prop.get("spec", {})
+                                if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
+                                    new_brightness = int(prop.get("value", 70))
+                                    if new_brightness != getattr(self, "led_brightness", 70):
+                                        _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                                        self.led_brightness = new_brightness
+                                        update_required = True
+                                    break
+                else:
+                    _LOGGER.warning("Failed to fetch smartdevices: %s", resp_devices.status)
                 
         except Exception as exc:
             _LOGGER.error("Exception during delayed_update: %s", exc)
             raise
-        
+
+        if update_required:
+            await self.publish_updates()
+            _LOGGER.info("Published updates to Home Assistant.")
+        else:
+            _LOGGER.debug("No update needed.")
+
         await self.publish_updates()
         _LOGGER.info("Delayed update done.")
 

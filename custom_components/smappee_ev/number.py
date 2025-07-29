@@ -50,10 +50,6 @@ class SmappeeBaseNumber(NumberEntity):
         self._current_value = int(initial_value) if initial_value is not None else min_value
 
     @property
-    def native_value(self) -> int:
-        return int(self._current_value)
-
-    @property
     def device_info(self):
         """Return device info for the wallbox."""
         return {
@@ -76,6 +72,10 @@ class SmappeeCurrentLimitNumber(SmappeeBaseNumber):
             initial_value=int(getattr(api_client, "current_limit", 6)),
         )
 
+    @property
+    def native_value(self) -> int:
+        return int(self._current_value)
+
     async def async_set_native_value(self, value: int) -> None:
         self._current_value = int(value)
         self.api_client.selected_current_limit = self._current_value
@@ -94,6 +94,10 @@ class SmappeePercentageLimitNumber(SmappeeBaseNumber):
             max_value=100,
             initial_value=int(getattr(api_client, "percentage_limit", 0)),
         )
+
+    @property
+    def native_value(self) -> int:
+        return int(self._current_value)
 
     async def async_set_native_value(self, value: int) -> None:
         self._current_value = int(value)
@@ -119,5 +123,15 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
         self._current_value = int(value)
         await self.api_client.set_brightness(self._current_value)
         self.async_write_ha_state()
-        
 
+    @property
+    def native_value(self) -> int:
+        return int(self.api_client.led_brightness)     
+
+    async def async_added_to_hass(self) -> None:
+        """Register update callback to be notified of changes."""
+        self.api_client.register_callback(self.async_write_ha_state)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Remove callback when entity is removed."""
+        self.api_client.remove_callback(self.async_write_ha_state)
