@@ -71,6 +71,7 @@ class SmappeeCurrentLimitNumber(SmappeeBaseNumber):
             max_value=32,
             initial_value=int(getattr(api_client, "current_limit", 6)),
         )
+        api_client.register_value_callback("current_limit", self._handle_external_update)
 
     @property
     def native_value(self) -> int:
@@ -99,6 +100,7 @@ class SmappeePercentageLimitNumber(SmappeeBaseNumber):
             max_value=100,
             initial_value=int(getattr(api_client, "percentage_limit", 0)),
         )
+        api_client.register_value_callback("percentage_limit", self._handle_external_update)
 
     @property
     def native_value(self) -> int:
