@@ -23,11 +23,9 @@ This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev
 [![Usage][usage-shield]][usage-url]
 [![Hassfest][hassfest-shield]][hassfest-url]
 [![License][license-shield]][license-url]
-
 [![Commits][commits-shield]][commits-url]
 [![Stars][stars-shield]][stars-url]
 [![Pull Requests][pulls-shield]][pulls-url]
-
 
 </div>
 
