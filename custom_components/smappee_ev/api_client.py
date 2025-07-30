@@ -133,13 +133,13 @@ class SmappeeApiClient:
             _LOGGER.error("Exception during delayed_update: %s", exc)
             raise
         
-        await self.publish_updates()
+        #await self.publish_updates()
 
-        # if update_required:
-        #     await self.publish_updates()
-        #     _LOGGER.info("Published updates to Home Assistant.")
-        # else:
-        #     _LOGGER.debug("No update needed.")
+        if update_required:
+            await self.publish_updates()
+            _LOGGER.info("Published updates to Home Assistant.")
+        else:
+            _LOGGER.debug("No update needed.")
 
         _LOGGER.info("Delayed update done.")
 
