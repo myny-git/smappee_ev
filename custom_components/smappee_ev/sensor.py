@@ -26,7 +26,7 @@ async def async_setup_entry(
     async_add_entities([
         ChargingPointSessionState(api_client, config_entry),
         ChargingPointEvccState(api_client, config_entry),
-        # --- ENERGIESENSOR REACTIVATE---
+        # --- ENERGYSENSOR REACTIVATE---
         # ChargingPointLatestCounter(api_client, config_entry),  
         # ------------------------
     ])

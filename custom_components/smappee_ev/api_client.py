@@ -37,10 +37,8 @@ class SmappeeApiClient:
         self._timer = datetime.now() - timedelta(seconds=self.update_interval)
         self._set_mode_select_callback = None        
         self._charging_point_session_state = None
-
-        # Store brightness for number.py
-        self.led_brightness = 70        
-        
+        self.led_brightness = 70
+       
         _LOGGER.info(
             "SmappeeApiClient initialized for serial: %s with update interval: %s seconds",
             self.serial, self.update_interval
@@ -132,12 +130,14 @@ class SmappeeApiClient:
         except Exception as exc:
             _LOGGER.error("Exception during delayed_update: %s", exc)
             raise
+        
+        await self.publish_updates()
 
-        if update_required:
-            await self.publish_updates()
-            _LOGGER.info("Published updates to Home Assistant.")
-        else:
-            _LOGGER.debug("No update needed.")
+        # if update_required:
+        #     await self.publish_updates()
+        #     _LOGGER.info("Published updates to Home Assistant.")
+        # else:
+        #     _LOGGER.debug("No update needed.")
 
         _LOGGER.info("Delayed update done.")
 

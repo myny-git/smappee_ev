@@ -119,19 +119,11 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
             initial_value=int(getattr(api_client, "led_brightness", 70)),
         )
 
-    async def async_set_native_value(self, value: int) -> None:
-        self._current_value = int(value)
-        await self.api_client.set_brightness(self._current_value)
-        self.async_write_ha_state()
+    # async def async_set_native_value(self, value: int) -> None:
+    #     self._current_value = int(value)
+    #     await self.api_client.set_brightness(self._current_value)
+    #     self.async_write_ha_state()
 
     @property
     def native_value(self) -> int:
         return int(self.api_client.led_brightness)     
-
-    async def async_added_to_hass(self) -> None:
-        """Register update callback to be notified of changes."""
-        self.api_client.register_callback(self.async_write_ha_state)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Remove callback when entity is removed."""
-        self.api_client.remove_callback(self.async_write_ha_state)
