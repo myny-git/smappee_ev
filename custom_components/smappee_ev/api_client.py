@@ -222,6 +222,9 @@ class SmappeeApiClient:
             _LOGGER.error("Exception in set_charging_mode: %s", exc)
             raise     
 
+        if self._set_mode_select_callback:
+            self._set_mode_select_callback(mode)
+
         if mode == "NORMAL" and limit is not None:
             self.selected_current_limit = limit
             self.push_value_update("current_limit", limit)
@@ -288,6 +291,9 @@ class SmappeeApiClient:
             raise     
 
         self.push_value_update("percentage_limit", percentage)
+        
+        if self._set_mode_select_callback:
+            self._set_mode_select_callback("NORMAL_PERCENTAGE")        
 
     async def set_brightness(self, brightness: int) -> None:
         """Set LED brightness via the Smappee API."""

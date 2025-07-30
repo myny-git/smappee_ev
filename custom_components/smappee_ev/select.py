@@ -21,7 +21,7 @@ async def async_setup_entry(
     select_entity = SmappeeModeSelect(api_client)
     async_add_entities([select_entity], update_before_add=True)
 
-    # Register the callback only after entity is added
+    # Register the callback once HA is fully started
     def register_callback_later(_):
         api_client.set_mode_select_callback(select_entity.set_selected_mode)
     hass.bus.async_listen_once("homeassistant_started", register_callback_later)
