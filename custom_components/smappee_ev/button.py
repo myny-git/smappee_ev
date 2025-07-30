@@ -162,7 +162,13 @@ class SmappeeSetBrightnessButton(SmappeeBaseButton):
             brightness = int(state.state) if state else 70
         except (ValueError, TypeError):
             brightness = 70
-        await self.api_client.set_brightness(brightness)
+ #       await self.api_client.set_brightness(brightness)
+        await self.hass.services.async_call(
+            domain="smappee_ev",
+            service="set_brightness",
+            service_data={"brightness": brightness},
+            blocking=True,
+        )
 
 class SmappeeSetAvailableButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
