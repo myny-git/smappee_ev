@@ -100,7 +100,12 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
         else:
             limit = 0
 
-        await self.api_client.set_charging_mode(mode, limit)
+        await self.hass.services.async_call(
+            domain=DOMAIN,
+            service="set_charging_mode",
+            service_data={"serial": serial, "mode": mode, "limit": limit},
+            blocking=True,
+        )
 
 class SmappeePauseChargingButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
@@ -112,7 +117,11 @@ class SmappeePauseChargingButton(SmappeeBaseButton):
         )
 
     async def async_press(self) -> None:
-        await self.api_client.pause_charging()
+        await self.hass.services.async_call(
+            domain=DOMAIN,
+            service="pause_charging",
+            blocking=True,
+        )
 
 class SmappeeStopChargingButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
@@ -124,7 +133,15 @@ class SmappeeStopChargingButton(SmappeeBaseButton):
         )
 
     async def async_press(self) -> None:
-        await self.api_client.stop_charging()
+        serial = self.api_client.serial_id
+        percent_entity_id = f"number.smappee_ev_wallbox_smappee_percentage_limit_{serial}"
+        percent_state = self.hass.states.get(percent_entity_id)
+
+        await self.hass.services.async_call(
+            domain=DOMAIN,
+            service="stop_charging",
+            blocking=True,
+        )
 
 class SmappeeStartChargingButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
@@ -139,11 +156,18 @@ class SmappeeStartChargingButton(SmappeeBaseButton):
         serial = self.api_client.serial_id
         percent_entity_id = f"number.smappee_ev_wallbox_smappee_percentage_limit_{serial}"
         percent_state = self.hass.states.get(percent_entity_id)
+
         try:
             percentage = int(percent_state.state) if percent_state else 100
         except (ValueError, TypeError):
             percentage = 100
-        await self.api_client.start_charging(percentage)
+
+        await self.hass.services.async_call(
+            domain=DOMAIN,
+            service="start_charging",
+            service_data={"percentage": percentage},
+            blocking=True,
+        )
 
 class SmappeeSetBrightnessButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
@@ -158,10 +182,12 @@ class SmappeeSetBrightnessButton(SmappeeBaseButton):
         serial = self.api_client.serial_id
         entity_id = f"number.smappee_ev_wallbox_smappee_led_brightness_{serial}"
         state = self.hass.states.get(entity_id)
+
         try:
             brightness = int(state.state) if state else 70
         except (ValueError, TypeError):
             brightness = 70
+
  #       await self.api_client.set_brightness(brightness)
         await self.hass.services.async_call(
             domain="smappee_ev",
@@ -179,7 +205,11 @@ class SmappeeSetAvailableButton(SmappeeBaseButton):
         )
 
     async def async_press(self) -> None:
-        await self.api_client.set_available()
+        await self.hass.services.async_call(
+            domain=DOMAIN,
+            service="set_available",
+            blocking=True,
+        )
 
 class SmappeeSetUnavailableButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
@@ -190,4 +220,8 @@ class SmappeeSetUnavailableButton(SmappeeBaseButton):
         )
 
     async def async_press(self) -> None:
-        await self.api_client.set_unavailable()
+        await self.hass.services.async_call(
+            domain=DOMAIN,
+            service="set_unavailable",
+            blocking=True,
+        )
