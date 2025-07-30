@@ -38,6 +38,8 @@ class SmappeeApiClient:
         self._set_mode_select_callback = None        
         self._charging_point_session_state = None
         self.led_brightness = 70
+        self._value_callbacks = {} 
+
        
         _LOGGER.info(
             "SmappeeApiClient initialized for serial: %s with update interval: %s seconds",
@@ -158,6 +160,13 @@ class SmappeeApiClient:
         """Remove a previously registered callback."""
         self._callbacks.discard(callback)
 
+    def register_value_callback(self, key: str, callback: Callable[[int], None]) -> None:
+        self._value_callbacks[key] = callback
+
+    def push_value_update(self, key: str, value: int) -> None:
+        if callback := self._value_callbacks.get(key):
+            callback(value)
+
     # --- REACTIVATE IF NECESSARY ---
     #@property
     #def latest_session_counter(self) -> int:
@@ -211,7 +220,15 @@ class SmappeeApiClient:
                 _LOGGER.debug("Charging mode set successfully")
         except Exception as exc:
             _LOGGER.error("Exception in set_charging_mode: %s", exc)
-            raise       
+            raise     
+
+        if mode == "NORMAL" and limit is not None:
+            self.selected_current_limit = limit
+            self.push_value_update("current_limit", limit)
+
+        elif mode == "NORMAL_PERCENTAGE" and limit is not None:
+            self.selected_percentage_limit = limit
+            self.push_value_update("percentage_limit", limit)              
        
     async def pause_charging(self) -> None:
         """Pause charging via the Smappee API."""
@@ -268,7 +285,9 @@ class SmappeeApiClient:
                 _LOGGER.debug("Started charging successfully")
         except Exception as exc:
             _LOGGER.error("Exception in start_charging: %s", exc)
-            raise            
+            raise     
+
+        self.push_value_update("percentage_limit", percentage)
 
     async def set_brightness(self, brightness: int) -> None:
         """Set LED brightness via the Smappee API."""

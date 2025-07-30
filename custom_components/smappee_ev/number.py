@@ -81,6 +81,11 @@ class SmappeeCurrentLimitNumber(SmappeeBaseNumber):
         self.api_client.selected_current_limit = self._current_value
         self.async_write_ha_state()
 
+    def _handle_external_update(self, value: int) -> None:
+        """Update value from external source (e.g., service call)."""
+        self._current_value = value
+        self.async_write_ha_state()
+
 class SmappeePercentageLimitNumber(SmappeeBaseNumber):
     """Percentage limit setting for Smappee EV."""
 
@@ -103,6 +108,10 @@ class SmappeePercentageLimitNumber(SmappeeBaseNumber):
         self._current_value = int(value)
         self.api_client.selected_percentage_limit = self._current_value
         self.async_write_ha_state()
+
+    def _handle_external_update(self, value: int) -> None:
+        self._current_value = value
+        self.async_write_ha_state()        
 
 class SmappeeBrightnessNumber(SmappeeBaseNumber):
     """LED brightness setting for Smappee EV."""
