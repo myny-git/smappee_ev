@@ -289,7 +289,8 @@ class SmappeeApiClient:
                     text = await resp.text()
                     _LOGGER.error("Failed to set brightness: %s", text)
                     raise Exception(f"Set brightness error: {text}")
-                _LOGGER.debug("Changed brightness successfully")
+                _LOGGER.info("LED brightness set successfully to %d%%", brightness)
+            
         except Exception as exc:
             _LOGGER.error("Exception in set_brightness: %s", exc)
             raise
