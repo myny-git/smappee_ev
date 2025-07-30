@@ -119,10 +119,10 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
             initial_value=int(getattr(api_client, "led_brightness", 70)),
         )
 
-    # async def async_set_native_value(self, value: int) -> None:
-    #     self._current_value = int(value)
-    #     await self.api_client.set_brightness(self._current_value)
-    #     self.async_write_ha_state()
+     async def async_set_native_value(self, value: int) -> None:
+         self._current_value = int(value)
+         await self.api_client.set_brightness(self._current_value)
+         self.async_write_ha_state()
 
     @property
     def native_value(self) -> int:
