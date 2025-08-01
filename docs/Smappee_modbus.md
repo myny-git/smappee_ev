@@ -12,7 +12,7 @@ This document explains how to connect your **Smappee EV Wall (Infinity series)**
 - ✅ IP address of your Smappee module (e.g. `192.168.XX.XX`)
 - ✅ Port 502 accessible in your local network
 - ✅ Home Assistant with Modbus integration enabled
-- send an email to support@smappee.com with a request to open modbus on your Connect ststem
+- Sen an email to support@smappee.com with a request to open modbus on your Connect system
 
 ## 🛠️ Home Assistant Configuration
 
