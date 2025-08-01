@@ -15,7 +15,7 @@ This document explains how to connect your **Smappee EV Wall (Infinity series)**
 
 ## 🛠️ Home Assistant Configuration
 
-Add the following to your `configuration.yaml`. The first sensors are Power Sensors (in W) and the second series are Current sensors (in A).
+Add the following to your `configuration.yaml`. The first sensors are Power Sensors (in W) and the second series are Current sensors (in A).You may need to add a unique identity with each sensor.
 
 ```yaml
 modbus:
