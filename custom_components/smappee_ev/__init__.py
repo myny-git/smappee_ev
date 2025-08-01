@@ -53,6 +53,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_SERVICE_LOCATION_ID],
         entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT),        
     )
+
+    api_client.enable()
    
     hass.data[DOMAIN][entry.entry_id] = api_client
 
