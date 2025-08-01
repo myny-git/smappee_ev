@@ -69,7 +69,7 @@ chargers:
     type: custom
     status: # charger status A..F --> the evcc_state integration does the job!
       source: http
-      uri: http://HAlocalIP:8123/api/states/sensor.charging_point_YOURSERIAL_evcc_state
+      uri: http://HAlocalIP:8123/api/states/sensor.evcc_state
       method: GET
       headers:
         - Authorization: Bearer long_lived_TOKEN
@@ -79,7 +79,7 @@ chargers:
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
     enabled: # also mandatory
       source: http
-      uri: http://HAlocalIP:8123/api/states/sensor.charging_point_YOURSERIAL_session_state
+      uri: http://HAlocalIP:8123/api/states/sensor.session_state
       method: GET
       headers:
         - Authorization: Bearer long_lived_TOKEN
