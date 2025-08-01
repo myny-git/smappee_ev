@@ -14,7 +14,9 @@
 > This is a personal project developed by me and is not affiliated with, maintained, authorized, or endorsed by Smappee in any way. Use at your own risk.
 
 ## 🧠 Credits
-This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". The complete code has been completely refactored, therefore this fork became a new integration which is not compatible with the old configs or entities from the original fork.
+This is a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". 
+The codebase has since been completely refactored, resulting in a **new and independent integration**. It is not compatible with configurations or entities from the original fork.
+This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging.
 <div align="center">
 
 [![HACS][hacs-shield]][hacs-url]

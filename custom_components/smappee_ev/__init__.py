@@ -70,8 +70,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        if not hass.data[DOMAIN]:
+        active_keys = [k for k in hass.data[DOMAIN].keys() if k != "services_registered"]
+        if not active_keys:
             unregister_services(hass)
+            hass.data.pop(DOMAIN)
     return unload_ok
 
 async def async_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
