@@ -56,6 +56,12 @@ class SmappeeApiClient:
         #self._latest_session_counter = random.randint(1, 10)
         _LOGGER.info("SmappeeApiClient enabled for serial: %s", self.serial)
         self._loop.create_task(self.delayed_update())
+        self._loop.create_task(self.polling_loop())
+
+    async def polling_loop(self):
+        while True:
+            await self.delayed_update()
+            await asyncio.sleep(self.update_interval)        
     
     async def delayed_update(self) -> None:
         """Refresh the session state and related info from the API."""
@@ -179,9 +185,9 @@ class SmappeeApiClient:
     @property
     def session_state(self) -> str:
         """Return current session state, triggers update if timer expired."""
-        if self._timer + timedelta(seconds=self.update_interval) < datetime.now():
-            self._timer = datetime.now()
-            self._loop.create_task(self.delayed_update())
+        # if self._timer + timedelta(seconds=self.update_interval) < datetime.now():
+        #     self._timer = datetime.now()
+        #     self._loop.create_task(self.delayed_update())
         return self._session_state
   
     # --- API-calls (set_charging_mode, start/pause/stop charging, set_brightness, ...) ---

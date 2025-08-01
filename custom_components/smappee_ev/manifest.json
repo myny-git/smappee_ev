@@ -4,10 +4,10 @@
   "codeowners": ["@gvnuland", "@myny-git"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/myny-git/Smappee_EV",
+  "documentation": "https://github.com/myny-git/smappee_ev",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/myny-git/Smappee_EV/issues",
+  "issue_tracker": "https://github.com/myny-git/smappee_ev/issues",
   "loggers": ["custom_components.smappee_ev"],
   "requirements": [],
-  "version": "2025.8.1"
+  "version": "2025.8.1b1"
 }
