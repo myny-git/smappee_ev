@@ -60,8 +60,8 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
         """Set charging mode based on current select/numbers in HA."""
         serial = self.api_client.serial_id
         mode_entity_id = f"select.smappee_ev_wallbox_charging_mode"
-        current_entity_id = f"number.smappee_ev_wallbox_charging_mode"
-        percent_entity_id = f"number.smappee_ev_wallbox_charging_mode"
+        current_entity_id = f"number.smappee_ev_wallbox_current_limit"
+        percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
 
         mode_state = self.hass.states.get(mode_entity_id)
         current_state = self.hass.states.get(current_entity_id)
