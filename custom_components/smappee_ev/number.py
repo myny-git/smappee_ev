@@ -132,7 +132,8 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
 
     async def async_set_native_value(self, value: int) -> None:
         self._current_value = int(value)
-        self.api_client.led_brightness = self._current_value
+        await self.api_client.set_brightness(self._current_value)  # ✅ push to the cloud
+        self.api_client.led_brightness = self._current_value       # ✅ keep local in sync
         self.async_write_ha_state()
 
     @property
