@@ -31,7 +31,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a Smappee EV config entry."""
     _LOGGER.debug("Setting up entry for Smappee EV. Serial: %s", entry.data.get(CONF_SERIAL))
-
+    
+    hass.data.setdefault(DOMAIN, {})
+    
     required = [
         CONF_SERIAL, 
         CONF_SERVICE_LOCATION_ID,
