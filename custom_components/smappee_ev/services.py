@@ -67,7 +67,11 @@ def register_services(hass: HomeAssistant) -> None:
         if not api:
             _LOGGER.error("No API client found for set_brightness")
             return
+
         brightness = call.data.get("brightness", 10)
+
+        api.led_brightness = brightness
+        await api.publish_updates()
         _LOGGER.info("Service: set_brightness (brightness=%s)", brightness)
         await api.set_brightness(brightness)
 
