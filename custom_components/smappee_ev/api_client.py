@@ -31,7 +31,7 @@ class SmappeeApiClient:
         self.update_interval = update_interval if update_interval is not None else UPDATE_INTERVAL_DEFAULT
 
         self._callbacks: Set[Callable] = set()
-        self._loop = asyncio.get_event_loop()
+        #self._loop = asyncio.get_event_loop()
         #self._latest_session_counter = 0
         self._session_state = "Initialize"
         self._timer = datetime.now() - timedelta(seconds=self.update_interval)
@@ -55,8 +55,8 @@ class SmappeeApiClient:
         """Enable the client (may trigger updates)."""
         #self._latest_session_counter = random.randint(1, 10)
         _LOGGER.info("SmappeeApiClient enabled for serial: %s", self.serial)
-        self._loop.create_task(self.delayed_update())
-        self._loop.create_task(self.polling_loop())
+        asyncio.create_task(self.delayed_update())
+        asyncio.create_task(self.polling_loop())
 
     async def polling_loop(self):
         while True:
