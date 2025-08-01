@@ -37,7 +37,7 @@ class SmappeeApiClient:
         self._timer = datetime.now() - timedelta(seconds=self.update_interval)
         self._set_mode_select_callback = None        
         self._charging_point_session_state = None
-        self.led_brightness = None
+        self.led_brightness = 70
         self._value_callbacks = {} 
 
        
