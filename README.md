@@ -121,33 +121,33 @@ During setup, you will be prompted to enter:
   → Set how frequently Home Assistant fetches data from your wallbox (don't make it too fast, not necessary)
 
 ### 🧩 Entities
+More information on the usage of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). 
 
 #### Controls
 
 | Entity                                   | Type     | Description                                                                  |
 |-------------------------------------------|----------|------------------------------------------------------------------------------|
-| `button.set_charging_mode`                | Button   | Apply the selected charging mode                                             |
-| `button.start_charging`                   | Button   | Starts charging using the set percentage                                     |
-| `button.pause_charging`                   | Button   | Pauses the current charging session                                          |
-| `button.stop_charging`                    | Button   | Stops the current charging session                                           |
-| `button.set_led_brightness`               | Button   | Apply the set LED brightness level                                           |
-| `select.smappee_charging_mode_<serial>`   | Select   | Choose between `SMART`, `SOLAR`, `NORMAL`, `NORMAL_PERCENTAGE`              |
-| `number.smappee_current_limit_<serial>`   | Number   | Set current in Amps for `NORMAL` mode                                        |
-| `number.smappee_percentage_limit_<serial>`| Number   | Set percentage limit for `NORMAL_PERCENTAGE` or Start Charging               |
-| `number.smappee_led_brightness_<serial>`  | Number   | Brightness percentage used in Set LED Brightness                             |
-| `button.set_available`                    | Button   | Make the Wallbox available for use                                           |
-| `button.set_unavailable`                  | Button   | Make the Wallbox unavailable for use                                         |
+| `button.smappee_ev_wallbox_set_charging_mode`          | Button   | Apply the selected charging mode                             |
+| `button.smappee_ev_wallbox_start_charging`             | Button   | Starts charging using the set percentage                      |
+| `button.smappee_ev_wallbox_pause_charging`              | Button   | Pauses the current charging session                           |
+| `button.smappee_ev_wallbox_stop_charging`              | Button   | Stops the current charging session                           |
+| `button.smappee_ev_wallbox_set_led_brightness`          | Button   | Apply the set LED brightness level                         |
+| `select.smappee_ev_wallbox_charging_mode`   | Select   | Choose between `SMART`, `SOLAR`, `NORMAL`, `NORMAL_PERCENTAGE`              |
+| `number.smappee_ev_wallbox_current_limit`   | Number   | Set current in Amps for `NORMAL` mode                                        |
+| `number.smappee_ev_wallbox_percentage_limit`| Number   | Set percentage limit for `NORMAL_PERCENTAGE` or Start Charging               |
+| `number.smappee_ev_wallbox_led_brightness`  | Number   | Brightness percentage used in Set LED Brightness                             |
+| `button.smappee_ev_wallbox_set_available`             | Button   | Make the Wallbox available for use                                |
+| `button.smappee_ev_wallbox_set_unavailable`             | Button   | Make the Wallbox unavailable for use                        |
 
 #### Sensors
 
 | Entity                                   | Type    | Description                                                                  |
 |-------------------------------------------|---------|------------------------------------------------------------------------------|
-| `sensor.session_state_<serial>`           | Sensor  | Current session state (`CHARGING`, `PAUSED`, `SUSPENDED`, ...)              |
-| `sensor.evcc_state_<serial>`              | Sensor  | EVCC state of the charger (`A`, `B`, `C`, `E`)                              |
+| `sensor.session_state`           | Sensor  | Current session state (`CHARGING`, `PAUSED`, `SUSPENDED`, ...)              |
+| `sensor.evcc_state`              | Sensor  | EVCC state of the charger (`A`, `B`, `C`, `E`)                              |
 <!--
 | `sensor.total_counter`                    | Sensor  | Total energy delivered in kWh (currently disabled, see docs)                |
--->                       |
-
+-->                      
 ### 🛠️ Services
 
 | Service                                   | Description                                                                 |
