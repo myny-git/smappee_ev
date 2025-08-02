@@ -121,7 +121,7 @@ During setup, you will be prompted to enter:
   → Set how frequently Home Assistant fetches data from your wallbox (don't make it too fast, not necessary)
 
 ### 🧩 Entities
-More information on the usage of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/docs/HA_integration.md). 
+More information on the usage of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). 
 
 #### Controls
 
