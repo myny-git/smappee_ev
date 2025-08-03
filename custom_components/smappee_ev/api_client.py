@@ -78,7 +78,7 @@ class SmappeeApiClient:
         # ------------ TILL HERE ----------------------
         ## new API-call for a better up to date charging poitn session state
         url_session_state = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
-        url_all_devices = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
+        #url_all_devices = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
 
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
@@ -108,52 +108,121 @@ class SmappeeApiClient:
                     _LOGGER.error("Failed to get charging point session state: %s", text)
                     raise Exception(f"Charging point session state error: {text}")
 
-                # retrieve propoerties and search for chargingState
-                session_state_data = await resp_state.json() 
-                new_session_state = next(
-                    (prop.get("value") for prop in session_state_data.get("properties", [])
-                     if prop.get("spec", {}).get("name") == "chargingState"),
-                    "unknown"
-                )
-                if new_session_state != self._session_state:
-                    _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, new_session_state)
-                    self._session_state = new_session_state
-                    update_required = True
+                data = await resp.json()
 
-                # --- LED Brightness + MIN/MAX current + percentageLimit---
-                resp_devices = await session.get(url_all_devices, headers=headers)
-                if resp_devices.status == 200:
-                    data = await resp_devices.json()
-                    for device in data:
-                        for prop in device.get("configurationProperties", []):
-                            spec = prop.get("spec", {})
-                            name = spec.get("name")
-                            raw_value = prop.get("value")
-                            if isinstance(raw_value, dict):
-                                value = raw_value.get("value")
-                            else:
-                                value = raw_value
+                # --- chargingState & percentageLimit (from "properties") ---
+                for prop in data.get("properties", []):
+                    name = prop.get("spec", {}).get("name")
+                    value = prop.get("value")
 
-                            if name == "etc.smart.device.type.car.charger.led.config.brightness":
-                                new_brightness = int(value)
-                                if new_brightness != getattr(self, "led_brightness", 70):
-                                    _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
-                                    self.led_brightness = new_brightness
-                                    update_required = True
+                    if name == "chargingState":
+                        if value != self._session_state:
+                            _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, value)
+                            self._session_state = value
+                            update_required = True
 
-                            elif name == "etc.smart.device.type.car.charger.config.max.current":
-                                self.max_current = int(value)
+                    elif name == "percentageLimit":
+                        new_percentage = int(value)
+                        if new_percentage != getattr(self, "selected_percentage_limit", None):
+                            _LOGGER.debug("Percentage limit changed: %s → %s", self.selected_percentage_limit, new_percentage)
+                            self.selected_percentage_limit = new_percentage
+                            self.push_value_update("percentage_limit", new_percentage)
+                            update_required = True
 
-                            elif name == "etc.smart.device.type.car.charger.config.min.current":
-                                self.min_current = int(value)    
+                # --- Configuration properties (e.g. max/min current) ---
+                for prop in data.get("configurationProperties", []):
+                    name = prop.get("spec", {}).get("name")
+                    raw_value = prop.get("value")
+                    value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
 
-                            elif name == "percentageLimit":
-                                new_percentage = int(value)
-                                if new_percentage != getattr(self, "selected_percentage_limit", None):
-                                    _LOGGER.debug("Percentage limit changed: %s → %s", self.selected_percentage_limit, new_percentage)
-                                    self.selected_percentage_limit = new_percentage
-                                    self.push_value_update("percentage_limit", new_percentage)
-                                    update_required = True                                                
+                    if name == "etc.smart.device.type.car.charger.config.max.current":
+                        new_max = int(value)
+                        if new_max != self.max_current:
+                            _LOGGER.debug("Max current changed: %s → %s", self.max_current, new_max)
+                            self.max_current = new_max
+                            update_required = True
+
+                    elif name == "etc.smart.device.type.car.charger.config.min.current":
+                        new_min = int(value)
+                        if new_min != self.min_current:
+                            _LOGGER.debug("Min current changed: %s → %s", self.min_current, new_min)
+                            self.min_current = new_min
+                            update_required = True
+
+                    elif name == "etc.smart.device.type.car.charger.led.config.brightness":
+                        new_brightness = int(value)
+                        if new_brightness != getattr(self, "led_brightness", 70):
+                            _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                            self.led_brightness = new_brightness
+                            update_required = True
+
+        except Exception as exc:
+            _LOGGER.error("Exception during delayed_update: %s", exc)
+            raise
+
+        if update_required:
+            await self.publish_updates()
+            _LOGGER.info("Published updates to Home Assistant.")
+        else:
+            _LOGGER.debug("No update needed.")
+
+        _LOGGER.info("Delayed update done.")
+
+                # new_session_state = next(
+                #     (prop.get("value") for prop in session_state_data.get("properties", [])
+                #      if prop.get("spec", {}).get("name") == "chargingState"),
+                #     "unknown"
+                # )
+                # if new_session_state != self._session_state:
+                #     _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, new_session_state)
+                #     self._session_state = new_session_state
+                #     update_required = True
+
+                # --- Smart device configuration + properties ---
+                # resp_devices = await session.get(url_all_devices, headers=headers)
+                # if resp_devices.status == 200:
+                #     _LOGGER.warning("Failed to fetch smartdevices: %s", resp_devices.status)
+                #     return
+
+                # data = await resp_devices.json()
+
+                # for device in data:
+                #      # --- Configuration properties: min/max current, brightness ---
+                #     for prop in device.get("configurationProperties", []):
+                #         spec = prop.get("spec", {})
+                #         name = spec.get("name")
+                #         raw_value = prop.get("value")
+                #         value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+
+                #         if name == "etc.smart.device.type.car.charger.led.config.brightness":
+                #             new_brightness = int(value)
+                #             if new_brightness != getattr(self, "led_brightness", 70):
+                #                 _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                #                 self.led_brightness = new_brightness
+                #                 update_required = True
+
+                #         elif name == "etc.smart.device.type.car.charger.config.max.current":
+                #             new_max = int(value)
+                #             if new_max != self.max_current:
+                #                 _LOGGER.debug("Max current changed: %s → %s", self.max_current, new_max)
+                #                 self.max_current = new_max
+                #                 update_required = True
+
+                #         elif name == "etc.smart.device.type.car.charger.config.min.current":
+                #             new_min = int(value)
+                #             if new_min != self.min_current:
+                #                 _LOGGER.debug("Min current changed: %s → %s", self.min_current, new_min)
+                #                 self.min_current = new_min
+                #                 update_required = True
+                        
+                #         # --- Properties: percentageLimit ---
+                #         elif name == "percentageLimit":
+                #             new_percentage = int(value)
+                #             if new_percentage != getattr(self, "selected_percentage_limit", None):
+                #                 _LOGGER.debug("Percentage limit changed: %s → %s", self.selected_percentage_limit, new_percentage)
+                #                 self.selected_percentage_limit = new_percentage
+                #                 self.push_value_update("percentage_limit", new_percentage)
+                #                 update_required = True                                                
 
                     # for device in data:
                     #     for prop in device.get("configurationProperties", []):
@@ -165,22 +234,22 @@ class SmappeeApiClient:
                     #                 self.led_brightness = new_brightness
                     #                 update_required = True
                     #             break
-                else:
-                    _LOGGER.warning("Failed to fetch smartdevices: %s", resp_devices.status)
+        #         else:
+        #             _LOGGER.warning("Failed to fetch smartdevices: %s", resp_devices.status)
                 
-        except Exception as exc:
-            _LOGGER.error("Exception during delayed_update: %s", exc)
-            raise
+        # except Exception as exc:
+        #     _LOGGER.error("Exception during delayed_update: %s", exc)
+        #     raise
         
-        #await self.publish_updates()
+        # #await self.publish_updates()
 
-        if update_required:
-            await self.publish_updates()
-            _LOGGER.info("Published updates to Home Assistant.")
-        else:
-            _LOGGER.debug("No update needed.")
+        # if update_required:
+        #     await self.publish_updates()
+        #     _LOGGER.info("Published updates to Home Assistant.")
+        # else:
+        #     _LOGGER.debug("No update needed.")
 
-        _LOGGER.info("Delayed update done.")
+        # _LOGGER.info("Delayed update done.")
 
     async def publish_updates(self) -> None:
         """Notify all registered callbacks of an update."""
