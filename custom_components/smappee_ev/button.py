@@ -158,7 +158,7 @@ class SmappeeStartChargingButton(SmappeeBaseButton):
         state = self.hass.states.get(entity_id)
 
         try:
-                current = int(state.state) if state else 6
+            current = int(state.state) if state else 6
             except (ValueError, TypeError):
                 _LOGGER.warning("Invalid current value from combined slider, falling back to 6 A")
                 current = 6
