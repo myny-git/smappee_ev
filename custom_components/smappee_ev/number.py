@@ -152,8 +152,12 @@ class SmappeeCombinedCurrentSlider(SmappeeBaseNumber):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        percentage = round((self._current_value - self.min_current) / self.range * 100)
-        return {"percentage": f"{percentage}%"}
+        attributes = {}
+        if self._current_value is not None:
+            percentage = round((self._current_value - self.min_current) / self.range * 100)
+            attributes["percentage"] = percentage
+            attributes["percentage_formatted"] = f"{percentage}%"
+        return attributes
 
     async def async_set_native_value(self, value: int) -> None:
         self._current_value = int(value)
