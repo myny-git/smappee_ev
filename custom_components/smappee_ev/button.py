@@ -159,16 +159,16 @@ class SmappeeStartChargingButton(SmappeeBaseButton):
 
         try:
             current = int(state.state) if state else 6
-            except (ValueError, TypeError):
-                _LOGGER.warning("Invalid current value from combined slider, falling back to 6 A")
-                current = 6
+        except (ValueError, TypeError):
+            _LOGGER.warning("Invalid current value from combined slider, falling back to 6 A")
+            current = 6
 
-            await self.hass.services.async_call(
-                domain=DOMAIN,
-                service="start_charging",
-                service_data={"current": current},
-                blocking=True,
-            )
+        await self.hass.services.async_call(
+            domain=DOMAIN,
+            service="start_charging",
+            service_data={"current": current},
+            blocking=True,
+        )
 
 class SmappeeSetBrightnessButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
