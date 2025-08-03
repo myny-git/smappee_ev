@@ -122,7 +122,7 @@ class SmappeeCombinedCurrentSlider(SmappeeBaseNumber):
     """Combined slider showing current and percentage."""
 
     def __init__(self, api_client: Any):
-        selt.api_client = api_client
+        self.api_client = api_client
         self.min_current = api_client.min_current
         self.max_current = api_client.max_current        
         self.range = self.max_current - self.min_current
