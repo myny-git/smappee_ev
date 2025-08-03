@@ -80,7 +80,7 @@ class SmappeeApiClient:
         # ------------ TILL HERE ----------------------
         ## new API-call for a better up to date charging poitn session state
         url_session_state = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
-        #url_all_devices = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
+        url_all_devices = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
 
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
@@ -102,17 +102,17 @@ class SmappeeApiClient:
                 #self._session_state = sessions[0].get("status", "unknown")
                 #self._latest_session_counter = sessions[0].get("startReading", 0) + sessions[0].get("energy", 0)
                 # ------------ TILL HERE ----------------------
-                       
-                # --- Charging session state ---
-                resp_state = await session.get(url_session_state, headers=headers)
-                if resp_state.status != 200:
-                    text = await resp_state.text()
-                    _LOGGER.error("Failed to get charging point session state: %s", text)
-                    raise Exception(f"Charging point session state error: {text}")
+                     
+                # --- Main device info (session state, percentageLimit, min/max current) ---
+                resp = await session.get(url_device, headers=headers)
+                if resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.error("Failed to get smartdevice: %s", text)
+                    raise Exception(f"Smartdevice error: {text}")
 
-                data = await resp_state.json()
+                data = await resp.json()
 
-                # --- chargingState & percentageLimit (from "properties") ---
+                # --- properties (e.g. chargingState, percentageLimit) ---
                 for prop in data.get("properties", []):
                     name = prop.get("spec", {}).get("name")
                     value = prop.get("value")
@@ -125,13 +125,14 @@ class SmappeeApiClient:
 
                     elif name == "percentageLimit":
                         new_percentage = int(value)
-                        if new_percentage != getattr(self, "selected_percentage_limit", None):
-                            _LOGGER.debug("Percentage limit changed: %s → %s", self.selected_percentage_limit, new_percentage)
+                        old = getattr(self, "selected_percentage_limit", None)
+                        if new_percentage != old:
+                            _LOGGER.debug("Percentage limit changed: %s → %s", old, new_percentage)
                             self.selected_percentage_limit = new_percentage
                             self.push_value_update("percentage_limit", new_percentage)
                             update_required = True
 
-                # --- Configuration properties (e.g. max/min current) ---
+                # --- configurationProperties (e.g. max/min current) ---
                 for prop in data.get("configurationProperties", []):
                     name = prop.get("spec", {}).get("name")
                     raw_value = prop.get("value")
@@ -151,12 +152,25 @@ class SmappeeApiClient:
                             self.min_current = new_min
                             update_required = True
 
-                    elif name == "etc.smart.device.type.car.charger.led.config.brightness":
-                        new_brightness = int(value)
-                        if new_brightness != getattr(self, "led_brightness", 70):
-                            _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
-                            self.led_brightness = new_brightness
-                            update_required = True
+                # --- separate call for LED brightness ---
+                resp_led = await session.get(url_all_devices, headers=headers)
+                if resp_led.status == 200:
+                    all_data = await resp_led.json()
+                    for device in all_data:
+                        for prop in device.get("configurationProperties", []):
+                            name = prop.get("spec", {}).get("name")
+                            raw_value = prop.get("value")
+                            value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+
+                            if name == "etc.smart.device.type.car.charger.led.config.brightness":
+                                new_brightness = int(value)
+                                if new_brightness != getattr(self, "led_brightness", 70):
+                                    _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                                    self.led_brightness = new_brightness
+                                    update_required = True
+                                break
+                else:
+                    _LOGGER.warning("Failed to fetch smartdevices for LED brightness: %s", resp_led.status)
 
         except Exception as exc:
             _LOGGER.error("Exception during delayed_update: %s", exc)
@@ -168,7 +182,7 @@ class SmappeeApiClient:
         else:
             _LOGGER.debug("No update needed.")
 
-        _LOGGER.info("Delayed update done.")
+        _LOGGER.info("Delayed update done.")                
 
                 # new_session_state = next(
                 #     (prop.get("value") for prop in session_state_data.get("properties", [])
