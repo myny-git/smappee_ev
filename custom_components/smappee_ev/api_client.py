@@ -79,7 +79,7 @@ class SmappeeApiClient:
         #url = f"{BASE_URL}/chargingstations/{self.serial}/sessions?active=false&range={startsession}"
         # ------------ TILL HERE ----------------------
         ## new API-call for a better up to date charging poitn session state
-        url_session_state = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
+        url_device = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
         url_all_devices = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
 
         headers = {
