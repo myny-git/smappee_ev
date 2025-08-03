@@ -40,6 +40,8 @@ class SmappeeApiClient:
         self.led_brightness = 70
         self.min_current = 6  # default fallback
         self.max_current = 32  # default fallback
+        self.selected_percentage_limit = None
+        self.selected_current_limit = None  # optioneel, als je deze ook gebruikt        
         self._value_callbacks = {} 
 
        
