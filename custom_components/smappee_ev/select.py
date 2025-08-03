@@ -9,7 +9,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-MODES = ["SMART", "SOLAR", "NORMAL", "NORMAL_PERCENTAGE"]  
+MODES = ["SMART", "SOLAR", "NORMAL"]  
 
 async def async_setup_entry(
     hass: HomeAssistant,

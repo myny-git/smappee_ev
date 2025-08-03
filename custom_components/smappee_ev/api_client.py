@@ -319,15 +319,14 @@ class SmappeeApiClient:
             url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
             payload = [{"spec": {"name": "mode", "species": "String"}, "value": mode}]
             async_method = "post"
-        else:
+        elif mode == "NORMAL":
             url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/1/mode"
-            if mode == "NORMAL_PERCENTAGE":
-                payload = {"mode": "NORMAL", "limit": {"unit": "PERCENTAGE", "value": limit}}
-            elif mode == "NORMAL":
-                payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": limit}}
-            else:
-                payload = {"mode": mode}
+            payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": limit or self.min_current}}
             async_method = "put"
+        else:
+            _LOGGER.warning("set_charging_mode called with unsupported mode: %s", mode)
+            return
+
         headers = {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json",
@@ -352,10 +351,7 @@ class SmappeeApiClient:
         if mode == "NORMAL" and limit is not None:
             self.selected_current_limit = limit
             self.push_value_update("current_limit", limit)
-
-        elif mode == "NORMAL_PERCENTAGE" and limit is not None:
-            self.selected_percentage_limit = limit
-            self.push_value_update("percentage_limit", limit)              
+          
        
     async def pause_charging(self) -> None:
         """Pause charging via the Smappee API."""
@@ -417,7 +413,7 @@ class SmappeeApiClient:
         self.push_value_update("percentage_limit", percentage)
         
         if self._set_mode_select_callback:
-            self._set_mode_select_callback("NORMAL_PERCENTAGE")        
+            self._set_mode_select_callback("NORMAL")        
 
     async def start_charging_current(self, current: int) -> None:
         """Start charging by specifying a current (in Amps).
@@ -439,7 +435,7 @@ class SmappeeApiClient:
 
         self.selected_current_limit = current
         self.selected_percentage_limit = percentage
-        self.push_value_update("percentage_limit", percentage)
+        # self.push_value_update("percentage_limit", percentage)
 
         # Use existing API call that supports percentage-based charging
         await self.start_charging(percentage)

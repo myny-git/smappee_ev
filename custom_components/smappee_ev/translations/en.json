@@ -46,7 +46,7 @@
         },
         "mode": {
           "name": "Mode",
-          "description": "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, SOLAR)"
+          "description": "Charging mode to set (NORMAL, SMART, SOLAR)"
         },
         "limit": {
           "name": "Limit",

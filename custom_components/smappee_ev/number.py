@@ -17,8 +17,6 @@ async def async_setup_entry(
     """Set up Smappee EV number entities from a config entry."""
     api_client = hass.data[DOMAIN][config_entry.entry_id]
     async_add_entities([
-        SmappeeCurrentLimitNumber(api_client),
-        SmappeePercentageLimitNumber(api_client),
         SmappeeCombinedCurrentSlider(api_client),
         SmappeeBrightnessNumber(api_client),
     ])
@@ -60,62 +58,62 @@ class SmappeeBaseNumber(NumberEntity):
             "manufacturer": "Smappee",
         }
 
-class SmappeeCurrentLimitNumber(SmappeeBaseNumber):
-    """Current limit setting for Smappee EV."""
+# class SmappeeCurrentLimitNumber(SmappeeBaseNumber):
+#     """Current limit setting for Smappee EV."""
 
-    def __init__(self, api_client: Any):
-        super().__init__(
-            api_client,
-            f"Current Limit",
-            f"{api_client.serial_id}_current_limit",
-            "A",
-            min_value=6,
-            max_value=32,
-            initial_value=int(getattr(api_client, "current_limit", 6)),
-        )
-        api_client.register_value_callback("current_limit", self._handle_external_update)
+#     def __init__(self, api_client: Any):
+#         super().__init__(
+#             api_client,
+#             f"Current Limit",
+#             f"{api_client.serial_id}_current_limit",
+#             "A",
+#             min_value=6,
+#             max_value=32,
+#             initial_value=int(getattr(api_client, "current_limit", 6)),
+#         )
+#         api_client.register_value_callback("current_limit", self._handle_external_update)
 
-    @property
-    def native_value(self) -> int:
-        return int(self._current_value)
+#     @property
+#     def native_value(self) -> int:
+#         return int(self._current_value)
 
-    async def async_set_native_value(self, value: int) -> None:
-        self._current_value = int(value)
-        self.api_client.selected_current_limit = self._current_value
-        self.async_write_ha_state()
+#     async def async_set_native_value(self, value: int) -> None:
+#         self._current_value = int(value)
+#         self.api_client.selected_current_limit = self._current_value
+#         self.async_write_ha_state()
 
-    def _handle_external_update(self, value: int) -> None:
-        """Update value from external source (e.g., service call)."""
-        self._current_value = value
-        self.async_write_ha_state()
+#     def _handle_external_update(self, value: int) -> None:
+#         """Update value from external source (e.g., service call)."""
+#         self._current_value = value
+#         self.async_write_ha_state()
 
-class SmappeePercentageLimitNumber(SmappeeBaseNumber):
-    """Percentage limit setting for Smappee EV."""
+# class SmappeePercentageLimitNumber(SmappeeBaseNumber):
+#     """Percentage limit setting for Smappee EV."""
 
-    def __init__(self, api_client: Any):
-        super().__init__(
-            api_client,
-            f"Percentage Limit",
-            f"{api_client.serial_id}_percentage_limit",
-            "%",
-            min_value=0,
-            max_value=100,
-            initial_value=int(getattr(api_client, "percentage_limit", 0)),
-        )
-        api_client.register_value_callback("percentage_limit", self._handle_external_update)
+#     def __init__(self, api_client: Any):
+#         super().__init__(
+#             api_client,
+#             f"Percentage Limit",
+#             f"{api_client.serial_id}_percentage_limit",
+#             "%",
+#             min_value=0,
+#             max_value=100,
+#             initial_value=int(getattr(api_client, "percentage_limit", 0)),
+#         )
+#         api_client.register_value_callback("percentage_limit", self._handle_external_update)
 
-    @property
-    def native_value(self) -> int:
-        return int(self._current_value)
+#     @property
+#     def native_value(self) -> int:
+#         return int(self._current_value)
 
-    async def async_set_native_value(self, value: int) -> None:
-        self._current_value = int(value)
-        self.api_client.selected_percentage_limit = self._current_value
-        self.async_write_ha_state()
+#     async def async_set_native_value(self, value: int) -> None:
+#         self._current_value = int(value)
+#         self.api_client.selected_percentage_limit = self._current_value
+#         self.async_write_ha_state()
 
-    def _handle_external_update(self, value: int) -> None:
-        self._current_value = value
-        self.async_write_ha_state()        
+#     def _handle_external_update(self, value: int) -> None:
+#         self._current_value = value
+#         self.async_write_ha_state()        
 
 
 class SmappeeCombinedCurrentSlider(SmappeeBaseNumber):
@@ -128,7 +126,6 @@ class SmappeeCombinedCurrentSlider(SmappeeBaseNumber):
         self.range = self.max_current - self.min_current
 
         initial_current = int(getattr(api_client, "current_limit", self.min_current))
-        initial_percentage = round((initial_current - self.min_current) / self.range * 100)
 
         super().__init__(
             api_client,

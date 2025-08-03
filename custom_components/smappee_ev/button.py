@@ -52,7 +52,7 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
         super().__init__(
             api_client, hass,
-            "Set Charging Mode",
+            "Set Charging Mode ",
             f"{api_client.serial_id}_set_charging_mode"
         )
 
@@ -60,12 +60,12 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
         """Set charging mode based on current select/numbers in HA."""
         serial = self.api_client.serial_id
         mode_entity_id = f"select.smappee_ev_wallbox_charging_mode"
-        current_entity_id = f"number.smappee_ev_wallbox_current_limit"
-        percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
+        current_entity_id = f"number.smappee_ev_wallbox_max_charging_speed"
+        #percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
 
         mode_state = self.hass.states.get(mode_entity_id)
         current_state = self.hass.states.get(current_entity_id)
-        percent_state = self.hass.states.get(percent_entity_id)
+        #percent_state = self.hass.states.get(percent_entity_id)
 
         if mode_state is None:
             await self.hass.services.async_call(
@@ -81,22 +81,15 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
 
         mode = mode_state.state
         current = None
-        percent = None
+        #percent = None
         if current_state is not None:
             try:
                 current = int(current_state.state)
             except (ValueError, TypeError):
                 pass
-        if percent_state is not None:
-            try:
-                percent = int(percent_state.state)
-            except (ValueError, TypeError):
-                pass
 
         if mode == "NORMAL":
             limit = current if current is not None else 6
-        elif mode == "NORMAL_PERCENTAGE":
-            limit = percent if percent is not None else 10
         else:
             limit = 0
 
@@ -133,9 +126,9 @@ class SmappeeStopChargingButton(SmappeeBaseButton):
         )
 
     async def async_press(self) -> None:
-        serial = self.api_client.serial_id
-        percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
-        percent_state = self.hass.states.get(percent_entity_id)
+        #serial = self.api_client.serial_id
+        #percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
+        #percent_state = self.hass.states.get(percent_entity_id)
 
         await self.hass.services.async_call(
             domain=DOMAIN,
@@ -154,7 +147,7 @@ class SmappeeStartChargingButton(SmappeeBaseButton):
 
     async def async_press(self) -> None:
         """Start charging using the current value from the combined current slider."""
-        entity_id = f"smappee_ev_wallbox_max_charging_speed"
+        entity_id = f"number.smappee_ev_wallbox_max_charging_speed"
         state = self.hass.states.get(entity_id)
 
         try:
