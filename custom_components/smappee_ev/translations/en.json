@@ -64,11 +64,11 @@
     },
     "start_charging": {
       "name": "Start charging",
-      "description": "Start charging with an optional percentage limit.",
+      "description": "Start charging using a specific current in Amps.",
       "fields": {
         "percentage": {
-          "name": "Percentage limit",
-          "description": "Percentage at which to stop charging (optional)"
+          "name": "Current (A)",
+          "description": "Current to use for charging (between min and max allowed)"
         }
       }
     },

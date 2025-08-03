@@ -58,9 +58,18 @@ def register_services(hass: HomeAssistant) -> None:
         if not api:
             _LOGGER.error("No API client found for start_charging")
             return
-        percentage = call.data.get("percentage", 100)
-        _LOGGER.info("Service: start_charging (percentage=%s)", percentage)
-        await api.start_charging(percentage)
+            
+        current = call.data.get("current")
+        if current is None:
+            _LOGGER.error("Missing required field: current")
+            return
+
+        _LOGGER.info("Service: start_charging (current=%s A)", current)
+        await api.start_charging_current(current)            
+
+        # percentage = call.data.get("percentage", 100)
+        # _LOGGER.info("Service: start_charging (percentage=%s)", percentage)
+        # await api.start_charging(percentage)
 
     async def async_set_brightness(call: ServiceCall):
         api = get_api_client(hass)

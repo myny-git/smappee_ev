@@ -38,6 +38,8 @@ class SmappeeApiClient:
         self._set_mode_select_callback = None        
         self._charging_point_session_state = None
         self.led_brightness = 70
+        self.min_current = 6  # default fallback
+        self.max_current = 32  # default fallback
         self._value_callbacks = {} 
 
        
@@ -118,20 +120,47 @@ class SmappeeApiClient:
                     self._session_state = new_session_state
                     update_required = True
 
-                # --- LED Brightness ---
+                # --- LED Brightness + MIN/MAX current + percentageLimit---
                 resp_devices = await session.get(url_all_devices, headers=headers)
                 if resp_devices.status == 200:
                     data = await resp_devices.json()
                     for device in data:
                         for prop in device.get("configurationProperties", []):
                             spec = prop.get("spec", {})
-                            if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
-                                new_brightness = int(prop.get("value", 70))
+                            name = spec.get("name")
+                            value = prop.get("value", {}).get("value")
+
+                            if name == "etc.smart.device.type.car.charger.led.config.brightness":
+                                new_brightness = int(value)
                                 if new_brightness != getattr(self, "led_brightness", 70):
                                     _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
                                     self.led_brightness = new_brightness
                                     update_required = True
-                                break
+
+                            elif name == "etc.smart.device.type.car.charger.config.max.current":
+                                self.max_current = int(value)
+
+                            elif name == "etc.smart.device.type.car.charger.config.min.current":
+                                self.min_current = int(value)    
+
+                            elif name == "percentageLimit":
+                                new_percentage = int(value)
+                                if new_percentage != getattr(self, "selected_percentage_limit", None):
+                                    _LOGGER.debug("Percentage limit changed: %s → %s", self.selected_percentage_limit, new_percentage)
+                                    self.selected_percentage_limit = new_percentage
+                                    self.push_value_update("percentage_limit", new_percentage)
+                                    update_required = True                                                
+
+                    # for device in data:
+                    #     for prop in device.get("configurationProperties", []):
+                    #         spec = prop.get("spec", {})
+                    #         if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
+                    #             new_brightness = int(prop.get("value", 70))
+                    #             if new_brightness != getattr(self, "led_brightness", 70):
+                    #                 _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                    #                 self.led_brightness = new_brightness
+                    #                 update_required = True
+                    #             break
                 else:
                     _LOGGER.warning("Failed to fetch smartdevices: %s", resp_devices.status)
                 
@@ -300,6 +329,32 @@ class SmappeeApiClient:
         
         if self._set_mode_select_callback:
             self._set_mode_select_callback("NORMAL_PERCENTAGE")        
+
+    async def start_charging_current(self, current: int) -> None:
+        """Start charging by specifying a current (in Amps).
+        Internally converts to percentage and uses the existing start_charging() API.
+        """
+        # Make sure min/max current values are available
+        if not hasattr(self, "min_current") or not hasattr(self, "max_current"):
+            raise ValueError("min_current and max_current must be set before calling start_charging_current")
+
+        # Validate that the input current is within the allowed range
+        if current < self.min_current or current > self.max_current:
+            raise ValueError(f"Current {current}A is outside allowed range: {self.min_current}–{self.max_current}A")
+
+        # Convert current (A) to percentage for the API
+        range_current = self.max_current - self.min_current
+        percentage = round(((current - self.min_current) / range_current) * 100)
+
+        _LOGGER.debug("Converted current %d A → %d %% for start_charging()", current, percentage)
+
+        self.selected_current_limit = current
+        self.selected_percentage_limit = percentage
+        self.push_value_update("percentage_limit", percentage)
+
+        # Use existing API call that supports percentage-based charging
+        await self.start_charging(percentage)
+     
 
     async def set_brightness(self, brightness: int) -> None:
         """Set LED brightness via the Smappee API."""

@@ -20,11 +20,20 @@ stop_charging:
   description: "Stops charging via the Smappee API."
   
 start_charging:
-  description: "Start charging with optional percentage limit"
+  name: Start Charging
+  description: Start charging session using a current value in Amps
   fields:
-    percentageLimit:
-      description: "Percentage limit for charging"
-      example: 5
+    current:
+      name: Current (A)
+      description: Charging current to apply
+      example: 8
+      required: true
+      selector:
+        number:
+          min: 6
+          max: 32
+          step: 1
+          unit_of_measurement: "A"
 
 set_brightness:
   description: Set the LED brightness of the charger.

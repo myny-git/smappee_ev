@@ -52,7 +52,7 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
         super().__init__(
             api_client, hass,
-            "Set Charging Mode",
+            "Set Charging Mode ({api_client.serial_id})",
             f"{api_client.serial_id}_set_charging_mode"
         )
 
@@ -153,21 +153,22 @@ class SmappeeStartChargingButton(SmappeeBaseButton):
         )
 
     async def async_press(self) -> None:
-        serial = self.api_client.serial_id
-        percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
-        percent_state = self.hass.states.get(percent_entity_id)
+        """Start charging using the current value from the combined current slider."""
+        entity_id = f"number.{self.api_client.serial_id}_combined_current"
+        state = self.hass.states.get(entity_id)
 
         try:
-            percentage = int(percent_state.state) if percent_state else 100
-        except (ValueError, TypeError):
-            percentage = 100
+                current = int(state.state) if state else 6
+            except (ValueError, TypeError):
+                _LOGGER.warning("Invalid current value from combined slider, falling back to 6 A")
+                current = 6
 
-        await self.hass.services.async_call(
-            domain=DOMAIN,
-            service="start_charging",
-            service_data={"percentage": percentage},
-            blocking=True,
-        )
+            await self.hass.services.async_call(
+                domain=DOMAIN,
+                service="start_charging",
+                service_data={"current": current},
+                blocking=True,
+            )
 
 class SmappeeSetBrightnessButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):

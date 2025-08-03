@@ -19,6 +19,7 @@ async def async_setup_entry(
     async_add_entities([
         SmappeeCurrentLimitNumber(api_client),
         SmappeePercentageLimitNumber(api_client),
+        SmappeeCombinedCurrentSlider(api_client),
         SmappeeBrightnessNumber(api_client),
     ])
 
@@ -27,7 +28,8 @@ class SmappeeBaseNumber(NumberEntity):
     """Base class for Smappee EV numbers."""
 
     _attr_has_entity_name = True
-    _attr_mode = NumberMode.BOX  # Accepts only whole numbers in UI
+ #   _attr_mode = NumberMode.BOX  # Accepts only whole numbers in UI
+    _attr_mode = NumberMode.SLIDER
 
     def __init__(
         self,
@@ -115,6 +117,61 @@ class SmappeePercentageLimitNumber(SmappeeBaseNumber):
         self._current_value = value
         self.async_write_ha_state()        
 
+
+class SmappeeCombinedCurrentSlider(SmappeeBaseNumber):
+    """Combined slider showing current and percentage."""
+
+    def __init__(self, api_client: Any):
+        selt.api_client = api_client
+        self.min_current = api_client.min_current
+        self.max_current = api_client.max_current        
+        self.range = self.max_current - self.min_current
+
+        initial_current = int(getattr(api_client, "current_limit", self.min_current))
+        initial_percentage = round((initial_current - self.min_current) / self.range * 100)
+
+        super().__init__(
+            api_client,
+            f"Max charging speed",
+            f"{api_client.serial_id}_combined_current",
+            "A", 
+            min_value=self.min_current,
+            max_value=self.max_current,
+            initial_value=initial_current,
+        )
+
+        self._attr_mode = NumberMode.SLIDER
+        self._attr_unit_of_measurement = "A"
+
+        api_client.register_value_callback("current_limit", self._handle_external_update)
+        api_client.register_value_callback("percentage_limit", self._handle_percentage_update)
+
+    @property
+    def native_value(self) -> int:
+        return int(self._current_value)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        percentage = round((self._current_value - self.min_current) / self.range * 100)
+        return {"percentage": f"{percentage}%"}
+
+    async def async_set_native_value(self, value: int) -> None:
+        self._current_value = int(value)
+        self.api_client.selected_current_limit = self._current_value
+        self.api_client.selected_percentage_limit = round((value - self.min_current) / self.range * 100)
+        self.async_write_ha_state()
+
+    def _handle_external_update(self, value: int) -> None:
+        self._current_value = value
+        self.async_write_ha_state()
+
+    def _handle_percentage_update(self, value: int) -> None:
+        """Update current (A) when we retrieve the percentage."""
+        current = round((value / 100) * self.range + self.min_current)
+        self._current_value = current
+        self.async_write_ha_state()
+
+
 class SmappeeBrightnessNumber(SmappeeBaseNumber):
     """LED brightness setting for Smappee EV."""
 
@@ -139,3 +196,5 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
     @property
     def native_value(self) -> int:
         return int(self.api_client.led_brightness)     
+
+
