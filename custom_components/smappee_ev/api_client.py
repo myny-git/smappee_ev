@@ -108,7 +108,7 @@ class SmappeeApiClient:
                     _LOGGER.error("Failed to get charging point session state: %s", text)
                     raise Exception(f"Charging point session state error: {text}")
 
-                data = await resp.json()
+                data = await resp_state.json()
 
                 # --- chargingState & percentageLimit (from "properties") ---
                 for prop in data.get("properties", []):
