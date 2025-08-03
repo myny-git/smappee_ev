@@ -52,7 +52,7 @@ class SmappeeSetChargingModeButton(SmappeeBaseButton):
     def __init__(self, api_client: Any, hass: HomeAssistant):
         super().__init__(
             api_client, hass,
-            "Set Charging Mode ({api_client.serial_id})",
+            "Set Charging Mode",
             f"{api_client.serial_id}_set_charging_mode"
         )
 
@@ -154,7 +154,7 @@ class SmappeeStartChargingButton(SmappeeBaseButton):
 
     async def async_press(self) -> None:
         """Start charging using the current value from the combined current slider."""
-        entity_id = f"number.{self.api_client.serial_id}_combined_current"
+        entity_id = f"smappee_ev_wallbox_max_charging_speed"
         state = self.hass.states.get(entity_id)
 
         try:
