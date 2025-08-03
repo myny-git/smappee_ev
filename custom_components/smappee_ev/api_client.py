@@ -128,7 +128,11 @@ class SmappeeApiClient:
                         for prop in device.get("configurationProperties", []):
                             spec = prop.get("spec", {})
                             name = spec.get("name")
-                            value = prop.get("value", {}).get("value")
+                            raw_value = prop.get("value")
+                            if isinstance(raw_value, dict):
+                                value = raw_value.get("value")
+                            else:
+                                value = raw_value
 
                             if name == "etc.smart.device.type.car.charger.led.config.brightness":
                                 new_brightness = int(value)
