@@ -35,8 +35,7 @@ This integration is designed to be **complementary to the official Smappee integ
 
 ## 🔧 Features
 
-This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant.  
-It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview). 
+This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview). 
 
 The main ambition is to integrate these sensors in other energy management systems. The howto is written below. 
 
@@ -44,13 +43,13 @@ The main ambition is to integrate these sensors in other energy management syste
 - Switch between all official Smappee charging modes:
   - `SMART` – Dynamic smart charging based on usage and pricing
   - `SOLAR` – Charge using only excess solar energy
-  - `STANDARD` (also called `NORMAL`) – Fixed current or percentage charging
+  - `STANDARD` (also called `NORMAL` according to the API) – Fixed current charging
 - Set mode via select entity or dedicated service
 - Apply selected mode with **Set Charging Mode** button
 
 ### ✅ Direct Charger Control
 - Start, Pause, or Stop charging sessions from Home Assistant
-- Set fixed charging **percentage** or **current** (in Amps)
+- Set fixed charging **currents** (in Amps)
 - Automatically switches to correct mode based on your selection
 - Change Wallbox availability (set available/unavailable)
 - **Reload service**: reloads all entries without restarting Home Assistant
@@ -66,12 +65,10 @@ The main ambition is to integrate these sensors in other energy management syste
 
 ### ✅ Built-in Safeguards & Notes
 - Charging mode resets to `NORMAL` when paused — same as in the Smappee app
-- User-configurable update interval (seconds) for data refreshes
 
 #### ⚡️ Advanced / Developer Notes
 - Polling interval (`update_interval`) can be set in both config flow and options (default 30s)
-- All values for current/percentage/brightness are always **integers** (no floats in UI)
-- Energy sensor (total kWh counter) is **currently disabled** (can be enabled by uncommenting code in sensor.py and api_client.py)
+- All values for currents/brightnesses are always **integers** (no floats in UI)
 - Integration tested on:  
   - **Smappee EV Wall Home** (single cable)
   - Should work similarly on other Smappee chargers using the same API
@@ -132,9 +129,8 @@ More information on the usage of the entities/buttons/services can be found in t
 | `button.smappee_ev_wallbox_pause_charging`              | Button   | Pauses the current charging session                           |
 | `button.smappee_ev_wallbox_stop_charging`              | Button   | Stops the current charging session                           |
 | `button.smappee_ev_wallbox_set_led_brightness`          | Button   | Apply the set LED brightness level                         |
-| `select.smappee_ev_wallbox_charging_mode`   | Select   | Choose between `SMART`, `SOLAR`, `NORMAL`, `NORMAL_PERCENTAGE`              |
-| `number.smappee_ev_wallbox_current_limit`   | Number   | Set current in Amps for `NORMAL` mode                                        |
-| `number.smappee_ev_wallbox_percentage_limit`| Number   | Set percentage limit for `NORMAL_PERCENTAGE` or Start Charging               |
+| `select.smappee_ev_wallbox_charging_mode`   | Select   | Choose between `SMART`, `SOLAR`, `NORMAL`              |
+| `number.smappee_ev_wallbox_max_charging_speed`  | Number   | Set current in Amps for `NORMAL` mode                                        |         |
 | `number.smappee_ev_wallbox_led_brightness`  | Number   | Brightness percentage used in Set LED Brightness                             |
 | `button.smappee_ev_wallbox_set_available`             | Button   | Make the Wallbox available for use                                |
 | `button.smappee_ev_wallbox_set_unavailable`             | Button   | Make the Wallbox unavailable for use                        |
@@ -152,9 +148,9 @@ More information on the usage of the entities/buttons/services can be found in t
 
 | Service                                   | Description                                                                 |
 |--------------------------------------------|-----------------------------------------------------------------------------|
-| `smappee_ev.set_charging_mode`             | Set mode: `SMART`, `SOLAR`, `NORMAL`, or `NORMAL_PERCENTAGE`                |
-| `smappee_ev.start_charging`                | Starts charging with a percentage limit                                      |
-| `smappee_ev.pause_charging`                | Pauses current charging session                                             |
+| `smappee_ev.set_charging_mode`             | Set mode: `SMART`, `SOLAR`, `NORMAL`               |
+| `smappee_ev.start_charging`                | Starts charging with a current limit                                      |
+| `smappee_ev.pause_charging`                | Pauses this charging session                                             |
 | `smappee_ev.stop_charging`                 | Stops the charging session                                                  |
 | `smappee_ev.set_available`                 | Makes the Wallbox available                                                 |
 | `smappee_ev.set_unavailable`               | Makes the Wallbox unavailable                                               |

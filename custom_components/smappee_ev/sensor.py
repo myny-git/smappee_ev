@@ -90,9 +90,9 @@ class ChargingPointEvccState(SmappeeSensorBase):
         session_state = self.api_client.session_state
         if session_state in ["INITIAL", "STOPPED"]:
             return "A"
-        elif session_state in ["STARTED", "STOPPING"]:
+        elif session_state in ["SUSPENDED", "STOPPING"]:
             return "B"
-        elif session_state in ["SUSPENDED", "CHARGING"]:
+        elif session_state in ["STARTED", "CHARGING"]:
             return "C"
         else:
             return "E"
