@@ -466,6 +466,32 @@ class SmappeeApiClient:
             _LOGGER.error("Exception in set_brightness: %s", exc)
             raise
 
+    async def set_percentage_limit(self, percentage: int) -> None:
+        """Set the percentage limit via the Smappee API."""
+        await self.oauth_client.ensure_token_valid()
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setPercentageLimit"
+        payload = [{
+            "spec": {"name": "percentageLimit", "species": "Integer"},
+            "value": percentage
+        }]
+        headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(url, json=payload, headers=headers)
+                if resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.error("Failed to set percentage limit: %s", text)
+                    raise Exception(f"Set percentage limit error: {text}")
+                _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
+        except Exception as exc:
+            _LOGGER.error("Exception in set_percentage_limit: %s", exc)
+            raise
+
+        self.selected_percentage_limit = percentage
+        self.push_value_update("percentage_limit", percentage)
+
+
     async def set_available(self) -> None:
         """Make charger available via the Smappee API."""
         await self.oauth_client.ensure_token_valid()

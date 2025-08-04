@@ -157,9 +157,16 @@ class SmappeeCombinedCurrentSlider(SmappeeBaseNumber):
         return attributes
 
     async def async_set_native_value(self, value: int) -> None:
+        value = max(self.min_current, min(value, self.max_current))  # Clamp value to [min, max]
+
         self._current_value = int(value)
         self.api_client.selected_current_limit = self._current_value
-        self.api_client.selected_percentage_limit = round((value - self.min_current) / self.range * 100)
+        percentage = round((value - self.min_current) / self.range * 100)
+        self.api_client.selected_percentage_limit = percentage
+
+        # Make API call here, when users change the number or move the slider
+        await self.api_client.set_percentage_limit(percentage)
+
         self.async_write_ha_state()
 
     def _handle_external_update(self, value: int) -> None:
@@ -190,8 +197,8 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
 
     async def async_set_native_value(self, value: int) -> None:
         self._current_value = int(value)
-        await self.api_client.set_brightness(self._current_value)  # ✅ push to the cloud
-        self.api_client.led_brightness = self._current_value       # ✅ keep local in sync
+        await self.api_client.set_brightness(self._current_value)  # push to the cloud
+        self.api_client.led_brightness = self._current_value       # keep local in sync
         self.async_write_ha_state()
 
     @property
