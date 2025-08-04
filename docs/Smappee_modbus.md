@@ -13,6 +13,7 @@ This document explains how to connect your **Smappee EV Wall (Infinity series)**
 - ✅ Port 502 accessible in your local network
 - ✅ Home Assistant with Modbus integration enabled
 - Send an email to support@smappee.com with a request to open modbus on your Connect system
+- Afterwards, when you receive the confirmation from Smappee Support, you may have to reboot the charger (put fuse off and on).
 
 ## 🛠️ Home Assistant Configuration
 
