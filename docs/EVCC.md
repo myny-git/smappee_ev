@@ -13,7 +13,7 @@ All details can be found in following link: 🔗 [Home Assistant as EVCC Source]
 - Make sure Home Assistant is reachable over your LAN (e.g. `http://192.168.x.x:8123`).
 
 ### ✅ Step 2: Collect Sensor Names
-- Identify all relevant `sensor.*` and `number.*` entities created by your Smappee integration.
+- Identify all relevant `sensor.*`, `switch.*` and `number.*` entities created by your Smappee integration.
 
 ### ✅ Step 3: Define Your Charger in `evcc.yaml`
 
@@ -22,43 +22,6 @@ Below, you can find a full example for a Smappee EV Wallbox. The configuration w
 We do not use the smart functions of the Smappee app, in contrary, we use it in Standard mode, with specific current targets.
 
 🔌 Key Item: Charging Enable Control
-
-The `enable` block is **mandatory** and controls whether the wallbox should allow charging. This setup makes use of **two Home Assistant services**, dynamically selected via Go templating:
-```yaml
-enable:
-  source: http
-  uri: http://<HAlocalIP>:8123/api/services/smappee_ev/{{ if .enable }}set_charging_mode{{ else }}pause_charging{{ end }}
-  method: POST
-  headers:
-    - Authorization: Bearer <long_lived_TOKEN>
-    - Content-Type: application/json
-  body: >
-    {{ if .enable }}
-    { "mode": "NORMAL" }
-    {{ else }}
-    {}
-    {{ end }}
-  timeout: 2s
-```
-### 🔧 Behavior
-
-- Enable Charging
-  When `.enable` is `true`, EVCC will:  
-  1. Call the `smappee_ev.set_charging_mode` service  
-  2. Send payload:  
-     ```json
-     {
-       "mode": "NORMAL"
-     }
-     ```
-- Pause Charging*
-  When `.enable` is `false`, EVCC will:  
-  1. Call the `smappee_ev.pause_charging` service  
-  2. Send payload:  
-     ```json
-     {}
-     ```
-Maybe, we need to modify this, but at the moment, it does the job.
 
 Below is the full yaml for the charger.
 
@@ -79,41 +42,40 @@ chargers:
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
     enabled: # also mandatory
       source: http
-      uri: http://HAlocalIP:8123/api/states/sensor.session_state
+      uri: http://HAlocalIP:8123/api/states/switch.smappee_ev_wallbox_evcc_charging_control
       method: GET
       headers:
         - Authorization: Bearer long_lived_TOKEN
         - Content-Type: application/json
       insecure: true
-      jq: 'if .state == "STOPPED" then 0 else 1 end'
+      jq: '.state == "on"'
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
     enable: # also mandatory, this is to enable the charging mode. I created an entry to two services.
       source: http
-      uri: http://HAlocalIP:8123/api/services/smappee_ev/{{ if .enable }}set_charging_mode{{ else }}pause_charging{{ end }}
-      method: POST
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      body: >
-        {{ if .enable }}
-        { "mode": "NORMAL" }
-        {{ else }}
-        {}
-        {{ end }}
-      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    maxcurrent: # set charging mode to normal and provide the current.
-      source: http
-      uri: http://HAlocalIP:8123/api/services/smappee_ev/set_charging_mode
+      uri: http://192.168.50.163:8123/api/services/switch/{{ if .enable }}turn_on{{ else }}turn_off{{ end }}
       method: POST
       headers:
         - Authorization: Bearer long_lived_TOKEN
         - Content-Type: application/json
       body: >
         {
-          "mode": "NORMAL",
-          "limit": {{ .maxcurrent }}
+          "entity_id": "switch.smappee_ev_wallbox_evcc_charging_control"
         }
+      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
+    maxcurrent: # set charging mode to normal and provide the current.
+      source: http
+      uri: http://HAlocalIP:8123/api/services/number/set_value
+      method: POST
+      headers:
+        - Authorization: Bearer long_lived_TOKEN
+        - Content-Type: application/json
+      body: >
+       {
+         "entity_id": "number.smappee_ev_wallbox_max_charging_speed",
+         "value": {{ .maxcurrent }}
+       }
       insecure: true  
+      ## POWER / CURRENTS / ENERGY from the modbus (or the official Smappee) integration
     power: # not mandatory, but take the power sensor of the smappee charger.(see the Smappee_modbus.md for more info)
       source: http
       uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_power_total_car
@@ -124,16 +86,46 @@ chargers:
       insecure: true
       jq: .state | tonumber
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    tos: true
-    Phases1p3p: # not mandatory, I am testing this, with a fake switch which I created in home assistant
+    #tos: true
+    #Phases1p3p: # not mandatory, I am testing this, with a fake switch which I created in home assistant
+    currents:
+      - source: http
+        uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_current_l1_car
+        method: GET
+        headers:
+          - Authorization: Bearer long_lived_TOKEN
+          - Content-Type: application/json
+        insecure: true
+        jq: .state | tonumber
+        timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
+      - source: http
+        uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_current_l2_car
+        method: GET
+        headers:
+          - Authorization: Bearer long_lived_TOKEN
+          - Content-Type: application/json
+        insecure: true
+        jq: .state | tonumber
+        timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
+      - source: http
+        uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_current_l3_car
+        method: GET
+        headers:
+          - Authorization: Bearer long_lived_TOKEN
+          - Content-Type: application/json
+        insecure: true
+        jq: .state | tonumber
+        timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration                
+    energy: ## this is a template sensor, combining [energy_import_car(L1 + L2 + L3) / 1000]
       source: http
-      uri: http://HAlocalIP:8123/api/states/input_select.fake_phase_switch
+      uri: http://HAlocalIP:8123/api/states/sensor.smappee_energy_import_car
       method: GET
       headers:
         - Authorization: Bearer long_lived_TOKEN
         - Content-Type: application/json
-      jq: >
-        if .state == "1" then 1 else 3 end."
+      jq: .state | tonumber
+      timeout: 2s
+      insecure: true        
 ```
 ## 🔌 YAML Example: circuits configuration for peak shaving / load balancing ??
 
@@ -142,11 +134,9 @@ circuits:
 - name: main
   title: main circuit
   maxCurrent: 75 # on my home circuit breaker3 x 25A 
-  maxPower: 4500 # max power I like to allow
+  maxPower: 4500 # max power I like to allow - I have it configured in Smappee as 5kW
   meter: Grid_smappee
 ```
-The peak shaving and current control do not function optimally yet — this is work in progress. Feel free to experiment and suggest improvements!
-
 
 You still have to include a loadpoint:
 ```yaml
@@ -155,7 +145,7 @@ loadpoints:
       charger: smappee # charger
       vehicle: Ford_explorer # default vehicle
       circuit: main
-      phases: 0  ## to allow for 1 and 3 phases - again, to be evaluated
+      phases: 0  ## to allow for 1 and 3 phases - to be evaluated
 ```
 
 ## ⚠️ EVCC requires high update rates for sensors

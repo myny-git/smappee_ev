@@ -26,8 +26,8 @@ class SmappeeChargingSwitch(SwitchEntity):
 
     def __init__(self, api_client):
         self.api_client = api_client
-        self._attr_name = "Charging Control"
-        self._attr_unique_id = f"{api_client.serial_id}_charging_switch"
+        self._attr_name = "EVCC Charging Control"
+        self._attr_unique_id = f"{api_client.serial_id}_evcc_charging_switch"
         self._is_on = False
 
 
@@ -53,7 +53,7 @@ class SmappeeChargingSwitch(SwitchEntity):
         """Restore previous state if needed."""
         self._is_on = False  # default on boot
         _LOGGER.debug("SmappeeChargingSwitch initialized with is_on = False")
-        
+
     @property
     def device_info(self):
         """Return device information for correct device grouping."""

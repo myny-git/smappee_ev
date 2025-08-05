@@ -103,3 +103,10 @@ Displays the EVCC (Electric Vehicle Communication Controller) state of the Wallb
 - `C`: Vehicle connected and ready for charging
 - `E`: Error state
 
+### EVCC specific entity
+
+**`switch.smappee_ev_wallbox_evcc_charging_control`**  
+The integration of EVCC requires a button, which:
+- `turn_on`: call internally the service start_charging with current limit 0A.
+- `turn_off`: call internally the service pause_charging.
+Please see the [EVCC](https://github.com/myny-git/smappee_ev/blob/main/docs/EVCC.md) documentation for the usage.

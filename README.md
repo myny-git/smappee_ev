@@ -134,6 +134,7 @@ More information on the usage of the entities/buttons/services can be found in t
 | `number.smappee_ev_wallbox_led_brightness`  | Number   | Brightness percentage used in Set LED Brightness                             |
 | `button.smappee_ev_wallbox_set_available`             | Button   | Make the Wallbox available for use                                |
 | `button.smappee_ev_wallbox_set_unavailable`             | Button   | Make the Wallbox unavailable for use                        |
+| `switch.smappee_ev_wallbox_evcc_charging_control`             | Button   | EVCC switch to enable/disable charging               |
 
 #### Sensors
 
