@@ -251,11 +251,11 @@ An additional option can be to make **utility-meters** in home assistant.
 ###
 ######################################
 utility_meter:
-   smappee_modbus_energy_import_car_15m:  # quarterly hour peak
+   smappee_modbus_energy_import_grid_15m:  # quarterly hour peak
       source: sensor.smappee_energy_import_grid
       cycle: quarter-hourly
       unique_id: smappee_energy_import_grid_consumption_15m  
-  smappee_modbus_energy_import_car_day:  # daily consumption
+  smappee_modbus_energy_import_grid_day:  # daily consumption
       source: sensor.smappee_energy_import_grid
       cycle: daily
       unique_id: smappee_energy_import_grid_consumption_day
