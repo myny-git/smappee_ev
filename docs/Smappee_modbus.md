@@ -217,7 +217,7 @@ template:
           states('sensor.smappee_modbus_energy_L3_import_grid') | float) / 1000
         }}
 
-    - name: smappee_energy_export_grid  ## energy exported to the grid - aka production
+    - name: smappee_energy_export_grid  ## energy exported to the grid - aka grid feed-in
       unit_of_measurement: kWh
       device_class: energy
       state_class: total_increasing
@@ -228,7 +228,7 @@ template:
           states('sensor.smappee_modbus_energy_L3_export_grid') | float) / 1000 
         }}
 
-    - name: smappee_energy_import_pv  ## PV-generated energy
+    - name: smappee_energy_import_pv  ## PV-generated energy or production
       unit_of_measurement: Wh
       device_class: energy
       state_class: total_increasing
@@ -241,7 +241,26 @@ template:
 
 
 ```
-You can also use these in your EVCC implementation, if you want.
+**You can also use these in your EVCC implementation, if you want.**
+
+An additional option can be to make **utility-meters** in home assistant. 
+```yaml
+######################################
+###
+### Smappee utility
+###
+######################################
+utility_meter:
+   smappee_modbus_energy_import_car_15m:  # quarterly hour peak
+      source: sensor.smappee_energy_import_grid
+      cycle: quarter-hourly
+      unique_id: smappee_energy_import_grid_consumption_15m  
+  smappee_modbus_energy_import_car_day:  # daily consumption
+      source: sensor.smappee_energy_import_grid
+      cycle: daily
+      unique_id: smappee_energy_import_grid_consumption_day
+```
+
 
 
 ## **Notes**
