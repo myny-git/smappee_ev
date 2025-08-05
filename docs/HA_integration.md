@@ -8,7 +8,8 @@ These entities are based on the [Smappee API](https://smappee.atlassian.net/wiki
 
 This integration firstly creates several services, which can be called directly in automations, scripts, or the Developer Tools → Actions (UI) in Home Assistant.
 
-<img width="921" height="325" alt="image" src="https://github.com/user-attachments/assets/6cbf1c49-14af-4238-86c3-a2f32e39281e" />
+<img width="821" height="336" alt="image" src="https://github.com/user-attachments/assets/050c0e51-ad84-4f23-a352-4cefdb2b339d" />
+
 
 - **`smappee_ev.set_charging_mode`**  
 Sets the desired charging mode. You must provide a `mode` parameter with one of the following values: `SMART`, `SOLAR` or `NORMAL`.
@@ -107,6 +108,6 @@ Displays the EVCC (Electric Vehicle Communication Controller) state of the Wallb
 
 **`switch.smappee_ev_wallbox_evcc_charging_control`**  
 The integration of EVCC requires a button, which:
-- `turn_on`: call internally the service start_charging with current limit 0A.
+- `turn_on`: call internally the service start_charging with current limit 6A.
 - `turn_off`: call internally the service pause_charging.
 Please see the [EVCC](https://github.com/myny-git/smappee_ev/blob/main/docs/EVCC.md) documentation for the usage.
