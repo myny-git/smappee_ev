@@ -20,7 +20,13 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT, Platform.BUTTON]
+PLATFORMS = [
+    Platform.SENSOR, 
+    Platform.NUMBER, 
+    Platform.SELECT, 
+    Platform.BUTTON,
+    Platform.SWITCH,
+]
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:

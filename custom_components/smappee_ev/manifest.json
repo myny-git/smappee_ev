@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/myny-git/smappee_ev/issues",
   "loggers": ["custom_components.smappee_ev"],
   "requirements": [],
-  "version": "2025.8.3"
+  "version": "2025.8.3b1"
 }
