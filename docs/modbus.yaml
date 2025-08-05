@@ -3,14 +3,15 @@
 ## Smappee connect modbus
 ##
 ###############
-- name: smappee_modbus
-  type: tcp
-  host: YOUR IP ADDRESS OF SMAPPEE
-  port: 502
-  delay: 0
-  message_wait_milliseconds: 30
-  timeout: 5
-  sensors:
+modbus:
+  - name: smappee_modbus
+    type: tcp
+    host: 192.168.x.x # YOUR IP ADDRESS OF SMAPPEE
+    port: 502
+    delay: 0
+    message_wait_milliseconds: 30
+    timeout: 5
+    sensors:
 
 ###############
 ##
@@ -18,209 +19,227 @@
 ##
 ###############
 
-    - name: smappee_modbus_power_L1_car
-      slave: 61
-      address: 256
-      input_type: holding
-      device_class: power
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2    
-    - name: smappee_modbus_power_L2_car
-      slave: 61
-      address: 260
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2    
-    - name: smappee_modbus_power_L3_car
-      slave: 61
-      address: 264
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2       
-    - name: smappee_modbus_power_L1_grid
-      slave: 61
-      address: 268
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2     
-    - name: smappee_modbus_power_L2_grid
-      slave: 61
-      address: 272
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2    
-    - name: smappee_modbus_power_L3_grid
-      slave: 61
-      address: 276
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2    
-    - name: smappee_modbus_power_L1_PV
-      slave: 61
-      address: 280
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2     
-    - name: smappee_modbus_power_L2_PV
-      slave: 61
-      address: 284
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2    
-    - name: smappee_modbus_power_L3_PV
-      slave: 61
-      address: 288
-      input_type: holding
-      device_class: power      
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: W
-      swap: word
-      scan_interval: 5
-      precision: 2                            
+      - name: smappee_modbus_power_L1_car
+        unique_id: YOURSERIAL_smappee_modbus_power_L1_car         
+        slave: 61
+        address: 256
+        input_type: holding
+        device_class: power
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2    
+      - name: smappee_modbus_power_L2_car
+        unique_id: YOURSERIAL_smappee_modbus_power_L2_car           
+        slave: 61
+        address: 260
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2    
+      - name: smappee_modbus_power_L3_car
+        unique_id: YOURSERIAL_smappee_modbus_power_L3_car           
+        slave: 61
+        address: 264
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2       
+      - name: smappee_modbus_power_L1_grid
+        unique_id: YOURSERIAL_smappee_modbus_power_L1_grid          
+        slave: 61
+        address: 268
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2     
+      - name: smappee_modbus_power_L2_grid
+        unique_id: YOURSERIAL_smappee_modbus_power_L2_grid          
+        slave: 61
+        address: 272
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2    
+      - name: smappee_modbus_power_L3_grid
+        unique_id: YOURSERIAL_smappee_modbus_power_L3_grid         
+        slave: 61
+        address: 276
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2    
+      - name: smappee_modbus_power_L1_PV
+        unique_id: YOURSERIAL_smappee_modbus_power_L1_pv        
+        slave: 61
+        address: 280
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2     
+      - name: smappee_modbus_power_L2_PV
+        unique_id: YOURSERIAL_smappee_modbus_power_L2_pv      
+        slave: 61
+        address: 284
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2    
+      - name: smappee_modbus_power_L3_PV
+        unique_id: YOURSERIAL_smappee_modbus_power_L3_pv         
+        slave: 61
+        address: 288
+        input_type: holding
+        device_class: power      
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: W
+        swap: word
+        scan_interval: 5
+        precision: 2                            
 ###############
 ##
 ## Current
 ##
 ###############       
-    - name: smappee_modbus_current_L1_car
-      slave: 61
-      address: 128
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3    
-    - name: smappee_modbus_current_L2_car
-      slave: 61
-      address: 132
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3        
-    - name: smappee_modbus_current_L3_car
-      slave: 61
-      address: 136
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3        
-    - name: smappee_modbus_current_L1_grid
-      slave: 61
-      address: 140
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3    
-    - name: smappee_modbus_current_L2_grid
-      slave: 61
-      address: 144
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3        
-    - name: smappee_modbus_current_L3_grid
-      slave: 61
-      address: 148
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3              
-    - name: smappee_modbus_current_L1_PV
-      slave: 61
-      address: 152
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3    
-    - name: smappee_modbus_current_L2_PV
-      slave: 61
-      address: 156
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3        
-    - name: smappee_modbus_current_L3_PV
-      slave: 61
-      address: 160
-      input_type: holding
-      device_class: current
-      data_type: float32
-      state_class: Measurement
-      unit_of_measurement: A
-      swap: word
-      scan_interval: 5
-      precision: 3         
+      - name: smappee_modbus_current_L1_car
+        unique_id: YOURSERIAL_smappee_modbus_current_L1_car
+        slave: 61
+        address: 128
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3    
+      - name: smappee_modbus_current_L2_car
+        unique_id: YOURSERIAL_smappee_modbus_current_L2_car      
+        slave: 61
+        address: 132
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3        
+      - name: smappee_modbus_current_L3_car
+        unique_id: YOURSERIAL_smappee_modbus_current_L3_car      
+        slave: 61
+        address: 136
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3        
+      - name: smappee_modbus_current_L1_grid
+        unique_id: YOURSERIAL_smappee_modbus_current_L1_grid
+        slave: 61
+        address: 140
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3    
+      - name: smappee_modbus_current_L2_grid
+        unique_id: YOURSERIAL_smappee_modbus_current_L2_grid
+        slave: 61
+        address: 144
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3        
+      - name: smappee_modbus_current_L3_grid
+        unique_id: YOURSERIAL_smappee_modbus_current_L3_grid
+        slave: 61
+        address: 148
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3              
+      - name: smappee_modbus_current_L1_PV
+        unique_id: YOURSERIAL_smappee_modbus_current_L1_pv
+        slave: 61
+        address: 152
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3    
+      - name: smappee_modbus_current_L2_PV
+        unique_id: YOURSERIAL_smappee_modbus_current_L2_pv
+        slave: 61
+        address: 156
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3        
+      - name: smappee_modbus_current_L3_PV
+        unique_id: YOURSERIAL_smappee_modbus_current_L3_pv
+        slave: 61
+        address: 160
+        input_type: holding
+        device_class: current
+        data_type: float32
+        state_class: Measurement
+        unit_of_measurement: A
+        swap: word
+        scan_interval: 5
+        precision: 3         
       
 ###############
 ##
@@ -228,541 +247,222 @@
 ##
 ###############
 
-    - name: smappee_modbus_energy_L1_import_car
-      slave: 61
-      address: 12288
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0       
-    - name: smappee_modbus_energy_L2_import_car
-      slave: 61
-      address: 12292
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0      
-    - name: smappee_modbus_energy_L3_import_car
-      slave: 61
-      address: 12296
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0 
-    - name: smappee_modbus_energy_L1_import_grid
-      slave: 61
-      address: 12300
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0     
-    - name: smappee_modbus_energy_L2_import_grid
-      slave: 61
-      address: 12304
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0   
-    - name: smappee_modbus_energy_L3_import_grid
-      slave: 61
-      address: 12308
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0 
-    - name: smappee_modbus_energy_L1_import_PV
-      slave: 61
-      address: 12312
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
-    - name: smappee_modbus_energy_L2_import_PV
-      slave: 61
-      address: 12316
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0 
-    - name: smappee_modbus_energy_L3_import_PV
-      slave: 61
-      address: 12320
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
+      - name: smappee_modbus_energy_L1_import_car
+        unique_id: YOURSERIAL_smappee_modbus_energy_L1_import_car
+        slave: 61
+        address: 12288
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0       
+      - name: smappee_modbus_energy_L2_import_car
+        unique_id: YOURSERIAL_smappee_modbus_energy_L2_import_car      
+        slave: 61
+        address: 12292
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0      
+      - name: smappee_modbus_energy_L3_import_car
+        unique_id: YOURSERIAL_smappee_modbus_energy_L3_import_car      
+        slave: 61
+        address: 12296
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0 
+      - name: smappee_modbus_energy_L1_import_grid
+        unique_id: YOURSERIAL_smappee_modbus_energy_L1_import_grid     
+        slave: 61
+        address: 12300
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0     
+      - name: smappee_modbus_energy_L2_import_grid
+        unique_id: YOURSERIAL_smappee_modbus_energy_L2_import_grid      
+        slave: 61
+        address: 12304
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0   
+      - name: smappee_modbus_energy_L3_import_grid
+        unique_id: YOURSERIAL_smappee_modbus_energy_L3_import_grid      
+        slave: 61
+        address: 12308
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0 
+      - name: smappee_modbus_energy_L1_import_PV
+        unique_id: YOURSERIAL_smappee_modbus_energy_L1_import_pv       
+        slave: 61
+        address: 12312
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
+      - name: smappee_modbus_energy_L2_import_PV
+        unique_id: YOURSERIAL_smappee_modbus_energy_L2_import_pv      
+        slave: 61
+        address: 12316
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0 
+      - name: smappee_modbus_energy_L3_import_PV
+        unique_id: YOURSERIAL_smappee_modbus_energy_L3_import_pv     
+        slave: 61
+        address: 12320
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
 
 
-    - name: smappee_modbus_energy_L1_export_car
-      slave: 61
-      address: 12290
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0       
-    - name: smappee_modbus_energy_L2_export_car
-      slave: 61
-      address: 12294
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0   
-    - name: smappee_modbus_energy_L3_export_car
-      slave: 61
-      address: 12298
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0  
-    - name: smappee_modbus_energy_L1_export_grid
-      slave: 61
-      address: 12302
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
-    - name: smappee_modbus_energy_L2_export_grid
-      slave: 61
-      address: 12306
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
-    - name: smappee_modbus_energy_L3_export_grid
-      slave: 61
-      address: 12310
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
-    - name: smappee_modbus_energy_L1_export_PV
-      slave: 61
-      address: 12314
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
-    - name: smappee_modbus_energy_L2_export_PV
-      slave: 61
-      address: 12318
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
-    - name: smappee_modbus_energy_L3_export_PV
-      slave: 61
-      address: 12322
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      swap: word
-      scan_interval: 20
-      precision: 0
-
-    - name: smappee_modbus_virtual_energy_krismynytelenetbe_-_1_ch0_active_import
-      slave: 61
-      address: 12544
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      state_class: total_increasing
-      swap: word
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_krismynytelenetbe_-_1_ch0_active_import
-    - name: smappee_modbus_virtual_energy_krismynytelenetbe_-_1_ch0_active_export
-      slave: 61
-      address: 12546
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_krismynytelenetbe_-_1_ch0_active_export
-    - name: smappee_modbus_virtual_energy_krismynytelenetbe_-_1_ch1_active_import
-      slave: 61
-      address: 12552
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_krismynytelenetbe_-_1_ch1_active_import
-    - name: smappee_modbus_virtual_energy_krismynytelenetbe_-_1_ch1_active_export
-      slave: 61
-      address: 12554
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_krismynytelenetbe_-_1_ch1_active_export
-    - name: smappee_modbus_virtual_energy_krismynytelenetbe_-_1_ch2_active_import
-      slave: 61
-      address: 12560
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_krismynytelenetbe_-_1_ch2_active_import
-    - name: smappee_modbus_virtual_energy_krismynytelenetbe_-_1_ch2_active_export
-      slave: 61
-      address: 12562
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_krismynytelenetbe_-_1_ch2_active_export
-    - name: smappee_modbus_virtual_energy_grid_ch3_active_import
-      slave: 61
-      address: 12568
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_grid_ch3_active_import
-    - name: smappee_modbus_virtual_energy_grid_ch3_active_export
-      slave: 61
-      address: 12570
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_grid_ch3_active_export
-    - name: smappee_modbus_virtual_energy_grid_ch4_active_import
-      slave: 61
-      address: 12576
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_grid_ch4_active_import
-    - name: smappee_modbus_virtual_energy_grid_ch4_active_export
-      slave: 61
-      address: 12578
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_grid_ch4_active_export
-    - name: smappee_modbus_virtual_energy_grid_ch5_active_import
-      slave: 61
-      address: 12584
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_grid_ch5_active_import
-    - name: smappee_modbus_virtual_energy_grid_ch5_active_export
-      slave: 61
-      address: 12586
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_grid_ch5_active_export
-    - name: smappee_modbus_virtual_energy_zonne-energie_ch6_active_import
-      slave: 61
-      address: 12592
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_zonne-energie_ch6_active_import
-    - name: smappee_modbus_virtual_energy_zonne-energie_ch6_active_export
-      slave: 61
-      address: 12594
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_zonne-energie_ch6_active_export
-    - name: smappee_modbus_virtual_energy_zonne-energie_ch7_active_import
-      slave: 61
-      address: 12600
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_zonne-energie_ch7_active_import
-    - name: smappee_modbus_virtual_energy_zonne-energie_ch7_active_export
-      slave: 61
-      address: 12602
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_zonne-energie_ch7_active_export
-    - name: smappee_modbus_virtual_energy_zonne-energie_ch8_active_import
-      slave: 61
-      address: 12608
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_zonne-energie_ch8_active_import
-    - name: smappee_modbus_virtual_energy_zonne-energie_ch8_active_export
-      slave: 61
-      address: 12610
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_zonne-energie_ch8_active_export
-    - name: smappee_modbus_virtual_energy_virtual_channel_9_ch9_active_import
-      slave: 61
-      address: 12616
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_9_ch9_active_import
-    - name: smappee_modbus_virtual_energy_virtual_channel_9_ch9_active_export
-      slave: 61
-      address: 12618
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_9_ch9_active_export
-    - name: smappee_modbus_virtual_energy_virtual_channel_10_ch10_active_import
-      slave: 61
-      address: 12624
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_10_ch10_active_import
-    - name: smappee_modbus_virtual_energy_virtual_channel_10_ch10_active_export
-      slave: 61
-      address: 12626
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_10_ch10_active_export
-    - name: smappee_modbus_virtual_energy_virtual_channel_11_ch11_active_import
-      slave: 61
-      address: 12632
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_11_ch11_active_import
-    - name: smappee_modbus_virtual_energy_virtual_channel_11_ch11_active_export
-      slave: 61
-      address: 12634
-      input_type: holding
-      device_class: energy
-      data_type: int32
-      swap: word
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_11_ch11_active_export
-    - name: smappee_modbus_virtual_energy_virtual_channel_12_ch12_active_import
-      slave: 61
-      address: 12640
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_12_ch12_active_import
-    - name: smappee_modbus_virtual_energy_virtual_channel_12_ch12_active_export
-      slave: 61
-      address: 12642
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_12_ch12_active_export
-    - name: smappee_modbus_virtual_energy_virtual_channel_13_ch13_active_import
-      slave: 61
-      address: 12648
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_13_ch13_active_import
-    - name: smappee_modbus_virtual_energy_virtual_channel_13_ch13_active_export
-      slave: 61
-      address: 12650
-      input_type: holding
-      device_class: energy
-      swap: word
-      data_type: int32
-      state_class: total_increasing
-      unit_of_measurement: Wh
-      scan_interval: 60
-      precision: 0
-      unique_id: smappee_5130086592_virtual_energy_virtual_channel_13_ch13_active_export
+      - name: smappee_modbus_energy_L1_export_car
+        unique_id: YOURSERIAL_smappee_modbus_energy_L1_export_car      
+        slave: 61
+        address: 12290
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0       
+      - name: smappee_modbus_energy_L2_export_car
+        unique_id: YOURSERIAL_smappee_modbus_energy_L2_export_car        
+        slave: 61
+        address: 12294
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0   
+      - name: smappee_modbus_energy_L3_export_car
+        unique_id: YOURSERIAL_smappee_modbus_energy_L3_export_car         
+        slave: 61
+        address: 12298
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0  
+      - name: smappee_modbus_energy_L1_export_grid
+        unique_id: YOURSERIAL_smappee_modbus_energy_L1_export_grid      
+        slave: 61
+        address: 12302
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
+      - name: smappee_modbus_energy_L2_export_grid
+        unique_id: YOURSERIAL_smappee_modbus_energy_L2_export_grid         
+        slave: 61
+        address: 12306
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
+      - name: smappee_modbus_energy_L3_export_grid
+        unique_id: YOURSERIAL_smappee_modbus_energy_L3_export_grid         
+        slave: 61
+        address: 12310
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
+      - name: smappee_modbus_energy_L1_export_PV
+        unique_id: YOURSERIAL_smappee_modbus_energy_L1_export_pv        
+        slave: 61
+        address: 12314
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
+      - name: smappee_modbus_energy_L2_export_PV
+        unique_id: YOURSERIAL_smappee_modbus_energy_L2_export_pv         
+        slave: 61
+        address: 12318
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
+      - name: smappee_modbus_energy_L3_export_PV
+        unique_id: YOURSERIAL_smappee_modbus_energy_L3_export_pv         
+        slave: 61
+        address: 12322
+        input_type: holding
+        device_class: energy
+        data_type: int32
+        state_class: total_increasing
+        unit_of_measurement: Wh
+        swap: word
+        scan_interval: 300
+        precision: 0
                                                                     
