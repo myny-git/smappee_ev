@@ -17,207 +17,19 @@ This document explains how to connect your **Smappee EV Wall (Infinity series)**
 
 ## 🛠️ Home Assistant Configuration
 
-Add the following to your `configuration.yaml`. The first sensors are Power Sensors (in W) and the second series are Current sensors (in A).You may need to add a unique identity with each sensor.
+**Usage instructions:**
+I created in the docs a modbus.yaml file. 
 
-```yaml
-modbus:
-  - name: smappee_modbus
-    type: tcp
-    host: 192.168.XX.XX
-    port: 502
-    delay: 0
-    message_wait_milliseconds: 30
-    timeout: 5
-    sensors:
-      - name: smappee_modbus_power_L1_car
-        slave: 61
-        address: 256
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-      - name: smappee_modbus_power_L2_car
-        slave: 61
-        address: 260
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-      - name: smappee_modbus_power_L3_car
+1. Replace `192.168.x.x` under `host:` with the IP address of your Smappee gateway.
+2. Replace every instance of `YOURSERIAL` with a unique string (e.g., your Smappee serial number).
+   This will be used for generating unique entity IDs in Home Assistant.
+3. Add the content of the file to your `configuration.yaml`, or include it via `!include` in a separate YAML file.
 
-        slave: 61
-        address: 264
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-      - name: smappee_modbus_power_L1_grid
-        slave: 61
-        address: 268
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-      - name: smappee_modbus_power_L2_grid
-        slave: 61
-        address: 272
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-      - name: smappee_modbus_power_L3_grid
-        slave: 61
-        address: 276
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
 
-      - name: smappee_modbus_power_L1_PV
-        slave: 61
-        address: 280
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-      - name: smappee_modbus_power_L2_PV
-        slave: 61
-        address: 284
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-      - name: smappee_modbus_power_L3_PV
-        slave: 61
-        address: 288
-        input_type: holding
-        data_type: float32
-        device_class: power
-        unit_of_measurement: W
-        swap: word
-        scan_interval: 5
-        precision: 2
-
-      - name: smappee_modbus_current_L1_car
-        slave: 61
-        address: 128
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-      - name: smappee_modbus_current_L2_car
-        slave: 61
-        address: 132
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-      - name: smappee_modbus_current_L3_car
-        slave: 61
-        address: 136
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-
-      - name: smappee_modbus_current_L1_grid
-        slave: 61
-        address: 140
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-      - name: smappee_modbus_current_L2_grid
-        slave: 61
-        address: 144
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-      - name: smappee_modbus_current_L3_grid
-        slave: 61
-        address: 148
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-
-      - name: smappee_modbus_current_L1_PV
-        slave: 61
-        address: 152
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-      - name: smappee_modbus_current_L2_PV
-        slave: 61
-        address: 156
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
-      - name: smappee_modbus_current_L3_PV
-        slave: 61
-        address: 160
-        input_type: holding
-        data_type: float32
-        device_class: current
-        unit_of_measurement: A
-        swap: word
-        scan_interval: 5
-        precision: 3
 ```
 ## 🗂️ Register Map (From Smappee Register Excel)
 
-There are also other sensors available, like energy, which can also be provided to EVCC. That's for later and if there is interest.
+The energy register map is in the discussions, and already converted in the modbus.yaml file.
 
 | Measurement | Type     | Phase | Source | Address |
 |-------------|----------|-------|--------|---------|
@@ -239,9 +51,10 @@ There are also other sensors available, like energy, which can also be provided 
 | Current     | float32  | L1    | PV     | 152     |
 | Current     | float32  | L2    | PV     | 156     |
 | Current     | float32  | L3    | PV     | 160     |
+```
 
 ## Template Sensors in Home Assistant
-Next, as EVCC requires 3-phase power, a template sensor in home assistant can do the job!
+Next, use template sensors to combine all three phases to one power sensor:
 
 ```yaml
 ######################################
@@ -281,7 +94,7 @@ template:
         {% set l3 = states('sensor.smappee_modbus_power_l3_pv') | float(0) %}
         {{ (l1 + l2 + l3) | round(2) }}
 ```
-
+You can use these in your EVCC implementation.
 ```yaml
 meters:
   - name: Grid_smappee
@@ -370,6 +183,67 @@ meters:
         jq: .state | tonumber
         timeout: 2s
 ```
+
+## Energy Template sensors
+Next, use template sensors to realize kWh sensors combining again L1/L2/L3. I only show the most relevant here:
+
+```yaml
+######################################
+###
+### Smappee modbus
+###
+######################################
+template:
+  sensor:  ## You can also add YOURSERIAL in the naming
+    - name: smappee_energy_import_car  ## energy delivered to the car
+      unit_of_measurement: kWh
+      device_class: energy
+      state_class: total
+      state: >
+        {{
+          (states('sensor.smappee_modbus_energy_L1_import_car') | float +
+          states('sensor.smappee_modbus_energy_L2_import_car') | float +
+          states('sensor.smappee_modbus_energy_L3_import_car') | float) / 1000
+        }}
+
+    - name: smappee_energy_import_grid  ## energy imported from the grid - aka consumption
+      unit_of_measurement: kWh
+      device_class: energy
+      state_class: total
+      state: >
+        {{ 
+          (states('sensor.smappee_modbus_energy_L1_import_grid') | float +
+          states('sensor.smappee_modbus_energy_L2_import_grid') | float +
+          states('sensor.smappee_modbus_energy_L3_import_grid') | float) / 1000
+        }}
+
+    - name: smappee_energy_export_grid  ## energy exported to the grid - aka production
+      unit_of_measurement: kWh
+      device_class: energy
+      state_class: total
+      state: >
+        {{ 
+          (states('sensor.smappee_modbus_energy_L1_export_grid') | float +
+          states('sensor.smappee_modbus_energy_L2_export_grid') | float +
+          states('sensor.smappee_modbus_energy_L3_export_grid') | float) / 1000 
+        }}
+
+    - name: smappee_energy_import_pv  ## PV-generated energy
+      unit_of_measurement: Wh
+      device_class: energy
+      state_class: total
+      state: >
+        {{ 
+          (states('sensor.smappee_modbus_energy_L1_import_PV') | float +
+          states('sensor.smappee_modbus_energy_L2_import_PV') | float +
+          states('sensor.smappee_modbus_energy_L3_import_PV') | float) / 1000
+        }}
+
+
+```
+You can also use these in your EVCC implementation, if you want.
+
+
 ## **Notes**
 - Make sure to replace <your_long_lived_token_here> with your actual Home Assistant long-lived access token.
 - Configure your Home Assistant sensors using the Modbus integration and map the register addresses to match the sensors in the template section.
