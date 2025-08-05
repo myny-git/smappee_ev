@@ -198,7 +198,7 @@ template:
     - name: smappee_energy_import_car  ## energy delivered to the car
       unit_of_measurement: kWh
       device_class: energy
-      state_class: total
+      state_class: total_increasing
       state: >
         {{
           (states('sensor.smappee_modbus_energy_L1_import_car') | float +
@@ -209,7 +209,7 @@ template:
     - name: smappee_energy_import_grid  ## energy imported from the grid - aka consumption
       unit_of_measurement: kWh
       device_class: energy
-      state_class: total
+      state_class: total_increasing
       state: >
         {{ 
           (states('sensor.smappee_modbus_energy_L1_import_grid') | float +
@@ -220,7 +220,7 @@ template:
     - name: smappee_energy_export_grid  ## energy exported to the grid - aka production
       unit_of_measurement: kWh
       device_class: energy
-      state_class: total
+      state_class: total_increasing
       state: >
         {{ 
           (states('sensor.smappee_modbus_energy_L1_export_grid') | float +
@@ -231,7 +231,7 @@ template:
     - name: smappee_energy_import_pv  ## PV-generated energy
       unit_of_measurement: Wh
       device_class: energy
-      state_class: total
+      state_class: total_increasing
       state: >
         {{ 
           (states('sensor.smappee_modbus_energy_L1_import_PV') | float +
