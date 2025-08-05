@@ -52,7 +52,7 @@ chargers:
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
     enable: # also mandatory, this is to enable the charging mode. I created an entry to two services.
       source: http
-      uri: http://192.168.50.163:8123/api/services/switch/{{ if .enable }}turn_on{{ else }}turn_off{{ end }}
+      uri: http://HAlocalIP:8123/api/services/switch/{{ if .enable }}turn_on{{ else }}turn_off{{ end }}
       method: POST
       headers:
         - Authorization: Bearer long_lived_TOKEN
