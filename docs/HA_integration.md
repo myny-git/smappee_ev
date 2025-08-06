@@ -66,6 +66,7 @@ Defines the current (in Amps) to be used when operating in `NORMAL` mode (aka St
 
 - **`number.smappee_ev_wallbox_min_surplus_percentage`**  
 [Explanation from the website of Smappee]
+
 For users unable to switch between single-phase and three-phase charging—or for those who want even more control over their installation—we provide a slider to manage the **minimum surplus percentage**.
 
 This slider sets **how much of the minimum required current (6A or 3x6A)** must be covered by surplus solar production before charging starts. You can thus reduce the percentage of surplus needed to begin charging.
@@ -77,9 +78,12 @@ This slider sets **how much of the minimum required current (6A or 3x6A)** must 
 | 50  | 50% must come from the solar panels, 50% from the grid (Single phase: 0.7 kW export, Three phase: 2.1 kW export). |
 | 100 | 100% must come from the solar panels (Single phase: 1.4 kW export, Three phase: 4.2 kW export). |
 
+<img width="740" height="286" alt="image" src="https://github.com/user-attachments/assets/f16a5b9c-4784-4704-93ab-186475bda6d5" />
+
+
 > **Note:**  
 > There is a known issue in the Smappee app:  
-> While the minimum surplus percentage works and updates correctly in the online dashboard, you may need to swap modes and return to see the change reflected in the app—it does not update live.
+> While the minimum surplus percentage works and updates correctly in the online dashboard, you may need to swap modes and return to see the change reflected on the dashboard—it does not update live. Somehow, the app never gets updated!
 
 - **`number.smappee_ev_wallbox_led_brightness`**  
 Sets the desired brightness level for the Wallbox LEDs, from 0 to 100%.
