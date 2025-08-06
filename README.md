@@ -192,8 +192,8 @@ If this integration is useful to you, feel free to support its development:
 [usage-shield]: https://img.shields.io/badge/dynamic/json?style=flat-square&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.smappee_ev.total
 [usage-url]: https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev
 
-[hassfest-shield]: https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/hassfest.yaml?label=Hassfest&style=flat-square
-[hassfest-url]: https://github.com/myny-git/smappee_ev/actions/workflows/hassfest.yaml
+[hassfest-shield]: https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/validate.yaml?label=Hassfest&style=flat-square
+[hassfest-url]: https://github.com/myny-git/smappee_ev/actions/workflows/validate.yaml
 
 [license-shield]: https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square
 [license-url]: https://opensource.org/licenses/MIT
