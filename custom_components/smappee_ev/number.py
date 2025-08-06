@@ -19,6 +19,7 @@ async def async_setup_entry(
     async_add_entities([
         SmappeeCombinedCurrentSlider(api_client),
         SmappeeBrightnessNumber(api_client),
+        SmappeeMinSurplusPctNumber(api_client),
     ])
 
 
@@ -205,4 +206,32 @@ class SmappeeBrightnessNumber(SmappeeBaseNumber):
     def native_value(self) -> int:
         return int(self.api_client.led_brightness)     
 
+class SmappeeMinSurplusPctNumber(SmappeeBaseNumber):
+    """Min Surplus Percentage (slider) for Smappee EV."""
 
+    def __init__(self, api_client):
+        super().__init__(
+            api_client,
+            "Min Surplus Percentage",
+            f"{api_client.serial_id}_min_surpluspct",
+            "%",
+            min_value=0,
+            max_value=100,
+            step=1,
+            initial_value=int(getattr(api_client, "min_surpluspct", 100)),
+        )
+        api_client.register_value_callback("min_surpluspct", self._handle_external_update)
+
+    async def async_set_native_value(self, value: int) -> None:
+        self._current_value = int(value)
+        await self.api_client.set_min_surpluspct(self._current_value)
+        self.api_client.min_surpluspct = self._current_value
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> int:
+        return int(getattr(self.api_client, "min_surpluspct", 100))
+
+    def _handle_external_update(self, value: int) -> None:
+        self._current_value = value
+        self.async_write_ha_state()

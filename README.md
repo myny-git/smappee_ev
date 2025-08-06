@@ -50,7 +50,6 @@ The main ambition is to integrate these sensors in other energy management syste
 ### ✅ Direct Charger Control
 - Start, Pause, or Stop charging sessions from Home Assistant
 - Set fixed charging **currents** (in Amps)
-- Automatically switches to correct mode based on your selection
 - Change Wallbox availability (set available/unavailable)
 - **Reload service**: reloads all entries without restarting Home Assistant
 
@@ -132,6 +131,7 @@ More information on the usage of the entities/buttons/services can be found in t
 | `select.smappee_ev_wallbox_charging_mode`   | Select   | Choose between `SMART`, `SOLAR`, `NORMAL`              |
 | `number.smappee_ev_wallbox_max_charging_speed`  | Number   | Set current in Amps for `NORMAL` mode                                        |         |
 | `number.smappee_ev_wallbox_led_brightness`  | Number   | Brightness percentage used in Set LED Brightness                             |
+| `number.smappee_ev_wallbox_min_surplus_percentage`  | Number   | Minimum  surplus (%) before enabling charging                             |
 | `button.smappee_ev_wallbox_set_available`             | Button   | Make the Wallbox available for use                                |
 | `button.smappee_ev_wallbox_set_unavailable`             | Button   | Make the Wallbox unavailable for use                        |
 | `switch.smappee_ev_wallbox_evcc_charging_control`             | Button   | EVCC switch to enable/disable charging               |

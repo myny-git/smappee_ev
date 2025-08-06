@@ -40,6 +40,7 @@ class SmappeeApiClient:
         self.led_brightness = 70
         self.min_current = 6  # default fallback
         self.max_current = 32  # default fallback
+        self.min_surpluspct = 100  # fallback default
         self.selected_percentage_limit = None
         self.selected_current_limit = None  # optioneel, als je deze ook gebruikt        
         self._value_callbacks = {} 
@@ -150,6 +151,14 @@ class SmappeeApiClient:
                         if new_min != self.min_current:
                             _LOGGER.debug("Min current changed: %s → %s", self.min_current, new_min)
                             self.min_current = new_min
+                            update_required = True
+
+                    elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
+                        new_min_surpluspct = int(value)
+                        if getattr(self, "min_surpluspct", None) != new_min_surpluspct:
+                            _LOGGER.debug("min.surpluspct changed: %s → %s", getattr(self, "min_surpluspct", None), new_min_surpluspct)
+                            self.min_surpluspct = new_min_surpluspct
+                            self.push_value_update("min_surpluspct", new_min_surpluspct)
                             update_required = True
 
                 # --- separate call for LED brightness ---
@@ -509,21 +518,30 @@ class SmappeeApiClient:
             _LOGGER.error("Exception in set_available: %s", exc)
             raise
 
-    async def set_unavailable(self) -> None:
-        """Make charger unavailable via the Smappee API."""
+    async def set_min_surpluspct(self, min_surpluspct: int) -> None:
+        """Set min.surpluspct via the Smappee API."""
         await self.oauth_client.ensure_token_valid()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setUnavailable"
-        headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
-        try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=[], headers=headers)
-                if resp.status != 0 and resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to set unavailable: %s", text)
-                    raise Exception(f"Set unavailable error: {text}")
-                _LOGGER.debug("Set charger unavailable successfully")
-        except Exception as exc:
-            _LOGGER.error("Exception in set_unavailable: %s", exc)
-            raise
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
+        payload = {
+            "configurationProperties": [{
+                "spec": {
+                    "name": "etc.smart.device.type.car.charger.config.min.excesspct",
+                    "species": "Integer"
+                },
+                "value": min_surpluspct
+            }]
+        }
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json"
+        }
+        async with aiohttp.ClientSession() as session:
+            resp = await session.patch(url, json=payload, headers=headers)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to set min.surpluspct: %s", text)
+                raise Exception(f"Set min.surpluspct error: {text}")
+            _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
+
 
 
