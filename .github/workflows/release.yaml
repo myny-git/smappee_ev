@@ -1,38 +1,45 @@
-name: "Release"
+name: Zip Release
 
 on:
   release:
     types:
-      - "published"
-
-permissions: {}
+      - published
 
 jobs:
   release:
-    name: "Release"
-    runs-on: "ubuntu-latest"
+    name: Release Smappee EV!
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: "Checkout the repository"
-        uses: "actions/checkout@v4.1.0"
+      # Step 1: Check out the code
+      - name: ⤵️ Check out code from GitHub
+        uses: actions/checkout@v4
 
-      # - name: "Install yq"    # Optionally enable if you ever need it
-      #   run: sudo apt-get update && sudo apt-get install -y yq
+      # Step 2: (Optional, but recommended) Install yq (in case it's not present)
+      #- name: Install yq
+      #  run: sudo apt-get update && sudo apt-get install -y yq
 
-      - name: "Adjust version number"
-        shell: "bash"
+      # Step 3: Update version in manifest.json to match the release tag
+      - name: 🔢 Adjust version number
+        shell: bash
         run: |
-          yq -i -o json '.version="${{ github.event.release.tag_name }}"' \
-            "${{ github.workspace }}/custom_components/weatherxm/manifest.json"
+          version="${{ github.event.release.tag_name }}"
+          version="${version,,}"            # convert to lowercase (e.g., V2024.10.1 -> v2024.10.1)
+          version="${version#v}"            # remove leading 'v' if present
+          yq e -P -o=json \
+            -i ".version = \"${version}\"" \
+            "${{ github.workspace }}/custom_components/smappee_ev/manifest.json"
 
-      - name: "ZIP the integration directory"
-        shell: "bash"
+      # Step 4: Create a ZIP archive of the component directory
+      - name: 📦 Create zipped release package
+        shell: bash
         run: |
-          cd "${{ github.workspace }}/custom_components/weatherxm"
-          zip weatherxm.zip -r ./
+          cd "${{ github.workspace }}/custom_components/smappee_ev"
+          zip smappee_ev.zip -r ./
 
-      - name: "Upload the ZIP file to the release"
-        uses: softprops/action-gh-release@v0.1.15
+      # Step 5: Upload ZIP as a release asset (for HACS)
+      - name: ⬆️ Upload zip to release
+        uses: softprops/action-gh-release@v2
         with:
-          files: ${{ github.workspace }}/custom_components/weatherxm/weatherxm.zip
+          files: ${{ github.workspace }}/custom_components/smappee_ev/smappee_ev.zip
