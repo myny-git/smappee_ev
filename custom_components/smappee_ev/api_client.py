@@ -519,6 +519,24 @@ class SmappeeApiClient:
             _LOGGER.error("Exception in set_available: %s", exc)
             raise
 
+    async def set_unavailable(self) -> None:
+        """Make charger unavailable via the Smappee API."""
+        await self.oauth_client.ensure_token_valid()
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setUnavailable"
+        headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(url, json=[], headers=headers)
+                if resp.status != 0 and resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.error("Failed to set unavailable: %s", text)
+                    raise Exception(f"Set unavailable error: {text}")
+                _LOGGER.debug("Set charger unavailable successfully")
+        except Exception as exc:
+            _LOGGER.error("Exception in set_unavailable: %s", exc)
+            raise
+
+
     async def set_min_surpluspct(self, min_surpluspct: int) -> None:
         """Set min.surpluspct via the Smappee API."""
         await self.oauth_client.ensure_token_valid()
