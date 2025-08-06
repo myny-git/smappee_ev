@@ -229,7 +229,7 @@ template:
         }}
 
     - name: smappee_energy_import_pv  ## PV-generated energy or production
-      unit_of_measurement: Wh
+      unit_of_measurement: kWh
       device_class: energy
       state_class: total_increasing
       state: >
