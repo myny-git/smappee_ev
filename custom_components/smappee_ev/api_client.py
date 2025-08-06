@@ -504,6 +504,7 @@ class SmappeeApiClient:
     async def set_available(self) -> None:
         """Make charger available via the Smappee API."""
         await self.oauth_client.ensure_token_valid()
+
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setAvailable"
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
         try:
