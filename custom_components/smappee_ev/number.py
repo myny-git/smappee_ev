@@ -1,7 +1,8 @@
+from __future__ import annotations
 import logging
 
 from typing import Any
-from __future__ import annotations
+
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
