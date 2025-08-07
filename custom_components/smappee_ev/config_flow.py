@@ -83,13 +83,16 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Fetch all carcharger devices
         try:
-            smartdevices_url = f"{BASE_URL}/servicelocation/{user_input[CONF_SERVICE_LOCATION_ID]}/smartdevices"
+            url = f"{BASE_URL}/servicelocation/{user_input[CONF_SERVICE_LOCATION_ID]}/smartdevices"
             async with aiohttp.ClientSession() as session:
-                resp = await session.get(smartdevices_url, headers=headers)
+                resp = await session.get(url, headers=headers)
                 if resp.status != 200:
                     errors["base"] = "uuid_failed"
                     return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-                devices = await resp.json()
+                
+                devices = await resp.json()                
+                
+                #  Extract connectors
                 carchargers = [
                     {
                         "id": d["id"],
@@ -106,15 +109,22 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     for d in devices
                     if d["type"]["category"] == "CARCHARGER"
                 ]
+
                 if not carchargers:
                     errors["base"] = "no_chargers"
                     return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
                 # find the station device (category CHARGINGSTATION)
-                stations = [d for d in devices if d["type"]["category"] == "CHARGINGSTATION"]
+                stations = [
+                    d for d in devices 
+                    if d.get("type", {}).get("category") == "CHARGINGSTATION"
+                ]
+                _LOGGER.debug("Station candidates: %s", stations)
+
                 if not stations:
                     errors["base"] = "no_station"
                     return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+                
                 station = stations[0]
 
 
@@ -123,7 +133,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "id": station["id"],
                     "uuid": station["uuid"],
                 }
-                
+
         except Exception as e:
             _LOGGER.error(f"Error fetching smartdevices: {e}")
             errors["base"] = "uuid_failed"
