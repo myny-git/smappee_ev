@@ -56,11 +56,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     oauth_client = OAuth2Client(entry.data)    
 
     # Station-level client (for LED, availability, etc.)
+    st = entry.data["station"]
     station_client = SmappeeApiClient(
         oauth_client,
         serial,
-        serial,
-        serial,
+        st["uuid"],             # real station smart_device_uuid
+        st["id"],               # real station smart_device_id
         service_location_id,
         update_interval,
     )

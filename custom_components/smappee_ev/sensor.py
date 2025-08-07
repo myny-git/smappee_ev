@@ -24,7 +24,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV sensors from a config entry.""" 
-    connector_clients: dict[str, SmappeeApiClient] = data["connectors"]
+    connector_clients: dict[str, SmappeeApiClient] = hass.data[DOMAIN][config_entry.entry_id]["connectors"]
 
     entities: list[SensorEntity] = []
     for client in connector_clients.values():
@@ -59,7 +59,7 @@ class SmappeeSensorBase(SensorEntity):
         }
 
 
-class SmappeeChargingStateSensor(SmappeeBaseSensor):
+class SmappeeChargingStateSensor(SmappeeSensorBase):
     """Sensor for the current session state."""
     def __init__(self, api_client: SmappeeApiClient):
         super().__init__(
