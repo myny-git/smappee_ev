@@ -87,57 +87,61 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             async with aiohttp.ClientSession() as session:
                 resp = await session.get(url, headers=headers)
                 if resp.status != 200:
-                    errors["base"] = "uuid_failed"
-                    return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-                
-                devices = await resp.json()                
-                
-                #  Extract connectors
-                carchargers = [
-                    {
-                        "id": d["id"],
-                        "uuid": d["uuid"],
-                        "connector_number": next(
-                            (
-                                p["value"]
-                                for p in d.get("configurationProperties", [])
-                                if p.get("spec", {}).get("name") == "etc.smart.device.type.car.charger.smappee.charger.number"
-                            ),
-                            None
-                        )
-                    }
-                    for d in devices
-                    if d["type"]["category"] == "CARCHARGER"
-                ]
-
-                if not carchargers:
-                    errors["base"] = "no_chargers"
-                    return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-
-                # find the station device (category CHARGINGSTATION)
-                stations = [
-                    d for d in devices 
-                    if d.get("type", {}).get("category") == "CHARGINGSTATION"
-                ]
-                _LOGGER.debug("Station candidates: %s", stations)
-
-                if not stations:
-                    errors["base"] = "no_station"
-                    return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-                
-                station = stations[0]
-
-
-                user_input["carchargers"] = carchargers
-                user_input["station"] = {
-                    "id": station["id"],
-                    "uuid": station["uuid"],
-                }
-
+                    raise Exception(await resp.text())
+                devices = await resp.json()
         except Exception as e:
-            _LOGGER.error(f"Error fetching smartdevices: {e}")
+            _LOGGER.error("Error fetching smartdevices: %s", e)
             errors["base"] = "uuid_failed"
-            return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+            return self.async_show_form(
+                step_id="user",
+                data_schema=data_schema,
+                errors=errors,
+            )
+        
+
+        # 4) Build connector list
+        carchargers = []
+        for d in devices:
+            if d.get("type", {}).get("category") == "CARCHARGER":
+                # find connector_number if present
+                num = None
+                for prop in d.get("configurationProperties", []):
+                    if prop.get("spec", {}).get("name") == "etc.smart.device.type.car.charger.smappee.charger.number":
+                        num = prop.get("value")
+                        break
+                carchargers.append({
+                    "id": d["id"],
+                    "uuid": d["uuid"],
+                    "connector_number": num,
+                })
+        if not carchargers:
+            errors["base"] = "no_chargers"
+            return self.async_show_form(
+                step_id="user",
+                data_schema=data_schema,
+                errors=errors,
+            )
+
+        # 5) Find the station device
+        station_list = [
+            d for d in devices
+            if d.get("type", {}).get("category") == "CHARGINGSTATION"
+        ]
+        if not station_list:
+            errors["base"] = "no_station"
+            return self.async_show_form(
+                step_id="user",
+                data_schema=data_schema,
+                errors=errors,
+            )
+        station = station_list[0]
+
+        # 6) Store everything under the keys your __init__.py expects
+        user_input["carchargers"] = carchargers
+        user_input["station"] = {
+            "id": station["id"],
+            "uuid": station["uuid"],
+        }
 
         return self.async_create_entry(title="Smappee EV", data=user_input)
 
