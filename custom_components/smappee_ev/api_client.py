@@ -29,7 +29,7 @@ class SmappeeApiClient:
         self.smart_device_id = smart_device_id        
         self.service_location_id = service_location_id
         self.connector_number = connector_number
-        self.is_sation = is_station
+        self.is_station = is_station
 
         self.update_interval = update_interval if update_interval is not None else UPDATE_INTERVAL_DEFAULT
 
