@@ -63,10 +63,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "Content-Type": "application/json",
             }
             async with aiohttp.ClientSession() as session:
-                resp = await session.get(
-                    f"{BASE_URL}/servicelocation",
-                    headers=headers,
-                )
+                resp = await session.get(f"{BASE_URL}/servicelocation", headers=headers)
                 if resp.status != 200:
                     errors["base"] = "servicelocation_failed"                                    
                     return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
