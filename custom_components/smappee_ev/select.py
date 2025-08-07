@@ -4,7 +4,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
+from .api_client import SmappeeApiClient
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -17,31 +17,36 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV mode select entity from a config entry."""
-    api_client = hass.data[DOMAIN][config_entry.entry_id]
-    select_entity = SmappeeModeSelect(api_client)
-    async_add_entities([select_entity], update_before_add=True)
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    connector_clients: dict[str, SmappeeApiClient] = data["connectors"]
 
-    # Register the callback once HA is fully started
-    def register_callback_later(_):
-        api_client.set_mode_select_callback(select_entity.set_selected_mode)
+    entities: list[SelectEntity] = []
+    for client in connector_clients.values():
+        entities.append(SmappeeModeSelect(client))
+
+    async_add_entities(entities)
+
+    # Register callbacks once HA is fully started
+    def register_callback_later(_event):
+        for entity in entities:
+            entity.api_client.set_mode_select_callback(entity.set_selected_mode)
     hass.bus.async_listen_once("homeassistant_started", register_callback_later)
+
 
 class SmappeeModeSelect(SelectEntity):
     """Home Assistant select entity for Smappee charging mode."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, api_client):
+    def __init__(self, api_client: SmappeeApiClient):
         self.api_client = api_client
-        self._attr_name = f"Charging Mode"
         self._attr_options = MODES
         self._selected_mode = MODES[0]
-        self._attr_unique_id = f"{api_client.serial_id}_mode_select"
-
+        self._attr_name = f"Charging Mode {api_client.connector_number}"
+        self._attr_unique_id = f"{api_client.serial_id}_charging_mode_{api_client.connector_number}"
 
     @property
     def current_option(self) -> str:
-        """Return the current selected charging mode."""
         return self._selected_mode
 
     async def async_select_option(self, option: str) -> None:

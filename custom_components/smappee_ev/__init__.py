@@ -13,9 +13,13 @@ from .const import (
     DOMAIN,
     CONF_SERIAL,
     CONF_SERVICE_LOCATION_ID,
+    CONF_UPDATE_INTERVAL,
+    CONF_CLIENT_ID,
+    CONF_CLIENT_SECRET,
+    CONF_USERNAME,
+    CONF_PASSWORD,
     CONF_SMART_DEVICE_UUID,
     CONF_SMART_DEVICE_ID,
-    CONF_UPDATE_INTERVAL,
     UPDATE_INTERVAL_DEFAULT,
 )
 
@@ -35,34 +39,51 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up a Smappee EV config entry."""
+    """Set up a Smappee EV config entry with support for multiple connectors."""
     _LOGGER.debug("Setting up entry for Smappee EV. Serial: %s", entry.data.get(CONF_SERIAL))
     
     hass.data.setdefault(DOMAIN, {})
-    
-    required = [
-        CONF_SERIAL, 
-        CONF_SERVICE_LOCATION_ID,
-        CONF_SMART_DEVICE_UUID,
-        CONF_SMART_DEVICE_ID,
-    ]
-    if not all(k in entry.data for k in required):
-        _LOGGER.error("Missing required entry data for Smappee EV: %s", entry.data)
+
+    if "carchargers" not in entry.data:
+        _LOGGER.error("Config entry is missing 'carchargers': %s", entry.data)
         return False
+    
+    serial = entry.data[CONF_SERIAL]
+    service_location_id = entry.data[CONF_SERVICE_LOCATION_ID]
+    update_interval = entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT)
    
     oauth_client = OAuth2Client(entry.data)    
-    api_client = SmappeeApiClient(
-        oauth_client, 
-        entry.data[CONF_SERIAL],
-        entry.data[CONF_SMART_DEVICE_UUID],
-        entry.data[CONF_SMART_DEVICE_ID],
-        entry.data[CONF_SERVICE_LOCATION_ID],
-        entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT),        
-    )
 
-    api_client.enable()
+    # Station-level client (for LED, availability, etc.)
+    station_client = SmappeeApiClient(
+        oauth_client,
+        serial,
+        serial,
+        serial,
+        service_location_id,
+        update_interval,
+    )
+    station_client.enable()    
+
+    # Connector-level clients (keyed by UUID)
+    connector_clients = {}
+        for device in entry.data["carchargers"]:
+        client = SmappeeApiClient(
+            oauth_client,
+            serial,
+            device["uuid"],
+            device["id"],
+            service_location_id,
+            update_interval,
+            connector_number=device.get("connector_number")  # pass through
+        )
+        client.enable()
+        connector_clients[device["uuid"]] = client
    
-    hass.data[DOMAIN][entry.entry_id] = api_client
+    hass.data[DOMAIN][entry.entry_id] = {
+        "station": station_client,
+        "connectors": connector_clients,
+    }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     

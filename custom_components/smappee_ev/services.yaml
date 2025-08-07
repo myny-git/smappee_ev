@@ -1,53 +1,97 @@
 set_charging_mode:
-  description: "Set the charging mode of a connector."
+  description: "Set the charging mode (STANDARD, SMART, SOLAR)."
   fields:
-    serial:
-      description: "Serial number of the charging station"
-      example: "6220001089"
+    connector_id:
+      description: "Connector number (1 or 2)."
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 2
     mode:
-      description: "Charging mode to set (NORMAL, NORMAL_PERCENTAGE, SMART, SOLAR)"
-      example: "NORMAL"
+      description: "Charging mode to apply."
+      required: true
+      selector:
+        select:
+          options:
+            - "STANDARD"
+            - "SMART"
+            - "SOLAR"
     limit:
-      description: "Current limit in amperes"
-      example: 6
+      description: "Optional current limit in Ampere when mode is NORMAL."
+      required: false
+      selector:
+        number:
+          min: 6
+          max: 32
+          unit_of_measurement: "A"
 
 pause_charging:
-  name: Pause Charging
-  description: "Pauses charging via the Smappee API."
+  description: "Pause charging on a connector."
+  fields:
+    connector_id:
+      description: "Connector number (1 or 2)."
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 2
 
 stop_charging:
-  name: Stop Charging
-  description: "Stops charging via the Smappee API."
-  
-start_charging:
-  name: Start Charging
-  description: Start charging session using a current value in Amps
+  description: "Stop charging on a connector."
   fields:
+    connector_id:
+      description: "Connector number (1 or 2)."
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 2
+  
+
+start_charging:
+  description: "Start charging on a connector using a specific current value (Ampere)."
+  fields:
+    connector_id:
+      description: "Connector number (1 or 2). If omitted, the only available connector is used."
+      example: 1
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 2
     current:
-      name: Current (A)
-      description: Charging current to apply
-      example: 8
+      description: "Charging current in Ampere"
+      example: 16
       required: true
       selector:
         number:
           min: 6
           max: 32
-          step: 1
           unit_of_measurement: "A"
 
 set_brightness:
-  description: Set the LED brightness of the charger.
+  description: "Set the LED brightness of the station."
   fields:
     brightness:
-      description: Brightness level (0-100)
-      example: 15
+      description: "LED brightness percentage (e.g., 3, 70)"
+      example: 70
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
 
 set_available:
-  description: Set the smart charger to available state.
+  description: "Set the charging station as available."
+  fields: {}
 
 set_unavailable:
-  description: Set the smart charger to unavailable state.
+  description: "Set the charging station as unavailable."
+  fields: {}
 
 reload:
   name: Reload integration
   description: Reload all Smappee EV entries and refresh the integration.
+  fields: {}

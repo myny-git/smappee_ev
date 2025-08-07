@@ -1,11 +1,13 @@
 import logging
 
 from typing import Any
+from __future__ import annotations
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
+from .api_client import SmappeeApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,207 +17,104 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV buttons from a config entry."""
-    api_client = hass.data[DOMAIN][config_entry.entry_id]
-    async_add_entities([
-        SmappeeSetChargingModeButton(api_client, hass),
-        SmappeePauseChargingButton(api_client, hass),
-        SmappeeStopChargingButton(api_client, hass),
-        SmappeeStartChargingButton(api_client, hass),
-        SmappeeSetBrightnessButton(api_client, hass),
-        SmappeeSetAvailableButton(api_client, hass),
-        SmappeeSetUnavailableButton(api_client, hass),
+    data = hass.data[DOMAIN][entry.entry_id]
+    connector_clients: dict[str, SmappeeApiClient] = data["connectors"]
+    station_client: SmappeeApiClient = data["station"]
+
+    entities: list[ButtonEntity] = []
+
+    # Connector-based buttons
+    for client in connector_clients.values():
+        connector = client.connector_number
+        entities.extend([
+            SmappeeActionButton(client, f"Start charging {connector}", "start_charging", f"start_{connector}"),
+            SmappeeActionButton(client, f"Stop charging {connector}", "stop_charging", f"stop_{connector}"),
+            SmappeeActionButton(client, f"Pause charging {connector}", "pause_charging", f"pause_{connector}"),
+            SmappeeActionButton(client, f"Set charging mode {connector}", "set_charging_mode", f"mode_{connector}"),
+        ])
+
+    # Station-level buttons
+    entities.extend([
+        SmappeeActionButton(station_client, "Set LED brightness", "set_brightness", "set_brightness"),
+        SmappeeActionButton(station_client, "Set available", "set_available", "set_available"),
+        SmappeeActionButton(station_client, "Set unavailable", "set_unavailable", "set_unavailable"),
     ])
 
-class SmappeeBaseButton(ButtonEntity):
-    """Base button for Smappee EV actions."""
+    async_add_entities(entities)
+    
 
+class SmappeeActionButton(ButtonEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, api_client: Any, hass: HomeAssistant, name: str, unique_id: str, icon: str = None) -> None:
+    def __init__(
+        self,
+        api_client: SmappeeApiClient,
+        name: str,
+        action: str,
+        unique_id_suffix: str,
+    ) -> None:
         self.api_client = api_client
-        self.hass = hass
         self._attr_name = name
-        self._attr_unique_id = unique_id
-        if icon:
-            self._attr_icon = icon
+        self._attr_unique_id = f"{api_client.serial_id}_{unique_id_suffix}"
+        self._action = action
 
     @property
     def device_info(self):
-        """Return device info for the wallbox."""
         return {
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
             "name": "Smappee EV Wallbox",
             "manufacturer": "Smappee",
         }
 
-class SmappeeSetChargingModeButton(SmappeeBaseButton):
-    def __init__(self, api_client: Any, hass: HomeAssistant):
-        super().__init__(
-            api_client, hass,
-            "Set Charging Mode ",
-            f"{api_client.serial_id}_set_charging_mode"
-        )
-
     async def async_press(self) -> None:
-        """Set charging mode based on current select/numbers in HA."""
-        serial = self.api_client.serial_id
-        mode_entity_id = f"select.smappee_ev_wallbox_charging_mode"
-        current_entity_id = f"number.smappee_ev_wallbox_max_charging_speed"
-        #percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
-
-        mode_state = self.hass.states.get(mode_entity_id)
-        current_state = self.hass.states.get(current_entity_id)
-        #percent_state = self.hass.states.get(percent_entity_id)
-
-        if mode_state is None:
-            await self.hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "message": f"Kan mode entity '{mode_entity_id}' niet vinden.",
-                    "title": "Smappee Button"
-                },
-                blocking=True,
-            )
-            return
-
-        mode = mode_state.state
-        current = None
-        #percent = None
-        if current_state is not None:
+        _LOGGER.debug("Button '%s' pressed", self._action)
+        if self._action == "start_charging":
+            connector = self.api_client.connector_number
+            entity_id = f"number.smappee_ev_wallbox_max_charging_speed_{connector}"
+            state = self.hass.states.get(entity_id)
             try:
-                current = int(current_state.state)
+                current = int(state.state) if state else 6
             except (ValueError, TypeError):
-                pass
+                _LOGGER.warning("Invalid current value for connector %s, using fallback 6 A", connector)
+                current = 6
+            _LOGGER.debug("Calling start_charging with current: %s", current)
+            await self.api_client.start_charging(current)
+        
+        elif self._action == "stop_charging":
+            await self.api_client.stop_charging()
+        
+        elif self._action == "pause_charging":
+            await self.api_client.pause_charging()
+        
+        elif self._action == "set_available":
+            await self.api_client.set_available()
+        
+        elif self._action == "set_unavailable":
+            await self.api_client.set_unavailable()
+        
+        elif self._action == "set_brightness":
+            entity_id = f"number.smappee_ev_wallbox_led_brightness"
+            state = self.hass.states.get(entity_id)
+            try:
+                brightness = int(state.state) if state else 70
+            except (ValueError, TypeError):
+                brightness = 70
+            await self.api_client.set_brightness(brightness)
+        
+        elif self._action == "set_charging_mode":
+            connector = self.api_client.connector_number
+            mode_entity_id = f"select.smappee_ev_wallbox_charging_mode_{connector}"
+            current_entity_id = f"number.smappee_ev_wallbox_max_charging_speed_{connector}"
 
-        if mode == "NORMAL":
-            limit = current if current is not None else 6
-        else:
-            limit = 0
+            mode_state = self.hass.states.get(mode_entity_id)
+            current_state = self.hass.states.get(current_entity_id)
 
-        await self.hass.services.async_call(
-            domain=DOMAIN,
-            service="set_charging_mode",
-            service_data={"serial": serial, "mode": mode, "limit": limit},
-            blocking=True,
-        )
+            mode = mode_state.state if mode_state else "NORMAL"
+            try:
+                current = int(current_state.state) if current_state else 6
+            except (ValueError, TypeError):
+                current = 6
 
-class SmappeePauseChargingButton(SmappeeBaseButton):
-    def __init__(self, api_client: Any, hass: HomeAssistant):
-        super().__init__(
-            api_client, hass,
-            "Pause Charging",
-            f"{api_client.serial_id}_pause_charging",
-            icon="mdi:pause"
-        )
-
-    async def async_press(self) -> None:
-        await self.hass.services.async_call(
-            domain=DOMAIN,
-            service="pause_charging",
-            blocking=True,
-        )
-
-class SmappeeStopChargingButton(SmappeeBaseButton):
-    def __init__(self, api_client: Any, hass: HomeAssistant):
-        super().__init__(
-            api_client, hass,
-            "Stop Charging",
-            f"{api_client.serial_id}_stop_charging",
-            icon="mdi:stop"
-        )
-
-    async def async_press(self) -> None:
-        #serial = self.api_client.serial_id
-        #percent_entity_id = f"number.smappee_ev_wallbox_percentage_limit"
-        #percent_state = self.hass.states.get(percent_entity_id)
-
-        await self.hass.services.async_call(
-            domain=DOMAIN,
-            service="stop_charging",
-            blocking=True,
-        )
-
-class SmappeeStartChargingButton(SmappeeBaseButton):
-    def __init__(self, api_client: Any, hass: HomeAssistant):
-        super().__init__(
-            api_client, hass,
-            "Start Charging",
-            f"{api_client.serial_id}_start_charging",
-            icon="mdi:play"
-        )
-
-    async def async_press(self) -> None:
-        """Start charging using the current value from the combined current slider."""
-        entity_id = f"number.smappee_ev_wallbox_max_charging_speed"
-        state = self.hass.states.get(entity_id)
-
-        try:
-            current = int(state.state) if state else 6
-        except (ValueError, TypeError):
-            _LOGGER.warning("Invalid current value from combined slider, falling back to 6 A")
-            current = 6
-
-        await self.hass.services.async_call(
-            domain=DOMAIN,
-            service="start_charging",
-            service_data={"current": current},
-            blocking=True,
-        )
-
-class SmappeeSetBrightnessButton(SmappeeBaseButton):
-    def __init__(self, api_client: Any, hass: HomeAssistant):
-        super().__init__(
-            api_client, hass,
-            "Set LED Brightness",
-            f"{api_client.serial_id}_set_led_brightness",
-            icon="mdi:brightness-6"
-        )
-
-    async def async_press(self) -> None:
-        serial = self.api_client.serial_id
-        entity_id = f"number.smappee_ev_wallbox_led_brightness"
-        state = self.hass.states.get(entity_id)
-
-        try:
-            brightness = int(state.state) if state else 70
-        except (ValueError, TypeError):
-            brightness = 70
-
- #       await self.api_client.set_brightness(brightness)
-        await self.hass.services.async_call(
-            domain="smappee_ev",
-            service="set_brightness",
-            service_data={"brightness": brightness},
-            blocking=True,
-        )
-
-class SmappeeSetAvailableButton(SmappeeBaseButton):
-    def __init__(self, api_client: Any, hass: HomeAssistant):
-        super().__init__(
-            api_client, hass,
-            "Set Available",
-            f"{api_client.serial_id}_set_available"
-        )
-
-    async def async_press(self) -> None:
-        await self.hass.services.async_call(
-            domain=DOMAIN,
-            service="set_available",
-            blocking=True,
-        )
-
-class SmappeeSetUnavailableButton(SmappeeBaseButton):
-    def __init__(self, api_client: Any, hass: HomeAssistant):
-        super().__init__(
-            api_client, hass,
-            "Set Unavailable",
-            f"{api_client.serial_id}_set_unavailable"
-        )
-
-    async def async_press(self) -> None:
-        await self.hass.services.async_call(
-            domain=DOMAIN,
-            service="set_unavailable",
-            blocking=True,
-        )
+            limit = current if mode == "NORMAL" else 0
+            _LOGGER.debug("Calling set_charging_mode(%s, limit=%s)", mode, limit)
+            await self.api_client.set_charging_mode(mode, limit)

@@ -1,6 +1,5 @@
 import aiohttp
 import logging
-import random
 import asyncio
 
 from datetime import datetime, timedelta
@@ -20,30 +19,31 @@ class SmappeeApiClient:
         smart_device_id: str, 
         service_location_id: str,
         update_interval: Optional[int] = None,
+        connector_number: Optional[int] = None,
     ):
 
-        """Initialize the API client."""
         self.oauth_client = oauth_client
         self.serial = serial
         self.smart_device_uuid = smart_device_uuid
         self.smart_device_id = smart_device_id        
         self.service_location_id = service_location_id
+        self.connector_number = connector_number
         self.update_interval = update_interval if update_interval is not None else UPDATE_INTERVAL_DEFAULT
 
         self._callbacks: Set[Callable] = set()
-        #self._loop = asyncio.get_event_loop()
-        #self._latest_session_counter = 0
+        self._value_callbacks = {} 
+
         self._session_state = "Initialize"
         self._timer = datetime.now() - timedelta(seconds=self.update_interval)
-        self._set_mode_select_callback = None        
-        self._charging_point_session_state = None
+        self._set_mode_select_callback = None  
+
         self.led_brightness = 70
-        self.min_current = 6  # default fallback
-        self.max_current = 32  # default fallback
-        self.min_surpluspct = 100  # fallback default
+        self.min_current = 6 
+        self.max_current = 32 
+        self.min_surpluspct = 100  
         self.selected_percentage_limit = None
-        self.selected_current_limit = None  # optioneel, als je deze ook gebruikt        
-        self._value_callbacks = {} 
+        self.selected_current_limit = None         
+
 
        
         _LOGGER.info(
@@ -161,7 +161,7 @@ class SmappeeApiClient:
                             self.push_value_update("min_surpluspct", new_min_surpluspct)
                             update_required = True
 
-                # --- separate call for LED brightness ---
+                 # LED brightness from all devices
                 resp_led = await session.get(url_all_devices, headers=headers)
                 if resp_led.status == 200:
                     all_data = await resp_led.json()
@@ -329,7 +329,7 @@ class SmappeeApiClient:
             payload = [{"spec": {"name": "mode", "species": "String"}, "value": mode}]
             async_method = "post"
         elif mode == "NORMAL":
-            url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/1/mode"
+            url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/{connector_id}/mode"
             payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": limit or self.min_current}}
             async_method = "put"
         else:
@@ -361,7 +361,55 @@ class SmappeeApiClient:
             self.selected_current_limit = limit
             self.push_value_update("current_limit", limit)
           
-       
+    
+    async def start_charging(self, percentage: int = 100) -> None:
+        """Start charging via the Smappee API (optionally with percentage limit)."""
+        await self.oauth_client.ensure_token_valid()
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
+        payload = [{
+            "spec": {"name": "percentageLimit", "species": "Integer"},
+            "value": percentage
+        }]
+        headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                resp = await session.post(url, json=payload, headers=headers)
+                if resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.error("Failed to start charging: %s", text)
+                    raise Exception(f"Start charging error: {text}")
+                _LOGGER.debug("Started charging successfully")
+        except Exception as exc:
+            _LOGGER.error("Exception in start_charging: %s", exc)
+            raise     
+
+        self.push_value_update("percentage_limit", percentage)
+        
+        if self._set_mode_select_callback:
+            self._set_mode_select_callback("NORMAL")       
+
+    async def start_charging_current(self, current: int) -> None:
+        """Start charging by specifying a current (in Amps).
+        Internally converts to percentage and uses the existing start_charging() API.
+        """
+        # Make sure min/max current values are available
+        if not hasattr(self, "min_current") or not hasattr(self, "max_current"):
+            raise ValueError("min_current and max_current must be set")
+
+        # Validate that the input current is within the allowed range
+        if current < self.min_current or current > self.max_current:
+            raise ValueError(f"Current {current}A is out of range: {self.min_current}--{self.max_current}A")
+
+        # Convert current (A) to percentage for the API
+        range_current = self.max_current - self.min_current
+        percentage = round(((current - self.min_current) / range_current) * 100)
+
+        self.selected_current_limit = current
+        self.selected_percentage_limit = percentage
+
+        await self.start_charging(percentage)            
+
+
     async def pause_charging(self) -> None:
         """Pause charging via the Smappee API."""
         await self.oauth_client.ensure_token_valid()
@@ -398,58 +446,7 @@ class SmappeeApiClient:
             _LOGGER.error("Exception in stop_charging: %s", exc)
             raise
 
-    async def start_charging(self, percentage: int = 100) -> None:
-        """Start charging via the Smappee API (optionally with percentage limit)."""
-        await self.oauth_client.ensure_token_valid()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
-        payload = [{
-            "spec": {"name": "percentageLimit", "species": "Integer"},
-            "value": percentage
-        }]
-        headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
-        try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=payload, headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to start charging: %s", text)
-                    raise Exception(f"Start charging error: {text}")
-                _LOGGER.debug("Started charging successfully")
-        except Exception as exc:
-            _LOGGER.error("Exception in start_charging: %s", exc)
-            raise     
-
-        self.push_value_update("percentage_limit", percentage)
-        
-        if self._set_mode_select_callback:
-            self._set_mode_select_callback("NORMAL")        
-
-    async def start_charging_current(self, current: int) -> None:
-        """Start charging by specifying a current (in Amps).
-        Internally converts to percentage and uses the existing start_charging() API.
-        """
-        # Make sure min/max current values are available
-        if not hasattr(self, "min_current") or not hasattr(self, "max_current"):
-            raise ValueError("min_current and max_current must be set before calling start_charging_current")
-
-        # Validate that the input current is within the allowed range
-        if current < self.min_current or current > self.max_current:
-            raise ValueError(f"Current {current}A is outside allowed range: {self.min_current}–{self.max_current}A")
-
-        # Convert current (A) to percentage for the API
-        range_current = self.max_current - self.min_current
-        percentage = round(((current - self.min_current) / range_current) * 100)
-
-        _LOGGER.debug("Converted current %d A → %d %% for start_charging()", current, percentage)
-
-        self.selected_current_limit = current
-        self.selected_percentage_limit = percentage
-        # self.push_value_update("percentage_limit", percentage)
-
-        # Use existing API call that supports percentage-based charging
-        await self.start_charging(percentage)
-     
-
+  
     async def set_brightness(self, brightness: int) -> None:
         """Set LED brightness via the Smappee API."""
         await self.oauth_client.ensure_token_valid()
@@ -474,6 +471,33 @@ class SmappeeApiClient:
         except Exception as exc:
             _LOGGER.error("Exception in set_brightness: %s", exc)
             raise
+
+
+    async def set_min_surpluspct(self, min_surpluspct: int) -> None:
+        """Set min.surpluspct via the Smappee API."""
+        await self.oauth_client.ensure_token_valid()
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
+        payload = {
+            "configurationProperties": [{
+                "spec": {
+                    "name": "etc.smart.device.type.car.charger.config.min.excesspct",
+                    "species": "Integer"
+                },
+                "value": min_surpluspct
+            }]
+        }
+        headers = {
+            "Authorization": f"Bearer {self.oauth_client.access_token}",
+            "Content-Type": "application/json"
+        }
+        async with aiohttp.ClientSession() as session:
+            resp = await session.patch(url, json=payload, headers=headers)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to set min.surpluspct: %s", text)
+                raise Exception(f"Set min.surpluspct error: {text}")
+            _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
+            
 
     async def set_percentage_limit(self, percentage: int) -> None:
         """Set the percentage limit via the Smappee API."""
@@ -537,30 +561,7 @@ class SmappeeApiClient:
             raise
 
 
-    async def set_min_surpluspct(self, min_surpluspct: int) -> None:
-        """Set min.surpluspct via the Smappee API."""
-        await self.oauth_client.ensure_token_valid()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
-        payload = {
-            "configurationProperties": [{
-                "spec": {
-                    "name": "etc.smart.device.type.car.charger.config.min.excesspct",
-                    "species": "Integer"
-                },
-                "value": min_surpluspct
-            }]
-        }
-        headers = {
-            "Authorization": f"Bearer {self.oauth_client.access_token}",
-            "Content-Type": "application/json"
-        }
-        async with aiohttp.ClientSession() as session:
-            resp = await session.patch(url, json=payload, headers=headers)
-            if resp.status != 200:
-                text = await resp.text()
-                _LOGGER.error("Failed to set min.surpluspct: %s", text)
-                raise Exception(f"Set min.surpluspct error: {text}")
-            _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
+
 
 
 
