@@ -64,6 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         st["id"],               # real station smart_device_id
         service_location_id,
         update_interval,
+        is_station=True
     )
     station_client.enable()    
 
