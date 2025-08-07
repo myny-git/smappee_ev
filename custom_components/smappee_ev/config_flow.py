@@ -123,13 +123,13 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         # 5) Find the station device
-        stations = []
-        for d in devices:
-            if d.get("type", {}).get("category") == "CHARGINGSTATION":
-                stations.append({
-                    "id": d["id"],
-                    "uuid": d["uuid"],
-                })
+
+        stations = [
+            {"id": d["id"], "uuid": d["uuid"]}
+            for d in devices
+            if d.get("type", {}).get("category") == "CHARGINGSTATION"
+        ]
+
         if not stations:
             errors["base"] = "no_station"
             return self.async_show_form(
@@ -137,6 +137,8 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data_schema=data_schema,
                 errors=errors,
             )
+        _LOGGER.debug("Found stations: %s", stations)
+
         station = stations[0]
 
         # 6) Store everything under the keys your __init__.py expects
