@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import logging
 
 from typing import Any
-from __future__ import annotations
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -41,7 +43,7 @@ async def async_setup_entry(
     ])
 
     async_add_entities(entities)
-    
+
 
 class SmappeeActionButton(ButtonEntity):
     _attr_has_entity_name = True
