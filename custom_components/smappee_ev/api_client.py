@@ -20,6 +20,7 @@ class SmappeeApiClient:
         service_location_id: str,
         update_interval: Optional[int] = None,
         connector_number: Optional[int] = None,
+        is_station: bool = False,
     ):
 
         self.oauth_client = oauth_client
@@ -28,14 +29,17 @@ class SmappeeApiClient:
         self.smart_device_id = smart_device_id        
         self.service_location_id = service_location_id
         self.connector_number = connector_number
+        self.is_sation = is_station
+
         self.update_interval = update_interval if update_interval is not None else UPDATE_INTERVAL_DEFAULT
 
-        self._callbacks: Set[Callable] = set()
-        self._value_callbacks = {} 
+        self._callbacks: Set[Callable[[], None]] = set()
+        self._value_callbacks: dict[str, Callable[[int], None]] = {}
+
 
         self._session_state = "Initialize"
         self._timer = datetime.now() - timedelta(seconds=self.update_interval)
-        self._set_mode_select_callback = None  
+        self._set_mode_select_callback: Optional[Callable[[str], None]] = None
 
         self.led_brightness = 70
         self.min_current = 6 
@@ -47,8 +51,8 @@ class SmappeeApiClient:
 
        
         _LOGGER.info(
-            "SmappeeApiClient initialized for serial: %s with update interval: %s seconds",
-            self.serial, self.update_interval
+            "SmappeeApiClient initialized (serial=%s, connector=%s, station=%s) update_interval=%s",
+            self.serial, self.connector_number, self.is_station, self.update_interval
         )
 
     @property
@@ -105,81 +109,84 @@ class SmappeeApiClient:
                 # ------------ TILL HERE ----------------------
                      
                 # --- Main device info (session state, percentageLimit, min/max current) ---
-                resp = await session.get(url_device, headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to get smartdevice: %s", text)
-                    raise Exception(f"Smartdevice error: {text}")
+                # Connector-only section
+                if not self.is_station:
+                    resp = await session.get(url_device, headers=headers)
+                    if resp.status != 200:
+                        text = await resp.text()
+                        _LOGGER.error("Failed to get smartdevice: %s", text)
+                        raise Exception(f"Smartdevice error: {text}")
 
-                data = await resp.json()
+                    data = await resp.json()
 
-                # --- properties (e.g. chargingState, percentageLimit) ---
-                for prop in data.get("properties", []):
-                    name = prop.get("spec", {}).get("name")
-                    value = prop.get("value")
+                    # --- properties (e.g. chargingState, percentageLimit) ---
+                    for prop in data.get("properties", []):
+                        name = prop.get("spec", {}).get("name")
+                        value = prop.get("value")
 
-                    if name == "chargingState":
-                        if value != self._session_state:
-                            _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, value)
-                            self._session_state = value
-                            update_required = True
+                        if name == "chargingState":
+                            if value != self._session_state:
+                                _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, value)
+                                self._session_state = value
+                                update_required = True
 
-                    elif name == "percentageLimit":
-                        new_percentage = int(value)
-                        old = getattr(self, "selected_percentage_limit", None)
-                        if new_percentage != old:
-                            _LOGGER.debug("Percentage limit changed: %s → %s", old, new_percentage)
-                            self.selected_percentage_limit = new_percentage
-                            self.push_value_update("percentage_limit", new_percentage)
-                            update_required = True
+                        elif name == "percentageLimit":
+                            new_percentage = int(value)
+                            old = getattr(self, "selected_percentage_limit", None)
+                            if new_percentage != old:
+                                _LOGGER.debug("Percentage limit changed: %s → %s", old, new_percentage)
+                                self.selected_percentage_limit = new_percentage
+                                self.push_value_update("percentage_limit", new_percentage)
+                                update_required = True
 
-                # --- configurationProperties (e.g. max/min current) ---
-                for prop in data.get("configurationProperties", []):
-                    name = prop.get("spec", {}).get("name")
-                    raw_value = prop.get("value")
-                    value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+                    # --- configurationProperties (e.g. max/min current) ---
+                    for prop in data.get("configurationProperties", []):
+                        name = prop.get("spec", {}).get("name")
+                        raw_value = prop.get("value")
+                        value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
 
-                    if name == "etc.smart.device.type.car.charger.config.max.current":
-                        new_max = int(value)
-                        if new_max != self.max_current:
-                            _LOGGER.debug("Max current changed: %s → %s", self.max_current, new_max)
-                            self.max_current = new_max
-                            update_required = True
+                        if name == "etc.smart.device.type.car.charger.config.max.current":
+                            new_max = int(value)
+                            if new_max != self.max_current:
+                                _LOGGER.debug("Max current changed: %s → %s", self.max_current, new_max)
+                                self.max_current = new_max
+                                update_required = True
 
-                    elif name == "etc.smart.device.type.car.charger.config.min.current":
-                        new_min = int(value)
-                        if new_min != self.min_current:
-                            _LOGGER.debug("Min current changed: %s → %s", self.min_current, new_min)
-                            self.min_current = new_min
-                            update_required = True
+                        elif name == "etc.smart.device.type.car.charger.config.min.current":
+                            new_min = int(value)
+                            if new_min != self.min_current:
+                                _LOGGER.debug("Min current changed: %s → %s", self.min_current, new_min)
+                                self.min_current = new_min
+                                update_required = True
 
-                    elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
-                        new_min_surpluspct = int(value)
-                        if getattr(self, "min_surpluspct", None) != new_min_surpluspct:
-                            _LOGGER.debug("min.surpluspct changed: %s → %s", getattr(self, "min_surpluspct", None), new_min_surpluspct)
-                            self.min_surpluspct = new_min_surpluspct
-                            self.push_value_update("min_surpluspct", new_min_surpluspct)
-                            update_required = True
+                        elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
+                            new_min_surpluspct = int(value)
+                            if getattr(self, "min_surpluspct", None) != new_min_surpluspct:
+                                _LOGGER.debug("min.surpluspct changed: %s → %s", getattr(self, "min_surpluspct", None), new_min_surpluspct)
+                                self.min_surpluspct = new_min_surpluspct
+                                self.push_value_update("min_surpluspct", new_min_surpluspct)
+                                update_required = True
 
-                 # LED brightness from all devices
-                resp_led = await session.get(url_all_devices, headers=headers)
-                if resp_led.status == 200:
-                    all_data = await resp_led.json()
-                    for device in all_data:
-                        for prop in device.get("configurationProperties", []):
-                            name = prop.get("spec", {}).get("name")
-                            raw_value = prop.get("value")
-                            value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+                 # LED brightness from all devices (station only)
+                if self.is_station:
+                    resp_led = await session.get(url_all_devices, headers=headers)
+                    if resp_led.status == 200:
+                        all_data = await resp_led.json()
+                        for device in all_data:
+                            for prop in device.get("configurationProperties", []):
+                                name = prop.get("spec", {}).get("name")
+                                raw_value = prop.get("value")
+                                value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
 
-                            if name == "etc.smart.device.type.car.charger.led.config.brightness":
-                                new_brightness = int(value)
-                                if new_brightness != getattr(self, "led_brightness", 70):
-                                    _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
-                                    self.led_brightness = new_brightness
-                                    update_required = True
-                                break
-                else:
-                    _LOGGER.warning("Failed to fetch smartdevices for LED brightness: %s", resp_led.status)
+                                if name == "etc.smart.device.type.car.charger.led.config.brightness":
+                                    new_brightness = int(value)
+                                    if new_brightness != getattr(self, "led_brightness", 70):
+                                        _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                                        self.led_brightness = new_brightness
+                                        update_required = True
+                                    break
+                    else:
+                        _LOGGER.warning("Failed to fetch smartdevices for LED brightness: %s", resp_led.status)
 
         except Exception as exc:
             _LOGGER.error("Exception during delayed_update: %s", exc)
@@ -497,7 +504,7 @@ class SmappeeApiClient:
                 _LOGGER.error("Failed to set min.surpluspct: %s", text)
                 raise Exception(f"Set min.surpluspct error: {text}")
             _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
-            
+
 
     async def set_percentage_limit(self, percentage: int) -> None:
         """Set the percentage limit via the Smappee API."""
