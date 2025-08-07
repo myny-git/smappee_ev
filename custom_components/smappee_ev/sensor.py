@@ -31,7 +31,7 @@ async def async_setup_entry(
         entities.append(SmappeeChargingStateSensor(client))
         entities.append(SmappeeEVCCStateSensor(client))
 
-    async_add_entities(entities)
+    async_add_entities(entities, update_before_add=True)
 
 class SmappeeSensorBase(SensorEntity):
     """Base class for Smappee EV sensors."""
@@ -57,6 +57,14 @@ class SmappeeSensorBase(SensorEntity):
             "name": f"Smappee EV Wallbox",
             "manufacturer": "Smappee",
         }
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        self.api_client.register_callback(self.schedule_update_ha_state)
+
+    async def async_will_remove_from_hass(self):
+        await super().async_will_remove_from_hass()
+        self.api_client.remove_callback(self.schedule_update_ha_state)
 
 
 class SmappeeChargingStateSensor(SmappeeSensorBase):
