@@ -45,8 +45,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     # Ensure connectors list is present
-    if "connectors" not in entry.data:
-        _LOGGER.error("Config entry is missing 'connectors': %s", entry.data)
+    if "carchargers" not in entry.data:
+        _LOGGER.error("Config entry is missing 'carchargers': %s", entry.data)
         return False
     
     serial = entry.data[CONF_SERIAL]
@@ -68,7 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Connector-level clients (keyed by UUID)
     connector_clients = {}
-        for device in entry.data["carchargers"]:
+    for device in entry.data["carchargers"]:
         client = SmappeeApiClient(
             oauth_client,
             serial,
