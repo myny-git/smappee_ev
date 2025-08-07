@@ -19,7 +19,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV buttons from a config entry."""
-    data = hass.data[DOMAIN][entry.entry_id]
+    data = hass.data[DOMAIN][config_entry.entry_id]
     connector_clients: dict[str, SmappeeApiClient] = data["connectors"]
     station_client: SmappeeApiClient = data["station"]
 

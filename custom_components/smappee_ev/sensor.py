@@ -71,7 +71,7 @@ class SmappeeChargingStateSensor(SmappeeSensorBase):
 
     @property
     def available(self) -> bool:
-        return self.api_client.charging_state is not None
+        return True
 
     @property
     def native_value(self):
@@ -105,7 +105,7 @@ class SmappeeEVCCStateSensor(SmappeeSensorBase):
 
     @property
     def available(self) -> bool:
-        return self.api_client.session_state is not None   
+        return True
 
 
 

@@ -18,7 +18,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV number entities from a config entry."""
-    data = hass.data[DOMAIN][entry.entry_id]
+    data = hass.data[DOMAIN][config_entry.entry_id]
     connector_clients: dict[str, SmappeeApiClient] = data["connectors"]
     station_client: SmappeeApiClient = data["station"]
 
@@ -70,7 +70,6 @@ class SmappeeCombinedCurrentSlider(SmappeeBaseNumber):
     """Combined slider showing current and percentage."""
 
     def __init__(self, api_client: Any):
-        self._attr_unit_of_measurement = "A"
         self.min_current = api_client.min_current
         self.max_current = api_client.max_current        
         self.range = self.max_current - self.min_current
