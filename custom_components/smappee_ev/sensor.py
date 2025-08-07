@@ -76,7 +76,7 @@ class SmappeeChargingStateSensor(SmappeeSensorBase):
     @property
     def native_value(self):
         """Return the current session state."""
-        return self.api_client.charging_state
+        return self.api_client.session_state
 
 
 class SmappeeEVCCStateSensor(SmappeeSensorBase):
