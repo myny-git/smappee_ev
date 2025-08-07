@@ -336,7 +336,7 @@ class SmappeeApiClient:
             payload = [{"spec": {"name": "mode", "species": "String"}, "value": mode}]
             async_method = "post"
         elif mode == "NORMAL":
-            url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/{connector_id}/mode"
+            url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/{self.connector_number}/mode"
             payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": limit or self.min_current}}
             async_method = "put"
         else:
