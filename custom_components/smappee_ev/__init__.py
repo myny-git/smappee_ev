@@ -45,8 +45,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     # Ensure connectors list is present
-    if "carchargers" not in entry.data:
-        _LOGGER.error("Config entry is missing 'carchargers': %s", entry.data)
+    if "carchargers" not in entry.data or "station" not in entry.data:
+        _LOGGER.error("Config entry missing connectors or station: %s", entry.data)
         return False
     
     serial = entry.data[CONF_SERIAL]

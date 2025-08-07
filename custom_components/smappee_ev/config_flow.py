@@ -110,7 +110,20 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "no_chargers"
                     return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
+                # find the station device (category CHARGINGSTATION)
+                stations = [d for d in devices if d["type"]["category"] == "CHARGINGSTATION"]
+                if not stations:
+                    errors["base"] = "no_station"
+                    return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+                station = stations[0]
+
+
                 user_input["carchargers"] = carchargers
+                user_input["station"] = {
+                    "id": station["id"],
+                    "uuid": station["uuid"],
+                }
+                
         except Exception as e:
             _LOGGER.error(f"Error fetching smartdevices: {e}")
             errors["base"] = "uuid_failed"
