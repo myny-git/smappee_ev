@@ -92,6 +92,6 @@ set_unavailable:
   fields: {}
 
 reload:
-  name: Reload integration
-  description: Reload all Smappee EV entries and refresh the integration.
+  name: "Reload integration"
+  description: "Reload all Smappee EV entries and refresh the integration."
   fields: {}
