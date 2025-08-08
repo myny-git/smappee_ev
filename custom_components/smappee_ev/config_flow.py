@@ -5,6 +5,7 @@ import logging
 
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .oauth import OAuth2Client
 from .const import (
     DOMAIN,
@@ -31,6 +32,8 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
         errors = {}
+        session = async_get_clientsession(self.hass)
+        timeout = aiohttp.ClientTimeout(connect=5, total=15)
 
         data_schema = vol.Schema({
             vol.Required(CONF_CLIENT_ID): str,
@@ -48,8 +51,8 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             
 
-        # Authenticate with the API and get access and refresh tokens
-        oauth_client = OAuth2Client(user_input)
+        # Authenticate with the API and get access and refresh tokens  (using HA session)
+        oauth_client = OAuth2Client(user_input, session=session)
         tokens = await oauth_client.authenticate()
 
         if not tokens:
@@ -65,17 +68,17 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "Authorization": f"Bearer {tokens['access_token']}",
                 "Content-Type": "application/json",
             }
-            async with aiohttp.ClientSession() as session:
-                resp = await session.get(f"{BASE_URL}/servicelocation", headers=headers)
-                if resp.status != 200:
-                    errors["base"] = "servicelocation_failed"                                    
-                    return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-                data = await resp.json()
-                locations = data.get("serviceLocations", [])
-                if not locations:
-                    errors["base"] = "no_locations"
-                    return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-                user_input[CONF_SERVICE_LOCATION_ID] = locations[0]["serviceLocationId"]
+            
+            resp = await session.get(f"{BASE_URL}/servicelocation", headers=headers, timeout=timeout)
+            if resp.status != 200:
+                errors["base"] = "servicelocation_failed"                                    
+                return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+            data = await resp.json()
+            locations = data.get("serviceLocations", [])
+            if not locations:
+                errors["base"] = "no_locations"
+                return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+            user_input[CONF_SERVICE_LOCATION_ID] = locations[0]["serviceLocationId"]
         except Exception as e:
             _LOGGER.error(f"Exception while retrieving service_location: {e}")
             errors["base"] = "servicelocation_failed"
@@ -84,11 +87,11 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Fetch all carcharger devices
         try:
             url = f"{BASE_URL}/servicelocation/{user_input[CONF_SERVICE_LOCATION_ID]}/smartdevices"
-            async with aiohttp.ClientSession() as session:
-                resp = await session.get(url, headers=headers)
-                if resp.status != 200:
-                    raise Exception(await resp.text())
-                devices = await resp.json()
+            
+            resp = await session.get(url, headers=headers, timeout=timeout)
+            if resp.status != 200:
+                raise Exception(await resp.text())
+            devices = await resp.json()
         except Exception as e:
             _LOGGER.error("Error fetching smartdevices: %s", e)
             errors["base"] = "uuid_failed"
