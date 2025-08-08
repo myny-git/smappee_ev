@@ -21,6 +21,7 @@ class SmappeeApiClient:
         update_interval: Optional[int] = None,
         connector_number: Optional[int] = None,
         is_station: bool = False,
+        *,
         session: ClientSession,
     ):
 
