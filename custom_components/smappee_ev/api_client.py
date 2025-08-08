@@ -1,7 +1,7 @@
-import aiohttp
 import logging
 import asyncio
 
+from aiohttp import ClientSession, ClientTimeout
 from datetime import datetime, timedelta
 from typing import Callable, Optional, Set
 from .const import BASE_URL, UPDATE_INTERVAL_DEFAULT
@@ -21,6 +21,7 @@ class SmappeeApiClient:
         update_interval: Optional[int] = None,
         connector_number: Optional[int] = None,
         is_station: bool = False,
+        session: ClientSession,
     ):
 
         self.oauth_client = oauth_client
@@ -30,6 +31,8 @@ class SmappeeApiClient:
         self.service_location_id = service_location_id
         self.connector_number = connector_number
         self.is_station = is_station
+        self._session: ClientSession = session
+        self._timeout = ClientTimeout(connect=5, total=15)
 
         self.update_interval = update_interval if update_interval is not None else UPDATE_INTERVAL_DEFAULT
 
@@ -48,7 +51,9 @@ class SmappeeApiClient:
         self.selected_percentage_limit = None
         self.selected_current_limit = None         
 
-
+        # background task management
+        self._tasks: Set[asyncio.Task] = set()
+        self._stop_event = asyncio.Event()
        
         _LOGGER.info(
             "SmappeeApiClient initialized (serial=%s, connector=%s, station=%s) update_interval=%s",
@@ -60,17 +65,33 @@ class SmappeeApiClient:
         """Return the serial number (ID) for this Smappee device."""
         return self.serial
 
-    def enable(self) -> None:
+    async def enable(self) -> None:
         """Enable the client (may trigger updates)."""
-        #self._latest_session_counter = random.randint(1, 10)
         _LOGGER.info("SmappeeApiClient enabled for serial: %s", self.serial)
-        asyncio.create_task(self.delayed_update())
-        asyncio.create_task(self.polling_loop())
+        self._stop_event.clear()
+        t1 = asyncio.create_task(self.delayed_update(), name=f"smappee_once_{self.smart_device_uuid}")
+        t2 = asyncio.create_task(self.polling_loop(), name=f"smappee_poll_{self.smart_device_uuid}")
+        for t in (t1, t2):
+            t.add_done_callback(self._tasks.discard)
+            self._tasks.add(t)
+
+    async def stop(self) -> None:
+        """Stop background tasks cleanly."""
+        self._stop_event.set()
+        tasks = list(self._tasks)
+        for t in tasks:
+            t.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._tasks.clear()
 
     async def polling_loop(self):
-        while True:
-            await self.delayed_update()
-            await asyncio.sleep(self.update_interval)        
+        try:
+            while not self._stop_event.is_set():
+                await self.delayed_update()
+                await asyncio.sleep(self.update_interval)
+        except asyncio.CancelledError:
+            return    
     
     async def delayed_update(self) -> None:
         """Refresh the session state and related info from the API."""
@@ -95,98 +116,98 @@ class SmappeeApiClient:
         update_required = False
         
         try:
-            async with aiohttp.ClientSession() as session:
-                # ---------------  Charging session state (commented) ---------------------
-                #resp = await session.get(url, headers=headers)
-                #if response.status != 200:
-                #    text = await resp.text()
-                #    _LOGGER.error("Failed to get charging sessions: %s", text)
-                #    raise Exception(f"Charging sessions error: {text}")
-                #sessions = await response.json()
+            
+            # ---------------  Charging session state (commented) ---------------------
+            #resp = await session.get(url, headers=headers)
+            #if response.status != 200:
+            #    text = await resp.text()
+            #    _LOGGER.error("Failed to get charging sessions: %s", text)
+            #    raise Exception(f"Charging sessions error: {text}")
+            #sessions = await response.json()
 
-                #self._session_state = sessions[0].get("status", "unknown")
-                #self._latest_session_counter = sessions[0].get("startReading", 0) + sessions[0].get("energy", 0)
-                # ------------ TILL HERE ----------------------
-                     
-                # --- Main device info (session state, percentageLimit, min/max current) ---
-                # Connector-only section
-                if not self.is_station:
-                    resp = await session.get(url_device, headers=headers)
-                    if resp.status != 200:
-                        text = await resp.text()
-                        _LOGGER.error("Failed to get smartdevice: %s", text)
-                        raise Exception(f"Smartdevice error: {text}")
+            #self._session_state = sessions[0].get("status", "unknown")
+            #self._latest_session_counter = sessions[0].get("startReading", 0) + sessions[0].get("energy", 0)
+            # ------------ TILL HERE ----------------------
+                    
+            # --- Main device info (session state, percentageLimit, min/max current) ---
+            # Connector-only section
+            if not self.is_station:
+                resp = await self._session.get(url_device, headers=headers, timeout=self._timeout)
+                if resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.error("Failed to get smartdevice: %s", text)
+                    raise Exception(f"Smartdevice error: {text}")
 
-                    data = await resp.json()
+                data = await resp.json()
 
-                    # --- properties (e.g. chargingState, percentageLimit) ---
-                    for prop in data.get("properties", []):
-                        name = prop.get("spec", {}).get("name")
-                        value = prop.get("value")
+                # --- properties (e.g. chargingState, percentageLimit) ---
+                for prop in data.get("properties", []):
+                    name = prop.get("spec", {}).get("name")
+                    value = prop.get("value")
 
-                        if name == "chargingState":
-                            if value != self._session_state:
-                                _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, value)
-                                self._session_state = value
-                                update_required = True
+                    if name == "chargingState":
+                        if value != self._session_state:
+                            _LOGGER.debug("Charging session state changed: %s → %s", self._session_state, value)
+                            self._session_state = value
+                            update_required = True
 
-                        elif name == "percentageLimit":
-                            new_percentage = int(value)
-                            old = getattr(self, "selected_percentage_limit", None)
-                            if new_percentage != old:
-                                _LOGGER.debug("Percentage limit changed: %s → %s", old, new_percentage)
-                                self.selected_percentage_limit = new_percentage
-                                self.push_value_update("percentage_limit", new_percentage)
-                                update_required = True
+                    elif name == "percentageLimit":
+                        new_percentage = int(value)
+                        old = getattr(self, "selected_percentage_limit", None)
+                        if new_percentage != old:
+                            _LOGGER.debug("Percentage limit changed: %s → %s", old, new_percentage)
+                            self.selected_percentage_limit = new_percentage
+                            self.push_value_update("percentage_limit", new_percentage)
+                            update_required = True
 
-                    # --- configurationProperties (e.g. max/min current) ---
-                    for prop in data.get("configurationProperties", []):
-                        name = prop.get("spec", {}).get("name")
-                        raw_value = prop.get("value")
-                        value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+                # --- configurationProperties (e.g. max/min current) ---
+                for prop in data.get("configurationProperties", []):
+                    name = prop.get("spec", {}).get("name")
+                    raw_value = prop.get("value")
+                    value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
 
-                        if name == "etc.smart.device.type.car.charger.config.max.current":
-                            new_max = int(value)
-                            if new_max != self.max_current:
-                                _LOGGER.debug("Max current changed: %s → %s", self.max_current, new_max)
-                                self.max_current = new_max
-                                update_required = True
+                    if name == "etc.smart.device.type.car.charger.config.max.current":
+                        new_max = int(value)
+                        if new_max != self.max_current:
+                            _LOGGER.debug("Max current changed: %s → %s", self.max_current, new_max)
+                            self.max_current = new_max
+                            update_required = True
 
-                        elif name == "etc.smart.device.type.car.charger.config.min.current":
-                            new_min = int(value)
-                            if new_min != self.min_current:
-                                _LOGGER.debug("Min current changed: %s → %s", self.min_current, new_min)
-                                self.min_current = new_min
-                                update_required = True
+                    elif name == "etc.smart.device.type.car.charger.config.min.current":
+                        new_min = int(value)
+                        if new_min != self.min_current:
+                            _LOGGER.debug("Min current changed: %s → %s", self.min_current, new_min)
+                            self.min_current = new_min
+                            update_required = True
 
-                        elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
-                            new_min_surpluspct = int(value)
-                            if getattr(self, "min_surpluspct", None) != new_min_surpluspct:
-                                _LOGGER.debug("min.surpluspct changed: %s → %s", getattr(self, "min_surpluspct", None), new_min_surpluspct)
-                                self.min_surpluspct = new_min_surpluspct
-                                self.push_value_update("min_surpluspct", new_min_surpluspct)
-                                update_required = True
+                    elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
+                        new_min_surpluspct = int(value)
+                        if getattr(self, "min_surpluspct", None) != new_min_surpluspct:
+                            _LOGGER.debug("min.surpluspct changed: %s → %s", getattr(self, "min_surpluspct", None), new_min_surpluspct)
+                            self.min_surpluspct = new_min_surpluspct
+                            self.push_value_update("min_surpluspct", new_min_surpluspct)
+                            update_required = True
 
-                 # LED brightness from all devices (station only)
-                if self.is_station:
-                    resp_led = await session.get(url_all_devices, headers=headers)
-                    if resp_led.status == 200:
-                        all_data = await resp_led.json()
-                        for device in all_data:
-                            for prop in device.get("configurationProperties", []):
-                                name = prop.get("spec", {}).get("name")
-                                raw_value = prop.get("value")
-                                value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+                # LED brightness from all devices (station only)
+            if self.is_station:
+                resp_led = await self._session.get(url_all_devices, headers=headers, timeout=self._timeout)
+                if resp_led.status == 200:
+                    all_data = await resp_led.json()
+                    for device in all_data:
+                        for prop in device.get("configurationProperties", []):
+                            name = prop.get("spec", {}).get("name")
+                            raw_value = prop.get("value")
+                            value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
 
-                                if name == "etc.smart.device.type.car.charger.led.config.brightness":
-                                    new_brightness = int(value)
-                                    if new_brightness != getattr(self, "led_brightness", 70):
-                                        _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
-                                        self.led_brightness = new_brightness
-                                        update_required = True
-                                    break
-                    else:
-                        _LOGGER.warning("Failed to fetch smartdevices for LED brightness: %s", resp_led.status)
+                            if name == "etc.smart.device.type.car.charger.led.config.brightness":
+                                new_brightness = int(value)
+                                if new_brightness != getattr(self, "led_brightness", 70):
+                                    _LOGGER.debug("LED brightness changed: %s → %s", self.led_brightness, new_brightness)
+                                    self.led_brightness = new_brightness
+                                    update_required = True
+                                break
+                else:
+                    _LOGGER.warning("Failed to fetch smartdevices for LED brightness: %s", resp_led.status)
 
         except Exception as exc:
             _LOGGER.error("Exception during delayed_update: %s", exc)
@@ -348,15 +369,14 @@ class SmappeeApiClient:
             "Content-Type": "application/json",
         }
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                method = getattr(session, async_method)
-                resp = await method(url, json=payload, headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to set charging mode: %s", text)
-                    raise Exception(f"Set charging mode error: {text}")
-                _LOGGER.debug("Charging mode set successfully")
+        try:            
+            method = getattr(self._session, async_method)
+            resp = await method(url, json=payload, headers=headers, timeout=self._timeout)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to set charging mode: %s", text)
+                raise Exception(f"Set charging mode error: {text}")
+            _LOGGER.debug("Charging mode set successfully")
         except Exception as exc:
             _LOGGER.error("Exception in set_charging_mode: %s", exc)
             raise     
@@ -379,13 +399,13 @@ class SmappeeApiClient:
         }]
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
         try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=payload, headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to start charging: %s", text)
-                    raise Exception(f"Start charging error: {text}")
-                _LOGGER.debug("Started charging successfully")
+            
+            resp = await self._session.post(url, json=payload, headers=headers, timeout=self._timeout)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to start charging: %s", text)
+                raise Exception(f"Start charging error: {text}")
+            _LOGGER.debug("Started charging successfully")
         except Exception as exc:
             _LOGGER.error("Exception in start_charging: %s", exc)
             raise     
@@ -403,6 +423,10 @@ class SmappeeApiClient:
         if not hasattr(self, "min_current") or not hasattr(self, "max_current"):
             raise ValueError("min_current and max_current must be set")
 
+        # Guard against invalid config (avoid divide-by-zero)
+        if self.max_current == self.min_current:
+            raise ValueError(f"Invalid current range: min_current == max_current == {self.max_current}")            
+
         # Validate that the input current is within the allowed range
         if current < self.min_current or current > self.max_current:
             raise ValueError(f"Current {current}A is out of range: {self.min_current}--{self.max_current}A")
@@ -410,6 +434,7 @@ class SmappeeApiClient:
         # Convert current (A) to percentage for the API
         range_current = self.max_current - self.min_current
         percentage = round(((current - self.min_current) / range_current) * 100)
+        percentage = max(0, min(percentage, 100))
 
         self.selected_current_limit = current
         self.selected_percentage_limit = percentage
@@ -423,15 +448,14 @@ class SmappeeApiClient:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/pauseCharging"
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
         try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=[], headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to pause charging: %s", text)
-                    raise Exception(f"Pause charging error: {text}")
-                if self._set_mode_select_callback:
-                    self._set_mode_select_callback("NORMAL")
-                _LOGGER.debug("Paused charging successfully")
+            resp = await self._session.post(url, json=[], headers=headers, timeout=self._timeout)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to pause charging: %s", text)
+                raise Exception(f"Pause charging error: {text}")
+            if self._set_mode_select_callback:
+                self._set_mode_select_callback("NORMAL")
+            _LOGGER.debug("Paused charging successfully")
         except Exception as exc:
             _LOGGER.error("Exception in pause_charging: %s", exc)
             raise
@@ -442,13 +466,12 @@ class SmappeeApiClient:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/stopCharging"
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
         try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=[], headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to stop charging: %s", text)
-                    raise Exception(f"Stop charging error: {text}")
-                _LOGGER.debug("Stopped charging successfully")
+            resp = await self._session.post(url, json=[], headers=headers, timeout=self._timeout)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to stop charging: %s", text)
+                raise Exception(f"Stop charging error: {text}")
+            _LOGGER.debug("Stopped charging successfully")
         except Exception as exc:
             _LOGGER.error("Exception in stop_charging: %s", exc)
             raise
@@ -467,13 +490,12 @@ class SmappeeApiClient:
         }]
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
         try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=payload, headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to set brightness: %s", text)
-                    raise Exception(f"Set brightness error: {text}")
-                _LOGGER.info("LED brightness set successfully to %d%%", brightness)
+            resp = await self._session.post(url, json=payload, headers=headers, timeout=self._timeout)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to set brightness: %s", text)
+                raise Exception(f"Set brightness error: {text}")
+            _LOGGER.info("LED brightness set successfully to %d%%", brightness)
             
         except Exception as exc:
             _LOGGER.error("Exception in set_brightness: %s", exc)
@@ -497,13 +519,12 @@ class SmappeeApiClient:
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json"
         }
-        async with aiohttp.ClientSession() as session:
-            resp = await session.patch(url, json=payload, headers=headers)
-            if resp.status != 200:
-                text = await resp.text()
-                _LOGGER.error("Failed to set min.surpluspct: %s", text)
-                raise Exception(f"Set min.surpluspct error: {text}")
-            _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
+        resp = await self._session.patch(url, json=payload, headers=headers, timeout=self._timeout)
+        if resp.status != 200:
+            text = await resp.text()
+            _LOGGER.error("Failed to set min.surpluspct: %s", text)
+            raise Exception(f"Set min.surpluspct error: {text}")
+        _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
 
 
     async def set_percentage_limit(self, percentage: int) -> None:
@@ -517,13 +538,12 @@ class SmappeeApiClient:
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
 
         try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=payload, headers=headers)
-                if resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to set percentage limit: %s", text)
-                    raise Exception(f"Set percentage limit error: {text}")
-                _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
+            resp = await self._session.post(url, json=payload, headers=headers, timeout=self._timeout)
+            if resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to set percentage limit: %s", text)
+                raise Exception(f"Set percentage limit error: {text}")
+            _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
         except Exception as exc:
             _LOGGER.error("Exception in set_percentage_limit: %s", exc)
             raise
@@ -539,13 +559,12 @@ class SmappeeApiClient:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setAvailable"
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
         try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=[], headers=headers)
-                if resp.status != 0 and resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to set available: %s", text)
-                    raise Exception(f"Set available error: {text}")
-                _LOGGER.debug("Set charger available successfully")
+            resp = await self._session.post(url, json=[], headers=headers, timeout=self._timeout)
+            if resp.status != 0 and resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to set available: %s", text)
+                raise Exception(f"Set available error: {text}")
+            _LOGGER.debug("Set charger available successfully")
         except Exception as exc:
             _LOGGER.error("Exception in set_available: %s", exc)
             raise
@@ -556,19 +575,12 @@ class SmappeeApiClient:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setUnavailable"
         headers = {"Authorization": f"Bearer {self.oauth_client.access_token}", "Content-Type": "application/json"}
         try:
-            async with aiohttp.ClientSession() as session:
-                resp = await session.post(url, json=[], headers=headers)
-                if resp.status != 0 and resp.status != 200:
-                    text = await resp.text()
-                    _LOGGER.error("Failed to set unavailable: %s", text)
-                    raise Exception(f"Set unavailable error: {text}")
-                _LOGGER.debug("Set charger unavailable successfully")
+            resp = await self._session.post(url, json=[], headers=headers, timeout=self._timeout)
+            if resp.status != 0 and resp.status != 200:
+                text = await resp.text()
+                _LOGGER.error("Failed to set unavailable: %s", text)
+                raise Exception(f"Set unavailable error: {text}")
+            _LOGGER.debug("Set charger unavailable successfully")
         except Exception as exc:
             _LOGGER.error("Exception in set_unavailable: %s", exc)
             raise
-
-
-
-
-
-

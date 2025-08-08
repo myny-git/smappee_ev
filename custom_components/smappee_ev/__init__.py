@@ -5,6 +5,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from aiohttp import ClientSession
 
 from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
@@ -14,12 +16,6 @@ from .const import (
     CONF_SERIAL,
     CONF_SERVICE_LOCATION_ID,
     CONF_UPDATE_INTERVAL,
-    CONF_CLIENT_ID,
-    CONF_CLIENT_SECRET,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_SMART_DEVICE_UUID,
-    CONF_SMART_DEVICE_ID,
     UPDATE_INTERVAL_DEFAULT,
 )
 
@@ -31,6 +27,7 @@ PLATFORMS = [
     Platform.BUTTON,
     Platform.SWITCH,
 ]
+
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -49,11 +46,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Config entry missing connectors or station: %s", entry.data)
         return False
     
+    # Use HA's aiohttp session
+    session: ClientSession = async_get_clientsession(hass)
+
     serial = entry.data[CONF_SERIAL]
     service_location_id = entry.data[CONF_SERVICE_LOCATION_ID]
     update_interval = entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT)
    
-    oauth_client = OAuth2Client(entry.data)    
+    #oauth_client = OAuth2Client(entry.data)    
+    oauth_client = OAuth2Client(entry.data, session=session)
 
     # Station-level client (for LED, availability, etc.)
     st = entry.data["station"]
@@ -64,9 +65,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         st["id"],               # real station smart_device_id
         service_location_id,
         update_interval,
-        is_station=True
+        is_station=True,
+        session=session,        # <<< inject HA session in the client
     )
-    station_client.enable()    
+
+    await station_client.enable()
 
     # Connector-level clients (keyed by UUID)
     connector_clients = {}
@@ -78,9 +81,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             device["id"],
             service_location_id,
             update_interval,
-            connector_number=device.get("connector_number")  # pass through
+            connector_number=device.get("connector_number"),  # pass through
+            session=session,
         )
-        client.enable()
+
+        await client.enable()
         connector_clients[device["uuid"]] = client
    
     hass.data[DOMAIN][entry.entry_id] = {
@@ -101,6 +106,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
+
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if data:
+        station = data.get("station")
+        connectors = data.get("connectors", {})
+        try:
+            if station:
+                await station.stop()
+            for client in connectors.values():
+                await client.stop()
+        except Exception as exc:
+            _LOGGER.warning("Errors while stopping clients on unload: %s", exc)    
+    
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
