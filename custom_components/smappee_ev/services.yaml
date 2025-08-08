@@ -95,3 +95,4 @@ reload:
   name: "Reload integration"
   description: "Reload all Smappee EV entries and refresh the integration."
   fields: {}
+
