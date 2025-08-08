@@ -14,7 +14,7 @@ set_charging_mode:
       selector:
         select:
           options:
-            - "STANDARD"
+            - "NORMAL"
             - "SMART"
             - "SOLAR"
     limit:
