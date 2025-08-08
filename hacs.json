@@ -1,5 +1,6 @@
 {
   "name": "smappee EV",
+  "render_readme": true,
   "zip_release": true,
   "filename": "smappee_ev.zip"
 }
