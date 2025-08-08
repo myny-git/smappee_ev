@@ -1,5 +1,5 @@
 set_charging_mode:
-  description: "Set the charging mode (STANDARD, SMART, SOLAR)."
+  description: "Set the charging mode (NORMAL, SMART, SOLAR)."
   fields:
     connector_id:
       description: "Connector number (1 or 2)."
