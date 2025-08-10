@@ -388,10 +388,33 @@ class SmappeeApiClient:
         if mode == "NORMAL" and limit is not None:
             self.selected_current_limit = limit
             self.push_value_update("current_limit", limit)
-          
-    
-    async def start_charging(self, percentage: int = 100) -> None:
-        """Start charging via the Smappee API (optionally with percentage limit)."""
+            
+ 
+
+    async def start_charging(self, current: int) -> None:
+        """Start charging at a given current (A). 
+        Converts to percentageLimit and calls the startCharging action.
+        """
+        # Make sure min/max current values are available
+        if not hasattr(self, "min_current") or not hasattr(self, "max_current"):
+            raise ValueError("min_current and max_current must be set")
+
+        # Guard against invalid config (avoid divide-by-zero)
+        if self.max_current == self.min_current:
+            raise ValueError(f"Invalid current range: min_current == max_current == {self.max_current}")            
+
+        # Validate that the input current is within the allowed range
+        if current < self.min_current or current > self.max_current:
+            raise ValueError(f"Current {current}A is out of range: {self.min_current}--{self.max_current}A")
+
+        # Convert current (A) to percentage for the API
+        range_current = self.max_current - self.min_current
+        percentage = round(((current - self.min_current) / range_current) * 100)
+        percentage = max(0, min(percentage, 100))
+
+        self.selected_current_limit = current
+        self.selected_percentage_limit = percentage
+
         await self.oauth_client.ensure_token_valid()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         payload = [{
@@ -414,33 +437,8 @@ class SmappeeApiClient:
         self.push_value_update("percentage_limit", percentage)
         
         if self._set_mode_select_callback:
-            self._set_mode_select_callback("NORMAL")       
-
-    async def start_charging_current(self, current: int) -> None:
-        """Start charging by specifying a current (in Amps).
-        Internally converts to percentage and uses the existing start_charging() API.
-        """
-        # Make sure min/max current values are available
-        if not hasattr(self, "min_current") or not hasattr(self, "max_current"):
-            raise ValueError("min_current and max_current must be set")
-
-        # Guard against invalid config (avoid divide-by-zero)
-        if self.max_current == self.min_current:
-            raise ValueError(f"Invalid current range: min_current == max_current == {self.max_current}")            
-
-        # Validate that the input current is within the allowed range
-        if current < self.min_current or current > self.max_current:
-            raise ValueError(f"Current {current}A is out of range: {self.min_current}--{self.max_current}A")
-
-        # Convert current (A) to percentage for the API
-        range_current = self.max_current - self.min_current
-        percentage = round(((current - self.min_current) / range_current) * 100)
-        percentage = max(0, min(percentage, 100))
-
-        self.selected_current_limit = current
-        self.selected_percentage_limit = percentage
-
-        await self.start_charging(percentage)            
+            self._set_mode_select_callback("NORMAL")               
+      
 
 
     async def pause_charging(self) -> None:

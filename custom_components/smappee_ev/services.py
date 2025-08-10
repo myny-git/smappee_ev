@@ -1,5 +1,4 @@
 import logging
-import asyncio
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from .const import DOMAIN
@@ -57,11 +56,11 @@ async def handle_set_unavailable(call: ServiceCall) -> None:
 
 
 async def handle_set_brightness(call: ServiceCall) -> None:
-    await async_handle_station_service(call.hass, call, "set_brightness")
+    await async_handle_station_service(call.hass, call, "set_brightness", {"brightness": call.data.get("brightness")})
 
 
 async def handle_start_charging(call: ServiceCall) -> None:
-    await async_handle_connector_service(call.hass, call, "start_charging_current", {"current": call.data.get("current")})
+    await async_handle_connector_service(call.hass, call, "start_charging", {"current": call.data.get("current")})
 
 
 async def handle_pause_charging(call: ServiceCall) -> None:
@@ -90,20 +89,6 @@ async def handle_set_percentage_limit(call: ServiceCall) -> None:
         "percentage": call.data.get("percentage")
     })
 
-
-async def handle_start_charging_current(call: ServiceCall) -> None:
-    await async_handle_connector_service(call.hass, call, "start_charging_current", {
-        "current": call.data.get("current")
-    })
-
-
-async def handle_reload(call: ServiceCall) -> None:
-    _LOGGER.info("Service: reload – reloading all Smappee EV entries")
-    hass = call.hass
-    entries = hass.config_entries.async_entries(DOMAIN)
-    await asyncio.gather(*(hass.config_entries.async_reload(e.entry_id) for e in entries))
-
-
 def register_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Registering Smappee EV services")
 
@@ -116,8 +101,6 @@ def register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "set_charging_mode", handle_set_charging_mode)
     hass.services.async_register(DOMAIN, "set_min_surpluspct", handle_set_min_surpluspct)
     hass.services.async_register(DOMAIN, "set_percentage_limit", handle_set_percentage_limit)
-    hass.services.async_register(DOMAIN, "start_charging_current", handle_start_charging_current)
-    hass.services.async_register(DOMAIN, "reload", handle_reload)    
 
 
 def unregister_services(hass: HomeAssistant) -> None:
@@ -131,5 +114,3 @@ def unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, "set_charging_mode")
     hass.services.async_remove(DOMAIN, "set_min_surpluspct")
     hass.services.async_remove(DOMAIN, "set_percentage_limit")
-    hass.services.async_remove(DOMAIN, "start_charging_current")
-    hass.services.async_remove(DOMAIN, "reload")    
