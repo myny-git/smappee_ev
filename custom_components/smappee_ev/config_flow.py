@@ -112,15 +112,14 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if prop.get("spec", {}).get("name") == "etc.smart.device.type.car.charger.smappee.charger.number":
                         num = prop.get("value")
                         break
+
                 # fallback: try to parse from name
                 if num is None:
                     name = d.get("name", "")
-                    if " - " in name:
-                        try:
-                            num = int(name.split(" - ")[-1])
-                        except ValueError:
-                            pass         
-                                       
+                    match = re.search(r"\s*[-–—]\s*(\d+)\s*$", name)
+                    if match:
+                        num = int(match.group(1))                                                 
+
                 carchargers.append({
                     "id": d["id"],
                     "uuid": d["uuid"],
