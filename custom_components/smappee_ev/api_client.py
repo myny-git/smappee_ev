@@ -34,6 +34,7 @@ class SmappeeApiClient:
         self.is_station = is_station
         self._session: ClientSession = session
         self._timeout = ClientTimeout(connect=5, total=15)
+        self.selected_mode = "NORMAL"
 
         self.update_interval = update_interval if update_interval is not None else UPDATE_INTERVAL_DEFAULT
 
@@ -60,6 +61,12 @@ class SmappeeApiClient:
             "SmappeeApiClient initialized (serial=%s, connector=%s, station=%s) update_interval=%s",
             self.serial, self.connector_number, self.is_station, self.update_interval
         )
+    
+    def set_local_value(self, key: str, value):
+        """Store a local value for cross-entity use (no entity_id lookups)."""
+        setattr(self, key, value)
+        _LOGGER.debug("Local value updated: %s=%s", key, value)
+
 
     @property
     def serial_id(self) -> str:
@@ -96,7 +103,7 @@ class SmappeeApiClient:
     
     async def delayed_update(self) -> None:
         """Refresh the session state and related info from the API."""
-        _LOGGER.info("Performing delayed update...")
+        _LOGGER.debug("Performing delayed update...")
         await self.oauth_client.ensure_token_valid()
 
         # ----------sensor charging energy data is commented -----------
@@ -216,11 +223,11 @@ class SmappeeApiClient:
 
         if update_required:
             await self.publish_updates()
-            _LOGGER.info("Published updates to Home Assistant.")
+            _LOGGER.debug("Published updates to Home Assistant.")
         else:
             _LOGGER.debug("No update needed.")
 
-        _LOGGER.info("Delayed update done.")                
+        _LOGGER.debug("Delayed update done.")                
 
                 # new_session_state = next(
                 #     (prop.get("value") for prop in session_state_data.get("properties", [])
@@ -328,6 +335,27 @@ class SmappeeApiClient:
     def push_value_update(self, key: str, value: int) -> None:
         if callback := self._value_callbacks.get(key):
             callback(value)
+
+    # --- getters for coordinator (safe, no I/O) ---
+    def get_led_brightness(self) -> Optional[int]:
+        return getattr(self, "led_brightness", None)
+
+    def get_availability(self) -> Optional[bool]:
+        # Je zet 'available' nog niet in delayed_update; laat dit voorlopig None zijn
+        return getattr(self, "available", None)
+
+    def get_connector_state(self) -> dict:
+        return {
+            "session_state": getattr(self, "_session_state", None),
+            "selected_current_limit": getattr(self, "selected_current_limit", None),
+            "selected_percentage_limit": getattr(self, "selected_percentage_limit", None),
+            "selected_mode": getattr(self, "selected_mode", None),
+            "min_current": getattr(self, "min_current", None),
+            "max_current": getattr(self, "max_current", None),
+            "min_surpluspct": getattr(self, "min_surpluspct", None),
+        }
+
+
 
     # --- REACTIVATE IF NECESSARY ---
     #@property

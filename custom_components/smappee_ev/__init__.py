@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from .coordinator import SmappeeCoordinator
 from aiohttp import ClientSession
 
 from .oauth import OAuth2Client
@@ -69,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         session=session,        # <<< inject HA session in the client
     )
 
-    await station_client.enable()
+    #await station_client.enable()
 
     # Connector-level clients (keyed by UUID)
     connector_clients = {}
@@ -85,13 +86,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             session=session,
         )
 
-        await client.enable()
+        #await client.enable()
         connector_clients[device["uuid"]] = client
-   
+
+    # --- Create and refresh coordinator ---
+    coordinator = SmappeeCoordinator(
+        hass,
+        station_client=station_client,
+        connector_clients=connector_clients,
+        update_interval=update_interval,
+    )
+    await coordinator.async_config_entry_first_refresh()
+
+    # --- Store in hass.data for platforms to use ---
     hass.data[DOMAIN][entry.entry_id] = {
-        "station": station_client,
-        "connectors": connector_clients,
-    }
+        "coordinator": coordinator,
+        "station_client": station_client,
+        "connector_clients": connector_clients,
+    }    
+
+    #hass.data[DOMAIN][entry.entry_id] = {
+    #    "station": station_client,
+    #    "connectors": connector_clients,
+    #}
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
@@ -106,19 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
-
-    data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if data:
-        station = data.get("station")
-        connectors = data.get("connectors", {})
-        try:
-            if station:
-                await station.stop()
-            for client in connectors.values():
-                await client.stop()
-        except Exception as exc:
-            _LOGGER.warning("Errors while stopping clients on unload: %s", exc)    
-    
+   
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)

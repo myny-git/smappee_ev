@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import logging
+from typing import Dict
 
 
 from datetime import timedelta
-from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorDeviceClass,
-    SensorStateClass,
-)
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from .api_client import SmappeeApiClient
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .const import DOMAIN
+from .api_client import SmappeeApiClient
+from .coordinator import SmappeeCoordinator
+from .data import IntegrationData, ConnectorState
 
 _LOGGER = logging.getLogger(__name__)
 #SCAN_INTERVAL = timedelta(seconds=20)
@@ -24,31 +25,26 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV sensors from a config entry.""" 
-    connector_clients: dict[str, SmappeeApiClient] = hass.data[DOMAIN][config_entry.entry_id]["connectors"]
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinator: SmappeeCoordinator = data["coordinator"]
+    connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"]
 
     entities: list[SensorEntity] = []
-    for client in connector_clients.values():
-        entities.append(SmappeeChargingStateSensor(client))
-        entities.append(SmappeeEVCCStateSensor(client))
+    for uuid, client in connector_clients.items():
+        entities.append(SmappeeChargingStateSensor(coordinator, client, uuid))
+        entities.append(SmappeeEVCCStateSensor(coordinator, client, uuid))
 
-    async_add_entities(entities, update_before_add=True)
+    async_add_entities(entities)
 
-class SmappeeSensorBase(SensorEntity):
+class _SmappeeSensorBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
+
     """Base class for Smappee EV sensors."""
 
     _attr_should_poll = False  # Event-driven, no polling
 
-    def __init__(
-        self,
-        api_client: SmappeeApiClient,
-        name: str,
-        unique_id: str,
-        icon: str | None = None,
-    ) -> None:
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
+        super().__init__(coordinator)
         self.api_client = api_client
-        self._attr_name = name
-        self._attr_unique_id = unique_id
-        self._attr_icon = icon
 
     @property
     def device_info(self):
@@ -58,50 +54,51 @@ class SmappeeSensorBase(SensorEntity):
             "manufacturer": "Smappee",
         }
 
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        self.api_client.register_callback(self.schedule_update_ha_state)
-
-    async def async_will_remove_from_hass(self):
-        await super().async_will_remove_from_hass()
-        self.api_client.remove_callback(self.schedule_update_ha_state)
-
-
-class SmappeeChargingStateSensor(SmappeeSensorBase):
-    """Sensor for the current session state."""
-    def __init__(self, api_client: SmappeeApiClient):
-        super().__init__(
-            api_client,
-            f"Charging state {api_client.connector_number}",
-            f"{api_client.serial_id}_connector{api_client.connector_number}_charging_state",
-            icon="mdi:ev-station",
-        )
+    def _state(self, connector_uuid: str) -> ConnectorState | None:
+        data: IntegrationData | None = self.coordinator.data
+        if not data:
+            return None
+        return data.connectors.get(connector_uuid)
 
     @property
     def available(self) -> bool:
         return True
 
+
+class SmappeeChargingStateSensor(_SmappeeSensorBase):
+    """Sensor for the current session state."""
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str) -> None:
+        super().__init__(coordinator, api_client)
+        self._connector_uuid = connector_uuid
+        self._attr_name = f"Charging state {api_client.connector_number}"
+        self._attr_unique_id = f"{api_client.serial_id}_connector{api_client.connector_number}_charging_state"
+        self._attr_icon = "mdi:ev-station"
+
     @property
     def native_value(self):
-        """Return the current session state."""
-        return self.api_client.session_state
+        st = self._state(self._connector_uuid)
+        if st and st.session_state:
+            return st.session_state
+        # fallback to client 
+        return getattr(self.api_client, "session_state", "Initialize")
 
 
-class SmappeeEVCCStateSensor(SmappeeSensorBase):
+class SmappeeEVCCStateSensor(_SmappeeSensorBase):
     """Sensor mapping session state to EVCC state."""
 
-    def __init__(self, api_client: SmappeeApiClient):
-        super().__init__(
-            api_client,
-            f"EVCC state {api_client.connector_number}",
-            f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state",
-            icon="mdi:car-electric",
-        )
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str) -> None:
+        super().__init__(coordinator, api_client)
+        self._connector_uuid = connector_uuid
+        self._attr_name = f"EVCC state {api_client.connector_number}"
+        self._attr_unique_id = f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state"
+        self._attr_icon = "mdi:car-electric"
 
     @property
     def native_value(self):
-        """Return the EVCC mapped state."""
-        session_state = self.api_client.session_state
+        st = self._state(self._connector_uuid)
+        session_state = (st.session_state if st else getattr(self.api_client, "session_state", "Initialize")) or "unknown"
+
+        # Map zoals in je oude code
         if session_state in ["INITIAL", "STOPPED"]:
             return "A"
         elif session_state in ["SUSPENDED", "STOPPING"]:
@@ -111,9 +108,6 @@ class SmappeeEVCCStateSensor(SmappeeSensorBase):
         else:
             return "E"
 
-    @property
-    def available(self) -> bool:
-        return True
 
 
 

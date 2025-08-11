@@ -1,11 +1,16 @@
+from __future__ import annotations
 import logging
 
+from typing import Dict
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
+from .coordinator import SmappeeCoordinator
+from .data import IntegrationData, ConnectorState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,57 +23,65 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smappee EV mode select entity from a config entry."""
     data = hass.data[DOMAIN][config_entry.entry_id]
-    connector_clients: dict[str, SmappeeApiClient] = data["connectors"]
+    coordinator: SmappeeCoordinator = data["coordinator"]
+    connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"] 
 
     entities: list[SelectEntity] = []
-    for client in connector_clients.values():
-        entities.append(SmappeeModeSelect(client))
+    for uuid, client in connector_clients.items():
+        entities.append(SmappeeModeSelect(coordinator, client, uuid))
 
     async_add_entities(entities)
 
-    # Register callbacks once HA is fully started
-    def register_callback_later(_event):
-        for entity in entities:
-            entity.api_client.set_mode_select_callback(entity.set_selected_mode)
-    hass.bus.async_listen_once("homeassistant_started", register_callback_later)
 
-
-class SmappeeModeSelect(SelectEntity):
+class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
     """Home Assistant select entity for Smappee charging mode."""
 
     _attr_has_entity_name = True
+    _attr_options = MODES
 
-    def __init__(self, api_client: SmappeeApiClient):
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str) -> None:
+        super().__init__(coordinator)
         self.api_client = api_client
-        self._attr_options = MODES
-        self._selected_mode = MODES[0]
+        self._connector_uuid = connector_uuid
         self._attr_name = f"Charging Mode {api_client.connector_number}"
         self._attr_unique_id = f"{api_client.serial_id}_charging_mode_{api_client.connector_number}"
 
     @property
-    def current_option(self) -> str:
-        return self._selected_mode
-
-    async def async_select_option(self, option: str) -> None:
-        """Change the selected mode and update the API client."""
-        self._selected_mode = option
-        self.api_client.selected_mode = option
-        self.async_write_ha_state()
-
-    def set_selected_mode(self, option: str) -> None:
-        """Externally set the selected mode from the API client."""
-        self._selected_mode = option
-        if self.hass:
-            _LOGGER.debug("Updating HA state for mode select to %s", option)
-            self.async_write_ha_state()
-        else:
-            _LOGGER.warning("Tried to update mode select before entity was added.")
-
-    @property
     def device_info(self):
-        """Device info for the wallbox, ensures correct grouping in HA."""
         return {
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
             "name": "Smappee EV Wallbox",
             "manufacturer": "Smappee",
         }
+
+    def _state(self) -> ConnectorState | None:
+        data: IntegrationData | None = self.coordinator.data
+        if not data:
+            return None
+        return data.connectors.get(self._connector_uuid)
+
+    async def _async_refresh(self) -> None:
+        """Small shared helper: fetch coordinator and refresh once."""
+        try:
+            await self.coordinator.async_request_refresh()
+        except Exception as exc:
+            _LOGGER.debug("Coordinator refresh failed after select change: %s", exc)
+
+
+    @property
+    def current_option(self) -> str:
+        st = self._state()
+        if st and st.selected_mode in MODES:
+            return st.selected_mode
+        # fallback to client
+        return getattr(self.api_client, "selected_mode", "NORMAL")
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the selected mode and update the API client."""
+        if option not in MODES:
+            _LOGGER.warning("Unsupported mode selected: %s", option)
+            return            
+        self.api_client.selected_mode = option
+        self.async_write_ha_state()
+        #await self.coordinator.async_request_refresh()
+        await self._async_refresh()
