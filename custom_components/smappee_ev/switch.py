@@ -45,7 +45,7 @@ class SmappeeChargingSwitch(SwitchEntity):
 
         connector = self.api_client.connector_number
         _LOGGER.info("Switch ON: starting charging at 6A on connector %s", connector)
-        await self.api_client.start_charging_current(6)
+        await self.api_client.start_charging(6)
         self._is_on = True
         self.async_write_ha_state()
 
