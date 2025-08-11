@@ -138,7 +138,7 @@ class SmappeeActionButton(ButtonEntity):
         #         _LOGGER.warning("Invalid current value for connector %s, using fallback 6 A", connector)
         #         current = 6
         #     _LOGGER.debug("Calling start_charging with current: %s", current)
-       try:
+        try:
             if self._action == "start_charging":
                 current = self.api_client.selected_current_limit or self.api_client.min_current
                 await self.api_client.start_charging(current)
