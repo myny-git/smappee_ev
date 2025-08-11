@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from typing import Any, Dict
+from typing import Dict
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
@@ -28,7 +28,6 @@ async def async_setup_entry(
     entities: list[ButtonEntity] = []
 
     # Connector-based buttons
-# Connector-based buttons (per connector client)
     for client in connector_clients.values():
         connector = client.connector_number or 1
         entities.extend(
@@ -140,7 +139,7 @@ class SmappeeActionButton(ButtonEntity):
         #     _LOGGER.debug("Calling start_charging with current: %s", current)
         try:
             if self._action == "start_charging":
-                current = self.api_client.selected_current_limit or self.api_client.min_current
+                current = int(self.api_client.selected_current_limit or self.api_client.min_current)
                 await self.api_client.start_charging(current)
                 #self.api_client.selected_mode = "NORMAL"
 
@@ -168,7 +167,7 @@ class SmappeeActionButton(ButtonEntity):
                 await self.api_client.set_charging_mode(mode, limit)
 
         finally:
-            await self._refresh()
+            await self._async_refresh()
 
             # connector = self.api_client.connector_number
             # mode_entity_id = f"select.smappee_ev_wallbox_charging_mode_{connector}"
