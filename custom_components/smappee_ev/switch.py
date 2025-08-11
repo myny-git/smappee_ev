@@ -56,7 +56,7 @@ class SmappeeChargingSwitch(SwitchEntity):
             "manufacturer": "Smappee",
         }        
 
-   @property
+    @property
     def is_on(self) -> bool:
         """Local ON/OFF flag, not derived from session_state."""
         return self._is_on
