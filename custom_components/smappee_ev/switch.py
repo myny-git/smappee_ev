@@ -22,13 +22,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smappee EV switch entity from config entry."""
     data = hass.data[DOMAIN][config_entry.entry_id]
-
+    coordinator: SmappeeCoordinator = data["coordinator"]
     connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"]  # keyed by UUID
 
-    entities: list[SwitchEntity] = []
+    entities: list[SmappeeChargingSwitch] = []
     # Create one EVCC Charging Control switch per connector
     for client in connector_clients.values():
-        entities.append(SmappeeChargingSwitch(client))
+        entities.append(SmappeeChargingSwitch(client, coordinator))
 
     async_add_entities(entities)
 
@@ -39,10 +39,10 @@ class SmappeeChargingSwitch(SwitchEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, api_client: SmappeeApiClient) -> None:
+    def __init__(self, api_client: SmappeeApiClient, coordinator: SmappeeCoordinator) -> None:
         self.api_client = api_client
+        self._coordinator = coordinator
         self._attr_name = f"EVCC Charging Control {api_client.connector_number}"
-        # Keep unique_id based on serial_id (your preference)
         self._attr_unique_id = f"{api_client.serial_id}_evcc_charging_switch_{api_client.connector_number}"
         self._is_on = False  # local flag only
 
@@ -61,27 +61,28 @@ class SmappeeChargingSwitch(SwitchEntity):
         """Local ON/OFF flag, not derived from session_state."""
         return self._is_on
 
+    async def async_added_to_hass(self) -> None:
+        """Initialize local state on add."""
+        self._is_on = False
+        _LOGGER.debug("Initialized %s with is_on = False", self._attr_unique_id)
+
     async def _async_refresh(self) -> None:
-        """Trigger a single coordinator refresh so UI updates immediately."""
+        """Trigger one coordinator refresh so UI updates immediately."""
         try:
-            data = self.hass.data[DOMAIN][self.platform.config_entry.entry_id]
-            coordinator: SmappeeCoordinator | None = data.get("coordinator")
-            if coordinator:
-                await coordinator.async_request_refresh()
+            await self._coordinator.async_request_refresh()
         except Exception as exc:
             _LOGGER.debug("Coordinator refresh failed after switch action: %s", exc)
 
     async def async_turn_on(self, **kwargs) -> None:
         """Start charging at current selected limit (fallback to min_current)."""
-        current = self.api_client.selected_current_limit or self.api_client.min_current
+        current = int(self.api_client.selected_current_limit or self.api_client.min_current)
         _LOGGER.info(
             "Switch ON: starting charging at %sA on connector %s",
             current,
             self.api_client.connector_number,
         )
-        await self.api_client.start_charging(int(current))
-        # Implicitly NORMAL after starting
-        self.api_client.selected_mode = "NORMAL"
+        await self.api_client.start_charging(current)
+        self.api_client.selected_mode = "NORMAL"  # optimistic local reflection
         self._is_on = True
         self.async_write_ha_state()
         await self._async_refresh()
@@ -93,8 +94,7 @@ class SmappeeChargingSwitch(SwitchEntity):
             self.api_client.connector_number,
         )
         await self.api_client.pause_charging()
-        # Implicitly NORMAL after pausing
-        self.api_client.selected_mode = "NORMAL"
+        self.api_client.selected_mode = "NORMAL"  # optimistic local reflection
         self._is_on = False
         self.async_write_ha_state()
         await self._async_refresh()

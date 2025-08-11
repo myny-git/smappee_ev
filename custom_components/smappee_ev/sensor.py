@@ -4,7 +4,6 @@ import logging
 from typing import Dict
 
 
-from datetime import timedelta
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -17,7 +16,6 @@ from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, ConnectorState
 
 _LOGGER = logging.getLogger(__name__)
-#SCAN_INTERVAL = timedelta(seconds=20)
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -34,17 +32,18 @@ async def async_setup_entry(
         entities.append(SmappeeChargingStateSensor(coordinator, client, uuid))
         entities.append(SmappeeEVCCStateSensor(coordinator, client, uuid))
 
-    async_add_entities(entities)
+    async_add_entities(entities, update_before_add=True)
 
-class _SmappeeSensorBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
+class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
 
     """Base class for Smappee EV sensors."""
 
     _attr_should_poll = False  # Event-driven, no polling
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str) -> None:
         super().__init__(coordinator)
-        self.api_client = api_client
+        self.api_client = api_client          # kept only for device_info
+        self._uuid = uuid
 
     @property
     def device_info(self):
@@ -54,59 +53,48 @@ class _SmappeeSensorBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
             "manufacturer": "Smappee",
         }
 
-    def _state(self, connector_uuid: str) -> ConnectorState | None:
+    def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
-        if not data:
-            return None
-        return data.connectors.get(connector_uuid)
-
-    @property
-    def available(self) -> bool:
-        return True
+        return data.connectors.get(self._uuid) if data else None
 
 
-class SmappeeChargingStateSensor(_SmappeeSensorBase):
-    """Sensor for the current session state."""
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str) -> None:
-        super().__init__(coordinator, api_client)
-        self._connector_uuid = connector_uuid
+
+class SmappeeChargingStateSensor(_Base):
+    """Raw charging/session state reported by the connector."""
+
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str) -> None:
+        super().__init__(coordinator, api_client, uuid)
         self._attr_name = f"Charging state {api_client.connector_number}"
         self._attr_unique_id = f"{api_client.serial_id}_connector{api_client.connector_number}_charging_state"
         self._attr_icon = "mdi:ev-station"
 
     @property
     def native_value(self):
-        st = self._state(self._connector_uuid)
-        if st and st.session_state:
-            return st.session_state
-        # fallback to client 
-        return getattr(self.api_client, "session_state", "Initialize")
+        st = self._state()
+        return st.session_state if st else None
 
 
-class SmappeeEVCCStateSensor(_SmappeeSensorBase):
-    """Sensor mapping session state to EVCC state."""
+class SmappeeEVCCStateSensor(_Base):
+    """EVCC A/B/C/E mapping derived from the session state."""
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str) -> None:
-        super().__init__(coordinator, api_client)
-        self._connector_uuid = connector_uuid
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str) -> None:
+        super().__init__(coordinator, api_client, uuid)
         self._attr_name = f"EVCC state {api_client.connector_number}"
         self._attr_unique_id = f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state"
         self._attr_icon = "mdi:car-electric"
 
     @property
     def native_value(self):
-        st = self._state(self._connector_uuid)
-        session_state = (st.session_state if st else getattr(self.api_client, "session_state", "Initialize")) or "unknown"
+        st = self._state()
+        session_state = st.session_state if st else None
 
-        # Map zoals in je oude code
-        if session_state in ["INITIAL", "STOPPED"]:
+        if session_state in ("INITIAL", "STOPPED"):
             return "A"
-        elif session_state in ["SUSPENDED", "STOPPING"]:
+        if session_state in ("SUSPENDED", "STOPPING"):
             return "B"
-        elif session_state in ["STARTED", "CHARGING"]:
+        if session_state in ("STARTED", "CHARGING"):
             return "C"
-        else:
-            return "E"
+        return "E"
 
 
 

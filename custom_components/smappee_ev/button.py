@@ -117,13 +117,10 @@ class SmappeeActionButton(ButtonEntity):
     async def _async_refresh(self) -> None:
         """Small shared helper: fetch coordinator and refresh once."""
         try:
-            data = self.hass.data[DOMAIN][self.platform.config_entry.entry_id]
-            coordinator: SmappeeCoordinator | None = data.get("coordinator")
-            if coordinator:
-                await coordinator.async_request_refresh()
+            if self._smappee_coordinator:
+                await self._smappee_coordinator.async_request_refresh()
         except Exception as exc:
             _LOGGER.debug("Coordinator refresh failed after '%s': %s", self._action, exc)
-
 
     async def async_press(self) -> None:
         # _LOGGER.debug("Button '%s' pressed", self._action)
@@ -158,7 +155,11 @@ class SmappeeActionButton(ButtonEntity):
                 await self.api_client.set_unavailable()
 
             elif self._action == "set_brightness":
-                brightness = getattr(self.api_client, "led_brightness", 70)
+                brightness = None
+                if self._smappee_coordinator and self._smappee_coordinator.data and self._smappee_coordinator.data.station:
+                    brightness = self._smappee_coordinator.data.station.led_brightness
+                if brightness is None:
+                    brightness = getattr(self.api_client, "led_brightness", 70)
                 await self.api_client.set_brightness(int(brightness))
 
             elif self._action == "set_charging_mode":
