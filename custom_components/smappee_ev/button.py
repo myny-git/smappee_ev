@@ -97,49 +97,49 @@ class SmappeeActionButton(ButtonEntity):
         except Exception as exc:
             _LOGGER.debug("Coordinator refresh failed after '%s': %s", self._action, exc)
 
-async def async_press(self) -> None:
-    try:
-        if self._action == "start_charging":
-            current = None
-            data = self._smappee_coordinator.data if self._smappee_coordinator else None
-            if data and self._uuid and self._uuid in data.connectors:
-                st = data.connectors[self._uuid]
-                current = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
-            if current is None:
-                current = 6  # ultimate safety
-            await self.api_client.start_charging(int(current))
+    async def async_press(self) -> None:
+        try:
+            if self._action == "start_charging":
+                current = None
+                data = self._smappee_coordinator.data if self._smappee_coordinator else None
+                if data and self._uuid and self._uuid in data.connectors:
+                    st = data.connectors[self._uuid]
+                    current = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
+                if current is None:
+                    current = 6  # ultimate safety
+                await self.api_client.start_charging(int(current))
 
-        elif self._action == "stop_charging":
-            await self.api_client.stop_charging()
+            elif self._action == "stop_charging":
+                await self.api_client.stop_charging()
 
-        elif self._action == "pause_charging":
-            await self.api_client.pause_charging()
+            elif self._action == "pause_charging":
+                await self.api_client.pause_charging()
 
-        elif self._action == "set_available":
-            await self.api_client.set_available()
+            elif self._action == "set_available":
+                await self.api_client.set_available()
 
-        elif self._action == "set_unavailable":
-            await self.api_client.set_unavailable()
+            elif self._action == "set_unavailable":
+                await self.api_client.set_unavailable()
 
-        elif self._action == "set_brightness":
-            brightness = 70
-            data = self._smappee_coordinator.data if self._smappee_coordinator else None
-            if data and data.station:
-                brightness = int(data.station.led_brightness)
-            await self.api_client.set_brightness(brightness)
+            elif self._action == "set_brightness":
+                brightness = 70
+                data = self._smappee_coordinator.data if self._smappee_coordinator else None
+                if data and data.station:
+                    brightness = int(data.station.led_brightness)
+                await self.api_client.set_brightness(brightness)
 
-        elif self._action == "set_charging_mode":
-            mode = "NORMAL"
-            limit = None
-            data = self._smappee_coordinator.data if self._smappee_coordinator else None
-            if data and self._uuid and self._uuid in data.connectors:
-                st = data.connectors[self._uuid]
-                mode = st.selected_mode or "NORMAL"
-                if mode == "NORMAL":
-                    limit = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
+            elif self._action == "set_charging_mode":
+                mode = "NORMAL"
+                limit = None
+                data = self._smappee_coordinator.data if self._smappee_coordinator else None
+                if data and self._uuid and self._uuid in data.connectors:
+                    st = data.connectors[self._uuid]
+                    mode = st.selected_mode or "NORMAL"
+                    if mode == "NORMAL":
+                        limit = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
 
-            await self.api_client.set_charging_mode(mode, limit)
+                await self.api_client.set_charging_mode(mode, limit)
 
-    finally:
-        await self._async_refresh()
+        finally:
+            await self._async_refresh()
 
