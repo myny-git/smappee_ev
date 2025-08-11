@@ -2,6 +2,7 @@ import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 import aiohttp
 import logging
+import re
 
 from homeassistant import config_entries
 from homeassistant.core import callback
