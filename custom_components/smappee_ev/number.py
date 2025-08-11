@@ -27,6 +27,8 @@ async def async_setup_entry(
     connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"] 
     station_client: SmappeeApiClient = data["station_client"]
 
+    entities: list[NumberEntity] = []
+
     # Connector numbers
     for uuid, client in connector_clients.items():
         entities.append(SmappeeCombinedCurrentSlider(coordinator, client, uuid))
@@ -106,8 +108,8 @@ class SmappeeCombinedCurrentSlider(_SmappeeNumberBase):
 
 
 
-        api_client.register_value_callback("current_limit", self._handle_external_update)
-        api_client.register_value_callback("percentage_limit", self._handle_percentage_update)
+        #api_client.register_value_callback("current_limit", self._handle_external_update)
+        #api_client.register_value_callback("percentage_limit", self._handle_percentage_update)
 
     @property
     def _state(self) -> ConnectorState | None:
@@ -199,7 +201,7 @@ class SmappeeMinSurplusPctNumber(_SmappeeNumberBase):
 
         data: IntegrationData | None = coordinator.data
         st: ConnectorState | None = (data.connectors.get(connector_uuid) if data else None)
-        initial = st.min_surpluspct if st else getattr(api_client, "min_surpluspct", 100)
+        #initial = st.min_surpluspct if st else getattr(api_client, "min_surpluspct", 100)
 
         super().__init__(
             coordinator,
