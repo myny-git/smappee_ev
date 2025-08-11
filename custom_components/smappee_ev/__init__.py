@@ -65,9 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         st["uuid"],             # real station smart_device_uuid
         st["id"],               # real station smart_device_id
         service_location_id,
-        update_interval,
+        session=session, 
         is_station=True,
-        session=session,        # <<< inject HA session in the client
     )
 
     #await station_client.enable()
@@ -81,9 +80,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             device["uuid"],
             device["id"],
             service_location_id,
-            update_interval,
-            connector_number=device.get("connector_number"),  # pass through
             session=session,
+            connector_number=device.get("connector_number"),  # pass through
         )
 
         #await client.enable()

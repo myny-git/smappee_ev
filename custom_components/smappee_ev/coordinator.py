@@ -83,7 +83,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         headers = client.auth_headers()
         url_all = f"{BASE_URL}/servicelocation/{client.service_location_id}/smartdevices"
 
-        led_brightness = getattr(client, "led_brightness", 70)
+        led_brightness = 70
         try:
             resp = await self._session.get(url_all, headers=headers, timeout=self._timeout)
             if resp.status == 200:
@@ -105,8 +105,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         except Exception as exc:
             _LOGGER.debug("Station brightness fetch exception: %s", exc)
 
-        # Availability not implemented yet (leave as None / or True if you prefer)
-        return StationState(led_brightness=led_brightness, available=getattr(client, "available", None))
+        return StationState(led_brightness=led_brightness, available=True)
 
     async def _fetch_connector_state(self, client: SmappeeApiClient) -> ConnectorState:
         """Read one connector's properties/config from its smartdevice."""

@@ -19,11 +19,10 @@ class SmappeeApiClient:
         smart_device_uuid: str,
         smart_device_id: str,
         service_location_id: str,
-        update_interval: Optional[int] = None,  # still passed in but unused here
-        connector_number: Optional[int] = None,
-        is_station: bool = False,
         *,
         session: ClientSession,
+        connector_number: Optional[int] = None,
+        is_station: bool = False,
     ):
         self.oauth_client = oauth_client
         self.serial = serial
@@ -39,12 +38,11 @@ class SmappeeApiClient:
         self.selected_mode = "NORMAL"
         self.min_current = 6
         self.max_current = 32
-        self.selected_current_limit = None
-        self.selected_percentage_limit = None
+        self.selected_current_limit: Optional[int] = None
+        self.selected_percentage_limit: Optional[int] = None
 
         # callbacks kept only if you still wire them somewhere
         self._callbacks: Set[Callable[[], None]] = set()
-        self._value_callbacks: dict[str, Callable[[int], None]] = {}
 
         _LOGGER.info(
             "SmappeeApiClient initialized (serial=%s, connector=%s, station=%s)",
@@ -80,10 +78,7 @@ class SmappeeApiClient:
 
         # Build URL/payload/method
         if mode in ("SMART", "SOLAR"):
-            url = (
-                f"{BASE_URL}/servicelocation/{self.service_location_id}"
-                f"/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
-            )
+            url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
             payload = [{"spec": {"name": "mode", "species": "String"}, "value": mode}]
             method = self._session.post
 
@@ -96,11 +91,8 @@ class SmappeeApiClient:
             max_c = getattr(self, "max_current", 32)
             use_limit = limit if limit is not None else min_c
             use_limit = max(min_c, min(int(use_limit), max_c))
-
-            url = (
-                f"{BASE_URL}/chargingstations/{self.serial}"
-                f"/connectors/{self.connector_number}/mode"
-            )
+            
+            url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/{self.connector_number}/mode"
             payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": use_limit}}
             method = self._session.put
         else:
@@ -121,8 +113,6 @@ class SmappeeApiClient:
         if mode == "NORMAL":
             # If caller passed a limit, mirror it; otherwise we used min_current
             self.selected_current_limit = use_limit
-            if cb := self._value_callbacks.get("current_limit"):
-                cb(use_limit)
 
         return True
 
@@ -130,7 +120,7 @@ class SmappeeApiClient:
         """Convert amps -> percentage and call action."""
         if self.max_current == self.min_current:
             raise ValueError(f"Invalid current range: {self.min_current} == {self.max_current}")
-        if current < self.min_current or current > self.max_current:
+        if not (self.min_current <= current <= self.max_current):
             raise ValueError(f"{current}A out of range {self.min_current}-{self.max_current}")
 
         rng = self.max_current - self.min_current
@@ -147,8 +137,6 @@ class SmappeeApiClient:
             raise RuntimeError(f"start_charging failed: {text}")
         _LOGGER.debug("Started charging successfully")
 
-        if cb := self._value_callbacks.get("percentage_limit"):
-            cb(percentage)
 
     async def pause_charging(self) -> None:
         await self.ensure_auth()
@@ -212,8 +200,6 @@ class SmappeeApiClient:
             raise RuntimeError(f"set_percentage_limit failed: {text}")
         _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
         self.selected_percentage_limit = percentage
-        if cb := self._value_callbacks.get("percentage_limit"):
-            cb(percentage)
 
     async def set_available(self) -> None:
         await self.ensure_auth()
@@ -230,5 +216,5 @@ class SmappeeApiClient:
         resp = await self._session.post(url, json=[], headers=self.auth_headers(), timeout=self._timeout)
         if resp.status not in (0, 200):
             text = await resp.text()
-        raise RuntimeError(f"set_unavailable failed: {text}")
-    _LOGGER.debug("Set charger unavailable successfully")
+            raise RuntimeError(f"set_unavailable failed: {text}")
+        _LOGGER.debug("Set charger unavailable successfully")

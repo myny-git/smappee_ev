@@ -28,34 +28,14 @@ async def async_setup_entry(
     entities: list[ButtonEntity] = []
 
     # Connector-based buttons
-    for client in connector_clients.values():
+    for uuid, client in connector_clients.items():             # <— had values() eerst
         connector = client.connector_number or 1
         entities.extend(
             [
-                SmappeeActionButton(
-                    api_client=client,
-                    name=f"Start charging {connector}",
-                    action="start_charging",
-                    unique_id_suffix=f"start_{connector}",
-                ),
-                SmappeeActionButton(
-                    api_client=client,
-                    name=f"Stop charging {connector}",
-                    action="stop_charging",
-                    unique_id_suffix=f"stop_{connector}",
-                ),
-                SmappeeActionButton(
-                    api_client=client,
-                    name=f"Pause charging {connector}",
-                    action="pause_charging",
-                    unique_id_suffix=f"pause_{connector}",
-                ),
-                SmappeeActionButton(
-                    api_client=client,
-                    name=f"Set charging mode {connector}",
-                    action="set_charging_mode",
-                    unique_id_suffix=f"mode_{connector}",
-                ),
+                SmappeeActionButton(api_client=client, uuid=uuid, name=f"Start charging {connector}", action="start_charging", unique_id_suffix=f"start_{connector}"),
+                SmappeeActionButton(api_client=client, uuid=uuid, name=f"Stop charging {connector}", action="stop_charging", unique_id_suffix=f"stop_{connector}"),
+                SmappeeActionButton(api_client=client, uuid=uuid, name=f"Pause charging {connector}", action="pause_charging", unique_id_suffix=f"pause_{connector}"),
+                SmappeeActionButton(api_client=client, uuid=uuid, name=f"Set charging mode {connector}", action="set_charging_mode", unique_id_suffix=f"mode_{connector}"),
             ]
         )
 
@@ -92,15 +72,10 @@ async def async_setup_entry(
 class SmappeeActionButton(ButtonEntity):
     _attr_has_entity_name = True
 
-    def __init__(
-        self,
-        *,
-        api_client: SmappeeApiClient,
-        name: str,
-        action: str,
-        unique_id_suffix: str,
-    ) -> None:
+    def __init__(self, *, api_client: SmappeeApiClient, uuid: str | None = None,
+                 name: str, action: str, unique_id_suffix: str) -> None:
         self.api_client = api_client
+        self._uuid = uuid                           # <— nieuw
         self._attr_name = name
         self._attr_unique_id = f"{api_client.serial_id}_{unique_id_suffix}"
         self._action = action
@@ -122,67 +97,49 @@ class SmappeeActionButton(ButtonEntity):
         except Exception as exc:
             _LOGGER.debug("Coordinator refresh failed after '%s': %s", self._action, exc)
 
-    async def async_press(self) -> None:
-        # _LOGGER.debug("Button '%s' pressed", self._action)
-        # if self._action == "start_charging":
-        #     connector = self.api_client.connector_number
-        #     entity_id = f"number.smappee_ev_wallbox_max_charging_speed_{connector}"
-        #     state = self.hass.states.get(entity_id)
-        #     try:
-        #         current = int(state.state) if state else 6
-        #     except (ValueError, TypeError):
-        #         _LOGGER.warning("Invalid current value for connector %s, using fallback 6 A", connector)
-        #         current = 6
-        #     _LOGGER.debug("Calling start_charging with current: %s", current)
-        try:
-            if self._action == "start_charging":
-                current = int(self.api_client.selected_current_limit or self.api_client.min_current)
-                await self.api_client.start_charging(current)
-                #self.api_client.selected_mode = "NORMAL"
+async def async_press(self) -> None:
+    try:
+        if self._action == "start_charging":
+            current = None
+            data = self._smappee_coordinator.data if self._smappee_coordinator else None
+            if data and self._uuid and self._uuid in data.connectors:
+                st = data.connectors[self._uuid]
+                current = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
+            if current is None:
+                current = 6  # ultimate safety
+            await self.api_client.start_charging(int(current))
 
-            elif self._action == "stop_charging":
-                await self.api_client.stop_charging()
-                #self.api_client.selected_mode = "NORMAL"
+        elif self._action == "stop_charging":
+            await self.api_client.stop_charging()
 
-            elif self._action == "pause_charging":
-                await self.api_client.pause_charging()
-                self.api_client.selected_mode = "NORMAL"
+        elif self._action == "pause_charging":
+            await self.api_client.pause_charging()
 
-            elif self._action == "set_available":
-                await self.api_client.set_available()
+        elif self._action == "set_available":
+            await self.api_client.set_available()
 
-            elif self._action == "set_unavailable":
-                await self.api_client.set_unavailable()
+        elif self._action == "set_unavailable":
+            await self.api_client.set_unavailable()
 
-            elif self._action == "set_brightness":
-                brightness = None
-                if self._smappee_coordinator and self._smappee_coordinator.data and self._smappee_coordinator.data.station:
-                    brightness = self._smappee_coordinator.data.station.led_brightness
-                if brightness is None:
-                    brightness = getattr(self.api_client, "led_brightness", 70)
-                await self.api_client.set_brightness(int(brightness))
+        elif self._action == "set_brightness":
+            brightness = 70
+            data = self._smappee_coordinator.data if self._smappee_coordinator else None
+            if data and data.station:
+                brightness = int(data.station.led_brightness)
+            await self.api_client.set_brightness(brightness)
 
-            elif self._action == "set_charging_mode":
-                mode = getattr(self.api_client, "selected_mode", "NORMAL")
-                limit = self.api_client.selected_current_limit if mode == "NORMAL" else None
-                await self.api_client.set_charging_mode(mode, limit)
+        elif self._action == "set_charging_mode":
+            mode = "NORMAL"
+            limit = None
+            data = self._smappee_coordinator.data if self._smappee_coordinator else None
+            if data and self._uuid and self._uuid in data.connectors:
+                st = data.connectors[self._uuid]
+                mode = st.selected_mode or "NORMAL"
+                if mode == "NORMAL":
+                    limit = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
 
-        finally:
-            await self._async_refresh()
+            await self.api_client.set_charging_mode(mode, limit)
 
-            # connector = self.api_client.connector_number
-            # mode_entity_id = f"select.smappee_ev_wallbox_charging_mode_{connector}"
-            # current_entity_id = f"number.smappee_ev_wallbox_max_charging_speed_{connector}"
+    finally:
+        await self._async_refresh()
 
-            # mode_state = self.hass.states.get(mode_entity_id)
-            # current_state = self.hass.states.get(current_entity_id)
-
-            # mode = mode_state.state if mode_state else "NORMAL"
-            # try:
-            #     current = int(current_state.state) if current_state else 6
-            # except (ValueError, TypeError):
-            #     current = 6
-
-            # limit = current if mode == "NORMAL" else 0
-            # _LOGGER.debug("Calling set_charging_mode(%s, limit=%s)", mode, limit)
-            # await self.api_client.set_charging_mode(mode, limit)

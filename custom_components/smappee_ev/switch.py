@@ -75,26 +75,33 @@ class SmappeeChargingSwitch(SwitchEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Start charging at current selected limit (fallback to min_current)."""
-        current = int(self.api_client.selected_current_limit or self.api_client.min_current)
-        _LOGGER.info(
-            "Switch ON: starting charging at %sA on connector %s",
-            current,
-            self.api_client.connector_number,
-        )
-        await self.api_client.start_charging(current)
-        self.api_client.selected_mode = "NORMAL"  # optimistic local reflection
+        current = None
+        try:
+            data = self.hass.data[DOMAIN][self.platform.config_entry.entry_id]
+            coordinator: SmappeeCoordinator | None = data.get("coordinator")
+        except Exception:
+            coordinator = None
+
+        if coordinator and coordinator.data:
+            for uuid, st in coordinator.data.connectors.items():
+                if st.connector_number == self.api_client.connector_number:
+                    current = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
+                    break
+
+        if current is None:
+            current = max(getattr(self.api_client, "min_current", 6), 1)
+
+        _LOGGER.info("Switch ON: starting charging at %sA on connector %s", current, self.api_client.connector_number)
+        await self.api_client.start_charging(int(current))
         self._is_on = True
         self.async_write_ha_state()
         await self._async_refresh()
 
+
     async def async_turn_off(self, **kwargs) -> None:
         """Pause charging."""
-        _LOGGER.info(
-            "Switch OFF: pausing charging on connector %s",
-            self.api_client.connector_number,
-        )
+        _LOGGER.info("Switch OFF: pausing charging on connector %s", self.api_client.connector_number)
         await self.api_client.pause_charging()
-        self.api_client.selected_mode = "NORMAL"  # optimistic local reflection
         self._is_on = False
         self.async_write_ha_state()
         await self._async_refresh()
