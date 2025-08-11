@@ -119,7 +119,10 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     name = d.get("name", "")
                     match = re.search(r"\s*[-–—]\s*(\d+)\s*$", name)
                     if match:
-                        num = int(match.group(1))                                                 
+                        num = int(match.group(1))      
+                
+                if isinstance(num, str) and num.isdigit():
+                    num = int(num)                                                                   
 
                 carchargers.append({
                     "id": d["id"],
@@ -160,6 +163,9 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "uuid": station["uuid"],
         }
 
+        await self.async_set_unique_id(station["uuid"])
+        self._abort_if_unique_id_configured()
+
         return self.async_create_entry(title="Smappee EV", data=user_input)
 
     @staticmethod
@@ -170,6 +176,9 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class SmappeeEvOptionsFlow(config_entries.OptionsFlow):
     """Handle the options flow."""
+    
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         data_schema = vol.Schema({
