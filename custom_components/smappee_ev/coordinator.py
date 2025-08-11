@@ -45,18 +45,16 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             )
 
             # --- Connector updates in parallel ---
-            tasks = {
-                uuid: asyncio.create_task(client.delayed_update())
-                for uuid, client in self.connector_clients.items()
-            }
-            results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+            pairs = list(self.connector_clients.items())  # [(uuid, client), ...]
+            coros = [client.delayed_update() for _, client in pairs]  # No create_task needed
+            results = await asyncio.gather(*coros, return_exceptions=True)
 
             connectors_state: Dict[str, ConnectorState] = {}
 
-            for (uuid, client), res in zip(tasks.keys(), results):
+            for (uuid, client), res in zip(pairs, results):
                 if isinstance(res, Exception):
-                    _LOGGER.warning("Connector %s update faalde: %s", uuid, res)
-                    # Fallback to last-know data of the client
+                    _LOGGER.warning("Connector %s update failed: %s", uuid, res)
+                    # fall back to client's last-known values
 
                 connectors_state[uuid] = ConnectorState(
                     connector_number=getattr(client, "connector_number", 1),
