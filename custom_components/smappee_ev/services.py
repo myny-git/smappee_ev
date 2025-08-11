@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import logging
 from typing import Dict, Optional, Any
 
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from .const import DOMAIN
+from .api_client import SmappeeApiClient
 from .coordinator import SmappeeCoordinator
 
 _LOGGER = logging.getLogger(__name__)
