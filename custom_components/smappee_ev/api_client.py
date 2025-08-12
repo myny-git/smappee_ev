@@ -146,7 +146,6 @@ class SmappeeApiClient:
             text = await resp.text()
             raise RuntimeError(f"pause_charging failed: {text}")
         _LOGGER.debug("Paused charging successfully")
-        self.selected_mode = "NORMAL"
 
     async def stop_charging(self) -> None:
         await self.ensure_auth()
