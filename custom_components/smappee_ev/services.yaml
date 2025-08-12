@@ -83,6 +83,23 @@ set_brightness:
           max: 100
           unit_of_measurement: "%"
 
+
+set_min_surpluspct:
+  description: "Set the minimum surplus percentage before charging starts in SOLAR mode."
+  fields:
+    connector_id:
+      description: "Connector number (1 or 2)."
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 2
+    min_surpluspct:
+      description: "Minimum surplus percentage required to start charging."
+      required: true
+      selector:
+        number:
+
 set_available:
   description: "Set the charging station as available."
   fields: {}

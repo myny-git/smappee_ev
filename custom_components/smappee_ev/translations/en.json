@@ -105,6 +105,21 @@
           "description": "Optional current limit (Ampere)"
         }
       }
+    },
+    "set_min_surpluspct": {
+      "name": "Set minimum surplus",
+      "description": "Set the minimum solar surplus percentage required before charging starts in SOLAR mode.",
+      "fields": {
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Connector number (1 or 2)"
+        },
+        "min_surpluspct": {
+          "name": "Minimum Surplus (%)",
+          "description": "Minimum percentage of solar surplus required to allow charging"
+        }
+      }
     }
+
   }
 }
