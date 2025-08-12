@@ -76,6 +76,8 @@ class SmappeeChargingSwitch(SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         """Start charging at current selected limit (fallback to min_current)."""
         current = None
+        mode = None
+
         try:
             data = self.hass.data[DOMAIN][self.platform.config_entry.entry_id]
             coordinator: SmappeeCoordinator | None = data.get("coordinator")
@@ -86,10 +88,17 @@ class SmappeeChargingSwitch(SwitchEntity):
             for uuid, st in coordinator.data.connectors.items():
                 if st.connector_number == self.api_client.connector_number:
                     current = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
+                    mode = st.selected_mode
                     break
 
         if current is None:
             current = max(getattr(self.api_client, "min_current", 6), 1)
+
+
+        if mode != "NORMAL":
+            _LOGGER.info("EVCC Switch: changing mode to NORMAL before starting charging")
+            await self.api_client.set_charging_mode("NORMAL", current)
+
 
         _LOGGER.info("Switch ON: starting charging at %sA on connector %s", current, self.api_client.connector_number)
         await self.api_client.start_charging(int(current))
