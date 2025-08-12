@@ -23,7 +23,7 @@ We do not use the smart functions of the Smappee app, in contrary, we use it in 
 
 🔌 Key Item: Charging Enable Control
 
-Below is the full yaml for the charger.
+Below is the full yaml for the charger. If you have changed the name of your wallbox, some entities will also have a different name in Home Assistant. Please always doublecheck prior to uploading the YAML. Also if you have two connectors, you should make two instances of the chargers, one per connector ID.
 
 ```yaml
 # see https://docs.evcc.io/docs/devices/chargers
@@ -32,7 +32,7 @@ chargers:
     type: custom
     status: # charger status A..F --> the evcc_state integration does the job!
       source: http
-      uri: http://HAlocalIP:8123/api/states/sensor.evcc_state
+      uri: http://HAlocalIP:8123/api/states/sensor.evcc_state_1  ## depending on your connector ID
       method: GET
       headers:
         - Authorization: Bearer long_lived_TOKEN
@@ -42,7 +42,7 @@ chargers:
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
     enabled: # also mandatory
       source: http
-      uri: http://HAlocalIP:8123/api/states/switch.smappee_ev_wallbox_evcc_charging_control
+      uri: http://HAlocalIP:8123/api/states/switch.smappee_ev_evcc_charging_control_1
       method: GET
       headers:
         - Authorization: Bearer long_lived_TOKEN
@@ -50,7 +50,7 @@ chargers:
       insecure: true
       jq: '.state == "on"'
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    enable: # also mandatory, this is to enable the charging mode. I created an entry to two services.
+    enable: # also mandatory, this is to enable the charging mode.
       source: http
       uri: http://HAlocalIP:8123/api/services/switch/{{ if .enable }}turn_on{{ else }}turn_off{{ end }}
       method: POST
@@ -59,7 +59,7 @@ chargers:
         - Content-Type: application/json
       body: >
         {
-          "entity_id": "switch.smappee_ev_wallbox_evcc_charging_control"
+          "entity_id": "switch.smappee_ev_evcc_charging_control_1"
         }
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
     maxcurrent: # set charging mode to normal and provide the current.
@@ -71,7 +71,7 @@ chargers:
         - Content-Type: application/json
       body: >
        {
-         "entity_id": "number.smappee_ev_wallbox_max_charging_speed",
+         "entity_id": "number.smappee_ev_max_charging_speed_1",
          "value": {{ .maxcurrent }}
        }
       insecure: true  
@@ -86,9 +86,7 @@ chargers:
       insecure: true
       jq: .state | tonumber
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    #tos: true
-    #Phases1p3p: # not mandatory, I am testing this, with a fake switch which I created in home assistant
-    currents:
+    currents:  ## I used here the modbus entities, but this will change depending on your personal setup
       - source: http
         uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_current_l1_car
         method: GET
