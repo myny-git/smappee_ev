@@ -5,7 +5,6 @@ description = "Custom Home Assistant integration for the Smappee EV Wallbox"
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
-testpaths = "tests"
 addopts = []
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
