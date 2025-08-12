@@ -172,11 +172,6 @@ async def handle_set_min_surpluspct(call: ServiceCall) -> None:
     )
 
 
-async def handle_set_percentage_limit(call: ServiceCall) -> None:
-    await async_handle_connector_service(
-        call.hass, call, "set_percentage_limit", {"percentage": call.data.get("percentage")}
-    )
-
 # ----------------------------
 # Service registration
 # ----------------------------
@@ -192,8 +187,6 @@ def register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging)
     hass.services.async_register(DOMAIN, "set_charging_mode", handle_set_charging_mode)
     hass.services.async_register(DOMAIN, "set_min_surpluspct", handle_set_min_surpluspct)
-    hass.services.async_register(DOMAIN, "set_percentage_limit", handle_set_percentage_limit)
-
 
 def unregister_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Unregistering Smappee EV services")
@@ -205,4 +198,3 @@ def unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, "stop_charging")
     hass.services.async_remove(DOMAIN, "set_charging_mode")
     hass.services.async_remove(DOMAIN, "set_min_surpluspct")
-    hass.services.async_remove(DOMAIN, "set_percentage_limit")
