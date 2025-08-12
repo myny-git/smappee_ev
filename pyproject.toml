@@ -1,0 +1,48 @@
+[project]
+name = "smappee-ev-homeassistant"
+version = "0.1.0"
+description = "Custom Home Assistant integration for the Smappee EV Wallbox"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+addopts = []
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+norecursedirs = [".git", ".mypy_cache", ".ruff_cache"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+  "E","F","W",        # pycodestyle/pyflakes
+  "I",                # isort
+  "ASYNC",            # geen blocking I/O in async
+  "LOG","G",          # logging best practices
+  "UP","PERF","PIE",  # modernisering/perf/refactors
+  "PT",               # pytest-style
+  "RET","RSE","BLE",  # returns/exceptions
+  "PTH","ICN","ISC"   # pathlib/import/import-concat
+]
+ignore = [
+  "E501","W191","E111","E114","E117",
+  "D206","D300","Q","COM812","COM819","ISC001"
+]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components.smappee_ev"]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.mccabe]
+max-complexity = 18
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint.per-file-ignores]
+"custom_components/**/__init__.py" = ["F401"]
+"tests/**" = ["D","S101"]
