@@ -1,0 +1,33 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = [
+  "E","F","W",        # style/pyflakes
+  "I",                # isort (import-sorting)
+  "ASYNC",            # geen blocking I/O in async
+  "LOG","G",          # logging best practices
+  "UP","PERF","PIE",  # modernisering/perf/refactors
+  "PT",               # pytest-style (kan later handig zijn)
+  "RET","RSE","BLE",  # returns/exceptions
+  "PTH","ICN","ISC"   # pathlib/import conventions/implicit concat
+]
+ignore = [
+  "E501","W191","E111","E114","E117","D206","D300","Q","COM812","COM819","ISC001"
+]
+
+[lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components.smappee_ev"]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[lint.mccabe]
+max-complexity = 18
+
+[format]
+docstring-code-format = true
+
+[lint.per-file-ignores]
+"custom_components/**/__init__.py" = ["F401"]  # re-export ok
+"tests/**" = ["D","S101"]                      # 
