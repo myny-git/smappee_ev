@@ -5,7 +5,7 @@ from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -152,37 +152,32 @@ class SmappeeCombinedCurrentSlider(_Base):
         await self.api_client.set_percentage_limit(pct)
         await self.coordinator.async_request_refresh()
 
-    async def async_update(self) -> None:
+    @callback
+    def _handle_coordinator_update(self) -> None:
         st = self._state()
-        if not st:
-            return
+        if st:
+            new_min = int(st.min_current)
+            new_max = int(st.max_current)
 
-        # Protection for weird ranges
-        new_min = int(st.min_current)
-        new_max = int(st.max_current)
-        if new_max < new_min:
-            _LOGGER.warning("Coordinator reported inverted range %s-%s; ignoring", new_min, new_max)
-            return
+            if new_max >= new_min:
+                old_min = self._attr_native_min_value
+                old_max = self._attr_native_max_value
 
-        changed = False
-        if self._attr_native_min_value != new_min:
-            self._attr_native_min_value = new_min
-            changed = True
+                if old_min != new_min:
+                    self._attr_native_min_value = new_min
+                if old_max != new_max:
+                    self._attr_native_max_value = new_max
 
-        if self._attr_native_max_value != new_max:
-            self._attr_native_max_value = new_max
-            changed = True
-
-        # Alleen bij echte wijziging nog iets doen (CoordinatorEntity zorgt zelf voor state write)
-        if changed:
-            _LOGGER.debug(
-                "Updated slider range to %s–%s A (was %s–%s)",
-                new_min,
-                new_max,
-                self._attr_native_min_value,
-                self._attr_native_max_value,
-            )
-            self.async_write_ha_state()
+                if old_min != new_min or old_max != new_max:
+                    _LOGGER.debug(
+                        "Updated slider range to %s–%s A (was %s–%s)",
+                        new_min,
+                        new_max,
+                        old_min,
+                        old_max,
+                    )
+        # laat CoordinatorEntity de state schrijven
+        super()._handle_coordinator_update()
 
 
 class SmappeeBrightnessNumber(_Base):
