@@ -1,8 +1,11 @@
-import aiohttp
+import asyncio
 import logging
 import time
-import asyncio
-from typing import Any, Dict, Optional
+from typing import Any
+
+import aiohttp
+from aiohttp import ClientError
+
 from .const import BASE_URL
 
 OAUTH_TOKEN_URL = f"{BASE_URL.replace('/v3', '/v1')}/oauth2/token"
@@ -13,23 +16,23 @@ _LOGGER = logging.getLogger(__name__)
 class OAuth2Client:
     """Handles OAuth2 authentication and token refresh for the Smappee API."""
 
-    def __init__(self, data: Dict[str, Any], session: aiohttp.ClientSession):
+    def __init__(self, data: dict[str, Any], session: aiohttp.ClientSession):
         self._session: aiohttp.ClientSession = session
         self._timeout = aiohttp.ClientTimeout(connect=5, total=10)
         self.client_id: str = data.get("client_id")
         self.client_secret: str = data.get("client_secret")
         self.username: str = data.get("username")
         self.password: str = data.get("password")
-        self.access_token: Optional[str] = data.get("access_token")
-        self.refresh_token: Optional[str] = data.get("refresh_token")
-        self.token_expires_at: Optional[float] = None
-        self.max_refresh_attempts: int = 3    
+        self.access_token: str | None = data.get("access_token")
+        self.refresh_token: str | None = data.get("refresh_token")
+        self.token_expires_at: float | None = None
+        self.max_refresh_attempts: int = 3
         self._refresh_lock = asyncio.Lock()
         self._early_renew_skew = 60
 
         _LOGGER.debug("OAuth2Client initialized (client_id: %s, username: %s)", self.client_id, self.username)
 
-    async def authenticate(self) -> Optional[Dict[str, Any]]:
+    async def authenticate(self) -> dict[str, Any] | None:
         """Authenticate using username/password and return tokens."""
         _LOGGER.info("Authenticating with client_id: %s, username: %s", self.client_id, self.username)
 
@@ -58,8 +61,8 @@ class OAuth2Client:
                 _LOGGER.info("Authentication succeeded, token valid until %s", self.token_expires_at)
                 return tokens
 
-        except Exception as e:
-            _LOGGER.error("Exception during authentication: %s", e)
+        except (TimeoutError, ClientError, asyncio.CancelledError) as err:
+            _LOGGER.error("Exception during authentication: %s", err)
             return None
 
     async def _refresh_token(self) -> None:
@@ -71,7 +74,7 @@ class OAuth2Client:
             tokens = await self.authenticate()
             if not tokens:
                 raise Exception("No refresh_token and authenticate() failed.")
-            return        
+            return
 
         payload = {
             "grant_type": "refresh_token",
@@ -94,15 +97,14 @@ class OAuth2Client:
                         self.token_expires_at = time.time() + tokens.get("expires_in", 3600)
                         _LOGGER.info("Token refreshed, valid until %s", self.token_expires_at)
                         return
-                    else:
-                        _LOGGER.error("Failed to refresh token (status %s): %s", response.status, text)
-            
+                    _LOGGER.error("Failed to refresh token (status %s): %s", response.status, text)
 
-            except Exception as e:
+
+            except (TimeoutError, ClientError, asyncio.CancelledError) as err:
                 _LOGGER.error(
                     "Exception during token refresh attempt %d: %s",
                     attempt + 1,
-                    e,
+                    err,
                 )
             await asyncio.sleep(2 * (attempt + 1))
 
@@ -121,4 +123,4 @@ class OAuth2Client:
             _LOGGER.info("Access token expired/missing or expiring soon, refreshing...")
             await self._refresh_token()
         else:
-            _LOGGER.debug("Access token is valid until %s", self.token_expires_at)        
+            _LOGGER.debug("Access token is valid until %s", self.token_expires_at)

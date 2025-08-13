@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Any
-
 
 from homeassistant.core import HomeAssistant, ServiceCall
-from .const import DOMAIN
+
 from .api_client import SmappeeApiClient
+from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -15,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 # Helpers to find the right clients
 # ----------------------------
 
-def _first_entry_data(hass: HomeAssistant) -> Optional[dict]:
+def _first_entry_data(hass: HomeAssistant) -> dict | None:
     """
     Get the first active config entry's data from hass.data.
     We support multiple entries, but services will operate on the first one found.
@@ -27,7 +26,7 @@ def _first_entry_data(hass: HomeAssistant) -> Optional[dict]:
     return None
 
 
-def get_station_client(hass: HomeAssistant) -> Optional[SmappeeApiClient]:
+def get_station_client(hass: HomeAssistant) -> SmappeeApiClient | None:
     """Return the SmappeeApiClient for the station (global actions)."""
     data = _first_entry_data(hass)
     if not data:
@@ -35,7 +34,7 @@ def get_station_client(hass: HomeAssistant) -> Optional[SmappeeApiClient]:
     return data.get("station_client")
 
 
-def get_connector_client(hass: HomeAssistant, connector_id: Optional[int]) -> Optional[SmappeeApiClient]:
+def get_connector_client(hass: HomeAssistant, connector_id: int | None) -> SmappeeApiClient | None:
     """
     Return the SmappeeApiClient for a specific connector.
     If connector_id is None and there is only one connector, return that one.
@@ -43,11 +42,11 @@ def get_connector_client(hass: HomeAssistant, connector_id: Optional[int]) -> Op
     data = _first_entry_data(hass)
     if not data:
         return None
-    connectors: Dict[str, SmappeeApiClient] = data.get("connector_clients", {})
+    connectors: dict[str, SmappeeApiClient] = data.get("connector_clients", {})
 
     # Match by connector_number if provided
     if connector_id is not None:
-        for _uuid, client in connectors.items():
+        for client in connectors.values():
             if getattr(client, "connector_number", None) == connector_id:
                 return client
         return None
@@ -58,7 +57,7 @@ def get_connector_client(hass: HomeAssistant, connector_id: Optional[int]) -> Op
 
     return None
 
-def get_coordinator(hass: HomeAssistant) -> Optional[SmappeeCoordinator]:
+def get_coordinator(hass: HomeAssistant) -> SmappeeCoordinator | None:
     """Return the DataUpdateCoordinator instance for this integration."""
     data = _first_entry_data(hass)
     if not data:
@@ -73,7 +72,7 @@ async def async_handle_station_service(
     hass: HomeAssistant,
     call: ServiceCall,
     method_name: str,
-    extra_args: Optional[dict] = None,
+    extra_args: dict | None = None,
 ) -> None:
 
     client = get_station_client(hass)
@@ -99,7 +98,7 @@ async def async_handle_connector_service(
     hass: HomeAssistant,
     call: ServiceCall,
     method_name: str,
-    extra_args: Optional[dict] = None,
+    extra_args: dict | None = None,
 ) -> None:
 
     connector_id = call.data.get("connector_id")
@@ -111,7 +110,7 @@ async def async_handle_connector_service(
     method = getattr(client, method_name, None)
     if not method:
         _LOGGER.error("Connector method '%s' not found", method_name)
-        return        
+        return
 
     # Execute the connector API method
     await method(**(extra_args or {}))

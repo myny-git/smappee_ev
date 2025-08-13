@@ -1,19 +1,19 @@
 import logging
 
-from typing import Dict
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import IntegrationData, ConnectorState
+from .data import ConnectorState, IntegrationData
 
 _LOGGER = logging.getLogger(__name__)
 
-MODES = ["SMART", "SOLAR", "NORMAL"]  
+MODES = ["SMART", "SOLAR", "NORMAL"]
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -22,7 +22,7 @@ async def async_setup_entry(
 ) -> None:
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator: SmappeeCoordinator = data["coordinator"]
-    connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"]
+    connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
 
     entities: list[SelectEntity] = [
         SmappeeModeSelect(coordinator, client, uuid)

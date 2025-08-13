@@ -1,7 +1,7 @@
 from __future__ import annotations
-import logging
 
-from typing import Any, Dict
+import logging
+from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
@@ -10,9 +10,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api_client import SmappeeApiClient
+from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData
-from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ async def async_setup_entry(
     """Set up Smappee EV number entities from a config entry."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator: SmappeeCoordinator = data["coordinator"]
-    connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"] 
+    connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
     station_client: SmappeeApiClient = data["station_client"]
 
     entities: list[NumberEntity] = []
@@ -67,7 +67,7 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
-        
+
 
     @property
     def device_info(self):
@@ -186,7 +186,7 @@ class SmappeeMinSurplusPctNumber(_Base):
             max_value=100,
             step=1,
         )
-        
+
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
         return data.connectors.get(self._uuid) if data else None

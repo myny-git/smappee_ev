@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict
-
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -10,10 +8,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .api_client import SmappeeApiClient
+from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import IntegrationData, ConnectorState
+from .data import ConnectorState, IntegrationData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,10 +20,10 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Smappee EV sensors from a config entry.""" 
+    """Set up Smappee EV sensors from a config entry."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator: SmappeeCoordinator = data["coordinator"]
-    connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"]
+    connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
 
     entities: list[SensorEntity] = []
     for uuid, client in connector_clients.items():
@@ -49,7 +47,7 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": f"Smappee EV Wallbox",
+            "name": "Smappee EV Wallbox",
             "manufacturer": "Smappee",
         }
 

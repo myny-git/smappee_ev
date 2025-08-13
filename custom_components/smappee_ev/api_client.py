@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import logging
-from typing import Optional, Callable, Set
 
 from aiohttp import ClientSession, ClientTimeout
 
@@ -21,7 +21,7 @@ class SmappeeApiClient:
         service_location_id: str,
         *,
         session: ClientSession,
-        connector_number: Optional[int] = None,
+        connector_number: int | None = None,
         is_station: bool = False,
     ):
         self.oauth_client = oauth_client
@@ -38,11 +38,11 @@ class SmappeeApiClient:
         self.selected_mode = "NORMAL"
         self.min_current = 6
         self.max_current = 32
-        self.selected_current_limit: Optional[int] = None
-        self.selected_percentage_limit: Optional[int] = None
+        self.selected_current_limit: int | None = None
+        self.selected_percentage_limit: int | None = None
 
         # callbacks kept only if you still wire them somewhere
-        self._callbacks: Set[Callable[[], None]] = set()
+        self._callbacks: set[Callable[[], None]] = set()
 
         _LOGGER.info(
             "SmappeeApiClient initialized (serial=%s, connector=%s, station=%s)",
@@ -67,12 +67,12 @@ class SmappeeApiClient:
 
     @property
     def serial_id(self) -> str:
-        return self.serial        
+        return self.serial
 
     # ------------------------------------------------------------------
     # COMMANDS (write actions)
     # ------------------------------------------------------------------
-    async def set_charging_mode(self, mode: str, limit: Optional[int] = None) -> bool:
+    async def set_charging_mode(self, mode: str, limit: int | None = None) -> bool:
         await self.ensure_auth()
         _LOGGER.debug("Setting charging mode: %s, limit: %s", mode, limit)
 
@@ -91,7 +91,7 @@ class SmappeeApiClient:
             max_c = getattr(self, "max_current", 32)
             use_limit = limit if limit is not None else min_c
             use_limit = max(min_c, min(int(use_limit), max_c))
-            
+
             url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/{self.connector_number}/mode"
             payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": use_limit}}
             method = self._session.put

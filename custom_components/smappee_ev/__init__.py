@@ -1,30 +1,30 @@
 import logging
 
-from homeassistant.const import Platform
+from aiohttp import ClientSession
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from .coordinator import SmappeeCoordinator
-from aiohttp import ClientSession
+from homeassistant.helpers.typing import ConfigType
 
-from .oauth import OAuth2Client
 from .api_client import SmappeeApiClient
-from .services import register_services, unregister_services
 from .const import (
-    DOMAIN,
     CONF_SERIAL,
     CONF_SERVICE_LOCATION_ID,
     CONF_UPDATE_INTERVAL,
+    DOMAIN,
     UPDATE_INTERVAL_DEFAULT,
 )
+from .coordinator import SmappeeCoordinator
+from .oauth import OAuth2Client
+from .services import register_services, unregister_services
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [
-    Platform.SENSOR, 
-    Platform.NUMBER, 
-    Platform.SELECT, 
+    Platform.SENSOR,
+    Platform.NUMBER,
+    Platform.SELECT,
     Platform.BUTTON,
     Platform.SWITCH,
 ]
@@ -39,22 +39,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a Smappee EV config entry with support for multiple connectors."""
     _LOGGER.debug("Setting up entry for Smappee EV. Serial: %s", entry.data.get(CONF_SERIAL))
-    
+
     hass.data.setdefault(DOMAIN, {})
 
     # Ensure connectors list is present
     if "carchargers" not in entry.data or "station" not in entry.data:
         _LOGGER.error("Config entry missing connectors or station: %s", entry.data)
         return False
-    
+
     # Use HA's aiohttp session
     session: ClientSession = async_get_clientsession(hass)
 
     serial = entry.data[CONF_SERIAL]
     service_location_id = entry.data[CONF_SERVICE_LOCATION_ID]
     update_interval = entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT)
-   
-    #oauth_client = OAuth2Client(entry.data)    
+
+    #oauth_client = OAuth2Client(entry.data)
     oauth_client = OAuth2Client(entry.data, session=session)
 
     # Station-level client (for LED, availability, etc.)
@@ -65,7 +65,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         st["uuid"],             # real station smart_device_uuid
         st["id"],               # real station smart_device_id
         service_location_id,
-        session=session, 
+        session=session,
         is_station=True,
     )
 
@@ -101,7 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
         "station_client": station_client,
         "connector_clients": connector_clients,
-    }    
+    }
 
     #hass.data[DOMAIN][entry.entry_id] = {
     #    "station": station_client,
@@ -109,19 +109,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     #}
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
+
     if not hass.data[DOMAIN].get("services_registered", False):
         register_services(hass)
         hass.data[DOMAIN]["services_registered"] = True
 
-    entry.async_on_unload(entry.add_update_listener(async_entry_update_listener))    
+    entry.async_on_unload(entry.add_update_listener(async_entry_update_listener))
 
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
-   
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
@@ -134,4 +134,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle updates to config entry options."""
     _LOGGER.debug("Config entry updated: %s", entry.entry_id)
-    await hass.config_entries.async_reload(entry.entry_id)    
+    await hass.config_entries.async_reload(entry.entry_id)

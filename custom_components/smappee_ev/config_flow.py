@@ -1,27 +1,28 @@
-import voluptuous as vol
-import homeassistant.helpers.config_validation as cv
-import aiohttp
+import asyncio
 import logging
 import re
 
+import aiohttp
+from aiohttp import ClientError
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from .oauth import OAuth2Client
+import voluptuous as vol
+
 from .const import (
-    DOMAIN,
     BASE_URL,
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
-    CONF_USERNAME,
     CONF_PASSWORD,
     CONF_SERIAL,
     CONF_SERVICE_LOCATION_ID,
-    CONF_SMART_DEVICE_UUID,
-    CONF_SMART_DEVICE_ID,
     CONF_UPDATE_INTERVAL,
+    CONF_USERNAME,
+    DOMAIN,
     UPDATE_INTERVAL_DEFAULT,
 )
+from .oauth import OAuth2Client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id="user",
                 data_schema=data_schema,
             )
-            
+
 
         # Authenticate with the API and get access and refresh tokens  (using HA session)
         oauth_client = OAuth2Client(user_input, session=session)
@@ -62,17 +63,17 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         user_input["access_token"] = tokens["access_token"]
         user_input["refresh_token"] = tokens["refresh_token"]
-        
+
          # Fetch the service_location_id
         try:
             headers = {
                 "Authorization": f"Bearer {tokens['access_token']}",
                 "Content-Type": "application/json",
             }
-            
+
             resp = await session.get(f"{BASE_URL}/servicelocation", headers=headers, timeout=timeout)
             if resp.status != 200:
-                errors["base"] = "servicelocation_failed"                                    
+                errors["base"] = "servicelocation_failed"
                 return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
             data = await resp.json()
             locations = data.get("serviceLocations", [])
@@ -80,28 +81,28 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "no_locations"
                 return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
             user_input[CONF_SERVICE_LOCATION_ID] = locations[0]["serviceLocationId"]
-        except Exception as e:
-            _LOGGER.error(f"Exception while retrieving service_location: {e}")
+        except (TimeoutError, ClientError, asyncio.CancelledError, HomeAssistantError) as err:
+            _LOGGER.error("Exception while retrieving service_location: %s", err)
             errors["base"] = "servicelocation_failed"
             return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
         # Fetch all carcharger devices
         try:
             url = f"{BASE_URL}/servicelocation/{user_input[CONF_SERVICE_LOCATION_ID]}/smartdevices"
-            
+
             resp = await session.get(url, headers=headers, timeout=timeout)
             if resp.status != 200:
                 raise Exception(await resp.text())
             devices = await resp.json()
-        except Exception as e:
-            _LOGGER.error("Error fetching smartdevices: %s", e)
+        except (TimeoutError, ClientError, asyncio.CancelledError, HomeAssistantError) as err:
+            _LOGGER.error("Error fetching smartdevices: %s", err)
             errors["base"] = "uuid_failed"
             return self.async_show_form(
                 step_id="user",
                 data_schema=data_schema,
                 errors=errors,
             )
-        
+
 
         # 4) Build connector list
         carchargers = []
@@ -119,10 +120,10 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     name = d.get("name", "")
                     match = re.search(r"\s*[-–—]\s*(\d+)\s*$", name)
                     if match:
-                        num = int(match.group(1))      
-                
+                        num = int(match.group(1))
+
                 if isinstance(num, str) and num.isdigit():
-                    num = int(num)                                                                   
+                    num = int(num)
 
                 carchargers.append({
                     "id": d["id"],
@@ -176,7 +177,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class SmappeeEvOptionsFlow(config_entries.OptionsFlow):
     """Handle the options flow."""
-    
+
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
 

@@ -2,7 +2,7 @@ from typing import Final
 
 DOMAIN = "smappee_ev"
 
-UPDATE_INTERVAL_DEFAULT: Final = 30 
+UPDATE_INTERVAL_DEFAULT: Final = 30
 
 # Config keys
 CONF_CLIENT_ID: str = "client_id"

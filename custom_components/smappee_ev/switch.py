@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from typing import Dict
+from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .const import DOMAIN
 from .api_client import SmappeeApiClient
+from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,12 +26,12 @@ async def async_setup_entry(
     """Set up Smappee EV switch entity from config entry."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator: SmappeeCoordinator = data["coordinator"]
-    connector_clients: Dict[str, SmappeeApiClient] = data["connector_clients"]  # keyed by UUID
+    connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]  # keyed by UUID
 
-    entities: list[SmappeeChargingSwitch] = []
-    # Create one EVCC Charging Control switch per connector
-    for client in connector_clients.values():
-        entities.append(SmappeeChargingSwitch(client, coordinator))
+    entities: list[SmappeeChargingSwitch] = [
+        SmappeeChargingSwitch(client, coordinator)
+        for client in connector_clients.values()
+    ]
 
     async_add_entities(entities)
 
@@ -54,7 +57,7 @@ class SmappeeChargingSwitch(SwitchEntity):
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
             "name": "Smappee EV Wallbox",
             "manufacturer": "Smappee",
-        }        
+        }
 
     @property
     def is_on(self) -> bool:
@@ -70,22 +73,20 @@ class SmappeeChargingSwitch(SwitchEntity):
         """Trigger one coordinator refresh so UI updates immediately."""
         try:
             await self._coordinator.async_request_refresh()
-        except Exception as exc:
-            _LOGGER.debug("Coordinator refresh failed after switch action: %s", exc)
+        except (TimeoutError, ClientError, asyncio.CancelledError, UpdateFailed, HomeAssistantError) as err:
+            _LOGGER.debug("Coordinator refresh failed after switch action: %s", err)
 
     async def async_turn_on(self, **kwargs) -> None:
         """Start charging at current selected limit (fallback to min_current)."""
         current = None
         mode = None
 
-        try:
-            data = self.hass.data[DOMAIN][self.platform.config_entry.entry_id]
-            coordinator: SmappeeCoordinator | None = data.get("coordinator")
-        except Exception:
-            coordinator = None
+        data = self.hass.data[DOMAIN][self.platform.config_entry.entry_id]
+        coordinator: SmappeeCoordinator | None = data.get("coordinator")
+
 
         if coordinator and coordinator.data:
-            for uuid, st in coordinator.data.connectors.items():
+            for st in coordinator.data.connectors.values():
                 if st.connector_number == self.api_client.connector_number:
                     current = st.selected_current_limit if st.selected_current_limit is not None else st.min_current
                     mode = st.selected_mode

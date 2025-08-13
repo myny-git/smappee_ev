@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from typing import Dict
-
+from aiohttp import ClientError
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from .const import DOMAIN
+from homeassistant.helpers.update_coordinator import UpdateFailed
+
 from .api_client import SmappeeApiClient
+from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,7 +67,7 @@ async def async_setup_entry(
     )
 
     for ent in entities:
-        ent._smappee_coordinator = coordinator 
+        ent._smappee_coordinator = coordinator
 
     async_add_entities(entities)
 
@@ -94,8 +97,8 @@ class SmappeeActionButton(ButtonEntity):
         try:
             if self._smappee_coordinator:
                 await self._smappee_coordinator.async_request_refresh()
-        except Exception as exc:
-            _LOGGER.debug("Coordinator refresh failed after '%s': %s", self._action, exc)
+        except (TimeoutError, ClientError, asyncio.CancelledError, UpdateFailed, HomeAssistantError) as err:
+            _LOGGER.debug("Coordinator refresh failed after '%s': %s", self._action, err)
 
     async def async_press(self) -> None:
         try:

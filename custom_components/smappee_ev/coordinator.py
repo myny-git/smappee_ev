@@ -2,17 +2,16 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import timedelta
-from typing import Dict
+import logging
 
-from aiohttp import ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientSession, ClientTimeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .data import IntegrationData, StationState, ConnectorState
 from .api_client import SmappeeApiClient
 from .const import BASE_URL
+from .data import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             coros = [self._fetch_connector_state(client) for _, client in pairs]
             results = await asyncio.gather(*coros, return_exceptions=True)
 
-            connectors_state: Dict[str, ConnectorState] = {}
+            connectors_state: dict[str, ConnectorState] = {}
             for (uuid, client), res in zip(pairs, results):
                 if isinstance(res, Exception):
                     _LOGGER.warning("Connector %s update failed: %s", uuid, res)
@@ -102,8 +101,8 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             else:
                 txt = await resp.text()
                 _LOGGER.debug("Station brightness fetch status=%s body=%s", resp.status, txt)
-        except Exception as exc:
-            _LOGGER.debug("Station brightness fetch exception: %s", exc)
+        except (TimeoutError, ClientError, asyncio.CancelledError) as err:
+            _LOGGER.debug("Station brightness fetch exception: %s", err)
 
         return StationState(led_brightness=led_brightness, available=True)
 
