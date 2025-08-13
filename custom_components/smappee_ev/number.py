@@ -102,6 +102,8 @@ class SmappeeCombinedCurrentSlider(_Base):
             step=1,
         )
 
+        # self.coordinator.async_add_listener(self.async_write_ha_state)
+
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
         return data.connectors.get(self._uuid) if data else None
@@ -137,14 +139,50 @@ class SmappeeCombinedCurrentSlider(_Base):
         pct = round((val - min_c) / rng * 100)
 
         # Command via API, then refresh coordinator
+
+        _LOGGER.debug(
+            "Setting current: requested=%s → clamped=%s → pct=%s (range %s-%s)",
+            value,
+            val,
+            pct,
+            min_c,
+            max_c,
+        )
+
         await self.api_client.set_percentage_limit(pct)
         await self.coordinator.async_request_refresh()
 
     async def async_update(self) -> None:
         st = self._state()
-        if st:
-            self._attr_native_min_value = st.min_current
-            self._attr_native_max_value = st.max_current
+        if not st:
+            return
+
+        # Protection for weird ranges
+        new_min = int(st.min_current)
+        new_max = int(st.max_current)
+        if new_max < new_min:
+            _LOGGER.warning("Coordinator reported inverted range %s-%s; ignoring", new_min, new_max)
+            return
+
+        changed = False
+        if self._attr_native_min_value != new_min:
+            self._attr_native_min_value = new_min
+            changed = True
+
+        if self._attr_native_max_value != new_max:
+            self._attr_native_max_value = new_max
+            changed = True
+
+        # Alleen bij echte wijziging nog iets doen (CoordinatorEntity zorgt zelf voor state write)
+        if changed:
+            _LOGGER.debug(
+                "Updated slider range to %s–%s A (was %s–%s)",
+                new_min,
+                new_max,
+                self._attr_native_min_value,
+                self._attr_native_max_value,
+            )
+            self.async_write_ha_state()
 
 
 class SmappeeBrightnessNumber(_Base):

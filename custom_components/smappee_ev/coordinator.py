@@ -166,6 +166,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 except (TypeError, ValueError):
                     pass
 
+        client.min_current = min_current
+        client.max_current = max_current
+        client.selected_percentage_limit = selected_percentage
+        client.selected_current_limit = selected_current
+
         # If we know %, but not A, we can reconstruct A later in the Number entity;
         # here we just return the snapshot.
         return ConnectorState(

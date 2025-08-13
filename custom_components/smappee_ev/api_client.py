@@ -127,8 +127,8 @@ class SmappeeApiClient:
 
         rng = self.max_current - self.min_current
         percentage = max(0, min(round(((current - self.min_current) / rng) * 100), 100))
-        self.selected_current_limit = current
-        self.selected_percentage_limit = percentage
+        # self.selected_current_limit = current
+        # self.selected_percentage_limit = percentage
 
         await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
@@ -140,6 +140,8 @@ class SmappeeApiClient:
             text = await resp.text()
             raise RuntimeError(f"start_charging failed: {text}")
         _LOGGER.debug("Started charging successfully")
+        self.selected_current_limit = current
+        self.selected_percentage_limit = percentage
 
     async def pause_charging(self) -> None:
         await self.ensure_auth()
@@ -217,9 +219,9 @@ class SmappeeApiClient:
             raise RuntimeError(f"set_percentage_limit failed: {text}")
         _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
         self.selected_percentage_limit = percentage
-        self.selected_current_limit = int(
-            round((percentage / 100) * (self.max_current - self.min_current) + self.min_current)
-        )
+        # self.selected_current_limit = int(
+        #    round((percentage / 100) * (self.max_current - self.min_current) + self.min_current)
+        # )
 
     async def set_available(self) -> None:
         await self.ensure_auth()
@@ -227,7 +229,7 @@ class SmappeeApiClient:
         resp = await self._session.post(
             url, json=[], headers=self.auth_headers(), timeout=self._timeout
         )
-        if resp.status not in (0, 200):
+        if resp.status not in (200, 204):
             text = await resp.text()
             raise RuntimeError(f"set_available failed: {text}")
         _LOGGER.debug("Set charger available successfully")
@@ -238,7 +240,7 @@ class SmappeeApiClient:
         resp = await self._session.post(
             url, json=[], headers=self.auth_headers(), timeout=self._timeout
         )
-        if resp.status not in (0, 200):
+        if resp.status not in (200, 204):
             text = await resp.text()
             raise RuntimeError(f"set_unavailable failed: {text}")
         _LOGGER.debug("Set charger unavailable successfully")
