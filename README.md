@@ -16,6 +16,7 @@ This integration is designed to be **complementary to the official Smappee integ
 [![Issues][issues-shield]][issues-url]
 [![Usage][usage-shield]][usage-url]
 [![Hassfest][hassfest-shield]][hassfest-url]
+[![Lint][lint-shield]][lint-url]
 [![License][license-shield]][license-url]
 [![Commits][commits-shield]][commits-url]
 [![Stars][stars-shield]][stars-url]
@@ -194,4 +195,8 @@ If this integration is useful to you, feel free to support its development:
 
 [paypal-shield]: https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&style=flat-square
 [paypal-url]: https://www.paypal.me/mynygit
+
+[lint-shield]: https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/lint.yaml?branch=main&label=Lint&style=flat-square&logo=ruff
+[lint-url]: https://github.com/myny-git/smappee_ev/actions/workflows/lint.yaml
+
 
