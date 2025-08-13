@@ -90,7 +90,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 for dev in devices:
                     for prop in dev.get("configurationProperties", []):
                         spec = prop.get("spec", {}) or {}
-                        if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
+                        if (
+                            spec.get("name")
+                            == "etc.smart.device.type.car.charger.led.config.brightness"
+                        ):
                             raw = prop.get("value")
                             val = raw.get("value") if isinstance(raw, dict) else raw
                             try:

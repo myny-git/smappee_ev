@@ -14,6 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 # Helpers to find the right clients
 # ----------------------------
 
+
 def _first_entry_data(hass: HomeAssistant) -> dict | None:
     """
     Get the first active config entry's data from hass.data.
@@ -57,6 +58,7 @@ def get_connector_client(hass: HomeAssistant, connector_id: int | None) -> Smapp
 
     return None
 
+
 def get_coordinator(hass: HomeAssistant) -> SmappeeCoordinator | None:
     """Return the DataUpdateCoordinator instance for this integration."""
     data = _first_entry_data(hass)
@@ -64,9 +66,11 @@ def get_coordinator(hass: HomeAssistant) -> SmappeeCoordinator | None:
         return None
     return data.get("coordinator")
 
+
 # ----------------------------
 # Generic async service handlers
 # ----------------------------
+
 
 async def async_handle_station_service(
     hass: HomeAssistant,
@@ -74,7 +78,6 @@ async def async_handle_station_service(
     method_name: str,
     extra_args: dict | None = None,
 ) -> None:
-
     client = get_station_client(hass)
     if not client:
         _LOGGER.error("No station client found")
@@ -100,7 +103,6 @@ async def async_handle_connector_service(
     method_name: str,
     extra_args: dict | None = None,
 ) -> None:
-
     connector_id = call.data.get("connector_id")
     client = get_connector_client(hass, connector_id)
     if not client:
@@ -122,9 +124,11 @@ async def async_handle_connector_service(
     if coordinator:
         await coordinator.async_request_refresh()
 
+
 # ----------------------------
 # Service function wrappers
 # ----------------------------
+
 
 async def handle_set_available(call: ServiceCall) -> None:
     await async_handle_station_service(call.hass, call, "set_available")
@@ -140,10 +144,12 @@ async def handle_set_brightness(call: ServiceCall) -> None:
         call.hass, call, "set_brightness", {"brightness": brightness}
     )
 
+
 async def handle_start_charging(call: ServiceCall) -> None:
     await async_handle_connector_service(
         call.hass, call, "start_charging", {"current": call.data.get("current")}
     )
+
 
 async def handle_pause_charging(call: ServiceCall) -> None:
     await async_handle_connector_service(call.hass, call, "pause_charging")
@@ -175,6 +181,7 @@ async def handle_set_min_surpluspct(call: ServiceCall) -> None:
 # Service registration
 # ----------------------------
 
+
 def register_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Registering Smappee EV services")
 
@@ -186,6 +193,7 @@ def register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging)
     hass.services.async_register(DOMAIN, "set_charging_mode", handle_set_charging_mode)
     hass.services.async_register(DOMAIN, "set_min_surpluspct", handle_set_min_surpluspct)
+
 
 def unregister_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Unregistering Smappee EV services")

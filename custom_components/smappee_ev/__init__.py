@@ -31,10 +31,12 @@ PLATFORMS = [
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Smappee EV component"""
     hass.data.setdefault(DOMAIN, {})
     return True
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a Smappee EV config entry with support for multiple connectors."""
@@ -54,7 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     service_location_id = entry.data[CONF_SERVICE_LOCATION_ID]
     update_interval = entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT)
 
-    #oauth_client = OAuth2Client(entry.data)
+    # oauth_client = OAuth2Client(entry.data)
     oauth_client = OAuth2Client(entry.data, session=session)
 
     # Station-level client (for LED, availability, etc.)
@@ -62,14 +64,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     station_client = SmappeeApiClient(
         oauth_client,
         serial,
-        st["uuid"],             # real station smart_device_uuid
-        st["id"],               # real station smart_device_id
+        st["uuid"],  # real station smart_device_uuid
+        st["id"],  # real station smart_device_id
         service_location_id,
         session=session,
         is_station=True,
     )
 
-    #await station_client.enable()
+    # await station_client.enable()
 
     # Connector-level clients (keyed by UUID)
     connector_clients = {}
@@ -84,7 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             connector_number=device.get("connector_number"),  # pass through
         )
 
-        #await client.enable()
+        # await client.enable()
         connector_clients[device["uuid"]] = client
 
     # --- Create and refresh coordinator ---
@@ -103,10 +105,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "connector_clients": connector_clients,
     }
 
-    #hass.data[DOMAIN][entry.entry_id] = {
+    # hass.data[DOMAIN][entry.entry_id] = {
     #    "station": station_client,
     #    "connectors": connector_clients,
-    #}
+    # }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -117,6 +119,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_entry_update_listener))
 
     return True
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
@@ -130,6 +133,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             unregister_services(hass)
             hass.data.pop(DOMAIN)
     return unload_ok
+
 
 async def async_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle updates to config entry options."""

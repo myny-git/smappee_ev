@@ -30,11 +30,15 @@ class OAuth2Client:
         self._refresh_lock = asyncio.Lock()
         self._early_renew_skew = 60
 
-        _LOGGER.debug("OAuth2Client initialized (client_id: %s, username: %s)", self.client_id, self.username)
+        _LOGGER.debug(
+            "OAuth2Client initialized (client_id: %s, username: %s)", self.client_id, self.username
+        )
 
     async def authenticate(self) -> dict[str, Any] | None:
         """Authenticate using username/password and return tokens."""
-        _LOGGER.info("Authenticating with client_id: %s, username: %s", self.client_id, self.username)
+        _LOGGER.info(
+            "Authenticating with client_id: %s, username: %s", self.client_id, self.username
+        )
 
         payload = {
             "grant_type": "password",
@@ -45,11 +49,15 @@ class OAuth2Client:
         }
 
         try:
-            async with self._session.post(OAUTH_TOKEN_URL, data=payload, timeout=self._timeout) as response:
+            async with self._session.post(
+                OAUTH_TOKEN_URL, data=payload, timeout=self._timeout
+            ) as response:
                 text = await response.text()
                 _LOGGER.debug("Token endpoint response (authenticate): %s", text)
                 if response.status != 200:
-                    _LOGGER.error("Authentication failed: status=%s, body=%s", response.status, text)
+                    _LOGGER.error(
+                        "Authentication failed: status=%s, body=%s", response.status, text
+                    )
                     return None
                 tokens = await response.json()
                 if "access_token" not in tokens:
@@ -58,7 +66,9 @@ class OAuth2Client:
                 self.access_token = tokens.get("access_token")
                 self.refresh_token = tokens.get("refresh_token")
                 self.token_expires_at = time.time() + tokens.get("expires_in", 3600)
-                _LOGGER.info("Authentication succeeded, token valid until %s", self.token_expires_at)
+                _LOGGER.info(
+                    "Authentication succeeded, token valid until %s", self.token_expires_at
+                )
                 return tokens
 
         except (TimeoutError, ClientError, asyncio.CancelledError) as err:
@@ -85,7 +95,9 @@ class OAuth2Client:
 
         for attempt in range(self.max_refresh_attempts):
             try:
-                async with self._session.post(OAUTH_TOKEN_URL, data=payload, timeout=self._timeout) as response:
+                async with self._session.post(
+                    OAUTH_TOKEN_URL, data=payload, timeout=self._timeout
+                ) as response:
                     text = await response.text()
                     if response.status == 200:
                         tokens = await response.json()
@@ -99,7 +111,6 @@ class OAuth2Client:
                         return
                     _LOGGER.error("Failed to refresh token (status %s): %s", response.status, text)
 
-
             except (TimeoutError, ClientError, asyncio.CancelledError) as err:
                 _LOGGER.error(
                     "Exception during token refresh attempt %d: %s",
@@ -107,7 +118,6 @@ class OAuth2Client:
                     err,
                 )
             await asyncio.sleep(2 * (attempt + 1))
-
 
         _LOGGER.error("Failed to refresh token after %d attempts.", self.max_refresh_attempts)
         raise Exception("Unable to refresh token after multiple attempts.")

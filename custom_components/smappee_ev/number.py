@@ -16,6 +16,7 @@ from .data import ConnectorState, IntegrationData
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -38,7 +39,6 @@ async def async_setup_entry(
     entities.append(SmappeeBrightnessNumber(coordinator, station_client))
 
     async_add_entities(entities, update_before_add=True)
-
 
 
 class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
@@ -68,7 +68,6 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
         self._attr_native_max_value = max_value
         self._attr_native_step = step
 
-
     @property
     def device_info(self):
         """Return device info for the wallbox."""
@@ -78,13 +77,16 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
             "manufacturer": "Smappee",
         }
 
+
 class SmappeeCombinedCurrentSlider(_Base):
     """Combined slider showing current (A), with percentage in attributes."""
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str) -> None:
+    def __init__(
+        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
+    ) -> None:
         self._uuid = connector_uuid
         data: IntegrationData | None = coordinator.data
-        st: ConnectorState | None = (data.connectors.get(connector_uuid) if data else None)
+        st: ConnectorState | None = data.connectors.get(connector_uuid) if data else None
 
         min_current = st.min_current if st else 6
         max_current = st.max_current if st else 32
@@ -99,8 +101,6 @@ class SmappeeCombinedCurrentSlider(_Base):
             max_value=max_current,
             step=1,
         )
-
-
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
@@ -171,10 +171,13 @@ class SmappeeBrightnessNumber(_Base):
         await self.api_client.set_brightness(int(value))
         await self.coordinator.async_request_refresh()
 
+
 class SmappeeMinSurplusPctNumber(_Base):
     """Min Surplus Percentage (connector-level)."""
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str) -> None:
+    def __init__(
+        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
+    ) -> None:
         self._uuid = connector_uuid
         super().__init__(
             coordinator,

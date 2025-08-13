@@ -15,6 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 
 MODES = ["SMART", "SOLAR", "NORMAL"]
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -25,8 +26,7 @@ async def async_setup_entry(
     connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
 
     entities: list[SelectEntity] = [
-        SmappeeModeSelect(coordinator, client, uuid)
-        for uuid, client in connector_clients.items()
+        SmappeeModeSelect(coordinator, client, uuid) for uuid, client in connector_clients.items()
     ]
     async_add_entities(entities, update_before_add=True)
 
@@ -37,7 +37,9 @@ class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
     _attr_has_entity_name = True
     _attr_options = MODES
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str):
+    def __init__(
+        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
+    ):
         super().__init__(coordinator)
         self.api_client = api_client
         self._connector_uuid = connector_uuid
@@ -63,7 +65,6 @@ class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
             self.coordinator.data.connectors[self._connector_uuid].selected_mode = option
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
-
 
     @property
     def device_info(self):

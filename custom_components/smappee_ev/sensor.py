@@ -15,6 +15,7 @@ from .data import ConnectorState, IntegrationData
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -32,15 +33,17 @@ async def async_setup_entry(
 
     async_add_entities(entities, update_before_add=True)
 
-class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
 
+class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     """Base class for Smappee EV sensors."""
 
     _attr_should_poll = False  # Event-driven, no polling
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str) -> None:
+    def __init__(
+        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
+    ) -> None:
         super().__init__(coordinator)
-        self.api_client = api_client          # kept only for device_info
+        self.api_client = api_client  # kept only for device_info
         self._uuid = uuid
 
     @property
@@ -56,14 +59,17 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
         return data.connectors.get(self._uuid) if data else None
 
 
-
 class SmappeeChargingStateSensor(_Base):
     """Raw charging/session state reported by the connector."""
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str) -> None:
+    def __init__(
+        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
+    ) -> None:
         super().__init__(coordinator, api_client, uuid)
         self._attr_name = f"Charging state {api_client.connector_number}"
-        self._attr_unique_id = f"{api_client.serial_id}_connector{api_client.connector_number}_charging_state"
+        self._attr_unique_id = (
+            f"{api_client.serial_id}_connector{api_client.connector_number}_charging_state"
+        )
         self._attr_icon = "mdi:ev-station"
 
     @property
@@ -75,10 +81,14 @@ class SmappeeChargingStateSensor(_Base):
 class SmappeeEVCCStateSensor(_Base):
     """EVCC A/B/C/E mapping derived from the session state."""
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str) -> None:
+    def __init__(
+        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
+    ) -> None:
         super().__init__(coordinator, api_client, uuid)
         self._attr_name = f"EVCC state {api_client.connector_number}"
-        self._attr_unique_id = f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state"
+        self._attr_unique_id = (
+            f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state"
+        )
         self._attr_icon = "mdi:car-electric"
 
     @property
@@ -93,8 +103,6 @@ class SmappeeEVCCStateSensor(_Base):
         if session_state in ("STARTED", "CHARGING"):
             return "C"
         return "E"
-
-
 
 
 # --- SENSOR DISABLED, as MQTT or MODBUS is available ---

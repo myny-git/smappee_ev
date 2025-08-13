@@ -7,6 +7,7 @@ from dataclasses import dataclass
 @dataclass
 class ConnectorState:
     """Holds state for one connector."""
+
     connector_number: int
     session_state: str = "Initialize"
     selected_current_limit: int | None = None
@@ -20,6 +21,7 @@ class ConnectorState:
 @dataclass
 class StationState:
     """Holds state for the station (applies to all connectors)."""
+
     led_brightness: int = 70
     available: bool = True
 
@@ -27,5 +29,6 @@ class StationState:
 @dataclass
 class IntegrationData:
     """Top-level state container for the integration."""
+
     station: StationState
     connectors: dict[str, ConnectorState]  # keyed by UUID
