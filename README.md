@@ -23,6 +23,9 @@ This integration is designed to be **complementary to the official Smappee integ
 [![Commits][commits-shield]][commits-url]
 [![Stars][stars-shield]][stars-url]
 [![Pull Requests][pulls-shield]][pulls-url]
+[![Community][community-shield]][community-url]
+[![Discord][discord-shield]][discord-url]
+
 
 </div>
 
@@ -207,5 +210,9 @@ If this integration is useful to you, feel free to support its development:
 [downloads-latest-shield]: https://img.shields.io/github/downloads/myny-git/smappee_ev/latest/total?style=flat-square
 [downloads-latest-url]: https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev
 
+[community-shield]: https://img.shields.io/badge/Forum-Home%20Assistant-blue?style=flat-square&logo=home-assistant
+[community-url]: https://community.home-assistant.io/t/smappee-ev/915116
 
+[discord-shield]: https://img.shields.io/badge/Discord-Chat-blue?style=flat-square&logo=discord&logoColor=white
+[discord-url]: https://discord.gg/CHnVjqDQ
 
