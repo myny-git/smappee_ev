@@ -45,12 +45,20 @@ Full details can be found [here](https://support.smappee.com/hc/en-gb/article_at
 **Example MQTT sensor for real-time total power:**
 
 ```yaml
-mqtt:
-  sensor:
-    - name: "Smappee Total Power"
-      state_topic: "servicelocation/YOURUUID/realtime"
-      value_template: "{{value_json.channelPowers[0].power}}"
-      unit_of_measurement: "W"
-      device_class: power
+- platform: mqtt
+    name: 'Smappee Grid'
+    state_topic: "servicelocation/xxxxxxxxxxxxxxxxxxx/realtime"
+    value_template: "{{ value_json.totalPower }}"
+    unit_of_measurement: 'W'
+    device_class: power
+    icon: mdi:current-ac
 
+  - platform: mqtt
+    state_topic: "servicelocation/xxxxxxxxxxxxxxxxxxxxxxxxxxx/realtime"
+    name: "Smappee Solar"
+    unit_of_measurement: "W"
+    value_template: "{{value_json.channelPowers[0].power}}"
+    device_class: power
+    icon: mdi:current-ac
+```
 This page will be updated when users with MQTT share their configuration.
