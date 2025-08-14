@@ -8,7 +8,7 @@ This document explains how to connect your **Smappee EV Wall (Infinity series)**
 
 ## 🧱 Prerequisites
 
-- ✅ Smappee Infinity system (with Modbus support) --> Smappee connect (not the Smappee Genius, this has MQTT and can be manually enabled)
+- ✅ Smappee Infinity system (with Modbus support) --> Smappee connect (not the Smappee Genius, this has [MQTT](https://github.com/myny-git/smappee_ev/blob/main/docs/Smappee_mqtt.md) and can be manually enabled)
 - ✅ IP address of your Smappee module (e.g. `192.168.XX.XX`)
 - ✅ Port 502 accessible in your local network
 - ✅ Home Assistant with Modbus integration enabled
