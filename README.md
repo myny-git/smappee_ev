@@ -15,6 +15,8 @@ This integration is designed to be **complementary to the official Smappee integ
 [![Release][release-shield]][release-url]
 [![Issues][issues-shield]][issues-url]
 [![Usage][usage-shield]][usage-url]
+[![Downloads][downloads-shield]][downloads-url]
+[![Downloads-latest][downloads-latest-shield]][downloads-latest-url]
 [![Hassfest][hassfest-shield]][hassfest-url]
 [![Lint][lint-shield]][lint-url]
 [![License][license-shield]][license-url]
@@ -198,5 +200,12 @@ If this integration is useful to you, feel free to support its development:
 
 [lint-shield]: https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/lint.yaml?branch=main&label=Lint&style=flat-square&logo=ruff
 [lint-url]: https://github.com/myny-git/smappee_ev/actions/workflows/lint.yaml
+
+[downloads-shield]: https://img.shields.io/github/downloads/myny-git/smappee_ev/total?style=flat-square
+[downloads-url]: https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev
+
+[downloads-latest-shield]: https://img.shields.io/github/downloads/myny-git/smappee_ev/latest/total?style=flat-square
+[downloads-latest-url]: https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev
+
 
 
