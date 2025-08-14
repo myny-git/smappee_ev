@@ -219,6 +219,8 @@ class SmappeeApiClient:
             raise RuntimeError(f"set_percentage_limit failed: {text}")
         _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
         self.selected_percentage_limit = percentage
+        rng = max(self.max_current - self.min_current, 1)
+        self.selected_current_limit = int(round((percentage / 100) * rng + self.min_current))
         # self.selected_current_limit = int(
         #    round((percentage / 100) * (self.max_current - self.min_current) + self.min_current)
         # )
