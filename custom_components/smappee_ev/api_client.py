@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+from typing import Any
 
 from aiohttp import ClientSession, ClientTimeout
 
@@ -77,6 +78,7 @@ class SmappeeApiClient:
         _LOGGER.debug("Setting charging mode: %s, limit: %s", mode, limit)
 
         # Build URL/payload/method
+        payload: dict[str, Any] | list[dict[str, Any]]
         if mode in ("SMART", "SOLAR"):
             url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
             payload = [{"spec": {"name": "mode", "species": "String"}, "value": mode}]
