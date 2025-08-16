@@ -1,7 +1,7 @@
 # .codespellrc
 [codespell]
 quiet-level = 2
-check-filenames = true
-check-hidden = true
+check-filenames =
+check-hidden =
 skip = .git,*.po,*.min.js,*.svg,*.png,*.jpg,*.json
 ignore-words-list = hass,HA,Smappee
