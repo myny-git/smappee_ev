@@ -128,10 +128,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        active_keys = [k for k in hass.data[DOMAIN].keys() if k != "services_registered"]
+        active_keys = [k for k in hass.data[DOMAIN] if k != "services_registered"]
         if not active_keys:
             unregister_services(hass)
-            hass.data.pop(DOMAIN)
+            hass.data.pop(DOMAI, None)
     return unload_ok
 
 
