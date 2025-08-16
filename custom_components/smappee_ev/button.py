@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
 
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
@@ -34,87 +34,88 @@ async def async_setup_entry(
     # Connector-based buttons
     for uuid, client in connector_clients.items():  # <— had values() eerst
         connector = client.connector_number or 1
-        entities.extend(
-            [
-                SmappeeActionButton(
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Start charging {connector}",
-                    action="start_charging",
-                    unique_id_suffix=f"start_{connector}",
-                ),
-                SmappeeActionButton(
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Stop charging {connector}",
-                    action="stop_charging",
-                    unique_id_suffix=f"stop_{connector}",
-                ),
-                SmappeeActionButton(
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Pause charging {connector}",
-                    action="pause_charging",
-                    unique_id_suffix=f"pause_{connector}",
-                ),
-                SmappeeActionButton(
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Set charging mode {connector}",
-                    action="set_charging_mode",
-                    unique_id_suffix=f"mode_{connector}",
-                ),
-            ]
-        )
+        entities.extend([
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Start charging {connector}",
+                action="start_charging",
+                unique_id_suffix=f"start_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Stop charging {connector}",
+                action="stop_charging",
+                unique_id_suffix=f"stop_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Pause charging {connector}",
+                action="pause_charging",
+                unique_id_suffix=f"pause_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Set charging mode {connector}",
+                action="set_charging_mode",
+                unique_id_suffix=f"mode_{connector}",
+            ),
+        ])
 
     # Station-level buttons
-    entities.extend(
-        [
-            SmappeeActionButton(
-                api_client=station_client,
-                name="Set LED brightness",
-                action="set_brightness",
-                unique_id_suffix="set_brightness",
-            ),
-            SmappeeActionButton(
-                api_client=station_client,
-                name="Set available",
-                action="set_available",
-                unique_id_suffix="set_available",
-            ),
-            SmappeeActionButton(
-                api_client=station_client,
-                name="Set unavailable",
-                action="set_unavailable",
-                unique_id_suffix="set_unavailable",
-            ),
-        ]
-    )
-
-    for ent in entities:
-        ent._smappee_coordinator = coordinator
+    entities.extend([
+        SmappeeActionButton(
+            coordinator=coordinator,
+            api_client=station_client,
+            name="Set LED brightness",
+            action="set_brightness",
+            unique_id_suffix="set_brightness",
+        ),
+        SmappeeActionButton(
+            coordinator=coordinator,
+            api_client=station_client,
+            name="Set available",
+            action="set_available",
+            unique_id_suffix="set_available",
+        ),
+        SmappeeActionButton(
+            coordinator=coordinator,
+            api_client=station_client,
+            name="Set unavailable",
+            action="set_unavailable",
+            unique_id_suffix="set_unavailable",
+        ),
+    ])
 
     async_add_entities(entities)
 
 
-class SmappeeActionButton(ButtonEntity):
+class SmappeeActionButton(CoordinatorEntity[SmappeeCoordinator], ButtonEntity):
     _attr_has_entity_name = True
 
     def __init__(
         self,
         *,
+        coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,
         uuid: str | None = None,
         name: str,
         action: str,
         unique_id_suffix: str,
     ) -> None:
+        super().__init__(coordinator)
         self.api_client = api_client
         self._uuid = uuid  # <— nieuw
         self._attr_name = name
         self._attr_unique_id = f"{api_client.serial_id}_{unique_id_suffix}"
         self._action = action
-        self._smappee_coordinator: SmappeeCoordinator | None = None
 
     @property
     def device_info(self):
@@ -127,8 +128,7 @@ class SmappeeActionButton(ButtonEntity):
     async def _async_refresh(self) -> None:
         """Small shared helper: fetch coordinator and refresh once."""
         try:
-            if self._smappee_coordinator:
-                await self._smappee_coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
         except (
             TimeoutError,
             ClientError,
@@ -142,7 +142,7 @@ class SmappeeActionButton(ButtonEntity):
         try:
             if self._action == "start_charging":
                 current = None
-                data = self._smappee_coordinator.data if self._smappee_coordinator else None
+                data = self.coordinator.data if self.coordinator else None
                 if data and self._uuid and self._uuid in data.connectors:
                     st = data.connectors[self._uuid]
                     current = (
@@ -168,7 +168,7 @@ class SmappeeActionButton(ButtonEntity):
 
             elif self._action == "set_brightness":
                 brightness = 70
-                data = self._smappee_coordinator.data if self._smappee_coordinator else None
+                data = self.coordinator.data if self.coordinator else None
                 if data and data.station:
                     brightness = int(data.station.led_brightness)
                 await self.api_client.set_brightness(brightness)
@@ -176,7 +176,7 @@ class SmappeeActionButton(ButtonEntity):
             elif self._action == "set_charging_mode":
                 mode = "NORMAL"
                 limit = None
-                data = self._smappee_coordinator.data if self._smappee_coordinator else None
+                data = self.coordinator.data if self.coordinator else None
                 if data and self._uuid and self._uuid in data.connectors:
                     st = data.connectors[self._uuid]
                     mode = st.selected_mode or "NORMAL"

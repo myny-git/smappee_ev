@@ -24,8 +24,12 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
     for uuid, client in connector_clients.items():
-        entities.append(SmappeeChargingStateSensor(coordinator, client, uuid))
-        entities.append(SmappeeEVCCStateSensor(coordinator, client, uuid))
+        entities.append(
+            SmappeeChargingStateSensor(coordinator=coordinator, api_client=client, uuid=uuid)
+        )
+        entities.append(
+            SmappeeEVCCStateSensor(coordinator=coordinator, api_client=client, uuid=uuid)
+        )
 
     async_add_entities(entities, update_before_add=True)
 
@@ -59,9 +63,9 @@ class SmappeeChargingStateSensor(_Base):
     """Raw charging/session state reported by the connector."""
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
+        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
     ) -> None:
-        super().__init__(coordinator, api_client, uuid)
+        super().__init__(coordinator=coordinator, api_client=api_client, uuid=uuid)
         self._attr_name = f"Charging state {api_client.connector_number}"
         self._attr_unique_id = (
             f"{api_client.serial_id}_connector{api_client.connector_number}_charging_state"
@@ -78,9 +82,9 @@ class SmappeeEVCCStateSensor(_Base):
     """EVCC A/B/C/E mapping derived from the session state."""
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
+        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
     ) -> None:
-        super().__init__(coordinator, api_client, uuid)
+        super().__init__(coordinator=coordinator, api_client=api_client, uuid=uuid)
         self._attr_name = f"EVCC state {api_client.connector_number}"
         self._attr_unique_id = (
             f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state"

@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Mapping
 import logging
 import time
 from typing import Any
@@ -16,13 +17,13 @@ _LOGGER = logging.getLogger(__name__)
 class OAuth2Client:
     """Handles OAuth2 authentication and token refresh for the Smappee API."""
 
-    def __init__(self, data: dict[str, Any], session: aiohttp.ClientSession):
+    def __init__(self, data: Mapping[str, Any], session: aiohttp.ClientSession):
         self._session: aiohttp.ClientSession = session
         self._timeout = aiohttp.ClientTimeout(connect=5, total=10)
-        self.client_id: str = data.get("client_id")
-        self.client_secret: str = data.get("client_secret")
-        self.username: str = data.get("username")
-        self.password: str = data.get("password")
+        self.client_id: str = str(data.get("client_id") or "")
+        self.client_secret: str = str(data.get("client_secret") or "")
+        self.username: str = str(data.get("username") or "")
+        self.password: str = str(data.get("password") or "")
         self.access_token: str | None = data.get("access_token")
         self.refresh_token: str | None = data.get("refresh_token")
         self.token_expires_at: float | None = None

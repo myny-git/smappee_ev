@@ -5,6 +5,7 @@ import asyncio
 from contextlib import suppress
 from datetime import timedelta
 import logging
+from typing import Any, cast
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from homeassistant.core import HomeAssistant
@@ -15,6 +16,14 @@ from .const import BASE_URL
 from .data import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _to_int(value: Any, default: int = 0) -> int:
+    """Convert a value to int safely, fallback to default on error."""
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
@@ -68,7 +77,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         min_surpluspct=100,
                     )
                 else:
-                    connectors_state[uuid] = res
+                    connectors_state[uuid] = cast(ConnectorState, res)
 
             return IntegrationData(station=station_state, connectors=connectors_state)
 
@@ -98,7 +107,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                             raw = prop.get("value")
                             val = raw.get("value") if isinstance(raw, dict) else raw
                             with suppress(TypeError, ValueError):
-                                led_brightness = int(val)
+                                led_brightness = _to_int(val, default=led_brightness)
                             break
             else:
                 txt = await resp.text()
@@ -149,13 +158,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             val = raw.get("value") if isinstance(raw, dict) else raw
             if name == "etc.smart.device.type.car.charger.config.max.current":
                 with suppress(TypeError, ValueError):
-                    max_current = int(val)
+                    max_current = _to_int(val, default=max_current)
             elif name == "etc.smart.device.type.car.charger.config.min.current":
                 with suppress(TypeError, ValueError):
-                    min_current = int(val)
+                    min_current = _to_int(val, default=max_current)
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
                 with suppress(TypeError, ValueError):
-                    min_surpluspct = int(val)
+                    min_surpluspct = _to_int(val, default=max_current)
 
         client.min_current = min_current
         client.max_current = max_current

@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
 
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
@@ -29,20 +29,26 @@ async def async_setup_entry(
     connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]  # keyed by UUID
 
     entities: list[SmappeeChargingSwitch] = [
-        SmappeeChargingSwitch(client, coordinator) for client in connector_clients.values()
+        SmappeeChargingSwitch(coordinator=coordinator, api_client=client)
+        for client in connector_clients.values()
     ]
 
     async_add_entities(entities)
 
 
-class SmappeeChargingSwitch(SwitchEntity):
+class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
     """Switch entity to control start/pause charging."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, api_client: SmappeeApiClient, coordinator: SmappeeCoordinator) -> None:
+    def __init__(
+        self,
+        *,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeApiClient,
+    ) -> None:
+        super().__init__(coordinator)
         self.api_client = api_client
-        self._coordinator = coordinator
         self._attr_name = f"EVCC Charging Control {api_client.connector_number}"
         self._attr_unique_id = (
             f"{api_client.serial_id}_evcc_charging_switch_{api_client.connector_number}"
@@ -71,7 +77,7 @@ class SmappeeChargingSwitch(SwitchEntity):
     async def _async_refresh(self) -> None:
         """Trigger one coordinator refresh so UI updates immediately."""
         try:
-            await self._coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
         except (
             TimeoutError,
             ClientError,
@@ -86,19 +92,17 @@ class SmappeeChargingSwitch(SwitchEntity):
         current = None
         mode = None
 
-        data = self.hass.data[DOMAIN][self.platform.config_entry.entry_id]
-        coordinator: SmappeeCoordinator | None = data.get("coordinator")
+        data = self.coordinator.data
 
-        if coordinator and coordinator.data:
-            for st in coordinator.data.connectors.values():
-                if st.connector_number == self.api_client.connector_number:
-                    current = (
-                        st.selected_current_limit
-                        if st.selected_current_limit is not None
-                        else st.min_current
-                    )
-                    mode = st.selected_mode
-                    break
+        for st in data.connectors.values():
+            if st.connector_number == self.api_client.connector_number:
+                current = (
+                    st.selected_current_limit
+                    if st.selected_current_limit is not None
+                    else st.min_current
+                )
+                mode = st.selected_mode
+                break
 
         if current is None:
             current = max(getattr(self.api_client, "min_current", 6), 1)

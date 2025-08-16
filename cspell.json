@@ -84,6 +84,9 @@
         "laat",
         "schrijven",
         "voor",
+        "carcharger",
+        "CARCHARGER",
+        "CHARGINGSTATION",
     ],
     "ignorePaths": [
         ".git",

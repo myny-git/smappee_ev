@@ -58,7 +58,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     service_location_id = entry.data[CONF_SERVICE_LOCATION_ID]
     update_interval = entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT)
 
-    # oauth_client = OAuth2Client(entry.data)
     oauth_client = OAuth2Client(entry.data, session=session)
 
     # Station-level client (for LED, availability, etc.)

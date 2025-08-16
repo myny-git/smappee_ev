@@ -32,8 +32,16 @@ async def async_setup_entry(
 
     # Connector numbers
     for uuid, client in connector_clients.items():
-        entities.append(SmappeeCombinedCurrentSlider(coordinator, client, uuid))
-        entities.append(SmappeeMinSurplusPctNumber(coordinator, client, uuid))
+        entities.append(
+            SmappeeCombinedCurrentSlider(
+                coordinator=coordinator, api_client=client, connector_uuid=uuid
+            )
+        )
+        entities.append(
+            SmappeeMinSurplusPctNumber(
+                coordinator=coordinator, api_client=client, connector_uuid=uuid
+            )
+        )
 
     # Station number
     entities.append(SmappeeBrightnessNumber(coordinator, station_client))
@@ -82,7 +90,7 @@ class SmappeeCombinedCurrentSlider(_Base):
     """Combined slider showing current (A), with percentage in attributes."""
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
+        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
     ) -> None:
         self._uuid = connector_uuid
         data: IntegrationData | None = coordinator.data

@@ -22,7 +22,8 @@ async def async_setup_entry(
     connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
 
     entities: list[SelectEntity] = [
-        SmappeeModeSelect(coordinator, client, uuid) for uuid, client in connector_clients.items()
+        SmappeeModeSelect(coordinator=coordinator, api_client=client, connector_uuid=uuid)
+        for uuid, client in connector_clients.items()
     ]
     async_add_entities(entities, update_before_add=True)
 
@@ -34,7 +35,7 @@ class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
     _attr_options = MODES
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
+        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
     ):
         super().__init__(coordinator)
         self.api_client = api_client
