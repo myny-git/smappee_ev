@@ -99,27 +99,3 @@ class SmappeeEVCCStateSensor(_Base):
         if session_state in ("STARTED", "CHARGING"):
             return "C"
         return "E"
-
-
-# --- SENSOR DISABLED, as MQTT or MODBUS is available ---
-# class ChargingPointLatestCounter(SmappeeSensorBase):
-#     """Sensor for the total energy delivered by the charging point."""
-#
-#     _attr_state_class = SensorStateClass.TOTAL_INCREASING
-#     _attr_device_class = SensorDeviceClass.ENERGY
-#     _attr_icon = "mdi:ev-station"
-#     _attr_native_unit_of_measurement = "kWh"
-#
-#     def __init__(self, api_client, config_entry):
-#         super().__init__(api_client, config_entry)
-#         self._attr_unique_id = f"{self._serial}_counter"
-#         self._attr_name = f"Charging point {self._serial} total counter"
-#
-#     @property
-#     def available(self) -> bool:
-#         return self.api_client.latest_session_counter != 0
-#
-#     @property
-#     def native_value(self):
-#         """Return the latest session counter."""
-#         return self.api_client.latest_session_counter
