@@ -27,7 +27,9 @@ select = [
   "SIM105","SIM118","SIM201","SIM401",
   "SIM117", "SIM212", "SIM300",
 
-  "TRY004"
+  "TRY004",
+
+  "S"
 
 ]
 
