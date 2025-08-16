@@ -6,7 +6,7 @@
 ## 🧠 Credits
 The original code started as a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". 
 
-The codebase has been completely refactored, resulting in a **new and independent integration**. It is not compatible with configurations or entities from the original fork. The codebase has been improved to be compiant with Home Assistant.
+The codebase has been completely refactored, resulting in a **new and independent integration**. It is not compatible with configurations or entities from the original fork. The codebase has been improved to be compliant with Home Assistant.
 
 This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging.
 <div align="center">
