@@ -52,7 +52,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             results = await asyncio.gather(*coros, return_exceptions=True)
 
             connectors_state: dict[str, ConnectorState] = {}
-            for (uuid, client), res in zip(pairs, results):
+            for (uuid, client), res in zip(pairs, results, strict=True):
                 if isinstance(res, Exception):
                     _LOGGER.warning("Connector %s update failed: %s", uuid, res)
                     # Fall back to safe defaults
