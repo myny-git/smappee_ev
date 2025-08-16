@@ -3,20 +3,41 @@ line-length = 100
 
 [lint]
 select = [
-  "E","F","W",        # style/pyflakes
-  "I",                # isort (import-sorting)
-  "ASYNC",            # geen blocking I/O in async
-  "LOG","G",          # logging best practices
-  "UP","PERF","PIE",  # modernisering/perf/refactors
-  "PT",               # pytest-style (kan later handig zijn)
-  "RET","RSE","BLE",  # returns/exceptions
-  "PTH","ICN","ISC",   # pathlib/import conventions/implicit concat
-  "B",                # + bugbear
-  "RUF100",            # + dead noqa
-  "SIM105","SIM118","SIM201","SIM401"
+  # Core style / errors
+  "E","F","W",
+  "I",               # import sorting (isort)
+  "C",               # complexity (via mccabe)
+
+  # HA-relevant best practices
+  "ASYNC","LOG","G",
+  "UP","PERF","PIE",
+  "RET","RSE","BLE",
+  "PTH","ICN","ISC",
+  "PT",              # pytest style
+  "B",               # bugbear
+
+  # Footgun catchers
+  "RUF006",          # save create_task return value
+  "RUF100",          # dead noqa
+  "PGH004",          # # noqa must include codes
+  "PLC0414",         # useless import alias
+  "T20",             # no print()
+
+  # Safe SIM refactors
+  "SIM105","SIM118","SIM201","SIM401",
+  "SIM117", "SIM212", "SIM300",
+
+  "TRY004"
+
 ]
+
+# Formatter conflicts and pragmatic ignores
 ignore = [
-  "E501","W191","E111","E114","E117","D206","D300","Q","COM812","COM819","ISC001"
+  "E501",            # line length (formatter handles it)
+  "COM812","COM819", # comma/whitespace (formatter)
+  "ISC001",          # implicit string concat (formatter)
+  "W191","E111","E114","E117",  # edge indentation noise
+  "D206","D300"      # docstring formatting quirks
 ]
 
 [lint.isort]

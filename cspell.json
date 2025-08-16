@@ -25,7 +25,21 @@
         "servicelocation",
         "smartdevice",
         "surpluspct",
-        "excesspct"
+        "excesspct",
+        "clientsession",
+        "carchargers",
+        "codespellrc",
+        "mccabe",
+        "noqa",
+        "isort",
+        "chargingstations",
+        "nieuw",
+        "eerst",
+        "laat",
+        "schrijven",
+        "MQTT",
+        "MODBUS",
+        "footgun"
     ],
     "ignorePaths": [
         ".git",

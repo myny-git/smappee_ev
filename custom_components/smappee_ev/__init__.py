@@ -1,3 +1,5 @@
+"""Smappee EV Home Assistant integration package."""
+
 import logging
 
 from aiohttp import ClientSession
@@ -33,7 +35,7 @@ CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Smappee EV component"""
+    """Set up the Smappee EV component."""
     hass.data.setdefault(DOMAIN, {})
     return True
 
@@ -131,7 +133,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         active_keys = [k for k in hass.data[DOMAIN] if k != "services_registered"]
         if not active_keys:
             unregister_services(hass)
-            hass.data.pop(DOMAI, None)
+            hass.data.pop(DOMAIN, None)
     return unload_ok
 
 
