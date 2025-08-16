@@ -1,5 +1,3 @@
-import logging
-
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -10,8 +8,6 @@ from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData
-
-_LOGGER = logging.getLogger(__name__)
 
 MODES = ["SMART", "SOLAR", "NORMAL"]
 

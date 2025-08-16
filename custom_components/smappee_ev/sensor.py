@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -12,8 +10,6 @@ from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
