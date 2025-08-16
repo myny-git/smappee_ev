@@ -56,13 +56,11 @@ jobs:
       - name: Install mypy + deps + stubs
         run: |
           python -m pip install --upgrade pip
-          # Type checker
           pip install mypy
-          # Runtime deps (zorgen dat mypy de modules vindt)
+          # Runtime deps
           pip install aiohttp voluptuous homeassistant
-          # Type stubs waar beschikbaar
-          pip install types-requests types-aiohttp
-  
+          # Stubs waar ze bestaan
+          pip install types-requests
       - name: Run mypy
         run: mypy custom_components/smappee_ev
             
