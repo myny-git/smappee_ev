@@ -1,0 +1,124 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Voeg je Smappee Platform API-sleutel toe",
+                "data": {
+                    "client_id": "Je API client-id",
+                    "client_secret": "Je client secret",
+                    "username": "Je gebruikersnaam op het Smappee-dashboard",
+                    "password": "Je wachtwoord op het Smappee-dashboard",
+                    "serial": "Het serienummer van je laadpunt",
+                    "update_interval": "Update-interval (seconden)"
+                }
+            }
+        },
+        "error": {
+            "auth_failed": "Authenticatie mislukt"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "description": "Werk je inloggegevens en polling-interval bij",
+                "data": {
+                    "client_id": "Je API client-id",
+                    "client_secret": "Je client secret",
+                    "username": "Je gebruikersnaam op het Smappee-dashboard",
+                    "password": "Je wachtwoord op het Smappee-dashboard",
+                    "serial": "Het serienummer van je laadpunt",
+                    "update_interval": "Update-interval (seconden)"
+                }
+            }
+        },
+        "error": {
+            "already_configured": "Er bestaat al een instantie met dit serienummer"
+        }
+    },
+    "services": {
+        "set_available": {
+            "name": "Zet beschikbaar",
+            "description": "Maak de lader beschikbaar om te laden."
+        },
+        "set_unavailable": {
+            "name": "Zet onbeschikbaar",
+            "description": "Maak de lader onbeschikbaar om te laden."
+        },
+        "set_brightness": {
+            "name": "Stel LED-helderheid in",
+            "description": "Pas de helderheid van de LED-verlichting van het station aan.",
+            "fields": {
+                "brightness": {
+                    "name": "Helderheid",
+                    "description": "Waarde tussen 0 en 100"
+                }
+            }
+        },
+        "start_charging": {
+            "name": "Start laden",
+            "description": "Start het laden met een specifieke stroomsterkte in Ampère.",
+            "fields": {
+                "connector_id": {
+                    "name": "Connector-ID",
+                    "description": "Connectornummer (1 of 2)"
+                },
+                "current": {
+                    "name": "Stroom (A)",
+                    "description": "Te gebruiken laadstroom (in Ampère)"
+                }
+            }
+        },
+        "pause_charging": {
+            "name": "Pauzeer laden",
+            "description": "Pauzeer het laden voor de geselecteerde connector.",
+            "fields": {
+                "connector_id": {
+                    "name": "Connector-ID",
+                    "description": "Connectornummer (1 of 2)"
+                }
+            }
+        },
+        "stop_charging": {
+            "name": "Stop laden",
+            "description": "Stop het laden voor de geselecteerde connector.",
+            "fields": {
+                "connector_id": {
+                    "name": "Connector-ID",
+                    "description": "Connectornummer (1 of 2)"
+                }
+            }
+        },
+        "set_charging_mode": {
+            "name": "Stel laadmodus in",
+            "description": "Stel de laadmodus van een connector in.",
+            "fields": {
+                "connector_id": {
+                    "name": "Connector-ID",
+                    "description": "Connectornummer (1 of 2)"
+                },
+                "mode": {
+                    "name": "Modus",
+                    "description": "Laadmodus (STANDARD, SMART, SOLAR)"
+                },
+                "limit": {
+                    "name": "Beperking",
+                    "description": "Optionele stroomlimiet (Ampère)"
+                }
+            }
+        },
+        "set_min_surpluspct": {
+            "name": "Stel minimum overschot in",
+            "description": "Stel het minimum percentage zonne-overschot in dat vereist is voordat het laden start in SOLAR-modus.",
+            "fields": {
+                "connector_id": {
+                    "name": "Connector-ID",
+                    "description": "Connectornummer (1 of 2)"
+                },
+                "min_surpluspct": {
+                    "name": "Minimum overschot (%)",
+                    "description": "Minimaal vereist percentage zonne-overschot om laden toe te staan"
+                }
+            }
+        }
+    }
+}
