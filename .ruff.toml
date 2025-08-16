@@ -10,7 +10,7 @@ select = [
   "UP","PERF","PIE",  # modernisering/perf/refactors
   "PT",               # pytest-style (kan later handig zijn)
   "RET","RSE","BLE",  # returns/exceptions
-  "PTH","ICN","ISC"   # pathlib/import conventions/implicit concat
+  "PTH","ICN","ISC",   # pathlib/import conventions/implicit concat
   "B",                # + bugbear
   "RUF100"            # + dead noqa
 ]
