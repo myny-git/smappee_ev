@@ -12,7 +12,8 @@ select = [
   "RET","RSE","BLE",  # returns/exceptions
   "PTH","ICN","ISC",   # pathlib/import conventions/implicit concat
   "B",                # + bugbear
-  "RUF100"            # + dead noqa
+  "RUF100",            # + dead noqa
+  "SIM105","SIM118","SIM201","SIM401"
 ]
 ignore = [
   "E501","W191","E111","E114","E117","D206","D300","Q","COM812","COM819","ISC001"
