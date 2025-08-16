@@ -1,0 +1,36 @@
+{
+    "version": "0.2",
+    "language": "en,nl",
+    "words": [
+        "homeassistant",
+        "HomeAssistant",
+        "Smappee",
+        "hass",
+        "uvx",
+        "pytest",
+        "pyproject",
+        "yaml",
+        "asyncio",
+        "EVCC",
+        "evcc",
+        "Wallbox",
+        "venv",
+        "pycache",
+        "codespell",
+        "Autobuild",
+        "autobuild",
+    ],
+    "ignorePaths": [
+        ".git",
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/.vscode/**",
+        "**/.ruff_cache/**",
+        "**/node_modules/**",
+        "**/*.svg",
+        "**/*.png",
+        "**/*.jpg",
+        "**/*.min.js"
+    ],
+    "flagWords": []
+}
