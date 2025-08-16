@@ -1,4 +1,5 @@
 # .codespellrc
+[codespell]
 quiet-level = 2
 check-filenames = true
 check-hidden = true
