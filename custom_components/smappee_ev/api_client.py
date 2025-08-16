@@ -56,7 +56,7 @@ class SmappeeApiClient:
     async def ensure_auth(self) -> None:
         await self.oauth_client.ensure_token_valid()
 
-    def auth_headers(self) -> dict:
+    def auth_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self.oauth_client.access_token}",
             "Content-Type": "application/json",
