@@ -19,6 +19,13 @@
         "codespell",
         "Autobuild",
         "autobuild",
+        "coros",
+        "surpluspct",
+        "smartdevices",
+        "servicelocation",
+        "smartdevice",
+        "surpluspct",
+        "excesspct"
     ],
     "ignorePaths": [
         ".git",

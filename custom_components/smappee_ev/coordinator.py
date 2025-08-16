@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import timedelta
 import logging
 
@@ -96,10 +97,8 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         ):
                             raw = prop.get("value")
                             val = raw.get("value") if isinstance(raw, dict) else raw
-                            try:
+                            with suppress(TypeError, ValueError):
                                 led_brightness = int(val)
-                            except (TypeError, ValueError):
-                                pass
                             break
             else:
                 txt = await resp.text()
@@ -139,10 +138,8 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if name == "chargingState":
                 session_state = val or session_state
             elif name == "percentageLimit":
-                try:
+                with suppress(TypeError, ValueError):
                     selected_percentage = int(val)
-                except (TypeError, ValueError):
-                    pass
 
         # configurationProperties: max/min current, min.excesspct
         for prop in data.get("configurationProperties", []):
@@ -151,20 +148,14 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             raw = prop.get("value")
             val = raw.get("value") if isinstance(raw, dict) else raw
             if name == "etc.smart.device.type.car.charger.config.max.current":
-                try:
+                with suppress(TypeError, ValueError):
                     max_current = int(val)
-                except (TypeError, ValueError):
-                    pass
             elif name == "etc.smart.device.type.car.charger.config.min.current":
-                try:
+                with suppress(TypeError, ValueError):
                     min_current = int(val)
-                except (TypeError, ValueError):
-                    pass
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
-                try:
+                with suppress(TypeError, ValueError):
                     min_surpluspct = int(val)
-                except (TypeError, ValueError):
-                    pass
 
         client.min_current = min_current
         client.max_current = max_current
