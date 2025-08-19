@@ -63,8 +63,8 @@ jobs:
           pip install types-requests
 
       - name: Generate stubs
-        run: |
-          python -m mypy.stubgen -m aiomqtt -o typings
+        run: python -m mypy.stubgen -m aiomqtt -o typings
+
       - name: Run mypy
         env:
           MYPYPATH: typings
