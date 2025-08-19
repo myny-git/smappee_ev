@@ -81,7 +81,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             return IntegrationData(station=station_state, connectors=connectors_state)
 
-        except Exception as err:
+        except (ClientError, TimeoutError, asyncio.CancelledError) as err:
             raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
 
     # -----------------------------
@@ -183,3 +183,323 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             max_current=max_current,
             min_surpluspct=min_surpluspct,
         )
+
+    # =====================================================================
+    # MQTT helpers + merge logic (call via mqtt_gateway callback)
+    # =====================================================================
+
+    # Topic parsing helpers
+    def _device_uuid_from_topic(self, topic: str) -> str | None:
+        """Return device UUID from .../devices/<UUID>/... ; None if not present."""
+        marker = "/devices/"
+        i = topic.find(marker)
+        if i == -1:
+            return None
+        rest = topic[i + len(marker) :]
+        return rest.split("/", 1)[0] if rest else None
+
+    def _property_name_from_topic(self, topic: str) -> str | None:
+        """Return property name from .../property/<name> (first segment)."""
+        marker = "/property/"
+        i = topic.find(marker)
+        if i == -1:
+            return None
+        name = topic[i + len(marker) :]
+        return name.split("/", 1)[0] if name else None
+
+    def _station_serial_from_topic(self, topic: str) -> str | None:
+        """Return station serial from .../acchargingstation/v1/<serial>/..."""
+        marker = "/acchargingstation/v1/"
+        i = topic.find(marker)
+        if i == -1:
+            return None
+        rest = topic[i + len(marker) :]
+        return rest.split("/", 1)[0] if rest else None
+
+    @staticmethod
+    def _as_int(v: Any, default: int | None = None) -> int | None:
+        try:
+            return int(v)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return default
+
+    # UI mappings
+    @staticmethod
+    def _derive_base_mode(mode: str | None, strat: str | None) -> str:
+        """Map to NORMAL/STANDARD/SOLAR."""
+        s = (strat or "").upper()
+        if s == "EXCESS_ONLY":
+            return "SOLAR"
+        if s == "SCHEDULES_FIRST_THEN_EXCESS":
+            return "STANDARD"
+        return "NORMAL"
+
+    @staticmethod
+    def _is_paused(
+        raw_mode: str | None, charging_state: str | None, evse_cause: str | None
+    ) -> bool:
+        """Pause or not."""
+        if (raw_mode or "").upper() == "PAUSED":
+            return True
+        if (charging_state or "").upper() == "SUSPENDED" and (evse_cause or "").upper().startswith(
+            "SUSPENDED_EVSE"
+        ):
+            return True
+        return False
+
+    @staticmethod
+    def _derive_evcc_letter(iec: str | None, charging_state: str | None) -> str | None:
+        """
+        IEC 61851 mapping:
+        - A*: vehicle not connected
+        - B*: connected, waiting to charge
+        - C*: connected, charging
+        """
+        if iec:
+            first = iec[:1].upper()
+            if first in ("A", "B", "C"):
+                return first
+        if charging_state:
+            cs = charging_state.upper()
+            if cs == "CHARGING":
+                return "C"
+            if cs in ("SUSPENDED", "FINISHED", "PAUSED"):
+                return "B"
+        return None
+
+    @staticmethod
+    def _evcc_code(letter: str | None) -> int | None:
+        return {"A": 0, "B": 1, "C": 2}.get(letter or "")
+
+    # Main entry: called by mqtt_gateway
+    def apply_mqtt_properties(self, topic: str, payload: dict) -> None:
+        """Merge incoming MQTT properties/state in the current snapshot."""
+        data = self.data
+        if not data:
+            return
+
+        changed = False
+
+        # Connector-device messages
+        if "/etc/carcharger/acchargingcontroller/" in topic and "/devices/" in topic:
+            changed = self._handle_connector_mqtt(topic, payload)
+
+        # Aggregated power
+        elif topic.endswith("/power"):
+            changed = self._handle_power(payload)
+
+        # Station-level properties
+        elif "/etc/chargingstation/acchargingstation/" in topic and topic.endswith("/properties"):
+            changed = self._handle_station_properties(payload)
+
+        # LED brightness
+        elif "/etc/led/acledcontroller/" in topic and topic.endswith("/devices/updated"):
+            changed = self._handle_led_updated(payload)
+
+        # min & max current
+        elif "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith(
+            "/devices/updated"
+        ):
+            changed = self._handle_devices_updated(payload)
+
+        if changed:
+            self.async_set_updated_data(data)
+
+    # ---------- split helpers to reduce complexity ----------
+    def _handle_connector_mqtt(self, topic: str, payload: dict) -> bool:
+        data = self.data
+        if not data:
+            return False
+        dev_uuid = self._device_uuid_from_topic(topic)
+        if not dev_uuid or dev_uuid not in data.connectors:
+            return False
+        conn: ConnectorState = data.connectors[dev_uuid]
+
+        if topic.endswith("/state"):
+            return self._handle_connector_state(conn, payload)
+
+        if "/property/" in topic and self._property_name_from_topic(topic) == "chargingstate":
+            return self._handle_connector_property_chargingstate(conn, payload)
+
+        return False
+
+    @staticmethod
+    def _handle_connector_state(conn: ConnectorState, payload: dict) -> bool:
+        changed = False
+        cs = payload.get("connectionStatus")
+        if cs and str(cs) != getattr(conn, "connection_status", None):
+            conn.connection_status = str(cs)
+            changed = True
+        errs = payload.get("configurationErrors")
+        if isinstance(errs, list):
+            new_errs = [str(e) for e in errs]
+            if new_errs != (conn.configuration_errors or []):
+                conn.configuration_errors = new_errs
+                changed = True
+        return changed
+
+    def _handle_connector_property_chargingstate(self, conn: ConnectorState, payload: dict) -> bool:
+        changed = False
+        changed |= self._merge_cs_primary(conn, payload)
+        changed |= self._merge_cs_context(conn, payload)
+        changed |= self._merge_cs_modes(conn, payload)
+        changed |= self._merge_cs_limits_availability(conn, payload)
+
+        changed |= self._update_evcc(conn)
+        return changed
+
+    # ---------- split sub-helpers ----------
+    def _set_if_changed(self, obj: object, attr: str, value) -> bool:
+        """Set attr if value is not None and different; return True if changed."""
+        if value is None:
+            return False
+        cur = getattr(obj, attr, None)
+        if value != cur:
+            setattr(obj, attr, value)
+            return True
+        return False
+
+    def _merge_cs_primary(self, conn: ConnectorState, payload: dict) -> bool:
+        return (
+            self._set_if_changed(conn, "session_state", str(payload["chargingState"]))
+            if "chargingState" in payload
+            else False
+        )
+
+    def _merge_cs_context(self, conn: ConnectorState, payload: dict) -> bool:
+        changed = False
+        evse_cur = (payload.get("status") or {}).get("current")
+        changed |= self._set_if_changed(conn, "session_cause", str(evse_cur) if evse_cur else None)
+        iec_cur = (payload.get("iecStatus") or {}).get("current")
+        changed |= self._set_if_changed(conn, "iec_status", str(iec_cur) if iec_cur else None)
+        if "status" in payload and isinstance(payload["status"], dict):
+            sbc = payload["status"].get("stoppedByCloud")
+            changed |= self._set_if_changed(
+                conn, "stopped_by_cloud", bool(sbc) if sbc is not None else None
+            )
+        return changed
+
+    def _merge_cs_limits_availability(self, conn: ConnectorState, payload: dict) -> bool:
+        changed = False
+        if "percentageLimit" in payload:
+            # Only update in NORMAL mode (strategy == NONE).
+            strategy = (conn.optimization_strategy or "").upper()
+            if strategy == "NONE":
+                pct = self._as_int(payload.get("percentageLimit"), conn.selected_percentage_limit)
+                if pct is not None:
+                    changed |= self._set_if_changed(conn, "selected_percentage_limit", pct)
+
+        if "available" in payload:
+            changed |= self._set_if_changed(conn, "available", bool(payload["available"]))
+        return changed
+
+    def _merge_cs_modes(self, conn: ConnectorState, payload: dict) -> bool:
+        changed = False
+        if "chargingMode" in payload:
+            changed |= self._set_if_changed(conn, "raw_charging_mode", str(payload["chargingMode"]))
+        if "optimizationStrategy" in payload:
+            changed |= self._set_if_changed(
+                conn, "optimization_strategy", str(payload["optimizationStrategy"])
+            )
+        base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
+        changed |= self._set_if_changed(conn, "ui_mode_base", base)
+        # backward compat
+        changed |= self._set_if_changed(conn, "selected_mode", base)
+        paused = self._is_paused(conn.raw_charging_mode, conn.session_state, conn.session_cause)
+        changed |= self._set_if_changed(conn, "paused", paused)
+        return changed
+
+    def _update_evcc(self, conn: ConnectorState) -> bool:
+        changed = False
+        letter = self._derive_evcc_letter(conn.iec_status, conn.session_state)
+        code = self._evcc_code(letter)
+        changed |= self._set_if_changed(conn, "evcc_state", letter)
+        changed |= self._set_if_changed(conn, "evcc_state_code", code)
+        return changed
+
+    def _handle_power(self, payload: dict) -> bool:
+        # val = payload.get("activePower")
+        # if isinstance(val, (int, float)):
+        #     cur = getattr(self.data.station, "active_power", None)
+        #     new = int(val)
+        #     if new != cur:
+        #         self.data.station.active_power = new
+        #         return True
+        return False
+
+    def _handle_station_properties(self, payload: dict) -> bool:
+        changed = False
+        station: StationState = self.data.station
+        if "available" in payload:
+            avail = bool(payload["available"])
+            if avail != getattr(station, "available", None):
+                station.available = avail
+                changed = True
+        if "ledBrightness" in payload:
+            new_bri = self._as_int(payload.get("ledBrightness"))
+            if new_bri is not None and new_bri != getattr(station, "led_brightness", None):
+                station.led_brightness = new_bri
+                changed = True
+        return changed
+
+    def _handle_led_updated(self, payload: dict) -> bool:
+        """Parse LED controller 'devices/updated' and update station.led_brightness."""
+        vals = payload.get("configurationPropertyValues") or []
+        if not isinstance(vals, list):
+            return False
+
+        new_bri = None
+        for item in vals:
+            if (
+                isinstance(item, dict)
+                and item.get("propertySpecName")
+                == "etc.smart.device.type.car.charger.led.config.brightness"
+            ):
+                new_bri = self._as_int(item.get("value"))
+                break
+
+        if new_bri is None:
+            return False
+
+        station = self.data.station
+        if new_bri != getattr(station, "led_brightness", None):
+            station.led_brightness = new_bri
+            return True
+
+        return False
+
+    def _handle_devices_updated(self, payload: dict) -> bool:
+        """Merge device-level updates (min/max current, min.excesspct, position)."""
+        data = self.data
+        if not data:
+            return False
+
+        dev_uuid = payload.get("uuid") or payload.get("deviceUUID")
+        if not dev_uuid or dev_uuid not in data.connectors:
+            return False
+
+        conn = data.connectors[dev_uuid]
+        changed = False
+
+        # max/min current
+        maxc = self._as_int(payload.get("maximumCurrent"))
+        if maxc is not None:
+            changed |= self._set_if_changed(conn, "max_current", maxc)
+
+        minc = self._as_int(payload.get("minimumCurrent"))
+        if minc is not None:
+            changed |= self._set_if_changed(conn, "min_current", minc)
+
+        # optional: min.excesspct uit customConfigurationProperties
+        ccp = payload.get("customConfigurationProperties") or {}
+        if isinstance(ccp, dict):
+            msp = self._as_int(ccp.get("etc.smart.device.type.car.charger.config.min.excesspct"))
+            if msp is not None:
+                changed |= self._set_if_changed(conn, "min_surpluspct", msp)
+
+        # optional: connector position → connector_number
+        pos = self._as_int(payload.get("position"))
+        if pos is not None:
+            changed |= self._set_if_changed(conn, "connector_number", pos)
+
+        return changed

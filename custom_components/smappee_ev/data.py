@@ -17,6 +17,24 @@ class ConnectorState:
     max_current: int = 32
     min_surpluspct: int = 100
 
+    connection_status: str | None = None  # CONNECTED / DISCONNECTED
+    configuration_errors: list[str] | None = None
+
+    iec_status: str | None = None  # "A1" / "B1" / "C1"
+    available: bool = True  # connector-level availability
+    session_cause: str | None = None
+    stopped_by_cloud: bool | None = None
+
+    # Modus/strategy + returned UI-modus en paused-overlay
+    raw_charging_mode: str | None = None  # NORMAL / SMART / PAUSED
+    optimization_strategy: str | None = None  # NONE / EXCESS_ONLY / SCHEDULES_FIRST_THEN_EXCESS
+    ui_mode_base: str | None = None  # NORMAL / STANDARD / SOLAR
+    paused: bool = False  # overlay
+
+    # EVCC letter/code (return from IEC of chargingState)
+    evcc_state: str | None = None  # "A" / "B" / "C"
+    evcc_state_code: int | None = None  # 0(A) / 1(B) / 2(C)
+
 
 @dataclass
 class StationState:

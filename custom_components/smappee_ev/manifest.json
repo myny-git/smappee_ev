@@ -1,13 +1,20 @@
 {
   "domain": "smappee_ev",
   "name": "Smappee EV",
-  "codeowners": ["@gvnuland", "@myny-git"],
+  "codeowners": [
+    "@gvnuland",
+    "@myny-git"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/myny-git/smappee_ev",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/myny-git/smappee_ev/issues",
-  "loggers": ["custom_components.smappee_ev"],
-  "requirements": [],
+  "loggers": [
+    "custom_components.smappee_ev"
+  ],
+  "requirements": [
+    "asyncio-mqtt==0.16.2"
+  ],
   "version": "2025.8.4"
 }

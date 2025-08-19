@@ -94,12 +94,16 @@ class SmappeeEVCCStateSensor(_Base):
     @property
     def native_value(self):
         st = self._state()
-        session_state = st.session_state if st else None
+        return st.evcc_state if st else None
 
-        if session_state in ("INITIAL", "STOPPED"):
-            return "A"
-        if session_state in ("SUSPENDED", "STOPPING"):
-            return "B"
-        if session_state in ("STARTED", "CHARGING"):
-            return "C"
-        return "E"
+    @property
+    def extra_state_attributes(self):
+        st = self._state()
+        if not st:
+            return None
+        return {
+            "iec_status": st.iec_status,  # "B1"
+            "session_state": st.session_state,  # CHARGING/SUSPENDED/...
+            "ui_mode_base": st.ui_mode_base,  # NORMAL/STANDARD/SOLAR
+            "paused": st.paused,
+        }

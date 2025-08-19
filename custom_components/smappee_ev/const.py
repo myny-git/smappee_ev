@@ -11,6 +11,7 @@ CONF_USERNAME: str = "username"
 CONF_PASSWORD: str = "password"  # noqa: S105 - config field name, not a secret
 CONF_SERIAL: str = "serial"
 CONF_SERVICE_LOCATION_ID: str = "service_location_id"
+CONF_SERVICE_LOCATION_UUID: str = "service_location_uuid"
 CONF_SMART_DEVICE_UUID: str = "smart_device_uuid"
 CONF_SMART_DEVICE_ID: str = "smart_device_id"
 CONF_UPDATE_INTERVAL: str = "update_interval"
@@ -27,3 +28,8 @@ SERVICE_RELOAD = "reload"
 
 # Base URL of the API
 BASE_URL = "https://app1pub.smappee.net/dev/v3"
+
+# MQTT for connect
+MQTT_HOST = "mqtt.smappee.net"
+MQTT_PORT_TLS = 443
+MQTT_TRACK_INTERVAL_SEC = 60

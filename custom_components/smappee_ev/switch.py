@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFa
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
+from .data import ConnectorState, IntegrationData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,10 +29,10 @@ async def async_setup_entry(
     coordinator: SmappeeCoordinator = data["coordinator"]
     connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]  # keyed by UUID
 
-    entities: list[SmappeeChargingSwitch] = [
-        SmappeeChargingSwitch(coordinator=coordinator, api_client=client)
-        for client in connector_clients.values()
-    ]
+    entities: list[SwitchEntity] = []
+    for client in connector_clients.values():
+        entities.append(SmappeeChargingSwitch(coordinator=coordinator, api_client=client))
+        entities.append(SmappeeAvailabilitySwitch(coordinator=coordinator, api_client=client))
 
     async_add_entities(entities)
 
@@ -130,3 +131,76 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
         self._is_on = False
         self.async_write_ha_state()
         await self._async_refresh()
+
+
+class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
+    """Switch to toggle connector availability."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
+        super().__init__(coordinator)
+        self.api_client = api_client
+        self._attr_name = f"Connector {api_client.connector_number} available"
+        self._attr_unique_id = (
+            f"{api_client.serial_id}_connector{api_client.connector_number}_available"
+        )
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
+
+    def _state(self) -> ConnectorState | None:
+        data: IntegrationData | None = self.coordinator.data
+        if not data:
+            return None
+
+        for st in data.connectors.values():
+            if st.connector_number == self.api_client.connector_number:
+                return st
+        return None
+
+    @property
+    def is_on(self) -> bool:
+        st = self._state()
+        if st is None:
+            return True
+        return st.available if st.available is not None else True
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._set_available(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._set_available(False)
+
+    async def _set_available(self, value: bool) -> None:
+        data: IntegrationData | None = self.coordinator.data
+        prev = None
+        st = self._state()
+        if data and st is not None:
+            prev = st.available
+            if prev != value:
+                st.available = value
+                self.coordinator.async_set_updated_data(data)
+
+        try:
+            await self.api_client.set_available()
+        except (
+            ClientError,
+            asyncio.CancelledError,
+            TimeoutError,
+            HomeAssistantError,
+            UpdateFailed,
+        ) as err:
+            _LOGGER.warning(
+                "Set availability failed on connector %s: %s", self.api_client.connector_number, err
+            )
+            # Revert local state
+            if data and st is not None and prev is not None:
+                st.available = prev
+                self.coordinator.async_set_updated_data(data)
+            raise

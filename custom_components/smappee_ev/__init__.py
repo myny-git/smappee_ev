@@ -14,11 +14,13 @@ from .api_client import SmappeeApiClient
 from .const import (
     CONF_SERIAL,
     CONF_SERVICE_LOCATION_ID,
+    CONF_SERVICE_LOCATION_UUID,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
     UPDATE_INTERVAL_DEFAULT,
 )
 from .coordinator import SmappeeCoordinator
+from .mqtt_gateway import SmappeeMqtt
 from .oauth import OAuth2Client
 from .services import register_services, unregister_services
 
@@ -97,6 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         connector_clients=connector_clients,
         update_interval=update_interval,
     )
+    # 1) First REST-snapshot (once)
     await coordinator.async_config_entry_first_refresh()
 
     # --- Store in hass.data for platforms to use ---
@@ -105,11 +108,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "station_client": station_client,
         "connector_clients": connector_clients,
     }
+    # 2) Live MQTT (if UUID is present)
+    slu = entry.data.get(CONF_SERVICE_LOCATION_UUID)
+    if slu:
 
-    # hass.data[DOMAIN][entry.entry_id] = {
-    #    "station": station_client,
-    #    "connectors": connector_clients,
-    # }
+        def _on_props(topic: str, payload: dict) -> None:
+            coordinator.apply_mqtt_properties(topic, payload)
+
+        # Serial voor tracking; directly from station_client
+        serial_for_tracking = str(getattr(station_client, "serial", serial))
+
+        mqtt = SmappeeMqtt(
+            service_location_uuid=slu,
+            client_id=f"ha-{entry.entry_id}",
+            serial_number=serial_for_tracking,
+            on_properties=_on_props,
+        )
+        hass.data[DOMAIN][entry.entry_id]["mqtt"] = mqtt
+        # Start async; don't block
+        hass.async_create_task(mqtt.start())
+    else:
+        _LOGGER.warning("No service_location_uuid in config entry; MQTT disabled")
+
+    # 3) disable REST-polling
+    coordinator.update_interval = None
+    _LOGGER.info("Smappee: REST polling disabled; MQTT will drive updates.")
+
+    # 4) Start platforms
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -125,6 +150,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
+
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    mqtt = data.get("mqtt") if data else None
+    if mqtt:
+        await mqtt.stop()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
