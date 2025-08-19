@@ -264,11 +264,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         if not iec:
             return None
         first = iec.strip()[:1].upper()
-        return first if first in ("A", "B", "C") else None
+        return first if first in ("A", "B", "C", "E", "F") else None
 
     @staticmethod
     def _evcc_code(letter: str | None) -> int | None:
-        return {"A": 0, "B": 1, "C": 2}.get(letter or "")
+        return {"A": 0, "B": 1, "C": 2, "E": 3, "F": 4}.get((letter or "").upper())
 
     # Main entry: called by mqtt_gateway
     def apply_mqtt_properties(self, topic: str, payload: dict) -> None:
