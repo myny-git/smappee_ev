@@ -59,7 +59,7 @@ class SmappeeMqtt:
                 qos=1,
             )
             await client.subscribe(
-                f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/property/#",
+                f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/property/chargingstate",
                 qos=1,
             )
             await client.subscribe(f"servicelocation/{self._slu}/power", qos=1)
