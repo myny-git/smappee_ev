@@ -62,10 +62,15 @@ jobs:
           # Stubs waar ze bestaan
           pip install types-requests
 
-      - name: Generate stubs for asyncio_mqtt
+      - name: Generate stubs
         run: |
-          python -m mypy.stubgen -m asyncio_mqtt -o typings       
-             
+          pip install mypy asyncio-mqtt
+          stubgen -m asyncio_mqtt -o typings
+      - name: Run mypy
+        env:
+          MYPYPATH: typings
+        run: mypy custom_components/smappee_ev
+
       - name: Run mypy
         run: mypy custom_components/smappee_ev
             
