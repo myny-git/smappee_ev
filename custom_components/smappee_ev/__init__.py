@@ -1,8 +1,10 @@
 """Smappee EV Home Assistant integration package."""
 
+import asyncio
+import json
 import logging
 
-from aiohttp import ClientSession
+from aiohttp import ClientError, ClientSession
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -12,6 +14,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .api_client import SmappeeApiClient
 from .const import (
+    BASE_URL,
     CONF_SERIAL,
     CONF_SERVICE_LOCATION_ID,
     CONF_SERVICE_LOCATION_UUID,
@@ -34,6 +37,80 @@ PLATFORMS = [
 ]
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
+
+
+async def _ensure_service_location_uuid_in_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    oauth_client,
+    session: ClientSession,
+) -> str | None:
+    if entry.data.get(CONF_SERVICE_LOCATION_UUID):
+        return entry.data[CONF_SERVICE_LOCATION_UUID]
+
+    sl_id = entry.data.get(CONF_SERVICE_LOCATION_ID)
+    serial = str(entry.data.get(CONF_SERIAL, ""))
+
+    # Token
+    await oauth_client.ensure_token_valid()
+    headers = {
+        "Authorization": f"Bearer {oauth_client.access_token}",
+        "Content-Type": "application/json",
+    }
+
+    url = f"{BASE_URL}/servicelocation"
+    try:
+        resp = await session.get(url, headers=headers)
+    except (TimeoutError, ClientError, asyncio.CancelledError) as err:
+        _LOGGER.warning("Failed to call %s: %s", url, err)
+        return None
+
+    if resp.status != 200:
+        text = await resp.text()
+        _LOGGER.warning("GET %s returned %s: %s", url, resp.status, text)
+        return None
+
+    try:
+        data = await resp.json()
+    except (json.JSONDecodeError, ClientError) as err:
+        _LOGGER.warning("Invalid JSON from %s: %s", url, err)
+        return None
+
+    if isinstance(data, dict) and "serviceLocations" in data:
+        items = data["serviceLocations"] or []
+    elif isinstance(data, list):
+        items = data
+    else:
+        items = []
+
+    match = None
+
+    if sl_id is not None:
+        for it in items:
+            try:
+                if int(it.get("serviceLocationId")) == int(sl_id):
+                    match = it
+                    break
+            except (TypeError, ValueError) as err:
+                _LOGGER.debug("Skip serviceLocation (bad id): %r (err=%s)", it, err)
+                continue
+
+    if match is None and serial:
+        for it in items:
+            if str(it.get("deviceSerialNumber", "")).strip() == serial:
+                match = it
+                break
+
+    slu = (match or {}).get("serviceLocationUuid")
+    if not slu:
+        _LOGGER.warning("Could not determine service_location_uuid from /servicelocation response")
+        return None
+
+    new_data = dict(entry.data)
+    new_data[CONF_SERVICE_LOCATION_UUID] = slu
+    hass.config_entries.async_update_entry(entry, data=new_data)
+    _LOGGER.info("Filled missing service_location_uuid in config entry: %s", slu)
+    return slu
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -61,6 +138,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     update_interval = entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT)
 
     oauth_client = OAuth2Client(entry.data, session=session)
+    slu = entry.data.get(CONF_SERVICE_LOCATION_UUID)
+    if not slu:
+        slu = await _ensure_service_location_uuid_in_entry(hass, entry, oauth_client, session)
 
     # Station-level client (for LED, availability, etc.)
     st = entry.data["station"]
@@ -110,6 +190,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     # 2) Live MQTT (if UUID is present)
     slu = entry.data.get(CONF_SERVICE_LOCATION_UUID)
+
     if slu:
 
         def _on_props(topic: str, payload: dict) -> None:
