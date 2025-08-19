@@ -58,20 +58,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install mypy
           # Runtime deps
-          pip install aiohttp voluptuous homeassistant asyncio_mqtt
+          pip install aiohttp voluptuous homeassistant aiomqtt==2.4.0
           # Stubs waar ze bestaan
           pip install types-requests
 
       - name: Generate stubs
         run: |
-          pip install mypy asyncio-mqtt
-          stubgen -m asyncio_mqtt -o typings
+          python -m mypy.stubgen -m aiomqtt -o typings
       - name: Run mypy
         env:
           MYPYPATH: typings
-        run: mypy custom_components/smappee_ev
-
-      - name: Run mypy
         run: mypy custom_components/smappee_ev
             
 

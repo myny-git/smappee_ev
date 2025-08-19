@@ -100,6 +100,8 @@
         "acledcontroller",
         "maxc",
         "minc",
+        "aiomqtt",
+        "tobytes",
     ],
     "ignorePaths": [
         ".git",
