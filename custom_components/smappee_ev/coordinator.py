@@ -225,9 +225,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
     # UI mappings
     @staticmethod
-    def _derive_base_mode(mode: str | None, strat: str | None) -> str:
+    def _derive_base_mode(mode: str | None, strategy: str | None) -> str:
         """Map to NORMAL/STANDARD/SOLAR."""
-        s = (strat or "").upper()
+        s = (strategy or "").upper()
         if s == "EXCESS_ONLY":
             return "SOLAR"
         if s == "SCHEDULES_FIRST_THEN_EXCESS":
@@ -398,9 +398,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         if "chargingMode" in payload:
             changed |= self._set_if_changed(conn, "raw_charging_mode", str(payload["chargingMode"]))
         if "optimizationStrategy" in payload:
-            changed |= self._set_if_changed(
-                conn, "optimization_strategy", str(payload["optimizationStrategy"])
-            )
+            strategy = str(payload["optimizationStrategy"])
+            changed |= self._set_if_changed(conn, "optimization_strategy", strategy)
+
         base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
         changed |= self._set_if_changed(conn, "ui_mode_base", base)
         # backward compat

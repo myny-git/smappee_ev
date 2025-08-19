@@ -34,51 +34,55 @@ async def async_setup_entry(
     # Connector-based buttons
     for uuid, client in connector_clients.items():  # <— had values() eerst
         connector = client.connector_number or 1
-        entities.extend([
-            SmappeeActionButton(
-                coordinator=coordinator,
-                api_client=client,
-                uuid=uuid,
-                name=f"Start charging {connector}",
-                action="start_charging",
-                unique_id_suffix=f"start_{connector}",
-            ),
-            SmappeeActionButton(
-                coordinator=coordinator,
-                api_client=client,
-                uuid=uuid,
-                name=f"Stop charging {connector}",
-                action="stop_charging",
-                unique_id_suffix=f"stop_{connector}",
-            ),
-            SmappeeActionButton(
-                coordinator=coordinator,
-                api_client=client,
-                uuid=uuid,
-                name=f"Pause charging {connector}",
-                action="pause_charging",
-                unique_id_suffix=f"pause_{connector}",
-            ),
-            SmappeeActionButton(
-                coordinator=coordinator,
-                api_client=client,
-                uuid=uuid,
-                name=f"Set charging mode {connector}",
-                action="set_charging_mode",
-                unique_id_suffix=f"mode_{connector}",
-            ),
-        ])
+        entities.extend(
+            [
+                SmappeeActionButton(
+                    coordinator=coordinator,
+                    api_client=client,
+                    uuid=uuid,
+                    name=f"Start charging {connector}",
+                    action="start_charging",
+                    unique_id_suffix=f"start_{connector}",
+                ),
+                SmappeeActionButton(
+                    coordinator=coordinator,
+                    api_client=client,
+                    uuid=uuid,
+                    name=f"Stop charging {connector}",
+                    action="stop_charging",
+                    unique_id_suffix=f"stop_{connector}",
+                ),
+                SmappeeActionButton(
+                    coordinator=coordinator,
+                    api_client=client,
+                    uuid=uuid,
+                    name=f"Pause charging {connector}",
+                    action="pause_charging",
+                    unique_id_suffix=f"pause_{connector}",
+                ),
+                SmappeeActionButton(
+                    coordinator=coordinator,
+                    api_client=client,
+                    uuid=uuid,
+                    name=f"Set charging mode {connector}",
+                    action="set_charging_mode",
+                    unique_id_suffix=f"mode_{connector}",
+                ),
+            ]
+        )
 
     # Station-level buttons
-    entities.extend([
-        SmappeeActionButton(
-            coordinator=coordinator,
-            api_client=station_client,
-            name="Set LED brightness",
-            action="set_brightness",
-            unique_id_suffix="set_brightness",
-        )
-    ])
+    entities.extend(
+        [
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=station_client,
+                name="Set LED brightness",
+                action="set_brightness",
+                unique_id_suffix="set_brightness",
+            )
+        ]
+    )
 
     async_add_entities(entities)
 
