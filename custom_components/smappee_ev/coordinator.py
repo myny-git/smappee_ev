@@ -231,7 +231,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         if s == "EXCESS_ONLY":
             return "SOLAR"
         if s == "SCHEDULES_FIRST_THEN_EXCESS":
-            return "STANDARD"
+            return "SMART"
         return "NORMAL"
 
     @staticmethod
@@ -248,24 +248,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         return False
 
     @staticmethod
-    def _derive_evcc_letter(iec: str | None, charging_state: str | None) -> str | None:
-        """
-        IEC 61851 mapping:
-        - A*: vehicle not connected
-        - B*: connected, waiting to charge
-        - C*: connected, charging
-        """
-        if iec:
-            first = iec[:1].upper()
-            if first in ("A", "B", "C"):
-                return first
-        if charging_state:
-            cs = charging_state.upper()
-            if cs == "CHARGING":
-                return "C"
-            if cs in ("SUSPENDED", "FINISHED", "PAUSED"):
-                return "B"
-        return None
+    def _derive_evcc_letter(iec: str | None, _charging_state: str | None = None) -> str | None:
+        if not iec:
+            return None
+        first = iec.strip()[:1].upper()
+        return first if first in ("A", "B", "C") else None
 
     @staticmethod
     def _evcc_code(letter: str | None) -> int | None:
@@ -280,8 +267,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         changed = False
 
+        if "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith("/devices/updated"):
+            changed = self._handle_connector_devices_updated(payload)
+
         # Connector-device messages
-        if "/etc/carcharger/acchargingcontroller/" in topic and "/devices/" in topic:
+        elif "/etc/carcharger/acchargingcontroller/" in topic and "/devices/" in topic:
             changed = self._handle_connector_mqtt(topic, payload)
 
         # Aggregated power
@@ -306,6 +296,55 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             self.async_set_updated_data(data)
 
     # ---------- split helpers to reduce complexity ----------
+    def _handle_connector_devices_updated(self, payload: dict) -> bool:
+        """Process devices/updated for AC charging controller (min/max current, min.excesspct, etc.)."""
+        data = self.data
+        if not data:
+            return False
+
+        dev_uuid = payload.get("deviceUUID")
+        if not dev_uuid or dev_uuid not in data.connectors:
+            return False
+
+        conn = data.connectors[dev_uuid]
+        changed = False
+
+        if "minimumCurrent" in payload:
+            mc_min = self._as_int(payload.get("minimumCurrent"), conn.min_current)
+            if mc_min is not None:
+                changed |= self._set_if_changed(conn, "min_current", mc_min)
+
+        if "maximumCurrent" in payload:
+            mc_max = self._as_int(payload.get("maximumCurrent"), conn.max_current)
+            if mc_max is not None:
+                changed |= self._set_if_changed(conn, "max_current", mc_max)
+
+        ccp = payload.get("customConfigurationProperties") or {}
+        if isinstance(ccp, dict):
+            v = ccp.get("etc.smart.device.type.car.charger.config.min.excesspct")
+            v_int = self._as_int(v, None)
+            if v_int is not None:
+                changed |= self._set_if_changed(conn, "min_surpluspct", v_int)
+
+            n = ccp.get("etc.smart.device.type.car.charger.smappee.charger.number")
+            try:
+                n_int = int(n) if n is not None else None
+            except (TypeError, ValueError):
+                n_int = None
+            if n_int is not None:
+                changed |= self._set_if_changed(conn, "connector_number", n_int)
+
+        if "percentageLimit" in payload:
+            pct = self._as_int(payload.get("percentageLimit"), None)
+            if pct is not None:
+                changed |= self._set_if_changed(conn, "selected_percentage_limit", pct)
+                # derive an amp value using current min/max
+                rng = max(int(conn.max_current) - int(conn.min_current), 1)
+                cur = int(round((pct / 100) * rng + int(conn.min_current)))
+                changed |= self._set_if_changed(conn, "selected_current_limit", cur)
+
+        return changed
+
     def _handle_connector_mqtt(self, topic: str, payload: dict) -> bool:
         data = self.data
         if not data:
@@ -411,8 +450,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
     def _update_evcc(self, conn: ConnectorState) -> bool:
         changed = False
-        letter = self._derive_evcc_letter(conn.iec_status, conn.session_state)
-        code = self._evcc_code(letter)
+        letter = self._derive_evcc_letter(conn.iec_status)
+        if letter is None:
+            letter = conn.evcc_state
+
+        code = self._evcc_code(letter) if letter else None
         changed |= self._set_if_changed(conn, "evcc_state", letter)
         changed |= self._set_if_changed(conn, "evcc_state_code", code)
         return changed

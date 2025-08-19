@@ -124,7 +124,16 @@ class SmappeeMqtt:
                         try:
                             payload = json.loads(payload_raw)
                             if isinstance(payload, dict) and "jsonContent" in payload:
-                                payload = json.loads(payload["jsonContent"])
+                                try:
+                                    inner = json.loads(payload["jsonContent"])
+                                except json.JSONDecodeError:
+                                    inner = None
+                                if isinstance(inner, dict):
+                                    # preserve outer fields we care about (deviceUUID, messageType/messsageType)
+                                    for k in ("deviceUUID", "messageType", "messsageType"):
+                                        if k in payload:
+                                            inner.setdefault(k, payload[k])
+                                    payload = inner
                         except json.JSONDecodeError:
                             _LOGGER.debug("Non-JSON MQTT payload on %s: %r", topic_str, payload_raw)
                             continue
