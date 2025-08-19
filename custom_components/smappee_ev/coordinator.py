@@ -321,6 +321,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         conn = data.connectors[dev_uuid]
         changed = False
 
+        # min/max current
         if "minimumCurrent" in payload:
             mc_min = self._as_int(payload.get("minimumCurrent"), conn.min_current)
             if mc_min is not None:
@@ -331,6 +332,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if mc_max is not None:
                 changed |= self._set_if_changed(conn, "max_current", mc_max)
 
+        # custom configuration properties: min excesspct + connector number
         ccp = payload.get("customConfigurationProperties") or {}
         if isinstance(ccp, dict):
             v = ccp.get("etc.smart.device.type.car.charger.config.min.excesspct")
@@ -346,14 +348,17 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if n_int is not None:
                 changed |= self._set_if_changed(conn, "connector_number", n_int)
 
+        # percentageLimit
         if "percentageLimit" in payload:
-            pct = self._as_int(payload.get("percentageLimit"), None)
-            if pct is not None:
-                changed |= self._set_if_changed(conn, "selected_percentage_limit", pct)
-                # derive an amp value using current min/max
-                rng = max(int(conn.max_current) - int(conn.min_current), 1)
-                cur = int(round((pct / 100) * rng + int(conn.min_current)))
-                changed |= self._set_if_changed(conn, "selected_current_limit", cur)
+            if (conn.optimization_strategy or "").upper() == "NONE":
+                pct = self._as_int(payload.get("percentageLimit"), None)
+                if pct is not None:
+                    if self._set_if_changed(conn, "selected_percentage_limit", pct):
+                        changed = True
+                    rng = max(int(conn.max_current) - int(conn.min_current), 1)
+                    cur = int(round((pct / 100) * rng + int(conn.min_current)))
+                    changed |= self._set_if_changed(conn, "selected_current_limit", cur)
+            # else: in SMART/SOLAR do not update
 
         return changed
 
@@ -439,13 +444,12 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         pct_raw = self._get_any(payload, "percentageLimit", "percentagelimit")
         if pct_raw is not None:
-            # Alleen in NORMAL (strategy == NONE)
+            # Only in NORMAL (strategy == NONE)
             if (conn.optimization_strategy or "").upper() == "NONE":
                 pct = self._as_int(pct_raw, conn.selected_percentage_limit)
                 if pct is not None:
                     if self._set_if_changed(conn, "selected_percentage_limit", pct):
                         changed = True
-                    # → zet ook meteen de current voor directe UI-update
                     rng = max(int(conn.max_current) - int(conn.min_current), 1)
                     cur = int(round((pct / 100) * rng + int(conn.min_current)))
                     changed |= self._set_if_changed(conn, "selected_current_limit", cur)
@@ -462,9 +466,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         if mode is not None:
             changed |= self._set_if_changed(conn, "raw_charging_mode", str(mode))
 
-        strat = self._get_any(payload, "optimizationStrategy", "optimizationstrategy")
-        if strat is not None:
-            changed |= self._set_if_changed(conn, "optimization_strategy", str(strat))
+        strategy = self._get_any(payload, "optimizationStrategy", "optimizationstrategy")
+        if strategy is not None:
+            changed |= self._set_if_changed(conn, "optimization_strategy", str(strategy))
 
         base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
         changed |= self._set_if_changed(conn, "ui_mode_base", base)
