@@ -117,22 +117,34 @@ class SmappeeApiClient:
         if mode == "NORMAL":
             # If caller passed a limit, mirror it; otherwise we used min_current
             self.selected_current_limit = use_limit
+            if self.max_current > self.min_current:
+                rng = self.max_current - self.min_current
+                # use_limit is always int
+                pct = int(round((use_limit - self.min_current) * 100.0 / rng))
+                self.selected_percentage_limit = max(0, min(100, pct))
+            else:
+                self.selected_percentage_limit = None
 
         return True
 
     async def start_charging(self, current: int) -> None:
         """Convert amps -> percentage and call action."""
-        if self.max_current == self.min_current:
-            raise ValueError(f"Invalid current range: {self.min_current} == {self.max_current}")
-        if not (self.min_current <= current <= self.max_current):
-            raise ValueError(f"{current}A out of range {self.min_current}-{self.max_current}")
-
-        rng = self.max_current - self.min_current
-        percentage = max(0, min(round(((current - self.min_current) / rng) * 100), 100))
-        # self.selected_current_limit = current
-        # self.selected_percentage_limit = percentage
 
         await self.ensure_auth()
+        min_c = getattr(self, "min_current", 6)
+        max_c = getattr(self, "max_current", 32)
+        if max_c < min_c:
+            min_c, max_c = max_c, min_c  # sanity
+
+        if max_c == min_c:
+            target = int(min_c)
+            percentage = 100
+
+        else:
+            target = max(min_c, min(int(current), max_c))
+            rng = max_c - min_c
+            percentage = int(max(0, min(100, round(((target - min_c) * 100.0) / rng))))
+
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
         resp = await self._session.post(
@@ -141,8 +153,9 @@ class SmappeeApiClient:
         if resp.status != 200:
             text = await resp.text()
             raise RuntimeError(f"start_charging failed: {text}")
+
         _LOGGER.debug("Started charging successfully")
-        self.selected_current_limit = current
+        self.selected_current_limit = target
         self.selected_percentage_limit = percentage
 
     async def pause_charging(self) -> None:
@@ -221,11 +234,16 @@ class SmappeeApiClient:
             raise RuntimeError(f"set_percentage_limit failed: {text}")
         _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
         self.selected_percentage_limit = percentage
-        rng = max(self.max_current - self.min_current, 1)
-        self.selected_current_limit = int(round((percentage / 100) * rng + self.min_current))
-        # self.selected_current_limit = int(
-        #    round((percentage / 100) * (self.max_current - self.min_current) + self.min_current)
-        # )
+
+        if self.max_current <= self.min_current:
+            # fixed range →  min_current
+            self.selected_current_limit = int(self.min_current)
+        else:
+            rng = self.max_current - self.min_current
+            cur = self.min_current + (float(percentage) / 100.0) * rng
+            self.selected_current_limit = max(
+                self.min_current, min(self.max_current, int(round(cur)))
+            )
 
     async def set_available(self) -> None:
         await self.ensure_auth()

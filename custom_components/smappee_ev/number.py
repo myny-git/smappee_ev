@@ -123,41 +123,53 @@ class SmappeeCombinedCurrentSlider(_Base):
             return None
         if st.selected_current_limit is not None:
             return int(st.selected_current_limit)
-        rng = max(st.max_current - st.min_current, 1)
+        if st.max_current <= st.min_current:
+            return int(st.min_current)
+        rng = st.max_current - st.min_current
         pct = st.selected_percentage_limit or 0
-        return int(round((pct / 100) * rng + st.min_current))
+        cur = st.min_current + (float(pct) / 100.0) * rng
+        return max(st.min_current, min(st.max_current, int(round(cur))))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         st = self._state()
         if not st:
             return {}
-        rng = max(st.max_current - st.min_current, 1)
         cur = self.native_value or st.min_current
-        pct = round((cur - st.min_current) / rng * 100)
-        return {"percentage": pct, "percentage_formatted": f"{pct}%"}
+        if st.max_current <= st.min_current:
+            return {
+                "percentage": None,
+                "percentage_formatted": "—",
+                "fixed_range": True,
+            }
+        rng = st.max_current - st.min_current
+        pct = int(round((cur - st.min_current) * 100.0 / rng))
+        return {"percentage": pct, "percentage_formatted": f"{pct}%", "fixed_range": False}
 
     async def async_set_native_value(self, value: float) -> None:
         st = self._state()
         if not st:
             return
         min_c, max_c = st.min_current, st.max_current
-        val = int(max(min_c, min(int(value), max_c)))
-        rng = max(max_c - min_c, 1)
-        pct = round((val - min_c) / rng * 100)
 
         # Command via API, then refresh coordinator
+        val = int(max(min_c, min(int(value), max_c)))
 
         _LOGGER.debug(
-            "Setting current: requested=%s → clamped=%s → pct=%s (range %s-%s)",
+            "Setting current: requested=%s → clamped=%s (range %s-%s)",
             value,
             val,
-            pct,
             min_c,
             max_c,
         )
 
-        await self.api_client.set_percentage_limit(pct)
+        if max_c <= min_c:
+            await self.api_client.start_charging(min_c)
+        else:
+            rng = max_c - min_c
+            pct = int(round((val - min_c) * 100.0 / rng))
+            pct = max(0, min(100, pct))
+            await self.api_client.set_percentage_limit(pct)
         await self.coordinator.async_request_refresh()
 
     @callback
@@ -167,24 +179,23 @@ class SmappeeCombinedCurrentSlider(_Base):
             new_min = int(st.min_current)
             new_max = int(st.max_current)
 
-            if new_max >= new_min:
-                old_min = self._attr_native_min_value
-                old_max = self._attr_native_max_value
+            old_min = self._attr_native_min_value
+            old_max = self._attr_native_max_value
+            if new_max < new_min:
+                new_max = new_min
+            if old_min != new_min:
+                self._attr_native_min_value = new_min
+            if old_max != new_max:
+                self._attr_native_max_value = new_max
+            if old_min != new_min or old_max != new_max:
+                _LOGGER.debug(
+                    "Updated slider range to %s–%s A (was %s–%s)",
+                    new_min,
+                    new_max,
+                    old_min,
+                    old_max,
+                )
 
-                if old_min != new_min:
-                    self._attr_native_min_value = new_min
-                if old_max != new_max:
-                    self._attr_native_max_value = new_max
-
-                if old_min != new_min or old_max != new_max:
-                    _LOGGER.debug(
-                        "Updated slider range to %s–%s A (was %s–%s)",
-                        new_min,
-                        new_max,
-                        old_min,
-                        old_max,
-                    )
-        # laat CoordinatorEntity de state schrijven
         super()._handle_coordinator_update()
 
 

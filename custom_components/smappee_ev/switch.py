@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import logging
 
 from aiohttp import ClientError
@@ -188,7 +189,10 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
                 self.coordinator.async_set_updated_data(data)
 
         try:
-            await self.api_client.set_available()
+            if value:
+                await self.api_client.set_available()
+            else:
+                await self.api_client.set_unavailable()
         except (
             ClientError,
             asyncio.CancelledError,
@@ -197,10 +201,18 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
             UpdateFailed,
         ) as err:
             _LOGGER.warning(
-                "Set availability failed on connector %s: %s", self.api_client.connector_number, err
+                "Set availability failed on connector %s: %s",
+                self.api_client.connector_number,
+                err,
             )
             # Revert local state
             if data and st is not None and prev is not None:
                 st.available = prev
                 self.coordinator.async_set_updated_data(data)
             raise
+        else:
+            # best effort UI nudge
+            with suppress(
+                TimeoutError, ClientError, asyncio.CancelledError, UpdateFailed, HomeAssistantError
+            ):
+                await self.coordinator.async_request_refresh()
