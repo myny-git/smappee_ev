@@ -36,7 +36,10 @@ class SmappeeMqtt:
 
     async def start(self) -> None:
         """Connect, subscribe, and start tracking."""
-        ssl_ctx = ssl.create_default_context()
+        ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
+        ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ssl_ctx.check_hostname = True
+        ssl_ctx.verify_mode = ssl.CERT_REQUIRED
         client = Client(
             hostname=MQTT_HOST,
             port=MQTT_PORT_TLS,
