@@ -29,6 +29,18 @@ def _to_int(value: Any, default: int = 0) -> int:
 class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     """Single source of truth: fetch station + all connector state here."""
 
+    @staticmethod
+    def _get_any(d: dict, *names: str):
+        for k in names:
+            if k in d:
+                return d[k]
+        low = {kk.lower(): vv for kk, vv in d.items()}
+        for k in names:
+            v = low.get(k.lower())
+            if v is not None:
+                return v
+        return None
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -226,7 +238,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     # UI mappings
     @staticmethod
     def _derive_base_mode(mode: str | None, strategy: str | None) -> str:
-        """Map to NORMAL/STANDARD/SOLAR."""
+        """Map to NORMAL/SMART/SOLAR."""
         s = (strategy or "").upper()
         if s == "EXCESS_ONLY":
             return "SOLAR"
@@ -399,51 +411,64 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         return False
 
     def _merge_cs_primary(self, conn: ConnectorState, payload: dict) -> bool:
-        return (
-            self._set_if_changed(conn, "session_state", str(payload["chargingState"]))
-            if "chargingState" in payload
-            else False
-        )
+        v = self._get_any(payload, "chargingState", "chargingstate")
+        return self._set_if_changed(conn, "session_state", str(v)) if v is not None else False
 
     def _merge_cs_context(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False
-        evse_cur = (payload.get("status") or {}).get("current")
-        changed |= self._set_if_changed(conn, "session_cause", str(evse_cur) if evse_cur else None)
-        iec_cur = (payload.get("iecStatus") or {}).get("current")
-        changed |= self._set_if_changed(conn, "iec_status", str(iec_cur) if iec_cur else None)
-        if "status" in payload and isinstance(payload["status"], dict):
-            sbc = payload["status"].get("stoppedByCloud")
+
+        status_obj = self._get_any(payload, "status")
+        if isinstance(status_obj, dict):
+            evse_cur = status_obj.get("current")
+            changed |= self._set_if_changed(
+                conn, "session_cause", str(evse_cur) if evse_cur else None
+            )
+            sbc = status_obj.get("stoppedByCloud")
             changed |= self._set_if_changed(
                 conn, "stopped_by_cloud", bool(sbc) if sbc is not None else None
             )
+
+        iec_obj = self._get_any(payload, "iecStatus", "iecstatus")
+        iec_cur = iec_obj.get("current") if isinstance(iec_obj, dict) else iec_obj
+        changed |= self._set_if_changed(conn, "iec_status", str(iec_cur) if iec_cur else None)
+
         return changed
 
     def _merge_cs_limits_availability(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False
-        if "percentageLimit" in payload:
-            # Only update in NORMAL mode (strategy == NONE).
-            strategy = (conn.optimization_strategy or "").upper()
-            if strategy == "NONE":
-                pct = self._as_int(payload.get("percentageLimit"), conn.selected_percentage_limit)
-                if pct is not None:
-                    changed |= self._set_if_changed(conn, "selected_percentage_limit", pct)
 
-        if "available" in payload:
-            changed |= self._set_if_changed(conn, "available", bool(payload["available"]))
+        pct_raw = self._get_any(payload, "percentageLimit", "percentagelimit")
+        if pct_raw is not None:
+            # Alleen in NORMAL (strategy == NONE)
+            if (conn.optimization_strategy or "").upper() == "NONE":
+                pct = self._as_int(pct_raw, conn.selected_percentage_limit)
+                if pct is not None:
+                    if self._set_if_changed(conn, "selected_percentage_limit", pct):
+                        changed = True
+                    # → zet ook meteen de current voor directe UI-update
+                    rng = max(int(conn.max_current) - int(conn.min_current), 1)
+                    cur = int(round((pct / 100) * rng + int(conn.min_current)))
+                    changed |= self._set_if_changed(conn, "selected_current_limit", cur)
+
+        avail = self._get_any(payload, "available")
+        if avail is not None:
+            changed |= self._set_if_changed(conn, "available", bool(avail))
+
         return changed
 
     def _merge_cs_modes(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False
-        if "chargingMode" in payload:
-            changed |= self._set_if_changed(conn, "raw_charging_mode", str(payload["chargingMode"]))
-        if "optimizationStrategy" in payload:
-            strategy = str(payload["optimizationStrategy"])
-            changed |= self._set_if_changed(conn, "optimization_strategy", strategy)
+        mode = self._get_any(payload, "chargingMode", "chargingmode")
+        if mode is not None:
+            changed |= self._set_if_changed(conn, "raw_charging_mode", str(mode))
+
+        strat = self._get_any(payload, "optimizationStrategy", "optimizationstrategy")
+        if strat is not None:
+            changed |= self._set_if_changed(conn, "optimization_strategy", str(strat))
 
         base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
         changed |= self._set_if_changed(conn, "ui_mode_base", base)
-        # backward compat
-        changed |= self._set_if_changed(conn, "selected_mode", base)
+        changed |= self._set_if_changed(conn, "selected_mode", base)  # backward compat
         paused = self._is_paused(conn.raw_charging_mode, conn.session_state, conn.session_cause)
         changed |= self._set_if_changed(conn, "paused", paused)
         return changed
