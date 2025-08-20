@@ -40,10 +40,9 @@ class SmappeeMqtt:
         self._stop = asyncio.Event()
         self._runner_task: asyncio.Task | None = None
         self._track_task: asyncio.Task | None = None
-        self._down_task: asyncio.Task | None = None
-        self._warmup_task: asyncio.Task | None = None
 
     # ---------- helpers ----------
+
     @staticmethod
     def _to_text(raw: object) -> str:
         dec = getattr(raw, "decode", None)
@@ -104,33 +103,6 @@ class SmappeeMqtt:
         except (RuntimeError, ValueError, TypeError, KeyError, AttributeError) as err:
             _LOGGER.debug("on_connection_change callback error: %s", err)
 
-    def _cancel_pending_down(self) -> None:
-        if self._down_task:
-            self._down_task.cancel()
-            self._down_task = None
-
-    def _schedule_down(self, delay: float = 5.0) -> None:
-        """Plan een 'down' melding met vertraging, om korte haperingen te maskeren."""
-        self._cancel_pending_down()
-
-        async def _delayed():
-            try:
-                await asyncio.sleep(delay)
-                self._notify_conn(False)
-            except asyncio.CancelledError:
-                pass
-
-        self._down_task = asyncio.create_task(_delayed(), name="smappee-mqtt-down-delay")
-
-    async def _warmup_after_connect(self) -> None:
-        """Extra 'kick' net na (re)connect om sneller eerste payloads te krijgen."""
-        try:
-            await asyncio.sleep(0.3)
-            await self._publish_tracking_once()
-            await self._publish_ha_heartbeat_once()
-        except asyncio.CancelledError:
-            pass
-
     async def _runner_main(self, ssl_ctx: ssl.SSLContext) -> None:
         """Maintain connection with auto-reconnect."""
         backoff = 1.0  # seconds
@@ -146,12 +118,11 @@ class SmappeeMqtt:
                         password=self._slu,
                         identifier=self._client_id,  # aiomqtt v2.x
                         tls_context=ssl_ctx,
-                        clean_session=False,
+                        clean_session=True,
                         keepalive=MQTT_TRACK_INTERVAL_SEC,
                     ) as client:
                         self._client = client
                         _LOGGER.info("MQTT connected to %s:%s", MQTT_HOST, MQTT_PORT_TLS)
-                        self._cancel_pending_down()
                         self._notify_conn(True)
 
                         # Success → reset backoff
@@ -162,11 +133,6 @@ class SmappeeMqtt:
 
                         # First tracking ping en periodically
                         await self._publish_tracking_once()
-                        if self._warmup_task:
-                            self._warmup_task.cancel()
-                        self._warmup_task = asyncio.create_task(
-                            self._warmup_after_connect(), name="smappee-mqtt-warmup"
-                        )
                         self._track_task = asyncio.create_task(
                             self._tracking_loop(), name="smappee-mqtt-tracking"
                         )
@@ -233,7 +199,6 @@ class SmappeeMqtt:
                 except (MqttError, OSError, TimeoutError) as err:
                     _LOGGER.warning("MQTT disconnected/error: %s (retry in %.0fs)", err, backoff)
                     # self._notify_conn(False)
-                    self._schedule_down()
 
                     if self._track_task:
                         self._track_task.cancel()
@@ -247,25 +212,15 @@ class SmappeeMqtt:
                     backoff = min(backoff * 2.0, max_backoff)
 
                 finally:
-                    if self._warmup_task:
-                        self._warmup_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await self._warmup_task
-                        self._warmup_task = None
-
                     if self._track_task:
                         self._track_task.cancel()
                         with suppress(asyncio.CancelledError):
                             await self._track_task
                         self._track_task = None
-
                     self._client = None
                     _LOGGER.info("MQTT stopped (looping=%s)", not self._stop.is_set())
                     if self._stop.is_set():
-                        self._cancel_pending_down()
                         self._notify_conn(False)
-                    else:
-                        self._schedule_down()
 
         finally:
             self._client = None
@@ -296,22 +251,11 @@ class SmappeeMqtt:
     async def stop(self) -> None:
         """Stop loops and disconnect."""
         self._stop.set()
-        self._cancel_pending_down()
         if self._runner_task:
             self._runner_task.cancel()
             with suppress(asyncio.CancelledError):
                 await self._runner_task
             self._runner_task = None
-        if self._track_task:
-            self._track_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._track_task
-            self._track_task = None
-        if self._warmup_task:
-            self._warmup_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._warmup_task
-            self._warmup_task = None
 
     async def _tracking_loop(self) -> None:
         """Publish RT_VALUES tracking ping every minute."""
