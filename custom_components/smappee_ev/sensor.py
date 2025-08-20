@@ -50,7 +50,7 @@ async def async_setup_entry(
         StationGridEnergyExport(coordinator, station_client),
         StationGridCurrents(coordinator, station_client),
         StationPvPower(coordinator, station_client),
-        StationPvEnergyExport(coordinator, station_client),
+        StationPvEnergyImport(coordinator, station_client),
         StationPvCurrents(coordinator, station_client),
     ]
 
@@ -252,6 +252,7 @@ class _StationBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
 class StationGridPower(_StationBase):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api):
         super().__init__(c, api, "Grid power", "grid_power")
@@ -293,6 +294,7 @@ class StationGridEnergyExport(_StationBase):
 class StationGridCurrents(_StationBase):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api):
         super().__init__(c, api, "Grid current (L1–L3)", "grid_currents")
@@ -313,6 +315,7 @@ class StationGridCurrents(_StationBase):
 class StationPvPower(_StationBase):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api):
         super().__init__(c, api, "PV power", "pv_power")
@@ -323,23 +326,24 @@ class StationPvPower(_StationBase):
         return st.pv_power_total if st else None
 
 
-class StationPvEnergyExport(_StationBase):
+class StationPvEnergyImport(_StationBase):
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(self, c, api):
-        super().__init__(c, api, "PV energy export", "pv_energy_export_kwh")
+        super().__init__(c, api, "PV energy import", "pv_energy_import_kwh")
 
     @property
     def native_value(self):
         st = self._st
-        return st.pv_energy_export_kwh if st else None
+        return st.pv_energy_import_kwh if st else None
 
 
 class StationPvCurrents(_StationBase):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api):
         super().__init__(c, api, "PV current (L1–L3)", "pv_currents")
@@ -394,6 +398,7 @@ class _ConnBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
 class ConnPowerTotal(_ConnBase):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api, uuid):
         super().__init__(c, api, uuid, "Connector power", "power_total")
@@ -407,6 +412,7 @@ class ConnPowerTotal(_ConnBase):
 class ConnCurrentL1(_ConnBase):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api, uuid):
         super().__init__(c, api, uuid, "Connector current L1", "current_l1")
@@ -424,6 +430,7 @@ class ConnCurrentL1(_ConnBase):
 class ConnCurrentL2(_ConnBase):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api, uuid):
         super().__init__(c, api, uuid, "Connector current L2", "current_l2")
@@ -441,6 +448,7 @@ class ConnCurrentL2(_ConnBase):
 class ConnCurrentL3(_ConnBase):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, c, api, uuid):
         super().__init__(c, api, uuid, "Connector current L3", "current_l3")

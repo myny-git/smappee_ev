@@ -61,7 +61,7 @@ class StationState:
 
     pv_power_total: int | None = None
     pv_power_phases: list[int] | None = None
-    pv_energy_export_kwh: float | None = None
+    pv_energy_import_kwh: float | None = None
     pv_current_phases: float | None = None
 
 
