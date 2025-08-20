@@ -226,10 +226,20 @@ class SmappeeMqtt:
         """Start the MQTT client, subscribe, and begin tracking."""
         self._stop.clear()
 
-        ssl_ctx = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH)
-        ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-        ssl_ctx.check_hostname = True
-        ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+        # Build SSL context off the event loop (create_default_context, and possibly
+        # set_default_verify_paths / load_default_certs are blocking).
+        async def _build_ssl_ctx() -> ssl.SSLContext:
+            def _mk() -> ssl.SSLContext:
+                ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+                # Any attribute that might touch cert paths stays inside the thread too
+                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+                ctx.check_hostname = True
+                ctx.verify_mode = ssl.CERT_REQUIRED
+                return ctx
+
+            return await asyncio.to_thread(_mk)
+
+        ssl_ctx = await _build_ssl_ctx()
 
         self._runner_task = asyncio.create_task(
             self._runner_main(ssl_ctx), name="smappee-mqtt-runner"
