@@ -37,6 +37,11 @@ class ConnectorState:
     evcc_state: str | None = None  # "A" / "B" / "C"
     evcc_state_code: int | None = None  # 0(A) / 1(B) / 2(C)
 
+    power_phases: list[int] | None = None  # [W_L1, W_L2, W_L3] (missing phases 0)
+    current_phases: list[float] | None = None  # [A_L1, A_L2, A_L3]
+    energy_import_kwh: float | None = None  # cumulative (kWh)
+    power_total: int | None = None
+
 
 @dataclass
 class StationState:
@@ -47,6 +52,17 @@ class StationState:
 
     mqtt_connected: bool | None = None
     last_mqtt_rx: float | None = None
+
+    grid_power_total: int | None = None
+    grid_power_phases: list[int] | None = None
+    grid_energy_import_kwh: float | None = None
+    grid_energy_export_kwh: float | None = None
+    grid_current_phases: float | None = None
+
+    pv_power_total: int | None = None
+    pv_power_phases: list[int] | None = None
+    pv_energy_export_kwh: float | None = None
+    pv_current_phases: float | None = None
 
 
 @dataclass

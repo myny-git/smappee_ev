@@ -4,6 +4,7 @@ from collections.abc import Callable
 import logging
 from typing import Any
 
+import aiohttp
 from aiohttp import ClientSession, ClientTimeout
 
 from .const import BASE_URL
@@ -266,3 +267,24 @@ class SmappeeApiClient:
             text = await resp.text()
             raise RuntimeError(f"set_unavailable failed: {text}")
         _LOGGER.debug("Set charger unavailable successfully")
+
+    async def async_get_metering_configuration(self) -> dict | None:
+        """Fetch metering configuration for this service location."""
+        await self.ensure_auth()
+        url = f"{BASE_URL}/dev/v3/servicelocation/{self.service_location_id}/meteringconfiguration"
+        try:
+            async with self._session.get(
+                url, headers=self.auth_headers(), timeout=self._timeout
+            ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    _LOGGER.warning(
+                        "Metering configuration fetch failed (status %s): %s",
+                        resp.status,
+                        text,
+                    )
+                    return None
+                return await resp.json()
+        except (TimeoutError, aiohttp.ClientError) as exc:
+            _LOGGER.warning("Metering configuration fetch failed: %s", exc)
+            return None

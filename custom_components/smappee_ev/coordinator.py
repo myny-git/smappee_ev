@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable, Sequence
 from contextlib import suppress
 from datetime import timedelta
 import logging
@@ -25,6 +26,20 @@ def _to_int(value: Any, default: int = 0) -> int:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return default
+
+
+def _pick(seq: Sequence[int] | list, idxs: Iterable[int]) -> list[int]:
+    """Safe index selection with zero-fill. Returns [] if seq or idxs are empty."""
+    idxs = list(idxs)
+    if not isinstance(seq, list) or not idxs:
+        return []
+    n = len(seq)
+    return [int(seq[i]) if 0 <= i < n else 0 for i in idxs]
+
+
+def _amps_from_ma(ma: list[int]) -> list[float]:
+    """Convert mA list to A with 3 decimals."""
+    return [round(x / 1000.0, 3) for x in ma] if ma else []
 
 
 class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
@@ -60,6 +75,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         # reuse HA's client session via any existing client
         self._session: ClientSession = station_client.get_http_session()
         self._timeout = ClientTimeout(connect=5, total=15)
+        self._power_index_map: dict[str, Any] | None = None
 
     async def _async_update_data(self) -> IntegrationData:
         try:
@@ -92,10 +108,65 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 else:
                     connectors_state[uuid] = cast(ConnectorState, res)
 
+            await self._ensure_power_index_map()
+
             return IntegrationData(station=station_state, connectors=connectors_state)
 
         except (ClientError, TimeoutError, asyncio.CancelledError) as err:
             raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
+
+    async def _ensure_power_index_map(self) -> None:
+        """Load and cache metering index mapping once."""
+        if self._power_index_map is not None:
+            return
+
+        cfg = await self.station_client.async_get_metering_configuration()
+        self._power_index_map = self._build_power_index_map(cfg or {})
+
+    def _build_power_index_map(self, cfg: dict) -> dict:
+        """
+        Build mapping from /meteringconfiguration.
+
+        Returns:
+        {
+            "grid": {"power":[...], "cons":[...]},
+            "pv":   {"power":[...], "cons":[...]},
+            "cars": { "<uuid>": {"power":[...], "cons":[...], "position": int|None, "serial": str|None } }
+        }
+        """
+        mapping: dict[str, Any] = {
+            "grid": {"power": [], "cons": []},
+            "pv": {"power": [], "cons": []},
+            "cars": {},
+        }
+
+        # measurements → GRID / PRODUCTION(PV)
+        for meas in cfg.get("measurements") or []:
+            mtype = (meas.get("type") or "").upper()
+            chans = meas.get("channels") or []
+            pidx = [int(ch["powerTopicIndex"]) for ch in chans if "powerTopicIndex" in ch]
+            cidx = [int(ch["consumptionIndex"]) for ch in chans if "consumptionIndex" in ch]
+            if mtype == "GRID":
+                mapping["grid"]["power"], mapping["grid"]["cons"] = pidx, cidx
+            elif mtype == "PRODUCTION":
+                mapping["pv"]["power"], mapping["pv"]["cons"] = pidx, cidx
+
+        # chargingStations[].chargers[] → per-connector
+        for cs in cfg.get("chargingStations") or []:
+            for chg in cs.get("chargers") or []:
+                uuid = chg.get("uuid")
+                if not uuid:
+                    continue
+                chans = chg.get("channels") or []
+                pidx = [int(ch["powerTopicIndex"]) for ch in chans if "powerTopicIndex" in ch]
+                cidx = [int(ch["consumptionIndex"]) for ch in chans if "consumptionIndex" in ch]
+                mapping["cars"][uuid] = {
+                    "power": pidx,
+                    "cons": cidx,
+                    "position": chg.get("position"),
+                    "serial": chg.get("serialNumber"),
+                }
+        return mapping
 
     # -----------------------------
     # Helpers (pure HTTP + parsing)
@@ -305,23 +376,23 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         # devices/updated (connector)
         if "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith("/devices/updated"):
-            changed = self._handle_connector_devices_updated(payload)
+            changed |= self._handle_connector_devices_updated(payload)
 
         # Connector-device messages
         elif "/etc/carcharger/acchargingcontroller/" in topic and "/devices/" in topic:
-            changed = self._handle_connector_mqtt(topic, payload)
+            changed |= self._handle_connector_mqtt(topic, payload)
 
         # Aggregated power
         elif topic.endswith("/power"):
-            changed = self._handle_power(payload)
+            changed |= self._handle_power(payload)
 
         # Station-level properties
         elif "/etc/chargingstation/acchargingstation/" in topic and topic.endswith("/properties"):
-            changed = self._handle_station_properties(payload)
+            changed |= self._handle_station_properties(payload)
 
         # LED brightness
         elif "/etc/led/acledcontroller/" in topic and topic.endswith("/devices/updated"):
-            changed = self._handle_led_updated(payload)
+            changed |= self._handle_led_updated(payload)
 
         if changed or heartbeat_touch:
             self.async_set_updated_data(data)
@@ -508,9 +579,103 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         changed |= self._set_if_changed(conn, "evcc_state_code", new_code)
         return changed
 
+    def _apply_station_group(
+        self,
+        st,  # StationState
+        payload: dict,
+        power_idxs: list[int],
+        cons_idxs: list[int],
+        power_key_prefix: str,  # "grid" or "pv"
+    ) -> bool:
+        changed = False
+        active = payload.get("activePowerData") or []
+        currents_ma = payload.get("currentData") or []
+        imp_wh = payload.get("importActiveEnergyData") or []
+        exp_wh = payload.get("exportActiveEnergyData") or []
+
+        p_ph = _pick(active, power_idxs)
+        if p_ph:
+            changed |= self._set_if_changed(st, f"{power_key_prefix}_power_phases", p_ph)
+            changed |= self._set_if_changed(st, f"{power_key_prefix}_power_total", sum(p_ph))
+            i_ph = _amps_from_ma(_pick(currents_ma, power_idxs))
+            if i_ph:
+                changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
+
+        if cons_idxs:
+            if power_key_prefix == "grid":
+                changed |= self._set_if_changed(
+                    st, "grid_energy_import_kwh", round(sum(_pick(imp_wh, cons_idxs)) / 1000.0, 3)
+                )
+                changed |= self._set_if_changed(
+                    st, "grid_energy_export_kwh", round(sum(_pick(exp_wh, cons_idxs)) / 1000.0, 3)
+                )
+            else:  # pv
+                changed |= self._set_if_changed(
+                    st, "pv_energy_export_kwh", round(sum(_pick(exp_wh, cons_idxs)) / 1000.0, 3)
+                )
+        return changed
+
+    def _apply_connector_values(
+        self,
+        conn,  # ConnectorState
+        payload: dict,
+        power_idxs: list[int],
+        cons_idxs: list[int],
+    ) -> bool:
+        changed = False
+        active = payload.get("activePowerData") or []
+        currents_ma = payload.get("currentData") or []
+        imp_wh = payload.get("importActiveEnergyData") or []
+
+        p_ph = _pick(active, power_idxs)
+        i_ma = _pick(currents_ma, power_idxs)
+        imp_kwh = round(sum(_pick(imp_wh, cons_idxs)) / 1000.0, 3) if cons_idxs else None
+
+        changed |= self._set_if_changed(conn, "power_phases", p_ph)
+        changed |= self._set_if_changed(conn, "power_total", sum(p_ph) if p_ph else None)
+        if i_ma:
+            changed |= self._set_if_changed(conn, "current_phases", _amps_from_ma(i_ma))
+        changed |= self._set_if_changed(conn, "energy_import_kwh", imp_kwh)
+        return changed
+
     def _handle_power(self, payload: dict) -> bool:
-        # Placeholder
-        return False
+        data = self.data
+        if not data:
+            return False
+        st = data.station
+        changed = False
+
+        idx_map = self._power_index_map or {}
+        grid = idx_map.get("grid", {})
+        pv = idx_map.get("pv", {})
+        cars = idx_map.get("cars", {}) or {}
+
+        # Station groups
+        changed |= self._apply_station_group(
+            st, payload, grid.get("power", []), grid.get("cons", []), "grid"
+        )
+        changed |= self._apply_station_group(
+            st, payload, pv.get("power", []), pv.get("cons", []), "pv"
+        )
+
+        # Connectors
+        for uuid, m in cars.items():
+            conn = data.connectors.get(uuid)
+            if not conn:
+                continue
+            changed |= self._apply_connector_values(
+                conn, payload, m.get("power", []), m.get("cons", [])
+            )
+
+        # Prefer explicit totals from payload if present (optional)
+        cp = payload.get("consumptionPower")
+        if isinstance(cp, int | float) and cp != 0:
+            changed |= self._set_if_changed(st, "grid_power_total", int(cp))
+        sp = payload.get("solarPower")
+        if isinstance(sp, int | float) and sp != 0:
+            changed |= self._set_if_changed(st, "pv_power_total", int(sp))
+
+        return changed
 
     def _handle_station_properties(self, payload: dict) -> bool:
         changed = False
