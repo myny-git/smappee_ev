@@ -5,6 +5,7 @@ import asyncio
 from contextlib import suppress
 from datetime import timedelta
 import logging
+from time import time as _now
 from typing import Any, cast
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
@@ -173,10 +174,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                     max_current = _to_int(val, default=max_current)
             elif name == "etc.smart.device.type.car.charger.config.min.current":
                 with suppress(TypeError, ValueError):
-                    min_current = _to_int(val, default=max_current)
+                    min_current = _to_int(val, default=min_current)
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
                 with suppress(TypeError, ValueError):
-                    min_surpluspct = _to_int(val, default=max_current)
+                    min_surpluspct = _to_int(val, default=min_surpluspct)
 
         client.min_current = min_current
         client.max_current = max_current
@@ -270,6 +271,21 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     def _evcc_code(letter: str | None) -> int | None:
         return {"A": 0, "B": 1, "C": 2, "E": 3, "F": 4}.get((letter or "").upper())
 
+    def apply_mqtt_connection_change(self, up: bool) -> None:
+        data = self.data
+        if not data:
+            return
+        st = data.station
+        changed = False
+        if getattr(st, "mqtt_connected", False) != up:
+            st.mqtt_connected = up
+            changed = True
+        if up:
+            st.last_mqtt_rx = _now()
+            changed = True
+        if changed:
+            self.async_set_updated_data(data)
+
     # Main entry: called by mqtt_gateway
     def apply_mqtt_properties(self, topic: str, payload: dict) -> None:
         """Merge incoming MQTT properties/state in the current snapshot."""
@@ -278,7 +294,16 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return
 
         changed = False
+        heartbeat_touch = False
 
+        st = getattr(data, "station", None)
+        if st is not None:
+            st.last_mqtt_rx = _now()
+            if not getattr(st, "mqtt_connected", False):
+                st.mqtt_connected = True
+                changed = True
+
+        # devices/updated (connector)
         if "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith("/devices/updated"):
             changed = self._handle_connector_devices_updated(payload)
 
@@ -298,13 +323,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         elif "/etc/led/acledcontroller/" in topic and topic.endswith("/devices/updated"):
             changed = self._handle_led_updated(payload)
 
-        # min & max current
-        elif "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith(
-            "/devices/updated"
-        ):
-            changed = self._handle_devices_updated(payload)
-
         if changed:
+            self.async_set_updated_data(data)
+        elif heartbeat_touch:
             self.async_set_updated_data(data)
 
     # ---------- split helpers to reduce complexity ----------
@@ -348,7 +369,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if n_int is not None:
                 changed |= self._set_if_changed(conn, "connector_number", n_int)
 
-        # percentageLimit
+        # percentageLimit (only in NORMAL / strategy NONE)
         if "percentageLimit" in payload:
             if (conn.optimization_strategy or "").upper() == "NONE":
                 pct = self._as_int(payload.get("percentageLimit"), None)
@@ -490,13 +511,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         return changed
 
     def _handle_power(self, payload: dict) -> bool:
-        # val = payload.get("activePower")
-        # if isinstance(val, (int, float)):
-        #     cur = getattr(self.data.station, "active_power", None)
-        #     new = int(val)
-        #     if new != cur:
-        #         self.data.station.active_power = new
-        #         return True
+        # Placeholder
         return False
 
     def _handle_station_properties(self, payload: dict) -> bool:
@@ -539,39 +554,3 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return True
 
         return False
-
-    def _handle_devices_updated(self, payload: dict) -> bool:
-        """Merge device-level updates (min/max current, min.excesspct, position)."""
-        data = self.data
-        if not data:
-            return False
-
-        dev_uuid = payload.get("uuid") or payload.get("deviceUUID")
-        if not dev_uuid or dev_uuid not in data.connectors:
-            return False
-
-        conn = data.connectors[dev_uuid]
-        changed = False
-
-        # max/min current
-        maxc = self._as_int(payload.get("maximumCurrent"))
-        if maxc is not None:
-            changed |= self._set_if_changed(conn, "max_current", maxc)
-
-        minc = self._as_int(payload.get("minimumCurrent"))
-        if minc is not None:
-            changed |= self._set_if_changed(conn, "min_current", minc)
-
-        # optional: min.excesspct uit customConfigurationProperties
-        ccp = payload.get("customConfigurationProperties") or {}
-        if isinstance(ccp, dict):
-            msp = self._as_int(ccp.get("etc.smart.device.type.car.charger.config.min.excesspct"))
-            if msp is not None:
-                changed |= self._set_if_changed(conn, "min_surpluspct", msp)
-
-        # optional: connector position → connector_number
-        pos = self._as_int(payload.get("position"))
-        if pos is not None:
-            changed |= self._set_if_changed(conn, "connector_number", pos)
-
-        return changed

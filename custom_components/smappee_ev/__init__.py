@@ -195,7 +195,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     def _on_props(topic: str, payload: dict) -> None:
         coordinator.apply_mqtt_properties(topic, payload)
-        # bump last RX (diagnostis)
+        # bump last RX (diagnostic)
         if coordinator.data and coordinator.data.station:
             coordinator.data.station.last_mqtt_rx = time.time()
             coordinator.async_set_updated_data(coordinator.data)
