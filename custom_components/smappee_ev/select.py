@@ -60,7 +60,9 @@ class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
         self.api_client.selected_mode = option
         if self.coordinator.data and self._connector_uuid in self.coordinator.data.connectors:
             self.coordinator.data.connectors[self._connector_uuid].selected_mode = option
-        await self.coordinator.async_request_refresh()
+            self.coordinator.async_set_updated_data(self.coordinator.data)
+
+        # await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
 
     @property

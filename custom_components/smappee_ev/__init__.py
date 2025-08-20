@@ -278,4 +278,4 @@ async def async_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -
         hass.data[DOMAIN][entry.entry_id] = ctx
         await hass.config_entries.async_reload(entry.entry_id)
     else:
-        _LOGGER.debug("ConfigEntry change zonder optie-wijziging → reload overgeslagen.")
+        _LOGGER.debug("ConfigEntry change.")
