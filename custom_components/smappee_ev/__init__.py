@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 
 from aiohttp import ClientError, ClientSession
 from homeassistant.config_entries import ConfigEntry
@@ -34,6 +35,7 @@ PLATFORMS = [
     Platform.SELECT,
     Platform.BUTTON,
     Platform.SWITCH,
+    Platform.BINARY_SENSOR,
 ]
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
@@ -191,6 +193,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # 2) Live MQTT (if UUID is present)
     slu = entry.data.get(CONF_SERVICE_LOCATION_UUID)
 
+    def _on_props(topic: str, payload: dict) -> None:
+        coordinator.apply_mqtt_properties(topic, payload)
+        # bump last RX (diagnostis)
+        if coordinator.data and coordinator.data.station:
+            coordinator.data.station.last_mqtt_rx = time.time()
+            coordinator.async_set_updated_data(coordinator.data)
+
+    def _on_conn(up: bool) -> None:
+        # store connected/vitals for binary_sensor
+        if coordinator.data and coordinator.data.station:
+            coordinator.data.station.mqtt_connected = up
+            coordinator.data.station.last_mqtt_rx = time.time()
+            coordinator.async_set_updated_data(coordinator.data)
+
     if slu:
 
         def _on_props(topic: str, payload: dict) -> None:
@@ -204,6 +220,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             client_id=f"ha-{entry.entry_id}",
             serial_number=serial_for_tracking,
             on_properties=_on_props,
+            service_location_id=service_location_id,
+            on_connection_change=_on_conn,
         )
         hass.data[DOMAIN][entry.entry_id]["mqtt"] = mqtt
         # Start async; don't block

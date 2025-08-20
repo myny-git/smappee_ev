@@ -45,6 +45,9 @@ class StationState:
     led_brightness: int = 70
     available: bool = True
 
+    mqtt_connected: bool | None = None
+    last_mqtt_rx: float | None = None
+
 
 @dataclass
 class IntegrationData:

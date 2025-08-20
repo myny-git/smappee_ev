@@ -26,11 +26,15 @@ class SmappeeMqtt:
         client_id: str,
         serial_number: str,
         on_properties: Callable[[str, dict], None],
+        service_location_id: int | str,
+        on_connection_change: Callable[[bool], None] | None = None,
     ) -> None:
         self._slu = service_location_uuid
         self._client_id = client_id
         self._serial = serial_number
         self._on_properties = on_properties
+        self._slu_id = service_location_id
+        self._on_conn = on_connection_change
 
         self._client: Client | None = None
         self._stop = asyncio.Event()
@@ -79,8 +83,22 @@ class SmappeeMqtt:
             f"servicelocation/{self._slu}/etc/led/acledcontroller/v1/devices/updated",
             qos=1,
         )
+
+        await client.subscribe(
+            f"servicelocation/{self._slu}/homeassistant/heartbeat",
+            qos=1,
+        )
         # Optional: servicelocation power feed
         # await client.subscribe(f"servicelocation/{self._slu}/power", qos=1)
+
+    def _notify_conn(self, up: bool) -> None:
+        cb = self._on_conn
+        if not cb:
+            return
+        try:
+            cb(up)
+        except (RuntimeError, ValueError, TypeError, KeyError, AttributeError) as err:
+            _LOGGER.debug("on_connection_change callback error: %s", err)
 
     async def _runner_main(self, ssl_ctx: ssl.SSLContext) -> None:
         """Maintain connection with auto-reconnect."""
@@ -102,6 +120,7 @@ class SmappeeMqtt:
                     ) as client:
                         self._client = client
                         _LOGGER.info("MQTT connected to %s:%s", MQTT_HOST, MQTT_PORT_TLS)
+                        self._notify_conn(True)
 
                         # Success → reset backoff
                         backoff = 1.0
@@ -147,6 +166,25 @@ class SmappeeMqtt:
                                 )
                                 continue
 
+                            if topic_str.endswith("/homeassistant/heartbeat"):
+                                self._notify_conn(True)
+                                try:
+                                    self._on_properties(
+                                        topic_str,
+                                        payload
+                                        if isinstance(payload, dict)
+                                        else {"raw": payload_raw},
+                                    )
+                                except (
+                                    RuntimeError,
+                                    ValueError,
+                                    TypeError,
+                                    KeyError,
+                                    AttributeError,
+                                ) as err:
+                                    _LOGGER.debug("on_properties (heartbeat) raised: %s", err)
+                                continue
+
                             try:
                                 self._on_properties(topic_str, payload)
                             except (RuntimeError, ValueError, TypeError, KeyError) as err:
@@ -157,6 +195,7 @@ class SmappeeMqtt:
                     break
                 except (MqttError, OSError, TimeoutError) as err:
                     _LOGGER.warning("MQTT disconnected/error: %s (retry in %.0fs)", err, backoff)
+                    self._notify_conn(False)
 
                     if self._track_task:
                         self._track_task.cancel()
@@ -177,6 +216,8 @@ class SmappeeMqtt:
                         self._track_task = None
                     self._client = None
                     _LOGGER.info("MQTT stopped (looping=%s)", not self._stop.is_set())
+                    if self._stop.is_set():
+                        self._notify_conn(False)
 
         finally:
             self._client = None
@@ -208,6 +249,7 @@ class SmappeeMqtt:
         try:
             while not self._stop.is_set():
                 await self._publish_tracking_once()
+                await self._publish_ha_heartbeat_once()
                 with suppress(TimeoutError):
                     await asyncio.wait_for(self._stop.wait(), timeout=MQTT_TRACK_INTERVAL_SEC)
         except asyncio.CancelledError:
@@ -227,3 +269,21 @@ class SmappeeMqtt:
         with suppress(MqttError):
             await client.publish(topic, json.dumps(payload), qos=0)
             _LOGGER.debug("MQTT tracking published")
+
+    async def _publish_ha_heartbeat_once(self) -> None:
+        client = self._client
+        if not client:
+            return
+        topic = f"servicelocation/{self._slu}/homeassistant/heartbeat"
+        value: int | str | None = self._slu_id
+        try:
+            # best-effort integer if str
+            if isinstance(value, str):
+                value = int(value)
+        except (TypeError, ValueError):
+            # keep as-is
+            pass
+        payload = {"serviceLocationId": value}
+        with suppress(MqttError):
+            await client.publish(topic, json.dumps(payload), qos=0)
+            _LOGGER.debug("MQTT HA heartbeat published to %s: %s", topic, payload)
