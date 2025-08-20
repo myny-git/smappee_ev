@@ -89,7 +89,10 @@ class SmappeeMqtt:
             qos=1,
         )
         # Optional: servicelocation power feed
-        # await client.subscribe(f"servicelocation/{self._slu}/power", qos=1)
+        await client.subscribe(
+            f"servicelocation/{self._slu}/power",
+            qos=1,
+        )
 
     def _notify_conn(self, up: bool) -> None:
         cb = self._on_conn
