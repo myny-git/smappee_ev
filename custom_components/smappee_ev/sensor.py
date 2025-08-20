@@ -7,6 +7,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -167,7 +168,7 @@ class SmappeeMqttLastSeenSensor(CoordinatorEntity[SmappeeCoordinator], SensorEnt
         self._attr_unique_id = f"{api_client.serial_id}_mqtt_last_seen"
 
     @property
-    def device_info(self) -> dict[str, Any]:
+    def device_info(self) -> DeviceInfo:
         return {
             "identifiers": {(DOMAIN, self.api_client.serial_id)},
             "name": "Smappee EV Wallbox",
@@ -181,7 +182,6 @@ class SmappeeMqttLastSeenSensor(CoordinatorEntity[SmappeeCoordinator], SensorEnt
         ts = getattr(st, "last_mqtt_rx", None)
         if not ts:
             return None
-        # HA verwacht een timezone-aware datetime voor TIMESTAMP
         return datetime.fromtimestamp(float(ts), tz=UTC)
 
     @property
