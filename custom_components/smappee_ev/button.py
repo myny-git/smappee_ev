@@ -30,42 +30,40 @@ async def async_setup_entry(
     # Connector-based buttons
     for uuid, client in connector_clients.items():  # <— had values() eerst
         connector = client.connector_number or 1
-        entities.extend(
-            [
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Start charging {connector}",
-                    action="start_charging",
-                    unique_id_suffix=f"start_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Stop charging {connector}",
-                    action="stop_charging",
-                    unique_id_suffix=f"stop_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Pause charging {connector}",
-                    action="pause_charging",
-                    unique_id_suffix=f"pause_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Set charging mode {connector}",
-                    action="set_charging_mode",
-                    unique_id_suffix=f"mode_{connector}",
-                ),
-            ]
-        )
+        entities.extend([
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Start charging {connector}",
+                action="start_charging",
+                unique_id_suffix=f"start_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Stop charging {connector}",
+                action="stop_charging",
+                unique_id_suffix=f"stop_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Pause charging {connector}",
+                action="pause_charging",
+                unique_id_suffix=f"pause_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Set charging mode {connector}",
+                action="set_charging_mode",
+                unique_id_suffix=f"mode_{connector}",
+            ),
+        ])
 
     # Station-level buttons
 
@@ -129,19 +127,12 @@ class SmappeeActionButton(CoordinatorEntity[SmappeeCoordinator], ButtonEntity):
 
             elif self._action == "set_charging_mode":
                 mode = "NORMAL"
-                limit = None
                 data = self.coordinator.data if self.coordinator else None
                 if data and self._uuid and self._uuid in data.connectors:
                     st = data.connectors[self._uuid]
                     mode = st.selected_mode or "NORMAL"
-                    if mode == "NORMAL":
-                        limit = (
-                            st.selected_current_limit
-                            if st.selected_current_limit is not None
-                            else st.min_current
-                        )
 
-                await self.api_client.set_charging_mode(mode, limit)
+                await self.api_client.set_charging_mode(mode)
 
         finally:
-            await self._async_refresh()
+            pass

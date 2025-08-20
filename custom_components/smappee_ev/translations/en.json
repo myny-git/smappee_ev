@@ -81,10 +81,6 @@
         "mode": {
           "name": "Mode",
           "description": "Charging mode (STANDARD, SMART, SOLAR)"
-        },
-        "limit": {
-          "name": "Limit",
-          "description": "Optional current limit (Ampere)"
         }
       }
     },

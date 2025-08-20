@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 import logging
 
 from aiohttp import ClientError
@@ -78,16 +77,6 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
 
     async def _async_refresh(self) -> None:
         """Trigger one coordinator refresh so UI updates immediately."""
-        try:
-            await self.coordinator.async_request_refresh()
-        except (
-            TimeoutError,
-            ClientError,
-            asyncio.CancelledError,
-            UpdateFailed,
-            HomeAssistantError,
-        ) as err:
-            _LOGGER.debug("Coordinator refresh failed after switch action: %s", err)
 
     async def async_turn_on(self, **kwargs) -> None:
         """Start charging at current selected limit (fallback to min_current)."""
@@ -212,7 +201,4 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
             raise
         else:
             # best effort UI nudge
-            with suppress(
-                TimeoutError, ClientError, asyncio.CancelledError, UpdateFailed, HomeAssistantError
-            ):
-                await self.coordinator.async_request_refresh()
+            pass

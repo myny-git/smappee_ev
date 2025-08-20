@@ -17,14 +17,6 @@ set_charging_mode:
             - "NORMAL"
             - "SMART"
             - "SOLAR"
-    limit:
-      description: "Optional current limit in Ampere when mode is NORMAL."
-      required: false
-      selector:
-        number:
-          min: 6
-          max: 32
-          unit_of_measurement: "A"
 
 pause_charging:
   description: "Pause charging on a connector."

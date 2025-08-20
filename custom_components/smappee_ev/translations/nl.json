@@ -81,10 +81,6 @@
                 "mode": {
                     "name": "Modus",
                     "description": "Laadmodus (STANDARD, SMART, SOLAR)"
-                },
-                "limit": {
-                    "name": "Beperking",
-                    "description": "Optionele stroomlimiet (Ampère)"
                 }
             }
         },

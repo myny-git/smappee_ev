@@ -80,26 +80,30 @@ class SmappeeApiClient:
 
         # Build URL/payload/method
         payload: dict[str, Any] | list[dict[str, Any]]
-        if mode in ("SMART", "SOLAR"):
+
+        if mode == "NORMAL":
+            mode = "STANDARD"
+
+        if mode in ("SMART", "SOLAR", "STANDARD"):
             url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
             payload = [{"spec": {"name": "mode", "species": "String"}, "value": mode}]
             method = self._session.post
 
-        elif mode == "NORMAL":
-            if self.connector_number is None:
-                raise ValueError("connector_number is required for NORMAL mode")
+        # elif mode == "NORMAL":
+        #     if self.connector_number is None:
+        #         raise ValueError("connector_number is required for NORMAL mode")
 
-            # Clamp limit to safe range if provided (or fall back to min_current)
-            min_c = getattr(self, "min_current", 6)
-            max_c = getattr(self, "max_current", 32)
-            use_limit = limit if limit is not None else min_c
-            use_limit = max(min_c, min(int(use_limit), max_c))
+        #     # Clamp limit to safe range if provided (or fall back to min_current)
+        #     min_c = getattr(self, "min_current", 6)
+        #     max_c = getattr(self, "max_current", 32)
+        #     use_limit = limit if limit is not None else min_c
+        #     use_limit = max(min_c, min(int(use_limit), max_c))
 
-            url = (
-                f"{BASE_URL}/chargingstations/{self.serial}/connectors/{self.connector_number}/mode"
-            )
-            payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": use_limit}}
-            method = self._session.put
+        #     url = (
+        #         f"{BASE_URL}/chargingstations/{self.serial}/connectors/{self.connector_number}/mode"
+        #     )
+        #     payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": use_limit}}
+        #     method = self._session.put
         else:
             _LOGGER.warning("Unsupported charging mode: %s", mode)
             return False
@@ -114,17 +118,18 @@ class SmappeeApiClient:
         _LOGGER.debug("Charging mode set successfully")
 
         # Update local mirrors so UI feels instant
-        self.selected_mode = mode
-        if mode == "NORMAL":
-            # If caller passed a limit, mirror it; otherwise we used min_current
-            self.selected_current_limit = use_limit
-            if self.max_current > self.min_current:
-                rng = self.max_current - self.min_current
-                # use_limit is always int
-                pct = int(round((use_limit - self.min_current) * 100.0 / rng))
-                self.selected_percentage_limit = max(0, min(100, pct))
-            else:
-                self.selected_percentage_limit = None
+        # self.selected_mode = mode
+
+        # if mode == "NORMAL":
+        #     # If caller passed a limit, mirror it; otherwise we used min_current
+        #     self.selected_current_limit = use_limit
+        #     if self.max_current > self.min_current:
+        #         rng = self.max_current - self.min_current
+        #         # use_limit is always int
+        #         pct = int(round((use_limit - self.min_current) * 100.0 / rng))
+        #         self.selected_percentage_limit = max(0, min(100, pct))
+        #     else:
+        #         self.selected_percentage_limit = None
 
         return True
 

@@ -140,7 +140,7 @@ async def handle_set_charging_mode(call: ServiceCall) -> None:
         call.hass,
         call,
         "set_charging_mode",
-        {"mode": call.data.get("mode"), "limit": call.data.get("limit")},
+        {"mode": call.data.get("mode")},
     )
 
 
