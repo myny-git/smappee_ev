@@ -1,5 +1,3 @@
-"""Smappee EV Home Assistant integration package."""
-
 import asyncio
 import json
 import logging
@@ -188,6 +186,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
         "station_client": station_client,
         "connector_clients": connector_clients,
+        "_last_options": dict(entry.options),
     }
     # 2) Live MQTT (if UUID is present)
     slu = entry.data.get(CONF_SERVICE_LOCATION_UUID)
@@ -270,5 +269,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle updates to config entry options."""
-    _LOGGER.debug("Config entry updated: %s", entry.entry_id)
-    await hass.config_entries.async_reload(entry.entry_id)
+    ctx = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    prev = ctx.get("_last_options", {})
+    cur = dict(entry.options)
+
+    if cur != prev:
+        ctx["_last_options"] = cur
+        hass.data[DOMAIN][entry.entry_id] = ctx
+        await hass.config_entries.async_reload(entry.entry_id)
+    else:
+        _LOGGER.debug("ConfigEntry change zonder optie-wijziging → reload overgeslagen.")
