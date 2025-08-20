@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api_client import SmappeeApiClient
-from .const import BASE_URL
+from .const import BASE_URL, MQTT_TRACK_INTERVAL_SEC
 from .data import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
@@ -346,14 +346,24 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         data = self.data
         if not data:
             return
+
         st = data.station
         changed = False
-        if getattr(st, "mqtt_connected", False) != up:
-            st.mqtt_connected = up
-            changed = True
+        now = _now()
+
         if up:
-            st.last_mqtt_rx = _now()
+            if not getattr(st, "mqtt_connected", False):
+                st.mqtt_connected = True
+                changed = True
+            st.last_mqtt_rx = now
             changed = True
+        else:
+            grace = max(2 * MQTT_TRACK_INTERVAL_SEC, 10)
+            last = float(getattr(st, "last_mqtt_rx", 0) or 0)
+            if (now - last) > grace and getattr(st, "mqtt_connected", True):
+                st.mqtt_connected = False
+                changed = True
+
         if changed:
             self.async_set_updated_data(data)
 
