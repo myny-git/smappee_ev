@@ -26,17 +26,6 @@ Pauses the currently active charging session.
 - **`smappee_ev.stop_charging`**  
 Stops the charging session. 
 
-- **`smappee_ev.set_available`**  
-Makes the Wallbox available for use (if it was marked unavailable).
-
-- **`smappee_ev.set_unavailable`**  
-Makes the Wallbox unavailable (e.g., for manual control or maintenance purposes or perhaps holiday mode).
-
-- **`smappee_ev.set_brightness`**  
-Sets the LED brightness on the Wallbox. Requires a `brightness` parameter (0–100) in percentage. Take care, you don't see an immediate update in your app, you have to exit this screen (e.g. by going to the home page) and return, or refresh the screen. Afterwards, your programmed LED brightness value will appear.
-
-<img width="338" height="170" alt="image" src="https://github.com/user-attachments/assets/2fb91c12-55fd-404b-be3c-0ba28e947d12" />
-
 - **`smappee_ev.set_min_surpluspct`**  
 Sets the min surplus percentage before enabling the connector in SOLAR mode. Take care, the dashboard doesn't reflect immediately the changed number. If you go to another screen, and return, then it is modified. 
 <img width="728" height="245" alt="image" src="https://github.com/user-attachments/assets/304cd08c-04e7-43dd-98cc-f5d2cc3f7144" />
@@ -98,15 +87,6 @@ Pauses the ongoing charging session. Charging can later be resumed.
 - **`button.smappee_ev_stop_charging_1`**  
 Stops the current charging session entirely. Useful for ending sessions manually or through automations. Also connector-specific.
 
-- **`button.smappee_ev_set_led_brightness`**  
-Applies the brightness level set in `number.smappee_ev_wallbox_led_brightness` to the Wallbox LEDs.
-
-- **`button.smappee_ev_set_available`**  
-Marks the Wallbox as available for use. Required before charging can start if the Wallbox was previously marked as unavailable.
-
-- **`button.smappee_ev_set_unavailable`**  
-Marks the Wallbox as unavailable. This can be used to disable charging when not in use or during maintenance.
-
 ### 📈 Sensor Entities
 
 **`sensor.charging_state_1`**  
@@ -120,6 +100,9 @@ Displays the EVCC (Electric Vehicle Communication Controller) state of the Wallb
 - `B`: Vehicle connected but not ready
 - `C`: Vehicle connected and ready for charging
 - `E`: Error state
+
+**`sensor.evcc_state-us_1`**  
+Displays the state of the Wallbox, per connector ID, similar as on the dashboard
 
 ### EVCC specific entity
 
