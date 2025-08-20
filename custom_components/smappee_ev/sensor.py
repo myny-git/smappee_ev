@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
+import time
+from typing import Any, Protocol, cast
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
@@ -14,7 +15,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api_client import SmappeeApiClient
-from .const import DOMAIN
+from .const import DOMAIN, MQTT_TRACK_INTERVAL_SEC
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData
 
@@ -65,7 +66,24 @@ async def async_setup_entry(
     async_add_entities(entities, update_before_add=True)
 
 
-class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
+class _HasCoordinator(Protocol):
+    coordinator: SmappeeCoordinator
+
+
+class _MqttAvailableMixin:
+    @property
+    def available(self) -> bool:
+        me = cast(_HasCoordinator, self)
+        data: IntegrationData | None = me.coordinator.data
+        st = data.station if data else None
+        if not st:
+            return False
+        last = float(getattr(st, "last_mqtt_rx", 0) or 0.0)
+        grace = max(2 * MQTT_TRACK_INTERVAL_SEC, 10)
+        return (time.time() - last) <= grace
+
+
+class _Base(_MqttAvailableMixin, CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     """Base class for Smappee EV sensors."""
 
     _attr_should_poll = False  # Event-driven, no polling
@@ -233,7 +251,7 @@ def _as_phases(obj: Any) -> list[float] | None:
     return None
 
 
-class _StationBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
+class _StationBase(_MqttAvailableMixin, CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(
@@ -373,7 +391,7 @@ class StationPvCurrents(_StationBase):
 # ============================ ADDED: Per-connector sensors ===========================
 
 
-class _ConnBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
+class _ConnBase(_MqttAvailableMixin, CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(

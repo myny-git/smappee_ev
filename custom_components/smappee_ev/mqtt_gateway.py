@@ -198,7 +198,7 @@ class SmappeeMqtt:
                     break
                 except (MqttError, OSError, TimeoutError) as err:
                     _LOGGER.warning("MQTT disconnected/error: %s (retry in %.0fs)", err, backoff)
-                    self._notify_conn(False)
+                    # self._notify_conn(False)
 
                     if self._track_task:
                         self._track_task.cancel()
