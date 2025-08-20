@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -89,6 +91,8 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
 class SmappeeCombinedCurrentSlider(_Base):
     """Combined slider showing current (A), with percentage in attributes."""
 
+    _attr_device_class = NumberDeviceClass.CURRENT
+
     def __init__(
         self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, connector_uuid: str
     ) -> None:
@@ -104,7 +108,7 @@ class SmappeeCombinedCurrentSlider(_Base):
             api_client,
             name=f"Max charging speed {api_client.connector_number}",
             unique_id=f"{api_client.serial_id}_connector{api_client.connector_number}_combined_current",
-            unit="A",
+            unit=UnitOfElectricCurrent.AMPERE,
             min_value=min_current,
             max_value=max_current,
             step=1,
@@ -165,11 +169,14 @@ class SmappeeCombinedCurrentSlider(_Base):
 
         if max_c <= min_c:
             await self.api_client.start_charging(min_c)
+            st.selected_current_limit = min_c
         else:
             rng = max_c - min_c
             pct = int(round((val - min_c) * 100.0 / rng))
             pct = max(0, min(100, pct))
             await self.api_client.set_percentage_limit(pct)
+            st.selected_current_limit = val
+            st.selected_percentage_limit = pct
         await self.coordinator.async_request_refresh()
 
     @callback
@@ -202,13 +209,16 @@ class SmappeeCombinedCurrentSlider(_Base):
 class SmappeeBrightnessNumber(_Base):
     """LED brightness setting for Smappee EV (station-level)."""
 
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_unit_of_measurement = PERCENTAGE
+
     def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
         super().__init__(
             coordinator,
             api_client,
             name="LED Brightness",
             unique_id=f"{api_client.serial_id}_led_brightness",
-            unit="%",
+            unit=PERCENTAGE,
             min_value=0,
             max_value=100,
             step=1,
@@ -220,7 +230,8 @@ class SmappeeBrightnessNumber(_Base):
         return int(data.station.led_brightness) if data and data.station else None
 
     async def async_set_native_value(self, value: float) -> None:
-        await self.api_client.set_brightness(int(value))
+        val = max(0, min(100, int(value)))
+        await self.api_client.set_brightness(val)
         await self.coordinator.async_request_refresh()
 
 

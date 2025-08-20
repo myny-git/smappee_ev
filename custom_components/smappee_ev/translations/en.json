@@ -36,24 +36,6 @@
     }
   },
   "services": {
-    "set_available": {
-      "name": "Set available",
-      "description": "Make the charger available for charging."
-    },
-    "set_unavailable": {
-      "name": "Set unavailable",
-      "description": "Make the charger unavailable for charging."
-    },
-    "set_brightness": {
-      "name": "Set LED brightness",
-      "description": "Set the LED brightness of the station.",
-      "fields": {
-        "brightness": {
-          "name": "Brightness",
-          "description": "Brightness value between 0 and 100"
-        }
-      }
-    },
     "start_charging": {
       "name": "Start charging",
       "description": "Start charging using a specific current in Amps.",
@@ -120,6 +102,5 @@
         }
       }
     }
-
   }
 }

@@ -27,62 +27,48 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][config_entry.entry_id]
     coordinator: SmappeeCoordinator = data["coordinator"]
     connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
-    station_client: SmappeeApiClient = data["station_client"]
 
     entities: list[ButtonEntity] = []
 
     # Connector-based buttons
     for uuid, client in connector_clients.items():  # <— had values() eerst
         connector = client.connector_number or 1
-        entities.extend(
-            [
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Start charging {connector}",
-                    action="start_charging",
-                    unique_id_suffix=f"start_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Stop charging {connector}",
-                    action="stop_charging",
-                    unique_id_suffix=f"stop_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Pause charging {connector}",
-                    action="pause_charging",
-                    unique_id_suffix=f"pause_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Set charging mode {connector}",
-                    action="set_charging_mode",
-                    unique_id_suffix=f"mode_{connector}",
-                ),
-            ]
-        )
-
-    # Station-level buttons
-    entities.extend(
-        [
+        entities.extend([
             SmappeeActionButton(
                 coordinator=coordinator,
-                api_client=station_client,
-                name="Set LED brightness",
-                action="set_brightness",
-                unique_id_suffix="set_brightness",
-            )
-        ]
-    )
+                api_client=client,
+                uuid=uuid,
+                name=f"Start charging {connector}",
+                action="start_charging",
+                unique_id_suffix=f"start_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Stop charging {connector}",
+                action="stop_charging",
+                unique_id_suffix=f"stop_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Pause charging {connector}",
+                action="pause_charging",
+                unique_id_suffix=f"pause_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Set charging mode {connector}",
+                action="set_charging_mode",
+                unique_id_suffix=f"mode_{connector}",
+            ),
+        ])
+
+    # Station-level buttons
 
     async_add_entities(entities)
 
@@ -149,13 +135,6 @@ class SmappeeActionButton(CoordinatorEntity[SmappeeCoordinator], ButtonEntity):
 
             elif self._action == "pause_charging":
                 await self.api_client.pause_charging()
-
-            elif self._action == "set_brightness":
-                brightness = 70
-                data = self.coordinator.data if self.coordinator else None
-                if data and data.station:
-                    brightness = int(data.station.led_brightness)
-                await self.api_client.set_brightness(brightness)
 
             elif self._action == "set_charging_mode":
                 mode = "NORMAL"

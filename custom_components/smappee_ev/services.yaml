@@ -70,20 +70,6 @@ start_charging:
           max: 32
           unit_of_measurement: "A"
 
-set_brightness:
-  description: "Set the LED brightness of the station."
-  fields:
-    brightness:
-      description: "LED brightness percentage (e.g., 3, 70)"
-      example: 70
-      required: true
-      selector:
-        number:
-          min: 0
-          max: 100
-          unit_of_measurement: "%"
-
-
 set_min_surpluspct:
   description: "Set the minimum surplus percentage before charging starts in SOLAR mode."
   fields:
@@ -99,12 +85,4 @@ set_min_surpluspct:
       required: true
       selector:
         number:
-
-set_available:
-  description: "Set the charging station as available."
-  fields: {}
-
-set_unavailable:
-  description: "Set the charging station as unavailable."
-  fields: {}
 

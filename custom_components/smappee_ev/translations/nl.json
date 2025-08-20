@@ -36,24 +36,6 @@
         }
     },
     "services": {
-        "set_available": {
-            "name": "Zet beschikbaar",
-            "description": "Maak de lader beschikbaar om te laden."
-        },
-        "set_unavailable": {
-            "name": "Zet onbeschikbaar",
-            "description": "Maak de lader onbeschikbaar om te laden."
-        },
-        "set_brightness": {
-            "name": "Stel LED-helderheid in",
-            "description": "Pas de helderheid van de LED-verlichting van het station aan.",
-            "fields": {
-                "brightness": {
-                    "name": "Helderheid",
-                    "description": "Waarde tussen 0 en 100"
-                }
-            }
-        },
         "start_charging": {
             "name": "Start laden",
             "description": "Start het laden met een specifieke stroomsterkte in Ampère.",

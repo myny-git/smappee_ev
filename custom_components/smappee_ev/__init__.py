@@ -241,6 +241,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         register_services(hass)
         hass.data[DOMAIN]["services_registered"] = True
 
+    for _svc in ("set_available", "set_unavailable", "set_brightness"):
+        try:
+            if hass.services.has_service(DOMAIN, _svc):
+                hass.services.async_remove(DOMAIN, _svc)
+                _LOGGER.info("Removed deprecated service %s.%s", DOMAIN, _svc)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("While removing deprecated service %s: %s", _svc, err)
+
     entry.async_on_unload(entry.add_update_listener(async_entry_update_listener))
 
     return True

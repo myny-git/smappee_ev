@@ -130,21 +130,6 @@ async def async_handle_connector_service(
 # ----------------------------
 
 
-async def handle_set_available(call: ServiceCall) -> None:
-    await async_handle_station_service(call.hass, call, "set_available")
-
-
-async def handle_set_unavailable(call: ServiceCall) -> None:
-    await async_handle_station_service(call.hass, call, "set_unavailable")
-
-
-async def handle_set_brightness(call: ServiceCall) -> None:
-    brightness = call.data.get("brightness")
-    await async_handle_station_service(
-        call.hass, call, "set_brightness", {"brightness": brightness}
-    )
-
-
 async def handle_start_charging(call: ServiceCall) -> None:
     await async_handle_connector_service(
         call.hass, call, "start_charging", {"current": call.data.get("current")}
@@ -185,9 +170,6 @@ async def handle_set_min_surpluspct(call: ServiceCall) -> None:
 def register_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Registering Smappee EV services")
 
-    hass.services.async_register(DOMAIN, "set_available", handle_set_available)
-    hass.services.async_register(DOMAIN, "set_unavailable", handle_set_unavailable)
-    hass.services.async_register(DOMAIN, "set_brightness", handle_set_brightness)
     hass.services.async_register(DOMAIN, "start_charging", handle_start_charging)
     hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging)
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging)
@@ -197,9 +179,6 @@ def register_services(hass: HomeAssistant) -> None:
 
 def unregister_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Unregistering Smappee EV services")
-    hass.services.async_remove(DOMAIN, "set_available")
-    hass.services.async_remove(DOMAIN, "set_unavailable")
-    hass.services.async_remove(DOMAIN, "set_brightness")
     hass.services.async_remove(DOMAIN, "start_charging")
     hass.services.async_remove(DOMAIN, "pause_charging")
     hass.services.async_remove(DOMAIN, "stop_charging")
