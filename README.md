@@ -50,15 +50,14 @@ The main ambition is to integrate these sensors in other energy management syste
 
 ### ✅ LED Brightness Control
 - Adjust LED ring brightness (%)
-- Set via number input and apply via button
 
 ### ✅ Charger State Feedback
 - Real-time **Session State**:
   - `CHARGING`, `PAUSED`, `SUSPENDED`, etc.
 - **EVCC State** for in-depth diagnostics (e.g. state A/B/C/E)
+- **EVCC Status** to represent the connector status similar as the dashboard
 
 #### ⚡️ Advanced / Developer Notes
-- Polling interval (`update_interval`) can be set in config flow (default 30s)
 - All values for currents/brightnesses are always **integers** (no floats in UI)
 - Integration tested on:  
   - **Smappee EV Wall Home** (single and double cable)
@@ -120,12 +119,9 @@ More information on the usage of the entities/buttons/services can be found in t
 | `button.smappee_ev_start_charging_1`             | Button   | Starts charging using the set current on connector 1 or 2              |
 | `button.smappee_ev_pause_charging_1`              | Button   | Pauses the current charging session on connector 1 or 2                 |
 | `button.smappee_ev_stop_charging_1`              | Button   | Stops the current charging session on connector 1 or 2                   |
-| `button.smappee_ev_set_led_brightness`          | Button   | Apply the set LED brightness level on the station                    |
 | `select.smappee_ev_charging_mode_1`   | Select   | Choose between `SMART`, `SOLAR`, `NORMAL` for connector 1 or 2             |
-| `number.smappee_ev_max_charging_speed_1`  | Number   | Set current in Amps for `NORMAL` mode on connector 1 or 2                    |        | `number.smappee_ev_wallbox_led_brightness`  | Number   | Brightness percentage used in Set LED Brightness                             |
-| `number.smappee_ev_wallbox_min_surplus_percentage_1`  | Number   | Minimum surplus (%) before enabling charging on connector 1 or 2   |
-| `button.smappee_ev_wallbox_set_available`             | Button   | Make the Wallbox available for use                                |
-| `button.smappee_ev_wallbox_set_unavailable`             | Button   | Make the Wallbox unavailable for use                        |
+| `number.smappee_ev_max_charging_speed_1`  | Number   | Set current in Amps for `NORMAL` mode on connector 1 or 2                    |       
+| `number.smappee_ev_wallbox_min_surplus_percentage_1`  | Number   | Minimum surplus (%) before enabling charging on connector 1 or 2  | | `switch.smappee_ev_connector_1_available`  | Number   | Modify connector avaialility            |
 | `switch.smappee_ev_wallbox_evcc_charging_control_1`             | Button   | EVCC switch for connector 1 or 2 to enable/disable charging  |
 
 #### Sensors
@@ -134,7 +130,22 @@ More information on the usage of the entities/buttons/services can be found in t
 |-------------------------------------------|---------|------------------------------------------------------------------------------|
 | `sensor.charging_state_1`           | Sensor  | Current charging state (`CHARGING`, `PAUSED`, `SUSPENDED`, ...) on connector 1 or 2    |
 | `sensor.evcc_state_1`              | Sensor  | EVCC state of the charger (`A`, `B`, `C`, `E`) for connector 1 or 2                    |
-            
+| `sensor.evse_status_1`              | Sensor  | EVCC status as shown on the Smappee Dashboard for connector 1 or 2                    |
+
+#### Configuration
+
+| Entity                                   | Type    | Description                                                                  |
+|-------------------------------------------|---------|------------------------------------------------------------------------------|
+| `number.smappee_ev_wallbox_led_brightness`  | Number   | Brightness percentage used in Set LED Brightness                |
+
+#### Diagnostic
+
+| Entity                                   | Type    | Description                                                                  |
+|-------------------------------------------|---------|------------------------------------------------------------------------------|
+| `binary_sensor.smappee_ev_mqtt_connected`  | Binary_sensor   | Connection status of the MQTT service               |
+| `sensor.smappee_ev_mqtt_last_seen`  | Sensor  | MQTT update status       |
+
+
 ### 🛠️ Services
 
 | Service                                   | Description                                                                 |
@@ -143,9 +154,6 @@ More information on the usage of the entities/buttons/services can be found in t
 | `smappee_ev.start_charging`                | Starts charging with a current limit                                      |
 | `smappee_ev.pause_charging`                | Pauses this charging session                                             |
 | `smappee_ev.stop_charging`                 | Stops the charging session                                                  |
-| `smappee_ev.set_available`                 | Makes the Wallbox available                                                 |
-| `smappee_ev.set_unavailable`               | Makes the Wallbox unavailable                                               |
-| `smappee_ev.set_brightness`                | Sets LED brightness (%) on the Wallbox                                      |
 | `smappee_ev.set_min_surpluspct`            | Sets the min Surplus % before enabling the connector                                |
 
 > ⚠️ **Note**  
