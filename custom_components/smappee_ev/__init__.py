@@ -208,10 +208,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator.async_set_updated_data(coordinator.data)
 
     if slu:
-
-        def _on_props(topic: str, payload: dict) -> None:
-            coordinator.apply_mqtt_properties(topic, payload)
-
         # Serial voor tracking; directly from station_client
         serial_for_tracking = str(getattr(station_client, "serial", serial))
 

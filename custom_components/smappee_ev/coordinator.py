@@ -323,9 +323,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         elif "/etc/led/acledcontroller/" in topic and topic.endswith("/devices/updated"):
             changed = self._handle_led_updated(payload)
 
-        if changed:
-            self.async_set_updated_data(data)
-        elif heartbeat_touch:
+        if changed or heartbeat_touch:
             self.async_set_updated_data(data)
 
     # ---------- split helpers to reduce complexity ----------
