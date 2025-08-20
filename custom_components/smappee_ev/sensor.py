@@ -4,6 +4,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api_client import SmappeeApiClient
@@ -29,6 +30,9 @@ async def async_setup_entry(
         )
         entities.append(
             SmappeeEVCCStateSensor(coordinator=coordinator, api_client=client, uuid=uuid)
+        )
+        entities.append(
+            SmappeeEvseStatusSensor(coordinator=coordinator, api_client=client, uuid=uuid)
         )
 
     async_add_entities(entities, update_before_add=True)
@@ -78,7 +82,7 @@ class SmappeeChargingStateSensor(_Base):
         return st.session_state if st else None
 
 
-class SmappeeEVCCStateSensor(_Base):
+class SmappeeEVCCStateSensor(_Base, RestoreEntity):
     """EVCC A/B/C/E mapping derived from the session state."""
 
     def __init__(
@@ -90,11 +94,22 @@ class SmappeeEVCCStateSensor(_Base):
             f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state"
         )
         self._attr_icon = "mdi:car-electric"
+        self._restored: str | None = None
 
     @property
     def native_value(self):
         st = self._state()
-        return st.evcc_state if st else None
+        # 1) live from coordinator
+        if st and st.evcc_state:
+            return st.evcc_state
+        # 2) fallback: last known value
+        return self._restored
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last and last.state and last.state not in ("unknown", "unavailable"):
+            self._restored = last.state
 
     @property
     def extra_state_attributes(self):
@@ -102,8 +117,29 @@ class SmappeeEVCCStateSensor(_Base):
         if not st:
             return None
         return {
-            "iec_status": st.iec_status,  # "B1"
-            "session_state": st.session_state,  # CHARGING/SUSPENDED/...
-            "ui_mode_base": st.ui_mode_base,  # NORMAL/STANDARD/SOLAR
+            "iec_status": st.iec_status,  # example C2
+            "session_state": st.session_state,  # STARTED/STOPPED/...
+            "charging_mode": st.raw_charging_mode,  # NORMAL/SMART/PAUSED
+            "optimization_strategy": st.optimization_strategy,
             "paused": st.paused,
+            "status_current": st.session_cause,  # AP-status
         }
+
+
+class SmappeeEvseStatusSensor(_Base):
+    """Smappee Dashboard connector status."""
+
+    def __init__(
+        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
+    ) -> None:
+        super().__init__(coordinator=coordinator, api_client=api_client, uuid=uuid)
+        self._attr_name = f"EVSE status {api_client.connector_number}"
+        self._attr_unique_id = (
+            f"{api_client.serial_id}_connector{api_client.connector_number}_evse_status"
+        )
+        self._attr_icon = "mdi:information-outline"
+
+    @property
+    def native_value(self):
+        st = self._state()
+        return st.status_current if st else None

@@ -428,6 +428,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             changed |= self._set_if_changed(
                 conn, "session_cause", str(evse_cur) if evse_cur else None
             )
+            changed |= self._set_if_changed(
+                conn, "status_current", str(evse_cur) if evse_cur else None
+            )
             sbc = status_obj.get("stoppedByCloud")
             changed |= self._set_if_changed(
                 conn, "stopped_by_cloud", bool(sbc) if sbc is not None else None
@@ -478,14 +481,12 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         return changed
 
     def _update_evcc(self, conn: ConnectorState) -> bool:
-        changed = False
-        letter = self._derive_evcc_letter(conn.iec_status)
-        if letter is None:
-            letter = conn.evcc_state
-
-        code = self._evcc_code(letter) if letter else None
-        changed |= self._set_if_changed(conn, "evcc_state", letter)
-        changed |= self._set_if_changed(conn, "evcc_state_code", code)
+        new_letter = self._derive_evcc_letter(conn.iec_status)
+        if new_letter is None:
+            return False
+        changed = self._set_if_changed(conn, "evcc_state", new_letter)
+        new_code = self._evcc_code(new_letter)
+        changed |= self._set_if_changed(conn, "evcc_state_code", new_code)
         return changed
 
     def _handle_power(self, payload: dict) -> bool:

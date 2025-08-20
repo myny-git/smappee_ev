@@ -31,6 +31,8 @@ class ConnectorState:
     ui_mode_base: str | None = None  # NORMAL / STANDARD / SOLAR
     paused: bool = False  # overlay
 
+    status_current: str | None = None
+
     # EVCC letter/code (return from IEC of chargingState)
     evcc_state: str | None = None  # "A" / "B" / "C"
     evcc_state_code: int | None = None  # 0(A) / 1(B) / 2(C)
