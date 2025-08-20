@@ -271,7 +271,7 @@ class SmappeeApiClient:
     async def async_get_metering_configuration(self) -> dict | None:
         """Fetch metering configuration for this service location."""
         await self.ensure_auth()
-        url = f"{BASE_URL}/dev/v3/servicelocation/{self.service_location_id}/meteringconfiguration"
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/meteringconfiguration"
         try:
             async with self._session.get(
                 url, headers=self.auth_headers(), timeout=self._timeout

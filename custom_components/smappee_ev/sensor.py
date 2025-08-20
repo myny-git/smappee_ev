@@ -380,10 +380,9 @@ class _ConnBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         return {
-            "identifiers": {(DOMAIN, f"{self.api_client.serial_id}:{self._uuid}")},
-            "name": f"Smappee EV Connector {self.api_client.connector_number}",
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
             "manufacturer": "Smappee",
-            "via_device": (DOMAIN, self.api_client.serial_id),
         }
 
     @property
