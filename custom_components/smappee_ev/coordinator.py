@@ -611,7 +611,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 )
             else:  # pv
                 changed |= self._set_if_changed(
-                    st, "pv_energy_import_kwh", round(sum(_pick(exp_wh, cons_idxs)) / 1000.0, 3)
+                    st, "pv_energy_import_kwh", round(sum(_pick(imp_wh, cons_idxs)) / 1000.0, 3)
                 )
         return changed
 

@@ -153,7 +153,7 @@ class SmappeeEVCCStateSensor(_Base, RestoreEntity):
         }
 
 
-class SmappeeEvseStatusSensor(_Base):
+class SmappeeEvseStatusSensor(_Base, RestoreEntity):
     """Smappee Dashboard connector status."""
 
     def __init__(
@@ -165,11 +165,20 @@ class SmappeeEvseStatusSensor(_Base):
             f"{api_client.serial_id}_connector{api_client.connector_number}_evse_status"
         )
         self._attr_icon = "mdi:information-outline"
+        self._restored: str | None = None
 
     @property
     def native_value(self):
         st = self._state()
-        return st.status_current if st else None
+        if st and st.status_current:
+            return st.status_current
+        return self._restored
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last and last.state and last.state not in ("unknown", "unavailable"):
+            self._restored = last.state
 
 
 class SmappeeMqttLastSeenSensor(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
