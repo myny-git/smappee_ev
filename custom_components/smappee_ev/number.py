@@ -177,7 +177,7 @@ class SmappeeCombinedCurrentSlider(_Base):
             await self.api_client.set_percentage_limit(pct)
             st.selected_current_limit = val
             st.selected_percentage_limit = pct
-        await self.coordinator.async_request_refresh()
+        # await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -232,7 +232,7 @@ class SmappeeBrightnessNumber(_Base):
     async def async_set_native_value(self, value: float) -> None:
         val = max(0, min(100, int(value)))
         await self.api_client.set_brightness(val)
-        await self.coordinator.async_request_refresh()
+        # await self.coordinator.async_request_refresh()
 
 
 class SmappeeMinSurplusPctNumber(_Base):
@@ -264,4 +264,4 @@ class SmappeeMinSurplusPctNumber(_Base):
 
     async def async_set_native_value(self, value: float) -> None:
         await self.api_client.set_min_surpluspct(int(value))
-        await self.coordinator.async_request_refresh()
+        # await self.coordinator.async_request_refresh()

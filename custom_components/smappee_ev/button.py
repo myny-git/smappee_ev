@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 
-from aiohttp import ClientError
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
@@ -33,42 +30,40 @@ async def async_setup_entry(
     # Connector-based buttons
     for uuid, client in connector_clients.items():  # <— had values() eerst
         connector = client.connector_number or 1
-        entities.extend(
-            [
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Start charging {connector}",
-                    action="start_charging",
-                    unique_id_suffix=f"start_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Stop charging {connector}",
-                    action="stop_charging",
-                    unique_id_suffix=f"stop_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Pause charging {connector}",
-                    action="pause_charging",
-                    unique_id_suffix=f"pause_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Set charging mode {connector}",
-                    action="set_charging_mode",
-                    unique_id_suffix=f"mode_{connector}",
-                ),
-            ]
-        )
+        entities.extend([
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Start charging {connector}",
+                action="start_charging",
+                unique_id_suffix=f"start_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Stop charging {connector}",
+                action="stop_charging",
+                unique_id_suffix=f"stop_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Pause charging {connector}",
+                action="pause_charging",
+                unique_id_suffix=f"pause_{connector}",
+            ),
+            SmappeeActionButton(
+                coordinator=coordinator,
+                api_client=client,
+                uuid=uuid,
+                name=f"Set charging mode {connector}",
+                action="set_charging_mode",
+                unique_id_suffix=f"mode_{connector}",
+            ),
+        ])
 
     # Station-level buttons
 
@@ -105,16 +100,8 @@ class SmappeeActionButton(CoordinatorEntity[SmappeeCoordinator], ButtonEntity):
 
     async def _async_refresh(self) -> None:
         """Small shared helper: fetch coordinator and refresh once."""
-        try:
-            await self.coordinator.async_request_refresh()
-        except (
-            TimeoutError,
-            ClientError,
-            asyncio.CancelledError,
-            UpdateFailed,
-            HomeAssistantError,
-        ) as err:
-            _LOGGER.debug("Coordinator refresh failed after '%s': %s", self._action, err)
+        # Coordinator refresh intentionally skipped to avoid 'unknown' states.
+        # MQTT will update the coordinator.data shortly after the service call.
 
     async def async_press(self) -> None:
         try:
