@@ -80,7 +80,7 @@
                 },
                 "mode": {
                     "name": "Modus",
-                    "description": "Laadmodus (STANDARD, SMART, SOLAR)"
+                    "description": "Laadmodus (NORMAL, SMART, SOLAR)"
                 }
             }
         },

@@ -80,7 +80,7 @@
         },
         "mode": {
           "name": "Mode",
-          "description": "Charging mode (STANDARD, SMART, SOLAR)"
+          "description": "Charging mode (NORMAL, SMART, SOLAR)"
         }
       }
     },
