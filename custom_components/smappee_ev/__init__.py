@@ -140,10 +140,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     update_interval = entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT)
 
     oauth_client = OAuth2Client(entry.data, session=session)
-    slu = entry.data.get(CONF_SERVICE_LOCATION_UUID)
-    if not slu:
-        slu = await _ensure_service_location_uuid_in_entry(hass, entry, oauth_client, session)
 
+    if not entry.data.get(CONF_SERVICE_LOCATION_UUID):
+        await _ensure_service_location_uuid_in_entry(hass, entry, oauth_client, session)
     # Station-level client (for LED, availability, etc.)
     st = entry.data["station"]
     station_client = SmappeeApiClient(
