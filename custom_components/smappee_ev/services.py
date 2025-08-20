@@ -92,9 +92,9 @@ async def async_handle_station_service(
     await method(**(extra_args or {}))
 
     # Immediately refresh the coordinator so the UI updates without waiting
-    coordinator = get_coordinator(hass)
-    if coordinator:
-        await coordinator.async_request_refresh()
+    # coordinator = get_coordinator(hass)
+    # if coordinator:
+    #     await coordinator.async_request_refresh()
 
 
 async def async_handle_connector_service(
