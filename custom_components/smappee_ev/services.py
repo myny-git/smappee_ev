@@ -91,11 +91,6 @@ async def async_handle_station_service(
     # Execute the station API method
     await method(**(extra_args or {}))
 
-    # Immediately refresh the coordinator so the UI updates without waiting
-    # coordinator = get_coordinator(hass)
-    # if coordinator:
-    #     await coordinator.async_request_refresh()
-
 
 async def async_handle_connector_service(
     hass: HomeAssistant,
@@ -119,10 +114,6 @@ async def async_handle_connector_service(
 
     if method_name in ("start_charging", "pause_charging", "stop_charging"):
         client.selected_mode = "NORMAL"
-
-    coordinator = get_coordinator(hass)
-    if coordinator:
-        await coordinator.async_request_refresh()
 
 
 # ----------------------------
