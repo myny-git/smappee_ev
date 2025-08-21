@@ -41,16 +41,18 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._user_input = user_input or {}
 
-        data_schema = vol.Schema({
-            vol.Required(CONF_CLIENT_ID): str,
-            vol.Required(CONF_CLIENT_SECRET): str,
-            vol.Required(CONF_USERNAME): str,
-            vol.Required(CONF_PASSWORD): str,
-            vol.Required(CONF_SERIAL): str,
-            vol.Optional(CONF_UPDATE_INTERVAL, default=UPDATE_INTERVAL_DEFAULT): vol.All(
-                int, vol.Range(min=5, max=3600)
-            ),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_CLIENT_ID): str,
+                vol.Required(CONF_CLIENT_SECRET): str,
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str,
+                vol.Required(CONF_SERIAL): str,
+                vol.Optional(CONF_UPDATE_INTERVAL, default=UPDATE_INTERVAL_DEFAULT): vol.All(
+                    int, vol.Range(min=5, max=3600)
+                ),
+            }
+        )
 
         if user_input is None:
             return self.async_show_form(
@@ -98,11 +100,13 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 for loc in locations
             }
 
-            location_schema = vol.Schema({
-                vol.Required("selected_location", default=list(location_options.keys())[0]): vol.In(
-                    location_options
-                ),
-            })
+            location_schema = vol.Schema(
+                {
+                    vol.Required(
+                        "selected_location", default=list(location_options.keys())[0]
+                    ): vol.In(location_options),
+                }
+            )
             return self.async_show_form(step_id="select_location", data_schema=location_schema)
 
         except (TimeoutError, ClientError, asyncio.CancelledError, HomeAssistantError) as err:
@@ -170,11 +174,13 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if isinstance(num, str) and num.isdigit():
                     num = int(num)
 
-                carchargers.append({
-                    "id": d["id"],
-                    "uuid": d["uuid"],
-                    "connector_number": num,
-                })
+                carchargers.append(
+                    {
+                        "id": d["id"],
+                        "uuid": d["uuid"],
+                        "connector_number": num,
+                    }
+                )
         if not carchargers:
             return self.async_abort(reason="no_chargers")
 
@@ -219,19 +225,25 @@ class SmappeeEvOptionsFlow(config_entries.OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
-        data_schema = vol.Schema({
-            vol.Required(CONF_CLIENT_ID, default=self.config_entry.data.get(CONF_CLIENT_ID)): str,
-            vol.Required(
-                CONF_CLIENT_SECRET, default=self.config_entry.data.get(CONF_CLIENT_SECRET)
-            ): str,
-            vol.Required(CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME)): str,
-            vol.Required(CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD)): str,
-            vol.Required(CONF_SERIAL, default=self.config_entry.data.get(CONF_SERIAL)): str,
-            vol.Optional(
-                CONF_UPDATE_INTERVAL,
-                default=self.config_entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT),
-            ): vol.All(int, vol.Range(min=5, max=3600)),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_CLIENT_ID, default=self.config_entry.data.get(CONF_CLIENT_ID)
+                ): str,
+                vol.Required(
+                    CONF_CLIENT_SECRET, default=self.config_entry.data.get(CONF_CLIENT_SECRET)
+                ): str,
+                vol.Required(CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME)): str,
+                vol.Required(CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD)): str,
+                vol.Required(CONF_SERIAL, default=self.config_entry.data.get(CONF_SERIAL)): str,
+                vol.Optional(
+                    CONF_UPDATE_INTERVAL,
+                    default=self.config_entry.data.get(
+                        CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT
+                    ),
+                ): vol.All(int, vol.Range(min=5, max=3600)),
+            }
+        )
         if user_input is None:
             return self.async_show_form(step_id="init", data_schema=data_schema)
         return self.async_create_entry(title="Smappee EV", data=user_input)
