@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import contextlib
-from datetime import UTC, datetime
+import time
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
@@ -10,7 +9,6 @@ from homeassistant.const import EntityCategory, UnitOfElectricCurrent, UnitOfEne
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api_client import SmappeeApiClient
@@ -45,7 +43,7 @@ async def async_setup_entry(
             continue
 
         # ---- Station sensors ----
-        entities.append(SmappeeMqttLastSeenSensor(coordinator, station_client, sid))
+        entities.append(SmappeeMqttLastSeenSensor(coordinator, station_client))
         entities.append(StationGridPower(coordinator, station_client, sid))
         entities.append(StationPvPower(coordinator, station_client, sid))
         entities.append(StationGridEnergyImport(coordinator, station_client, sid))
@@ -83,7 +81,7 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
         self._name_suffix = name_suffix
         serial = _station_serial(coordinator)
         self._attr_unique_id = f"{sid}:{serial}:{unique_suffix}"
-        self._attr_name = f"{_station_name(coordinator, sid)} – {name_suffix}"
+        self._attr_name = name_suffix
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -114,8 +112,8 @@ class _ConnBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
         serial = _station_serial(coordinator)
         self._attr_unique_id = f"{sid}:{serial}:{uuid}:{unique_suffix}"
         cnum = getattr(api, "connector_number", None)
-        conn_lbl = f"Connector {cnum}" if cnum else f"Connector {uuid[-4:]}"
-        self._attr_name = f"{_station_name(coordinator, sid)} – {conn_lbl} {name_suffix}"
+        num_lbl = f"{cnum}" if cnum is not None else uuid[-4:]
+        self._attr_name = f"Connector {num_lbl} {name_suffix}"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -420,27 +418,38 @@ class SmappeeEvseStatusSensor(_ConnBase):
         return str(getattr(st, "status_current", None)) if st else None
 
 
-class SmappeeMqttLastSeenSensor(_Base, RestoreEntity):
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
+class SmappeeMqttLastSeenSensor(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
+    """Station-scope 'last MQTT RX' as age in seconds."""
 
-    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
-        super().__init__(coordinator, sid, "MQTT last seen", "mqtt_last_seen")
-        self._restored: datetime | None = None
+    _attr_has_entity_name = True
+    _attr_name = "MQTT last seen"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:timer-sand"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "s"
+
+    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
+        super().__init__(coordinator)
+        self.api_client = api_client
+        self._attr_unique_id = f"{api_client.serial_id}_mqtt_last_seen"
 
     @property
-    def native_value(self) -> datetime | None:
-        st = self.coordinator.data.station if self.coordinator.data else None
-        ts = getattr(st, "last_mqtt_rx", None)
-        if isinstance(ts, int | float) and ts > 0:
-            try:
-                return datetime.fromtimestamp(float(ts), tz=UTC)
-            except (OSError, OverflowError, ValueError):
-                return None
-        return self._restored
+    def device_info(self) -> DeviceInfo:
+        return {
+            "identifiers": {(DOMAIN, self.api_client.serial_id)},
+            "name": "Smappee EV Wallbox",
+            "manufacturer": "Smappee",
+        }
 
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        prev = await self.async_get_last_state()
-        if prev and prev.state and prev.state != "unknown":
-            with contextlib.suppress(Exception):
-                self._restored = datetime.fromisoformat(prev.state)
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        st = data.station if data else None
+        ts = getattr(st, "last_mqtt_rx", None)
+        if not ts:
+            return None
+        try:
+            return max(0.0, time.time() - float(ts))
+        except (TypeError, ValueError):
+            return None

@@ -40,14 +40,15 @@ async def async_setup_entry(
             continue
         # Per connector: Start / Pause / Stop / Set mode
         for uuid, client in (connector_clients.get(sid) or {}).items():
-            name_prefix = _station_name(coord, sid)
+            num = getattr(client, "connector_number", None)
+            num_lbl = f"{num}" if num is not None else uuid[-4:]
             entities.append(
                 SmappeeActionButton(
                     coordinator=coord,
                     api_client=client,
                     sid=sid,
                     uuid=uuid,
-                    name=f"{name_prefix} – Start charging",
+                    name=f"Start charging {num_lbl}",
                     action="start_charging",
                     unique_id_suffix=f"{uuid}:start",
                 )
@@ -58,7 +59,7 @@ async def async_setup_entry(
                     api_client=client,
                     sid=sid,
                     uuid=uuid,
-                    name=f"{name_prefix} – Pause charging",
+                    name=f"Pause charging {num_lbl}",
                     action="pause_charging",
                     unique_id_suffix=f"{uuid}:pause",
                 )
@@ -69,7 +70,7 @@ async def async_setup_entry(
                     api_client=client,
                     sid=sid,
                     uuid=uuid,
-                    name=f"{name_prefix} – Stop charging",
+                    name=f"Stop charging {num_lbl}",
                     action="stop_charging",
                     unique_id_suffix=f"{uuid}:stop",
                 )
@@ -80,7 +81,7 @@ async def async_setup_entry(
                     api_client=client,
                     sid=sid,
                     uuid=uuid,
-                    name=f"{name_prefix} – Set charging mode",
+                    name=f"Set charging mode {num_lbl}",
                     action="set_charging_mode",
                     unique_id_suffix=f"{uuid}:setmode",
                 )

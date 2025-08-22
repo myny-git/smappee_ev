@@ -33,6 +33,9 @@ class SmappeeApiClient:
         self.smart_device_id = smart_device_id
         self.service_location_id = service_location_id
         self.connector_number = connector_number
+        self.led_device_id: str | None = None
+        self.led_device_uuid: str | None = None
+
         self.is_station = is_station
         self._session: ClientSession = session
         self._timeout = ClientTimeout(connect=5, total=15)
@@ -70,6 +73,26 @@ class SmappeeApiClient:
     @property
     def serial_id(self) -> str:
         return self.serial
+
+    async def _ensure_led_device(self) -> None:
+        if self.led_device_id and self.led_device_uuid:
+            return
+        await self.ensure_auth()
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
+        resp = await self._session.get(url, headers=self.auth_headers(), timeout=self._timeout)
+        if resp.status != 200:
+            txt = await resp.text()
+            raise RuntimeError(f"LED discovery failed: {txt}")
+        devices = await resp.json()
+        for dev in devices or []:
+            for prop in dev.get("configurationProperties", []) or []:
+                spec = prop.get("spec") or {}
+                if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
+                    self.led_device_id = str(dev.get("id"))
+                    self.led_device_uuid = str(dev.get("uuid"))
+                    return
+
+        raise RuntimeError("LED controller smartdevice not found on this service location")
 
     # ------------------------------------------------------------------
     # COMMANDS (write actions)
@@ -188,14 +211,15 @@ class SmappeeApiClient:
 
     async def set_brightness(self, brightness: int) -> None:
         await self.ensure_auth()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setBrightness"
+        await self._ensure_led_device()
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.led_device_id}/actions/setBrightness"
         payload = [
             {
                 "spec": {
                     "name": "etc.smart.device.type.car.charger.led.config.brightness",
                     "species": "Integer",
                 },
-                "value": brightness,
+                "value": int(brightness),
             }
         ]
         resp = await self._session.post(
@@ -253,18 +277,20 @@ class SmappeeApiClient:
 
     async def set_available(self) -> None:
         await self.ensure_auth()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setAvailable"
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setAvailable"
         resp = await self._session.post(
             url, json=[], headers=self.auth_headers(), timeout=self._timeout
         )
+
         if resp.status not in (200, 204):
             text = await resp.text()
             raise RuntimeError(f"set_available failed: {text}")
         _LOGGER.debug("Set charger available successfully")
 
     async def set_unavailable(self) -> None:
+        """Maak connector onbeschikbaar (per-connector actie)."""
         await self.ensure_auth()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.serial}/actions/setUnavailable"
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setUnavailable"
         resp = await self._session.post(
             url, json=[], headers=self.auth_headers(), timeout=self._timeout
         )
