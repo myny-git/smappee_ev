@@ -39,6 +39,7 @@ class SmappeeApiClient:
         self.is_station = is_station
         self._session: ClientSession = session
         self._timeout = ClientTimeout(connect=5, total=15)
+        self.station_action_uuid = None
 
         # local knobs used by commands
         self.selected_mode = "NORMAL"
@@ -211,8 +212,11 @@ class SmappeeApiClient:
 
     async def set_brightness(self, brightness: int) -> None:
         await self.ensure_auth()
-        await self._ensure_led_device()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.led_device_id}/actions/setBrightness"
+
+        if not self.smart_device_uuid:
+            raise RuntimeError("set_brightness: missing station smart_device_uuid")
+
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setBrightness"
         payload = [
             {
                 "spec": {

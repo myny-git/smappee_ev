@@ -38,19 +38,25 @@ async def async_setup_entry(
     coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
     connector_clients_by_sid: dict[int, dict[str, SmappeeApiClient]] = store["connector_clients"]
 
+    station_clients: dict[int, SmappeeApiClient] = store["station_clients"]
+
     entities: list[SwitchEntity] = []
     for sid, coord in coordinators.items():
+        # Station availability (1 per station)
+        station_client = station_clients.get(sid)
+        if station_client:
+            entities.append(
+                SmappeeAvailabilitySwitch(
+                    coordinator=coord,
+                    api_client=station_client,  # <-- station client (acchargingstation UUID)
+                    sid=sid,
+                )
+            )
+
+        # Per-connector charging switch(es) blijven met uuid
         for uuid, client in (connector_clients_by_sid.get(sid) or {}).items():
             entities.append(
                 SmappeeChargingSwitch(
-                    coordinator=coord,
-                    api_client=client,
-                    sid=sid,
-                    uuid=uuid,
-                )
-            )
-            entities.append(
-                SmappeeAvailabilitySwitch(
                     coordinator=coord,
                     api_client=client,
                     sid=sid,
@@ -193,7 +199,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
 
 
 class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
-    """Switch to toggle connector availability (cloud property)."""
+    """Switch to toggle station availability (acchargingstation action)."""
 
     _attr_has_entity_name = True
 
@@ -201,25 +207,15 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
         self,
         *,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api_client: SmappeeApiClient,  # <-- station client
         sid: int,
-        uuid: str,
     ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
         self._sid = sid
-        self._uuid = uuid
         serial = _station_serial(coordinator)
-        num = getattr(api_client, "connector_number", None)
-        num_lbl = f"{num}" if num is not None else uuid[-4:]
-        self._attr_name = f"Connector {num_lbl} available"
-        self._attr_unique_id = f"{sid}:{serial}:{uuid}:available"
-
-    def _conn_state(self) -> ConnectorState | None:
-        data: IntegrationData | None = self.coordinator.data
-        if not data:
-            return None
-        return (data.connectors or {}).get(self._uuid)
+        self._attr_name = "Station available"
+        self._attr_unique_id = f"{sid}:{serial}:station_available"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -230,10 +226,14 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
             "manufacturer": "Smappee",
         }
 
+    def _station_state(self):
+        data: IntegrationData | None = self.coordinator.data
+        return data.station if data else None
+
     @property
     def is_on(self) -> bool:
-        st = self._conn_state()
-        # Default to True (available) if unknown
+        st = self._station_state()
+        # Als je geen ‘available’ flag in je station state hebt, default True
         return bool(getattr(st, "available", True)) if st else True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -244,30 +244,22 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
 
     async def _set_available(self, value: bool) -> None:
         data: IntegrationData | None = self.coordinator.data
-        st = self._conn_state()
+        st = self._station_state()
         prev = getattr(st, "available", None) if st else None
 
-        # Optimistically update local snapshot so UI reacts immediately
+        # Optimistisch updaten voor snellere UI
         if data and st is not None and prev != value:
             st.available = value
             self.coordinator.async_set_updated_data(data)
 
         try:
             if value:
-                await self.api_client.set_available()
+                await self.api_client.set_available()  # <-- station action
             else:
-                await self.api_client.set_unavailable()
-        except (
-            ClientError,
-            asyncio.CancelledError,
-            TimeoutError,
-            HomeAssistantError,
-            UpdateFailed,
-        ) as err:
-            _LOGGER.warning(
-                "Set availability failed (sid=%s, uuid=%s): %s", self._sid, self._uuid, err
-            )
-            # Revert local optimistic update on failure
+                await self.api_client.set_unavailable()  # <-- station action
+        except Exception as err:
+            _LOGGER.warning("Set station availability failed (sid=%s): %s", self._sid, err)
+            # revert optimistic update
             if data and st is not None and prev is not None:
                 st.available = prev
                 self.coordinator.async_set_updated_data(data)

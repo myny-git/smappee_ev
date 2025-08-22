@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import time
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
@@ -43,7 +43,7 @@ async def async_setup_entry(
             continue
 
         # ---- Station sensors ----
-        entities.append(SmappeeMqttLastSeenSensor(coordinator, station_client))
+        entities.append(SmappeeMqttLastSeenSensor(coordinator, station_client, sid))
         entities.append(StationGridPower(coordinator, station_client, sid))
         entities.append(StationPvPower(coordinator, station_client, sid))
         entities.append(StationGridEnergyImport(coordinator, station_client, sid))
@@ -419,37 +419,43 @@ class SmappeeEvseStatusSensor(_ConnBase):
 
 
 class SmappeeMqttLastSeenSensor(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
-    """Station-scope 'last MQTT RX' as age in seconds."""
+    """Station-scope 'last MQTT RX' as timestamp sensor."""
 
     _attr_has_entity_name = True
     _attr_name = "MQTT last seen"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:timer-sand"
-    _attr_device_class = SensorDeviceClass.DURATION
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = "s"
+    _attr_icon = "mdi:clock-check"
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeApiClient,
+        sid: int,
+    ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
-        self._attr_unique_id = f"{api_client.serial_id}_mqtt_last_seen"
+        self._sid = sid
+        serial = _station_serial(coordinator)
+        self._attr_unique_id = f"{sid}:{serial}:mqtt_last_seen"
 
     @property
     def device_info(self) -> DeviceInfo:
+        serial = _station_serial(self.coordinator)
         return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
+            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
+            "name": _station_name(self.coordinator, self._sid),
             "manufacturer": "Smappee",
         }
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> datetime | None:
         data = self.coordinator.data
         st = data.station if data else None
         ts = getattr(st, "last_mqtt_rx", None)
-        if not ts:
+        if ts is None:
             return None
         try:
-            return max(0.0, time.time() - float(ts))
+            return datetime.fromtimestamp(float(ts), tz=UTC)
         except (TypeError, ValueError):
             return None
