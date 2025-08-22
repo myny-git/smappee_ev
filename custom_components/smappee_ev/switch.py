@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
 
@@ -19,26 +21,53 @@ from .data import ConnectorState, IntegrationData
 _LOGGER = logging.getLogger(__name__)
 
 
+def _station_serial(coord: SmappeeCoordinator) -> str:
+    return getattr(coord.station_client, "serial_id", "unknown")
+
+
+def _station_name(coord: SmappeeCoordinator, sid: int) -> str:
+    st = coord.data.station if getattr(coord, "data", None) else None
+    return getattr(st, "name", None) or f"Smappee EV {_station_serial(coord)}"
+
+
 async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up Smappee EV switch entity from config entry."""
-    data = hass.data[DOMAIN][config_entry.entry_id]
-    coordinator: SmappeeCoordinator = data["coordinator"]
-    connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]  # keyed by UUID
+    """Set up Smappee EV switches for all discovered service locations."""
+    store = hass.data[DOMAIN][config_entry.entry_id]
+    coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
+    connector_clients_by_sid: dict[int, dict[str, SmappeeApiClient]] = store["connector_clients"]
 
     entities: list[SwitchEntity] = []
-    for client in connector_clients.values():
-        entities.append(SmappeeChargingSwitch(coordinator=coordinator, api_client=client))
-        entities.append(SmappeeAvailabilitySwitch(coordinator=coordinator, api_client=client))
+    for sid, coord in coordinators.items():
+        for uuid, client in (connector_clients_by_sid.get(sid) or {}).items():
+            entities.append(
+                SmappeeChargingSwitch(
+                    coordinator=coord,
+                    api_client=client,
+                    sid=sid,
+                    uuid=uuid,
+                )
+            )
+            entities.append(
+                SmappeeAvailabilitySwitch(
+                    coordinator=coord,
+                    api_client=client,
+                    sid=sid,
+                    uuid=uuid,
+                )
+            )
 
     async_add_entities(entities)
 
 
+# ====================================================================================
+# Charging ON/OFF (acts like a start/pause toggle on the connector)
+# ====================================================================================
+
+
 class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
-    """Switch entity to control start/pause charging."""
+    """Switch to control start/pause charging on a specific connector."""
 
     _attr_has_entity_name = True
 
@@ -47,135 +76,181 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
         *,
         coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,
+        sid: int,
+        uuid: str,
     ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
-        self._attr_name = f"EVCC Charging Control {api_client.connector_number}"
-        self._attr_unique_id = (
-            f"{api_client.serial_id}_evcc_charging_switch_{api_client.connector_number}"
-        )
-        self._is_on = False  # local flag only
+        self._sid = sid
+        self._uuid = uuid
+        serial = _station_serial(coordinator)
+        num = getattr(api_client, "connector_number", None)
+        num_lbl = f"{num}" if num is not None else uuid[-4:]
+        self._attr_name = f"{_station_name(coordinator, sid)} – Connector {num_lbl} EVCC charging"
+        self._attr_unique_id = f"{sid}:{serial}:{uuid}:charging_switch"
+        self._is_on = False  # UI-only latch
 
-    @property
-    def device_info(self):
-        """Return device information for correct device grouping."""
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
+    # ---------- Helpers ----------
 
-    @property
-    def is_on(self) -> bool:
-        """Local ON/OFF flag, not derived from session_state."""
-        return self._is_on
-
-    async def async_added_to_hass(self) -> None:
-        """Initialize local state on add."""
-        self._is_on = False
-        _LOGGER.debug("Initialized %s with is_on = False", self._attr_unique_id)
-
-    async def _async_refresh(self) -> None:
-        """Trigger one coordinator refresh so UI updates immediately."""
-
-    async def async_turn_on(self, **kwargs) -> None:
-        """Start charging at current selected limit (fallback to min_current)."""
-        current = None
-        mode = None
-
-        data = self.coordinator.data
-
-        for st in data.connectors.values():
-            if st.connector_number == self.api_client.connector_number:
-                current = (
-                    st.selected_current_limit
-                    if st.selected_current_limit is not None
-                    else st.min_current
-                )
-                mode = st.selected_mode
-                break
-
-        if current is None:
-            current = max(getattr(self.api_client, "min_current", 6), 1)
-
-        if mode != "NORMAL":
-            _LOGGER.info("EVCC Switch: changing mode to NORMAL before starting charging")
-            await self.api_client.set_charging_mode("NORMAL", current)
-
-        _LOGGER.info(
-            "Switch ON: starting charging at %sA on connector %s",
-            current,
-            self.api_client.connector_number,
-        )
-        await self.api_client.start_charging(int(current))
-        self._is_on = True
-        self.async_write_ha_state()
-        await self._async_refresh()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        """Pause charging."""
-        _LOGGER.info(
-            "Switch OFF: pausing charging on connector %s", self.api_client.connector_number
-        )
-        await self.api_client.pause_charging()
-        self._is_on = False
-        self.async_write_ha_state()
-        await self._async_refresh()
-
-
-class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
-    """Switch to toggle connector availability."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
-        super().__init__(coordinator)
-        self.api_client = api_client
-        self._attr_name = f"Connector {api_client.connector_number} available"
-        self._attr_unique_id = (
-            f"{api_client.serial_id}_connector{api_client.connector_number}_available"
-        )
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
-
-    def _state(self) -> ConnectorState | None:
+    def _conn_state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
         if not data:
             return None
+        return (data.connectors or {}).get(self._uuid)
 
-        for st in data.connectors.values():
-            if st.connector_number == self.api_client.connector_number:
-                return st
-        return None
+    def _device_serial(self) -> str:
+        return _station_serial(self.coordinator)
+
+    # ---------- HA hooks ----------
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        serial = self._device_serial()
+        return {
+            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
+            "name": _station_name(self.coordinator, self._sid),
+            "manufacturer": "Smappee",
+        }
 
     @property
     def is_on(self) -> bool:
-        st = self._state()
-        if st is None:
-            return True
-        return st.available if st.available is not None else True
+        """Represent the user's last command; session state may differ briefly."""
+        return self._is_on
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_added_to_hass(self) -> None:
+        self._is_on = False
+
+    # ---------- Actions ----------
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Start charging using selected or minimum current; set NORMAL mode first if needed."""
+        st = self._conn_state()
+        # Prefer selected current; else min_current; guard to >= 1
+        if st:
+            current = (
+                st.selected_current_limit
+                if st.selected_current_limit is not None
+                else st.min_current
+            )
+            mode = getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None)
+        else:
+            current = getattr(self.api_client, "min_current", 6)
+            mode = "NORMAL"
+
+        current = int(max(int(current or 6), 1))
+
+        try:
+            if (mode or "").upper() != "NORMAL":
+                _LOGGER.debug(
+                    "Charging switch: switching mode to NORMAL before starting (sid=%s, uuid=%s)",
+                    self._sid,
+                    self._uuid,
+                )
+                await self.api_client.set_charging_mode("NORMAL", current)
+
+            _LOGGER.info(
+                "Charging switch ON → start_charging %s A (sid=%s, uuid=%s)",
+                current,
+                self._sid,
+                self._uuid,
+            )
+            await self.api_client.start_charging(current)
+            self._is_on = True
+            self.async_write_ha_state()
+        except (
+            ClientError,
+            asyncio.CancelledError,
+            TimeoutError,
+            HomeAssistantError,
+            UpdateFailed,
+        ) as err:
+            _LOGGER.warning("Failed to start charging on %s: %s", self._uuid, err)
+            raise
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Pause charging."""
+        try:
+            _LOGGER.info(
+                "Charging switch OFF → pause_charging (sid=%s, uuid=%s)", self._sid, self._uuid
+            )
+            await self.api_client.pause_charging()
+            self._is_on = False
+            self.async_write_ha_state()
+        except (
+            ClientError,
+            asyncio.CancelledError,
+            TimeoutError,
+            HomeAssistantError,
+            UpdateFailed,
+        ) as err:
+            _LOGGER.warning("Failed to pause charging on %s: %s", self._uuid, err)
+            raise
+
+
+# ====================================================================================
+# Availability ON/OFF (expose/take connector available for charging)
+# ====================================================================================
+
+
+class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
+    """Switch to toggle connector availability (cloud property)."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        *,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeApiClient,
+        sid: int,
+        uuid: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self.api_client = api_client
+        self._sid = sid
+        self._uuid = uuid
+        serial = _station_serial(coordinator)
+        num = getattr(api_client, "connector_number", None)
+        num_lbl = f"{num}" if num is not None else uuid[-4:]
+        self._attr_name = f"{_station_name(coordinator, sid)} – Connector {num_lbl} available"
+        self._attr_unique_id = f"{sid}:{serial}:{uuid}:available"
+
+    def _conn_state(self) -> ConnectorState | None:
+        data: IntegrationData | None = self.coordinator.data
+        if not data:
+            return None
+        return (data.connectors or {}).get(self._uuid)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        serial = _station_serial(self.coordinator)
+        return {
+            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
+            "name": _station_name(self.coordinator, self._sid),
+            "manufacturer": "Smappee",
+        }
+
+    @property
+    def is_on(self) -> bool:
+        st = self._conn_state()
+        # Default to True (available) if unknown
+        return bool(getattr(st, "available", True)) if st else True
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_available(True)
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         await self._set_available(False)
 
     async def _set_available(self, value: bool) -> None:
         data: IntegrationData | None = self.coordinator.data
-        prev = None
-        st = self._state()
-        if data and st is not None:
-            prev = st.available
-            if prev != value:
-                st.available = value
-                self.coordinator.async_set_updated_data(data)
+        st = self._conn_state()
+        prev = getattr(st, "available", None) if st else None
+
+        # Optimistically update local snapshot so UI reacts immediately
+        if data and st is not None and prev != value:
+            st.available = value
+            self.coordinator.async_set_updated_data(data)
 
         try:
             if value:
@@ -190,15 +265,10 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
             UpdateFailed,
         ) as err:
             _LOGGER.warning(
-                "Set availability failed on connector %s: %s",
-                self.api_client.connector_number,
-                err,
+                "Set availability failed (sid=%s, uuid=%s): %s", self._sid, self._uuid, err
             )
-            # Revert local state
+            # Revert local optimistic update on failure
             if data and st is not None and prev is not None:
                 st.available = prev
                 self.coordinator.async_set_updated_data(data)
             raise
-        else:
-            # best effort UI nudge
-            pass

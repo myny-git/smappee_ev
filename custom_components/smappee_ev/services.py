@@ -27,35 +27,56 @@ def _first_entry_data(hass: HomeAssistant) -> dict | None:
     return None
 
 
-def get_station_client(hass: HomeAssistant) -> SmappeeApiClient | None:
-    """Return the SmappeeApiClient for the station (global actions)."""
+def _only_or_single_sid(data: dict) -> int | None:
+    """Return the only available service_location_id if exactly one, else None."""
+    s = (data.get("coordinators") or {}).keys()
+    sids = list(s)
+    return sids[0] if len(sids) == 1 else None
+
+
+def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> int | None:
+    """Decide which site to act on, using call.data['service_location_id'] or single-site fallback."""
     data = _first_entry_data(hass)
     if not data:
         return None
-    return data.get("station_client")
+    sid = call.data.get("service_location_id")
+    if isinstance(sid, int):
+        return sid
+    return _only_or_single_sid(data)
 
 
-def get_connector_client(hass: HomeAssistant, connector_id: int | None) -> SmappeeApiClient | None:
-    """
-    Return the SmappeeApiClient for a specific connector.
-    If connector_id is None and there is only one connector, return that one.
-    """
+def get_station_client(hass: HomeAssistant, sid: int | None) -> SmappeeApiClient | None:
+    """Return the station client for a given site."""
     data = _first_entry_data(hass)
     if not data:
         return None
-    connectors: dict[str, SmappeeApiClient] = data.get("connector_clients", {})
+    if sid is None:
+        return None
+    stations: dict[int, SmappeeApiClient] = data.get("station_clients", {}) or {}
+    return stations.get(sid)
 
-    # Match by connector_number if provided
+
+def get_connector_client(
+    hass: HomeAssistant, sid: int | None, connector_id: int | None
+) -> SmappeeApiClient | None:
+    """
+    Return the connector client within a site. If connector_id is None and there is only
+    one connector in that site, return that one.
+    """
+    data = _first_entry_data(hass)
+    if not data or sid is None:
+        return None
+    all_connectors: dict[int, dict[str, SmappeeApiClient]] = data.get("connector_clients", {}) or {}
+    site_conns = all_connectors.get(sid) or {}
+
     if connector_id is not None:
-        for client in connectors.values():
+        for client in site_conns.values():
             if getattr(client, "connector_number", None) == connector_id:
                 return client
         return None
 
-    # If no connector_id given and only one connector exists, return it
-    if len(connectors) == 1:
-        return next(iter(connectors.values()))
-
+    if len(site_conns) == 1:
+        return next(iter(site_conns.values()))
     return None
 
 
@@ -78,9 +99,10 @@ async def async_handle_station_service(
     method_name: str,
     extra_args: dict | None = None,
 ) -> None:
-    client = get_station_client(hass)
+    sid = _resolve_sid(hass, call)
+    client = get_station_client(hass, sid)
     if not client:
-        _LOGGER.error("No station client found")
+        _LOGGER.error("No station client found (service_location_id missing or invalid)")
         return
 
     method = getattr(client, method_name, None)
@@ -98,10 +120,15 @@ async def async_handle_connector_service(
     method_name: str,
     extra_args: dict | None = None,
 ) -> None:
+    sid = _resolve_sid(hass, call)
     connector_id = call.data.get("connector_id")
-    client = get_connector_client(hass, connector_id)
+    client = get_connector_client(hass, sid, connector_id)
     if not client:
-        _LOGGER.error("No matching connector client found for ID: %s", connector_id)
+        _LOGGER.error(
+            "No matching connector client found (service_location_id=%s, connector_id=%s)",
+            sid,
+            connector_id,
+        )
         return
 
     method = getattr(client, method_name, None)

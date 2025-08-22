@@ -12,16 +12,32 @@ from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 
 
+def _station_serial(coord: SmappeeCoordinator) -> str:
+    return getattr(coord.station_client, "serial_id", "unknown")
+
+
+def _station_name(coord: SmappeeCoordinator, sid: int) -> str:
+    st = coord.data.station if coord.data else None
+    return getattr(st, "name", None) or f"Smappee EV {_station_serial(coord)}"
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    data = hass.data[DOMAIN][config_entry.entry_id]
-    coordinator: SmappeeCoordinator = data["coordinator"]
-    station_client: SmappeeApiClient = data["station_client"]
+    store = hass.data[DOMAIN][config_entry.entry_id]
+    coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
+    station_clients: dict[int, SmappeeApiClient] = store["station_clients"]
 
-    async_add_entities([SmappeeMqttConnectivity(coordinator, station_client)])
+    entities: list[SmappeeMqttConnectivity] = []
+    for sid, coord in coordinators.items():
+        st_client = station_clients.get(sid)
+        if not st_client:
+            continue
+        entities.append(SmappeeMqttConnectivity(coord, st_client, sid))
+
+    async_add_entities(entities)
 
 
 class SmappeeMqttConnectivity(CoordinatorEntity[SmappeeCoordinator], BinarySensorEntity):
@@ -30,16 +46,25 @@ class SmappeeMqttConnectivity(CoordinatorEntity[SmappeeCoordinator], BinarySenso
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeApiClient,
+        sid: int,
+    ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
-        self._attr_unique_id = f"{api_client.serial_id}_mqtt_connected"
+        # self._attr_unique_id = f"{api_client.serial_id}_mqtt_connected"
+        self._sid = sid
+        # Unique ID for each site + station
+        self._attr_unique_id = f"{sid}:{_station_serial(coordinator)}:mqtt_connected"
 
     @property
     def device_info(self):
+        serial = _station_serial(self.coordinator)
         return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
+            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
+            "name": _station_name(self.coordinator, self._sid),
             "manufacturer": "Smappee",
         }
 
@@ -53,4 +78,6 @@ class SmappeeMqttConnectivity(CoordinatorEntity[SmappeeCoordinator], BinarySenso
         st = self.coordinator.data.station if self.coordinator.data else None
         return {
             "last_mqtt_rx": getattr(st, "last_mqtt_rx", None),
+            "service_location_id": self._sid,
+            "station_serial": _station_serial(self.coordinator),
         }

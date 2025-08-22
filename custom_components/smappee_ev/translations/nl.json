@@ -38,15 +38,19 @@
     "services": {
         "start_charging": {
             "name": "Start laden",
-            "description": "Start het laden met een specifieke stroomsterkte in Ampère.",
+            "description": "Start laden. Als geen stroomsterkte wordt opgegeven, wordt de ingestelde of minimale stroom gebruikt.",
             "fields": {
+                "service_location_id": {
+                    "name": "Service Location ID",
+                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
+                },
                 "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Connectornummer (1 of 2)"
+                    "name": "Connector",
+                    "description": "Optioneel: connectornummer (1 of 2, laat leeg bij slechts één connector)."
                 },
                 "current": {
                     "name": "Stroom (A)",
-                    "description": "Te gebruiken laadstroom (in Ampère)"
+                    "description": "Optioneel: te gebruiken laadstroom (in Ampère)."
                 }
             }
         },
@@ -54,9 +58,13 @@
             "name": "Pauzeer laden",
             "description": "Pauzeer het laden voor de geselecteerde connector.",
             "fields": {
+                "service_location_id": {
+                    "name": "Service Location ID",
+                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
+                },
                 "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Connectornummer (1 of 2)"
+                    "name": "Connector",
+                    "description": "Optioneel: connectornummer (1 of 2)."
                 }
             }
         },
@@ -64,9 +72,13 @@
             "name": "Stop laden",
             "description": "Stop het laden voor de geselecteerde connector.",
             "fields": {
+                "service_location_id": {
+                    "name": "Service Location ID",
+                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
+                },
                 "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Connectornummer (1 of 2)"
+                    "name": "Connector",
+                    "description": "Optioneel: connectornummer (1 of 2)."
                 }
             }
         },
@@ -74,13 +86,17 @@
             "name": "Stel laadmodus in",
             "description": "Stel de laadmodus van een connector in.",
             "fields": {
+                "service_location_id": {
+                    "name": "Service Location ID",
+                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
+                },
                 "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Connectornummer (1 of 2)"
+                    "name": "Connector",
+                    "description": "Optioneel: connectornummer (1 of 2)."
                 },
                 "mode": {
                     "name": "Modus",
-                    "description": "Laadmodus (NORMAL, SMART, SOLAR)"
+                    "description": "Laadmodus (NORMAL, SMART, SOLAR)."
                 }
             }
         },
@@ -88,13 +104,17 @@
             "name": "Stel minimum overschot in",
             "description": "Stel het minimum percentage zonne-overschot in dat vereist is voordat het laden start in SOLAR-modus.",
             "fields": {
+                "service_location_id": {
+                    "name": "Service Location ID",
+                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
+                },
                 "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Connectornummer (1 of 2)"
+                    "name": "Connector",
+                    "description": "Optioneel: connectornummer (1 of 2)."
                 },
                 "min_surpluspct": {
                     "name": "Minimum overschot (%)",
-                    "description": "Minimaal vereist percentage zonne-overschot om laden toe te staan"
+                    "description": "Minimaal vereist percentage zonne-overschot om laden toe te staan."
                 }
             }
         }

@@ -1,61 +1,87 @@
 set_charging_mode:
   description: "Set the charging mode (NORMAL, SMART, SOLAR)."
   fields:
-    connector_id:
-      description: "Connector number (1 or 2)."
+    service_location_id:
+      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
       required: false
+      example: 173311
       selector:
         number:
           min: 1
-          max: 2
+    connector_id:
+      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
     mode:
       description: "Charging mode to apply."
       required: true
       selector:
         select:
           options:
-            - "NORMAL"
-            - "SMART"
-            - "SOLAR"
+            - NORMAL
+            - SMART
+            - SOLAR
 
 pause_charging:
   description: "Pause charging on a connector."
   fields:
-    connector_id:
-      description: "Connector number (1 or 2)."
+    service_location_id:
+      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
       required: false
+      example: 173311
       selector:
         number:
           min: 1
-          max: 2
+    connector_id:
+      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
 
 stop_charging:
   description: "Stop charging on a connector."
   fields:
-    connector_id:
-      description: "Connector number (1 or 2)."
+    service_location_id:
+      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
       required: false
+      example: 173311
       selector:
         number:
           min: 1
-          max: 2
-  
+    connector_id:
+      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
 
 start_charging:
-  description: "Start charging on a connector using a specific current value (Ampere)."
+  description: "Start charging on a connector. Als 'current' leeg is, gebruiken we de geselecteerde of minimum stroom."
   fields:
-    connector_id:
-      description: "Connector number (1 or 2). If omitted, the only available connector is used."
-      example: 1
+    service_location_id:
+      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
       required: false
+      example: 173311
       selector:
         number:
           min: 1
-          max: 2
+    connector_id:
+      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
     current:
-      description: "Charging current in Ampere"
+      description: "Optional: Charging current in Ampere (fallback naar geselecteerd/min)."
+      required: false
       example: 16
-      required: true
       selector:
         number:
           min: 6
@@ -65,16 +91,26 @@ start_charging:
 set_min_surpluspct:
   description: "Set the minimum surplus percentage before charging starts in SOLAR mode."
   fields:
-    connector_id:
-      description: "Connector number (1 or 2)."
+    service_location_id:
+      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
       required: false
+      example: 173311
       selector:
         number:
           min: 1
-          max: 2
+    connector_id:
+      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
     min_surpluspct:
       description: "Minimum surplus percentage required to start charging."
       required: true
+      example: 80
       selector:
         number:
-
+          min: 0
+          max: 100
+          unit_of_measurement: "%"

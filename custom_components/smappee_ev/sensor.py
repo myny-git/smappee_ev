@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+import contextlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -16,7 +16,15 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData
+
+
+def _station_serial(coord: SmappeeCoordinator) -> str:
+    return getattr(coord.station_client, "serial_id", "unknown")
+
+
+def _station_name(coord: SmappeeCoordinator, sid: int) -> str:
+    st = coord.data.station if getattr(coord, "data", None) else None
+    return getattr(st, "name", None) or f"Smappee EV {_station_serial(coord)}"
 
 
 async def async_setup_entry(
@@ -24,452 +32,217 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Smappee EV sensors from a config entry."""
-    data = hass.data[DOMAIN][config_entry.entry_id]
-    coordinator: SmappeeCoordinator = data["coordinator"]
-    connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
-    station_client: SmappeeApiClient = data["station_client"]
+    store = hass.data[DOMAIN][config_entry.entry_id]
+    coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
+    station_clients: dict[int, SmappeeApiClient] = store["station_clients"]
+    connector_clients_by_sid: dict[int, dict[str, SmappeeApiClient]] = store["connector_clients"]
 
     entities: list[SensorEntity] = []
-    for uuid, client in connector_clients.items():
-        entities.append(
-            SmappeeChargingStateSensor(coordinator=coordinator, api_client=client, uuid=uuid)
-        )
-        entities.append(
-            SmappeeEVCCStateSensor(coordinator=coordinator, api_client=client, uuid=uuid)
-        )
-        entities.append(
-            SmappeeEvseStatusSensor(coordinator=coordinator, api_client=client, uuid=uuid)
-        )
 
-    entities.append(SmappeeMqttLastSeenSensor(coordinator, station_client))
+    for sid, coordinator in coordinators.items():
+        station_client = station_clients.get(sid)
+        if not station_client:
+            continue
 
-    entities += [
-        StationGridPower(coordinator, station_client),
-        StationGridEnergyImport(coordinator, station_client),
-        StationGridEnergyExport(coordinator, station_client),
-        StationGridCurrents(coordinator, station_client),
-        StationPvPower(coordinator, station_client),
-        StationPvEnergyImport(coordinator, station_client),
-        StationPvCurrents(coordinator, station_client),
-    ]
+        # ---- Station sensors ----
+        entities.append(SmappeeMqttLastSeenSensor(coordinator, station_client, sid))
+        entities.append(StationGridPower(coordinator, station_client, sid))
+        entities.append(StationPvPower(coordinator, station_client, sid))
+        entities.append(StationGridEnergyImport(coordinator, station_client, sid))
+        entities.append(StationGridEnergyExport(coordinator, station_client, sid))
+        entities.append(StationPvEnergyImport(coordinator, station_client, sid))
 
-    # --------------------- ADDED: Per-connector power/current/energy ------------------
-    for uuid, client in connector_clients.items():
-        entities.append(ConnPowerTotal(coordinator, client, uuid))
-        entities.append(ConnCurrentL1(coordinator, client, uuid))
-        entities.append(ConnCurrentL2(coordinator, client, uuid))
-        entities.append(ConnCurrentL3(coordinator, client, uuid))
-        entities.append(ConnEnergyImport(coordinator, client, uuid))
+        # ---- Connector sensors ----
+        for uuid, client in (connector_clients_by_sid.get(sid) or {}).items():
+            entities.append(ConnectorPowerSensor(coordinator, client, sid, uuid))
+            entities.append(ConnectorCurrentASensor(coordinator, client, sid, uuid))
+            entities.append(ConnEnergyImport(coordinator, client, sid, uuid))
+            entities.append(SmappeeChargingStateSensor(coordinator, client, sid, uuid))
+            entities.append(SmappeeEVCCStateSensor(coordinator, client, sid, uuid))
+            entities.append(SmappeeEvseStatusSensor(coordinator, client, sid, uuid))
 
-    async_add_entities(entities, update_before_add=True)
+    async_add_entities(entities)
+
+
+# --------------- Bases ---------------
 
 
 class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
-    """Base class for Smappee EV sensors."""
-
-    _attr_should_poll = False  # Event-driven, no polling
+    """Common base for station sensors."""
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
+        self, coordinator: SmappeeCoordinator, sid: int, name_suffix: str, unique_suffix: str
     ) -> None:
         super().__init__(coordinator)
-        self.api_client = api_client  # kept only for device_info
-        self._uuid = uuid
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
-
-    def _state(self) -> ConnectorState | None:
-        data: IntegrationData | None = self.coordinator.data
-        return data.connectors.get(self._uuid) if data else None
-
-
-class SmappeeChargingStateSensor(_Base):
-    """Raw charging/session state reported by the connector."""
-
-    def __init__(
-        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
-    ) -> None:
-        super().__init__(coordinator=coordinator, api_client=api_client, uuid=uuid)
-        self._attr_name = f"Charging state {api_client.connector_number}"
-        self._attr_unique_id = (
-            f"{api_client.serial_id}_connector{api_client.connector_number}_charging_state"
-        )
-        self._attr_icon = "mdi:ev-station"
-
-    @property
-    def native_value(self):
-        st = self._state()
-        return st.session_state if st else None
-
-
-class SmappeeEVCCStateSensor(_Base, RestoreEntity):
-    """EVCC A/B/C/E mapping derived from the session state."""
-
-    def __init__(
-        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
-    ) -> None:
-        super().__init__(coordinator=coordinator, api_client=api_client, uuid=uuid)
-        self._attr_name = f"EVCC state {api_client.connector_number}"
-        self._attr_unique_id = (
-            f"{api_client.serial_id}_connector{api_client.connector_number}_evcc_state"
-        )
-        self._attr_icon = "mdi:car-electric"
-        self._restored: str | None = None
-
-    @property
-    def native_value(self):
-        st = self._state()
-        # 1) live from coordinator
-        if st and st.evcc_state:
-            return st.evcc_state
-        # 2) fallback: last known value
-        return self._restored
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if last and last.state and last.state not in ("unknown", "unavailable"):
-            self._restored = last.state
-
-    @property
-    def extra_state_attributes(self):
-        st = self._state()
-        if not st:
-            return None
-        return {
-            "iec_status": st.iec_status,  # example C2
-            "session_state": st.session_state,  # STARTED/STOPPED/...
-            "charging_mode": st.raw_charging_mode,  # NORMAL/SMART/PAUSED
-            "optimization_strategy": st.optimization_strategy,
-            "paused": st.paused,
-            "status_current": st.session_cause,  # AP-status
-        }
-
-
-class SmappeeEvseStatusSensor(_Base, RestoreEntity):
-    """Smappee Dashboard connector status."""
-
-    def __init__(
-        self, *, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, uuid: str
-    ) -> None:
-        super().__init__(coordinator=coordinator, api_client=api_client, uuid=uuid)
-        self._attr_name = f"EVSE status {api_client.connector_number}"
-        self._attr_unique_id = (
-            f"{api_client.serial_id}_connector{api_client.connector_number}_evse_status"
-        )
-        self._attr_icon = "mdi:information-outline"
-        self._restored: str | None = None
-
-    @property
-    def native_value(self):
-        st = self._state()
-        if st and st.status_current:
-            return st.status_current
-        return self._restored
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if last and last.state and last.state not in ("unknown", "unavailable"):
-            self._restored = last.state
-
-
-class SmappeeMqttLastSeenSensor(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
-    """Station-scope 'last MQTT RX' as timestamp sensor."""
-
-    _attr_has_entity_name = True
-    _attr_name = "MQTT last seen"
-    _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:clock-check"
-
-    def __init__(self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient) -> None:
-        super().__init__(coordinator)
-        self.api_client = api_client
-        self._attr_unique_id = f"{api_client.serial_id}_mqtt_last_seen"
+        self._sid = sid
+        self._name_suffix = name_suffix
+        serial = _station_serial(coordinator)
+        self._attr_unique_id = f"{sid}:{serial}:{unique_suffix}"
+        self._attr_name = f"{_station_name(coordinator, sid)} – {name_suffix}"
 
     @property
     def device_info(self) -> DeviceInfo:
+        serial = _station_serial(self.coordinator)
         return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
+            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
+            "name": _station_name(self.coordinator, self._sid),
             "manufacturer": "Smappee",
         }
-
-    @property
-    def native_value(self) -> datetime | None:
-        data: IntegrationData | None = self.coordinator.data
-        st = data.station if data else None
-        ts = getattr(st, "last_mqtt_rx", None)
-        if not ts:
-            return None
-        return datetime.fromtimestamp(float(ts), tz=UTC)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        data: IntegrationData | None = self.coordinator.data
-        st = data.station if data else None
-        if not st:
-            return None
-        return {
-            "connected": bool(getattr(st, "mqtt_connected", False)),
-        }
-
-
-def _as_phases(obj: Any) -> list[float] | None:
-    """Return a list[float] if obj is a sequence of numbers; otherwise None."""
-    if isinstance(obj, Sequence) and not isinstance(obj, str | bytes):
-        try:
-            return [float(x) for x in obj]
-        except (TypeError, ValueError):
-            return None
-    return None
-
-
-class _StationBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
-    _attr_has_entity_name = True
-
-    def __init__(
-        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, name: str, uid: str
-    ) -> None:
-        super().__init__(coordinator)
-        self.api_client = api_client
-        self._attr_name = name
-        self._attr_unique_id = f"{api_client.serial_id}_{uid}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
-            "manufacturer": "Smappee",
-        }
-
-    @property
-    def _st(self):
-        d: IntegrationData | None = self.coordinator.data
-        return d.station if d else None
-
-
-class StationGridPower(_StationBase):
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, c, api):
-        super().__init__(c, api, "Grid power", "grid_power")
-
-    @property
-    def native_value(self):
-        st = self._st
-        return st.grid_power_total if st else None
-
-
-class StationGridEnergyImport(_StationBase):
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-
-    def __init__(self, c, api):
-        super().__init__(c, api, "Grid energy import", "grid_energy_import_kwh")
-
-    @property
-    def native_value(self):
-        st = self._st
-        return st.grid_energy_import_kwh if st else None
-
-
-class StationGridEnergyExport(_StationBase):
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-
-    def __init__(self, c, api):
-        super().__init__(c, api, "Grid energy export", "grid_energy_export_kwh")
-
-    @property
-    def native_value(self):
-        st = self._st
-        return st.grid_energy_export_kwh if st else None
-
-
-class StationGridCurrents(_StationBase):
-    _attr_device_class = SensorDeviceClass.CURRENT
-    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, c, api):
-        super().__init__(c, api, "Grid current (L1–L3)", "grid_currents")
-
-    @property
-    def native_value(self):
-        st = self._st
-        ph = _as_phases(st.grid_current_phases) if st else None
-        return round(sum(ph), 3) if ph else None
-
-    @property
-    def extra_state_attributes(self):
-        st = self._st
-        ph = _as_phases(st.grid_current_phases) if st else None
-        return {"L1": ph[0], "L2": ph[1], "L3": ph[2]} if ph and len(ph) >= 3 else {}
-
-
-class StationPvPower(_StationBase):
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, c, api):
-        super().__init__(c, api, "PV power", "pv_power")
-
-    @property
-    def native_value(self):
-        st = self._st
-        return st.pv_power_total if st else None
-
-
-class StationPvEnergyImport(_StationBase):
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-
-    def __init__(self, c, api):
-        super().__init__(c, api, "PV energy import", "pv_energy_import_kwh")
-
-    @property
-    def native_value(self):
-        st = self._st
-        return st.pv_energy_import_kwh if st else None
-
-
-class StationPvCurrents(_StationBase):
-    _attr_device_class = SensorDeviceClass.CURRENT
-    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, c, api):
-        super().__init__(c, api, "PV current (L1–L3)", "pv_currents")
-
-    @property
-    def native_value(self):
-        st = self._st
-        ph = _as_phases(st.pv_current_phases) if st else None
-        return round(sum(ph), 3) if ph else None
-
-    @property
-    def extra_state_attributes(self):
-        st = self._st
-        ph = _as_phases(st.pv_current_phases) if st else None
-        return {"L1": ph[0], "L2": ph[1], "L3": ph[2]} if ph and len(ph) >= 3 else {}
-
-
-# ============================ ADDED: Per-connector sensors ===========================
 
 
 class _ConnBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
-    _attr_has_entity_name = True
+    """Common base for connector sensors."""
 
     def __init__(
         self,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api: SmappeeApiClient,
+        sid: int,
         uuid: str,
-        name: str,
-        uid: str,
+        name_suffix: str,
+        unique_suffix: str,
     ) -> None:
         super().__init__(coordinator)
-        self.api_client = api_client
+        self.api_client = api
+        self._sid = sid
         self._uuid = uuid
-        self._attr_name = f"{name} {api_client.connector_number}"
-        self._attr_unique_id = f"{api_client.serial_id}_conn{api_client.connector_number}_{uid}"
+        serial = _station_serial(coordinator)
+        self._attr_unique_id = f"{sid}:{serial}:{uuid}:{unique_suffix}"
+        cnum = getattr(api, "connector_number", None)
+        conn_lbl = f"Connector {cnum}" if cnum else f"Connector {uuid[-4:]}"
+        self._attr_name = f"{_station_name(coordinator, sid)} – {conn_lbl} {name_suffix}"
 
     @property
     def device_info(self) -> DeviceInfo:
+        serial = _station_serial(self.coordinator)
         return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
+            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
+            "name": _station_name(self.coordinator, self._sid),
             "manufacturer": "Smappee",
         }
 
     @property
-    def _st(self) -> ConnectorState | None:
-        d: IntegrationData | None = self.coordinator.data
-        return d.connectors.get(self._uuid) if d else None
+    def _conn_state(self) -> Any | None:
+        data = self.coordinator.data
+        if not data:
+            return None
+        return (data.connectors or {}).get(self._uuid)
 
 
-class ConnPowerTotal(_ConnBase):
+# --------------- Station sensors ---------------
+
+
+class StationGridPower(_Base):
     _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, c, api, uuid):
-        super().__init__(c, api, uuid, "Connector power", "power_total")
+    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
+        super().__init__(coordinator, sid, "Grid power", "grid_power")
 
     @property
-    def native_value(self):
-        st = self._st
-        return int(st.power_total) if st and st.power_total is not None else None
+    def native_value(self) -> float | None:
+        st = self.coordinator.data.station if self.coordinator.data else None
+        v = getattr(st, "grid_power_total", None)
+        return float(v) if isinstance(v, int | float) else None
 
 
-class ConnCurrentL1(_ConnBase):
+class StationPvPower(_Base):
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+
+    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
+        super().__init__(coordinator, sid, "PV power", "pv_power")
+
+    @property
+    def native_value(self) -> float | None:
+        st = self.coordinator.data.station if self.coordinator.data else None
+        v = getattr(st, "pv_power_total", None)
+        return float(v) if isinstance(v, int | float) else None
+
+
+class StationGridEnergyImport(_Base):
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
+        super().__init__(coordinator, sid, "Grid energy import", "grid_energy_import")
+
+    @property
+    def native_value(self) -> float | None:
+        st = self.coordinator.data.station if self.coordinator.data else None
+        v = getattr(st, "grid_energy_import_kwh", None)
+        return float(v) if isinstance(v, int | float) else None
+
+
+class StationGridEnergyExport(_Base):
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
+        super().__init__(coordinator, sid, "Grid energy export", "grid_energy_export")
+
+    @property
+    def native_value(self) -> float | None:
+        st = self.coordinator.data.station if self.coordinator.data else None
+        v = getattr(st, "grid_energy_export_kwh", None)
+        return float(v) if isinstance(v, int | float) else None
+
+
+class StationPvEnergyImport(_Base):
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
+        super().__init__(coordinator, sid, "PV energy import", "pv_energy_import")
+
+    @property
+    def native_value(self) -> float | None:
+        st = self.coordinator.data.station if self.coordinator.data else None
+        v = getattr(st, "pv_energy_import_kwh", None)
+        return float(v) if isinstance(v, int | float) else None
+
+
+# --------------- Connector sensors ---------------
+
+
+class ConnectorPowerSensor(_ConnBase):
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+
+    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+        super().__init__(c, api, sid, uuid, "Power", "power_total")
+
+    @property
+    def native_value(self) -> float | None:
+        st = self._conn_state
+        v = getattr(st, "power_total", None) if st else None
+        return float(v) if isinstance(v, int | float) else None
+
+
+class ConnectorCurrentASensor(_ConnBase):
     _attr_device_class = SensorDeviceClass.CURRENT
-    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
-    def __init__(self, c, api, uuid):
-        super().__init__(c, api, uuid, "Connector current L1", "current_l1")
+    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+        super().__init__(c, api, sid, uuid, "Current", "current_total")
 
     @property
-    def native_value(self):
-        st = self._st
-        return (
-            float(st.current_phases[0])
-            if st and st.current_phases and len(st.current_phases) >= 1
-            else None
-        )
-
-
-class ConnCurrentL2(_ConnBase):
-    _attr_device_class = SensorDeviceClass.CURRENT
-    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, c, api, uuid):
-        super().__init__(c, api, uuid, "Connector current L2", "current_l2")
-
-    @property
-    def native_value(self):
-        st = self._st
-        return (
-            float(st.current_phases[1])
-            if st and st.current_phases and len(st.current_phases) >= 2
-            else None
-        )
-
-
-class ConnCurrentL3(_ConnBase):
-    _attr_device_class = SensorDeviceClass.CURRENT
-    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, c, api, uuid):
-        super().__init__(c, api, uuid, "Connector current L3", "current_l3")
-
-    @property
-    def native_value(self):
-        st = self._st
-        return (
-            float(st.current_phases[2])
-            if st and st.current_phases and len(st.current_phases) >= 3
-            else None
-        )
+    def native_value(self) -> float | None:
+        st = self._conn_state
+        vals = getattr(st, "current_phases", None) if st else None
+        if isinstance(vals, list) and vals:
+            try:
+                return float(sum(float(x) for x in vals))
+            except (TypeError, ValueError):
+                return None
+        return None
 
 
 class ConnEnergyImport(_ConnBase):
@@ -477,10 +250,73 @@ class ConnEnergyImport(_ConnBase):
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
-    def __init__(self, c, api, uuid):
-        super().__init__(c, api, uuid, "Connector energy import", "energy_import_kwh")
+    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+        super().__init__(c, api, sid, uuid, "Energy import", "energy_import_kwh")
 
     @property
-    def native_value(self):
-        st = self._st
-        return float(st.energy_import_kwh) if st and st.energy_import_kwh is not None else None
+    def native_value(self) -> float | None:
+        st = self._conn_state
+        v = getattr(st, "energy_import_kwh", None) if st else None
+        return float(v) if isinstance(v, int | float) else None
+
+
+class SmappeeChargingStateSensor(_ConnBase):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+        super().__init__(c, api, sid, uuid, "Charging state", "charging_state")
+
+    @property
+    def native_value(self) -> str | None:
+        st = self._conn_state
+        return str(getattr(st, "session_state", None)) if st else None
+
+
+class SmappeeEVCCStateSensor(_ConnBase):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+        super().__init__(c, api, sid, uuid, "EVCC state", "evcc_state")
+
+    @property
+    def native_value(self) -> str | None:
+        st = self._conn_state
+        return str(getattr(st, "evcc_state", None)) if st else None
+
+
+class SmappeeEvseStatusSensor(_ConnBase):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+        super().__init__(c, api, sid, uuid, "EVSE status", "status_current")
+
+    @property
+    def native_value(self) -> str | None:
+        st = self._conn_state
+        return str(getattr(st, "status_current", None)) if st else None
+
+
+class SmappeeMqttLastSeenSensor(_Base, RestoreEntity):
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
+        super().__init__(coordinator, sid, "MQTT last seen", "mqtt_last_seen")
+        self._restored: datetime | None = None
+
+    @property
+    def native_value(self) -> datetime | None:
+        st = self.coordinator.data.station if self.coordinator.data else None
+        ts = getattr(st, "last_mqtt_rx", None)
+        if isinstance(ts, int | float) and ts > 0:
+            try:
+                return datetime.fromtimestamp(float(ts), tz=UTC)
+            except (OSError, OverflowError, ValueError):
+                return None
+        return self._restored
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        prev = await self.async_get_last_state()
+        if prev and prev.state and prev.state != "unknown":
+            with contextlib.suppress(Exception):
+                self._restored = datetime.fromisoformat(prev.state)

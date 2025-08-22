@@ -15,126 +15,141 @@ from .coordinator import SmappeeCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+def _station_serial(coord: SmappeeCoordinator) -> str:
+    return getattr(coord.station_client, "serial_id", "unknown")
+
+
+def _station_name(coord: SmappeeCoordinator, sid: int) -> str:
+    st = coord.data.station if coord.data else None
+    return getattr(st, "name", None) or f"Smappee EV {_station_serial(coord)}"
+
+
 async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up Smappee EV buttons from a config entry."""
-    data = hass.data[DOMAIN][config_entry.entry_id]
-    coordinator: SmappeeCoordinator = data["coordinator"]
-    connector_clients: dict[str, SmappeeApiClient] = data["connector_clients"]
+    """Set up Smappee EV buttons (multi-site)."""
+    store = hass.data[DOMAIN][config_entry.entry_id]
+    coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
+    station_clients: dict[int, SmappeeApiClient] = store["station_clients"]
+    connector_clients: dict[int, dict[str, SmappeeApiClient]] = store["connector_clients"]
 
     entities: list[ButtonEntity] = []
-
-    # Connector-based buttons
-    for uuid, client in connector_clients.items():  # <— had values() eerst
-        connector = client.connector_number or 1
-        entities.extend(
-            [
+    for sid, coord in coordinators.items():
+        st_client = station_clients.get(sid)
+        if not st_client:
+            continue
+        # Per connector: Start / Pause / Stop / Set mode
+        for uuid, client in (connector_clients.get(sid) or {}).items():
+            name_prefix = _station_name(coord, sid)
+            entities.append(
                 SmappeeActionButton(
-                    coordinator=coordinator,
+                    coordinator=coord,
                     api_client=client,
+                    sid=sid,
                     uuid=uuid,
-                    name=f"Start charging {connector}",
+                    name=f"{name_prefix} – Start charging",
                     action="start_charging",
-                    unique_id_suffix=f"start_{connector}",
-                ),
+                    unique_id_suffix=f"{uuid}:start",
+                )
+            )
+            entities.append(
                 SmappeeActionButton(
-                    coordinator=coordinator,
+                    coordinator=coord,
                     api_client=client,
+                    sid=sid,
                     uuid=uuid,
-                    name=f"Stop charging {connector}",
-                    action="stop_charging",
-                    unique_id_suffix=f"stop_{connector}",
-                ),
-                SmappeeActionButton(
-                    coordinator=coordinator,
-                    api_client=client,
-                    uuid=uuid,
-                    name=f"Pause charging {connector}",
+                    name=f"{name_prefix} – Pause charging",
                     action="pause_charging",
-                    unique_id_suffix=f"pause_{connector}",
-                ),
+                    unique_id_suffix=f"{uuid}:pause",
+                )
+            )
+            entities.append(
                 SmappeeActionButton(
-                    coordinator=coordinator,
+                    coordinator=coord,
                     api_client=client,
+                    sid=sid,
                     uuid=uuid,
-                    name=f"Set charging mode {connector}",
+                    name=f"{name_prefix} – Stop charging",
+                    action="stop_charging",
+                    unique_id_suffix=f"{uuid}:stop",
+                )
+            )
+            entities.append(
+                SmappeeActionButton(
+                    coordinator=coord,
+                    api_client=client,
+                    sid=sid,
+                    uuid=uuid,
+                    name=f"{name_prefix} – Set charging mode",
                     action="set_charging_mode",
-                    unique_id_suffix=f"mode_{connector}",
-                ),
-            ]
-        )
-
-    # Station-level buttons
+                    unique_id_suffix=f"{uuid}:setmode",
+                )
+            )
 
     async_add_entities(entities)
 
 
 class SmappeeActionButton(CoordinatorEntity[SmappeeCoordinator], ButtonEntity):
-    _attr_has_entity_name = True
+    """Generic action button for a connector."""
 
     def __init__(
         self,
         *,
         coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,
-        uuid: str | None = None,
+        sid: int,
+        uuid: str | None,
         name: str,
         action: str,
         unique_id_suffix: str,
     ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
-        self._uuid = uuid  # <— nieuw
-        self._attr_name = name
-        self._attr_unique_id = f"{api_client.serial_id}_{unique_id_suffix}"
+        self._sid = sid
+        self._uuid = uuid
         self._action = action
+        self._attr_name = name
+        self._attr_unique_id = f"{sid}:{_station_serial(coordinator)}:{unique_id_suffix}"
 
     @property
     def device_info(self):
+        serial = _station_serial(self.coordinator)
         return {
-            "identifiers": {(DOMAIN, self.api_client.serial_id)},
-            "name": "Smappee EV Wallbox",
+            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
+            "name": _station_name(self.coordinator, self._sid),
             "manufacturer": "Smappee",
         }
 
-    async def _async_refresh(self) -> None:
-        """Small shared helper: fetch coordinator and refresh once."""
-        # Coordinator refresh intentionally skipped to avoid 'unknown' states.
-        # MQTT will update the coordinator.data shortly after the service call.
-
     async def async_press(self) -> None:
-        try:
-            if self._action == "start_charging":
-                current = None
-                data = self.coordinator.data if self.coordinator else None
-                if data and self._uuid and self._uuid in data.connectors:
-                    st = data.connectors[self._uuid]
-                    current = (
-                        st.selected_current_limit
-                        if st.selected_current_limit is not None
-                        else st.min_current
-                    )
-                if current is None:
-                    current = 6  # ultimate safety
-                await self.api_client.start_charging(int(current))
+        """Execute the action on press."""
+        if self._action == "start_charging":
+            # Pass current if we know it, otherwise call without arg
+            data = self.coordinator.data if self.coordinator else None
+            target_a = 6
+            if data and self._uuid and self._uuid in (data.connectors or {}):
+                conn = data.connectors[self._uuid]
+                sel = getattr(conn, "selected_current_limit", None)
+                mn = getattr(conn, "min_current", None)
+                if isinstance(sel, int) and sel > 0:
+                    target_a = sel
+                elif isinstance(mn, int) and mn > 0:
+                    target_a = mn
+            await self.api_client.start_charging(current=target_a)
+        elif self._action == "pause_charging":
+            await self.api_client.pause_charging()
+        elif self._action == "stop_charging":
+            await self.api_client.stop_charging()
+        elif self._action == "set_charging_mode":
+            data = self.coordinator.data if self.coordinator else None
+            mode = "NORMAL"
+            if data and self._uuid and self._uuid in (data.connectors or {}):
+                conn = data.connectors[self._uuid]
 
-            elif self._action == "stop_charging":
-                await self.api_client.stop_charging()
-
-            elif self._action == "pause_charging":
-                await self.api_client.pause_charging()
-
-            elif self._action == "set_charging_mode":
-                mode = "NORMAL"
-                data = self.coordinator.data if self.coordinator else None
-                if data and self._uuid and self._uuid in data.connectors:
-                    st = data.connectors[self._uuid]
-                    mode = st.selected_mode or "NORMAL"
-
-                await self.api_client.set_charging_mode(mode)
-
-        finally:
-            pass
+                mode = (
+                    getattr(conn, "selected_mode", None)
+                    or getattr(conn, "ui_mode_base", None)
+                    or "NORMAL"
+                )
+            await self.api_client.set_charging_mode(mode)
+        else:
+            _LOGGER.debug("Unknown action for button: %s", self._action)

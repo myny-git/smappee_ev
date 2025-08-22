@@ -38,15 +38,19 @@
   "services": {
     "start_charging": {
       "name": "Start charging",
-      "description": "Start charging using a specific current in Amps.",
+      "description": "Start charging. If 'current' is omitted, the configured or minimum current will be used.",
       "fields": {
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
         "connector_id": {
           "name": "Connector ID",
-          "description": "Connector number (1 or 2)"
+          "description": "Optional: connector number (1 or 2, leave empty if only one)."
         },
         "current": {
           "name": "Current (A)",
-          "description": "Charging current to use (in Ampere)"
+          "description": "Optional: charging current to use (in Ampere)."
         }
       }
     },
@@ -54,9 +58,13 @@
       "name": "Pause charging",
       "description": "Pause charging for the selected connector.",
       "fields": {
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
         "connector_id": {
           "name": "Connector ID",
-          "description": "Connector number (1 or 2)"
+          "description": "Optional: connector number (1 or 2)."
         }
       }
     },
@@ -64,9 +72,13 @@
       "name": "Stop charging",
       "description": "Stop charging for the selected connector.",
       "fields": {
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
         "connector_id": {
           "name": "Connector ID",
-          "description": "Connector number (1 or 2)"
+          "description": "Optional: connector number (1 or 2)."
         }
       }
     },
@@ -74,13 +86,17 @@
       "name": "Set charging mode",
       "description": "Set the charging mode of a connector.",
       "fields": {
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
         "connector_id": {
           "name": "Connector ID",
-          "description": "Connector number (1 or 2)"
+          "description": "Optional: connector number (1 or 2)."
         },
         "mode": {
           "name": "Mode",
-          "description": "Charging mode (NORMAL, SMART, SOLAR)"
+          "description": "Charging mode (NORMAL, SMART, SOLAR)."
         }
       }
     },
@@ -88,13 +104,17 @@
       "name": "Set minimum surplus",
       "description": "Set the minimum solar surplus percentage required before charging starts in SOLAR mode.",
       "fields": {
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
         "connector_id": {
           "name": "Connector ID",
-          "description": "Connector number (1 or 2)"
+          "description": "Optional: connector number (1 or 2)."
         },
         "min_surpluspct": {
           "name": "Minimum Surplus (%)",
-          "description": "Minimum percentage of solar surplus required to allow charging"
+          "description": "Minimum percentage of solar surplus required to allow charging."
         }
       }
     }
