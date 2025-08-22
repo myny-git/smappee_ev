@@ -42,18 +42,16 @@ async def async_setup_entry(
 
     entities: list[SwitchEntity] = []
     for sid, coord in coordinators.items():
-        # Station availability (1 per station)
         station_client = station_clients.get(sid)
         if station_client:
             entities.append(
                 SmappeeAvailabilitySwitch(
                     coordinator=coord,
-                    api_client=station_client,  # <-- station client (acchargingstation UUID)
+                    api_client=station_client,
                     sid=sid,
                 )
             )
 
-        # Per-connector charging switch(es) blijven met uuid
         for uuid, client in (connector_clients_by_sid.get(sid) or {}).items():
             entities.append(
                 SmappeeChargingSwitch(
@@ -233,7 +231,6 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
     @property
     def is_on(self) -> bool:
         st = self._station_state()
-        # Als je geen ‘available’ flag in je station state hebt, default True
         return bool(getattr(st, "available", True)) if st else True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -247,16 +244,15 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
         st = self._station_state()
         prev = getattr(st, "available", None) if st else None
 
-        # Optimistisch updaten voor snellere UI
         if data and st is not None and prev != value:
             st.available = value
             self.coordinator.async_set_updated_data(data)
 
         try:
             if value:
-                await self.api_client.set_available()  # <-- station action
+                await self.api_client.set_available()
             else:
-                await self.api_client.set_unavailable()  # <-- station action
+                await self.api_client.set_unavailable()
         except Exception as err:
             _LOGGER.warning("Set station availability failed (sid=%s): %s", self._sid, err)
             # revert optimistic update
