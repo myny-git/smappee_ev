@@ -2,14 +2,14 @@ set_charging_mode:
   description: "Set the charging mode (NORMAL, SMART, SOLAR)."
   fields:
     service_location_id:
-      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
+      description: "Optional: Service Location ID."
       required: false
       example: 173311
       selector:
         number:
           min: 1
     connector_id:
-      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      description: "Optional: Connector number."
       required: false
       example: 1
       selector:
@@ -29,14 +29,14 @@ pause_charging:
   description: "Pause charging on a connector."
   fields:
     service_location_id:
-      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
+      description: "Optional: Service Location ID."
       required: false
       example: 173311
       selector:
         number:
           min: 1
     connector_id:
-      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      description: "Optional: Connector number."
       required: false
       example: 1
       selector:
@@ -47,14 +47,14 @@ stop_charging:
   description: "Stop charging on a connector."
   fields:
     service_location_id:
-      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
+      description: "Optional: Service Location ID."
       required: false
       example: 173311
       selector:
         number:
           min: 1
     connector_id:
-      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      description: "Optional: Connector number."
       required: false
       example: 1
       selector:
@@ -62,24 +62,24 @@ stop_charging:
           min: 1
 
 start_charging:
-  description: "Start charging on a connector. Als 'current' leeg is, gebruiken we de geselecteerde of minimum stroom."
+  description: "Start charging on a connector. "
   fields:
     service_location_id:
-      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
+      description: "Optional: Service Location ID."
       required: false
       example: 173311
       selector:
         number:
           min: 1
     connector_id:
-      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      description: "Optional: Connector number."
       required: false
       example: 1
       selector:
         number:
           min: 1
     current:
-      description: "Optional: Charging current in Ampere (fallback naar geselecteerd/min)."
+      description: "Optional: Charging current in Ampere"
       required: false
       example: 16
       selector:
@@ -92,14 +92,14 @@ set_min_surpluspct:
   description: "Set the minimum surplus percentage before charging starts in SOLAR mode."
   fields:
     service_location_id:
-      description: "Optional: Service Location ID. Laat leeg als er maar één site is."
+      description: "Optional: Service Location ID."
       required: false
       example: 173311
       selector:
         number:
           min: 1
     connector_id:
-      description: "Optional: Connector number. Laat leeg als er maar één connector is."
+      description: "Optional: Connector number."
       required: false
       example: 1
       selector:
