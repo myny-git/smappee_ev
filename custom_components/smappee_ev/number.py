@@ -1,24 +1,30 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
+from .data import ConnectorState, IntegrationData
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Smappee EV number entities (per station and connector)."""
+    """Set up Smappee EV number entities from a config entry."""
     store = hass.data[DOMAIN][config_entry.entry_id]
     coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
     station_clients: dict[int, SmappeeApiClient] = store["station_clients"]
@@ -31,91 +37,63 @@ async def async_setup_entry(
         if not st_client:
             continue
 
-        serial = getattr(coord.station_client, "serial_id", "unknown")
-        station_name = (
-            getattr(getattr(coord.data, "station", None), "name", None) or f"Smappee EV {serial}"
-        )
-
-        # LED Brightness (station-level)
-        entities.append(
-            SmappeeNumber(
-                coordinator=coord,
-                api_client=st_client,
-                sid=sid,
-                uuid=None,
-                name=f"{station_name} – LED Brightness",
-                unique_id_suffix=f"{serial}:led_brightness",
-                action="led_brightness",
-                min_value=0,
-                max_value=10,
-                step=1,
-            )
-        )
-
-        # Per connector: Current limit + Percentage limit
+        # Per connector
         for uuid, client in (connector_clients.get(sid) or {}).items():
             entities.append(
-                SmappeeNumber(
+                SmappeeCombinedCurrentSlider(
                     coordinator=coord,
                     api_client=client,
                     sid=sid,
-                    uuid=uuid,
-                    name=f"{station_name} – Current limit",
-                    unique_id_suffix=f"{serial}:{uuid}:current_limit",
-                    action="current_limit",
-                    min_value=6,
-                    max_value=32,
-                    step=1,
+                    connector_uuid=uuid,
                 )
             )
             entities.append(
-                SmappeeNumber(
+                SmappeeMinSurplusPctNumber(
                     coordinator=coord,
                     api_client=client,
                     sid=sid,
-                    uuid=uuid,
-                    name=f"{station_name} – Percentage limit",
-                    unique_id_suffix=f"{serial}:{uuid}:percentage_limit",
-                    action="percentage_limit",
-                    min_value=1,
-                    max_value=100,
-                    step=1,
+                    connector_uuid=uuid,
                 )
             )
 
-    async_add_entities(entities)
+        # Station number (LED Brightness)
+        entities.append(SmappeeBrightnessNumber(coord, st_client, sid))
+
+    async_add_entities(entities, update_before_add=True)
 
 
-class SmappeeNumber(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
-    """Number entity for Smappee EV Wallbox."""
+class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
+    """Base class for Smappee EV numbers."""
+
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.SLIDER
 
     def __init__(
         self,
-        *,
         coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,
+        *,
         sid: int,
-        uuid: str | None,
         name: str,
-        unique_id_suffix: str,
-        action: str,
-        min_value: float,
-        max_value: float,
-        step: float,
+        unique_id: str,
+        unit: str,
+        min_value: int,
+        max_value: int,
+        step: int = 1,
     ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
         self._sid = sid
-        self._uuid = uuid
-        self._action = action
         self._attr_name = name
-        self._attr_unique_id = f"{sid}:{unique_id_suffix}"
+        self._attr_unique_id = unique_id
+        self._attr_native_unit_of_measurement = unit
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
 
     @property
     def device_info(self):
+        """Return device info for the wallbox."""
         serial = getattr(self.coordinator.station_client, "serial_id", "unknown")
         return {
             "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
@@ -124,46 +102,189 @@ class SmappeeNumber(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
             "manufacturer": "Smappee",
         }
 
+
+class SmappeeCombinedCurrentSlider(_Base):
+    """Combined slider showing current (A), with percentage in attributes."""
+
+    _attr_device_class = NumberDeviceClass.CURRENT
+
+    def __init__(
+        self,
+        *,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeApiClient,
+        sid: int,
+        connector_uuid: str,
+    ) -> None:
+        self._uuid = connector_uuid
+        data: IntegrationData | None = coordinator.data
+        st: ConnectorState | None = data.connectors.get(connector_uuid) if data else None
+
+        min_current = st.min_current if st else 6
+        max_current = st.max_current if st else 32
+
+        super().__init__(
+            coordinator,
+            api_client,
+            sid=sid,
+            name=f"Max charging speed {api_client.connector_number}",
+            unique_id=f"{sid}:{api_client.serial_id}_connector{api_client.connector_number}_combined_current",
+            unit=UnitOfElectricCurrent.AMPERE,
+            min_value=min_current,
+            max_value=max_current,
+            step=1,
+        )
+
+    def _state(self) -> ConnectorState | None:
+        data: IntegrationData | None = self.coordinator.data
+        return data.connectors.get(self._uuid) if data else None
+
     @property
-    def native_value(self) -> float | None:
-        data = self.coordinator.data
-        if not data:
+    def native_value(self) -> int | None:
+        st = self._state()
+        if not st:
             return None
+        if st.selected_current_limit is not None:
+            return int(st.selected_current_limit)
+        if st.max_current <= st.min_current:
+            return int(st.min_current)
+        rng = st.max_current - st.min_current
+        pct = st.selected_percentage_limit or 0
+        cur = st.min_current + (float(pct) / 100.0) * rng
+        return max(st.min_current, min(st.max_current, int(round(cur))))
 
-        if self._action == "led_brightness":
-            return getattr(data, "led_brightness", None)
-
-        if self._uuid and self._uuid in (data.connectors or {}):
-            conn = data.connectors[self._uuid]
-            if self._action == "current_limit":
-                return getattr(conn, "selected_current_limit", None)
-            if self._action == "percentage_limit":
-                return getattr(conn, "selected_percentage_limit", None)
-        return None
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        st = self._state()
+        if not st:
+            return {}
+        cur = self.native_value or st.min_current
+        if st.max_current <= st.min_current:
+            return {
+                "percentage": None,
+                "percentage_formatted": "—",
+                "fixed_range": True,
+            }
+        rng = st.max_current - st.min_current
+        pct = int(round((cur - st.min_current) * 100.0 / rng))
+        return {"percentage": pct, "percentage_formatted": f"{pct}%", "fixed_range": False}
 
     async def async_set_native_value(self, value: float) -> None:
-        if self._action == "led_brightness":
-            await self.api_client.set_brightness(int(value))
-        elif self._action == "current_limit":
-            data = self.coordinator.data
-            if not data or not self._uuid or self._uuid not in (data.connectors or {}):
-                _LOGGER.debug("No connector context for current_limit set; skipping")
-                return
-            conn = data.connectors[self._uuid]
-            min_c = int(getattr(conn, "min_current", 6) or 6)
-            max_c = int(getattr(conn, "max_current", 32) or 32)
-            val = int(value)
-            if max_c <= min_c:
-                await self.api_client.start_charging(min_c)
-                conn.selected_current_limit = min_c
-            else:
-                rng = max_c - min_c
-                pct = int(round((val - min_c) * 100.0 / rng))
-                pct = max(0, min(100, pct))
-                await self.api_client.set_percentage_limit(pct)
-                conn.selected_current_limit = val
-                conn.selected_percentage_limit = pct
-        elif self._action == "percentage_limit":
-            await self.api_client.set_percentage_limit(int(value))
+        st = self._state()
+        if not st:
+            return
+        min_c, max_c = st.min_current, st.max_current
+
+        val = int(max(min_c, min(int(value), max_c)))
+
+        _LOGGER.debug(
+            "Setting current: requested=%s → clamped=%s (range %s-%s)",
+            value,
+            val,
+            min_c,
+            max_c,
+        )
+
+        if max_c <= min_c:
+            await self.api_client.start_charging(min_c)
+            st.selected_current_limit = min_c
         else:
-            _LOGGER.warning("Unknown action for number entity: %s", self._action)
+            rng = max_c - min_c
+            pct = int(round((val - min_c) * 100.0 / rng))
+            pct = max(0, min(100, pct))
+            await self.api_client.set_percentage_limit(pct)
+            st.selected_current_limit = val
+            st.selected_percentage_limit = pct
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        st = self._state()
+        if st:
+            new_min = int(st.min_current)
+            new_max = int(st.max_current)
+
+            old_min = self._attr_native_min_value
+            old_max = self._attr_native_max_value
+            if new_max < new_min:
+                new_max = new_min
+            if old_min != new_min:
+                self._attr_native_min_value = new_min
+            if old_max != new_max:
+                self._attr_native_max_value = new_max
+            if old_min != new_min or old_max != new_max:
+                _LOGGER.debug(
+                    "Updated slider range to %s–%s A (was %s–%s)",
+                    new_min,
+                    new_max,
+                    old_min,
+                    old_max,
+                )
+
+        super()._handle_coordinator_update()
+
+
+class SmappeeBrightnessNumber(_Base):
+    """LED brightness setting for Smappee EV (station-level)."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_unit_of_measurement = PERCENTAGE
+
+    def __init__(
+        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, sid: int
+    ) -> None:
+        super().__init__(
+            coordinator,
+            api_client,
+            sid=sid,
+            name="LED Brightness",
+            unique_id=f"{sid}:{api_client.serial_id}_led_brightness",
+            unit=PERCENTAGE,
+            min_value=0,
+            max_value=100,
+            step=1,
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        data: IntegrationData | None = self.coordinator.data
+        return int(data.station.led_brightness) if data and data.station else None
+
+    async def async_set_native_value(self, value: float) -> None:
+        val = max(0, min(100, int(value)))
+        await self.api_client.set_brightness(val)
+
+
+class SmappeeMinSurplusPctNumber(_Base):
+    """Min Surplus Percentage (connector-level)."""
+
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeApiClient,
+        sid: int,
+        connector_uuid: str,
+    ) -> None:
+        self._uuid = connector_uuid
+        super().__init__(
+            coordinator,
+            api_client,
+            sid=sid,
+            name=f"Min Surplus Percentage {api_client.connector_number}",
+            unique_id=f"{sid}:{api_client.serial_id}_connector{api_client.connector_number}_min_surpluspct",
+            unit="%",
+            min_value=0,
+            max_value=100,
+            step=1,
+        )
+
+    def _state(self) -> ConnectorState | None:
+        data: IntegrationData | None = self.coordinator.data
+        return data.connectors.get(self._uuid) if data else None
+
+    @property
+    def native_value(self) -> int | None:
+        st = self._state()
+        return int(st.min_surpluspct) if st else None
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.api_client.set_min_surpluspct(int(value))

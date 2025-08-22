@@ -86,7 +86,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
         serial = _station_serial(coordinator)
         num = getattr(api_client, "connector_number", None)
         num_lbl = f"{num}" if num is not None else uuid[-4:]
-        self._attr_name = f"{_station_name(coordinator, sid)} – Connector {num_lbl} EVCC charging"
+        self._attr_name = f"Connector {num_lbl} EVCC charging"
         self._attr_unique_id = f"{sid}:{serial}:{uuid}:charging_switch"
         self._is_on = False  # UI-only latch
 
@@ -212,7 +212,7 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
         serial = _station_serial(coordinator)
         num = getattr(api_client, "connector_number", None)
         num_lbl = f"{num}" if num is not None else uuid[-4:]
-        self._attr_name = f"{_station_name(coordinator, sid)} – Connector {num_lbl} available"
+        self._attr_name = f"Connector {num_lbl} available"
         self._attr_unique_id = f"{sid}:{serial}:{uuid}:available"
 
     def _conn_state(self) -> ConnectorState | None:

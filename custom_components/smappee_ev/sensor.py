@@ -51,6 +51,8 @@ async def async_setup_entry(
         entities.append(StationGridEnergyImport(coordinator, station_client, sid))
         entities.append(StationGridEnergyExport(coordinator, station_client, sid))
         entities.append(StationPvEnergyImport(coordinator, station_client, sid))
+        entities.append(StationGridCurrents(coordinator, station_client, sid))
+        entities.append(StationPvCurrents(coordinator, station_client, sid))
 
         # ---- Connector sensors ----
         for uuid, client in (connector_clients_by_sid.get(sid) or {}).items():
@@ -60,6 +62,9 @@ async def async_setup_entry(
             entities.append(SmappeeChargingStateSensor(coordinator, client, sid, uuid))
             entities.append(SmappeeEVCCStateSensor(coordinator, client, sid, uuid))
             entities.append(SmappeeEvseStatusSensor(coordinator, client, sid, uuid))
+            entities.append(ConnCurrentL1(coordinator, client, sid, uuid))
+            entities.append(ConnCurrentL2(coordinator, client, sid, uuid))
+            entities.append(ConnCurrentL3(coordinator, client, sid, uuid))
 
     async_add_entities(entities)
 
@@ -210,6 +215,51 @@ class StationPvEnergyImport(_Base):
 # --------------- Connector sensors ---------------
 
 
+class ConnCurrentL1(_ConnBase):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, c, api, sid, uuid):
+        super().__init__(c, api, sid, uuid, "Current L1", "current_l1")
+
+    @property
+    def native_value(self):
+        st = self._conn_state
+        vals = getattr(st, "current_phases", None) if st else None
+        return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
+
+
+class ConnCurrentL2(_ConnBase):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, c, api, sid, uuid):
+        super().__init__(c, api, sid, uuid, "Current L2", "current_l2")
+
+    @property
+    def native_value(self):
+        st = self._conn_state
+        vals = getattr(st, "current_phases", None) if st else None
+        return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
+
+
+class ConnCurrentL3(_ConnBase):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, c, api, sid, uuid):
+        super().__init__(c, api, sid, uuid, "Current L3", "current_l3")
+
+    @property
+    def native_value(self):
+        st = self._conn_state
+        vals = getattr(st, "current_phases", None) if st else None
+        return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
+
+
 class ConnectorPowerSensor(_ConnBase):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -260,6 +310,66 @@ class ConnEnergyImport(_ConnBase):
         return float(v) if isinstance(v, int | float) else None
 
 
+class StationGridCurrents(_Base):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid):
+        super().__init__(coordinator, sid, "Grid current (L1–L3)", "grid_currents")
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_current_phases", None) if st else None
+        if isinstance(vals, list) and vals:
+            try:
+                return round(sum(float(x) for x in vals), 3)
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_current_phases", None) if st else None
+        return (
+            {"L1": vals[0], "L2": vals[1], "L3": vals[2]}
+            if isinstance(vals, list) and len(vals) >= 3
+            else {}
+        )
+
+
+class StationPvCurrents(_Base):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid):
+        super().__init__(coordinator, sid, "PV current (L1–L3)", "pv_currents")
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "pv_current_phases", None) if st else None
+        if isinstance(vals, list) and vals:
+            try:
+                return round(sum(float(x) for x in vals), 3)
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "pv_current_phases", None) if st else None
+        return (
+            {"L1": vals[0], "L2": vals[1], "L3": vals[2]}
+            if isinstance(vals, list) and len(vals) >= 3
+            else {}
+        )
+
+
 class SmappeeChargingStateSensor(_ConnBase):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -275,23 +385,37 @@ class SmappeeChargingStateSensor(_ConnBase):
 class SmappeeEVCCStateSensor(_ConnBase):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+    def __init__(self, c, api, sid, uuid):
         super().__init__(c, api, sid, uuid, "EVCC state", "evcc_state")
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self):
         st = self._conn_state
         return str(getattr(st, "evcc_state", None)) if st else None
+
+    @property
+    def extra_state_attributes(self):
+        st = self._conn_state
+        if not st:
+            return None
+        return {
+            "iec_status": getattr(st, "iec_status", None),
+            "session_state": getattr(st, "session_state", None),
+            "charging_mode": getattr(st, "raw_charging_mode", None),
+            "optimization_strategy": getattr(st, "optimization_strategy", None),
+            "paused": getattr(st, "paused", None),
+            "status_current": getattr(st, "session_cause", None),
+        }
 
 
 class SmappeeEvseStatusSensor(_ConnBase):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
+    def __init__(self, c, api, sid, uuid):
         super().__init__(c, api, sid, uuid, "EVSE status", "status_current")
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self):
         st = self._conn_state
         return str(getattr(st, "status_current", None)) if st else None
 
