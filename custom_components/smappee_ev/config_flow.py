@@ -1,5 +1,3 @@
-import logging
-
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -15,8 +13,6 @@ from .const import (
     UPDATE_INTERVAL_DEFAULT,
 )
 from .oauth import OAuth2Client
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

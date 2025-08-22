@@ -141,20 +141,6 @@ class SmappeeApiClient:
 
         _LOGGER.debug("Charging mode set successfully")
 
-        # Update local mirrors so UI feels instant
-        # self.selected_mode = mode
-
-        # if mode == "NORMAL":
-        #     # If caller passed a limit, mirror it; otherwise we used min_current
-        #     self.selected_current_limit = use_limit
-        #     if self.max_current > self.min_current:
-        #         rng = self.max_current - self.min_current
-        #         # use_limit is always int
-        #         pct = int(round((use_limit - self.min_current) * 100.0 / rng))
-        #         self.selected_percentage_limit = max(0, min(100, pct))
-        #     else:
-        #         self.selected_percentage_limit = None
-
         return True
 
     async def start_charging(self, current: int) -> None:
