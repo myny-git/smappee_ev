@@ -46,6 +46,7 @@ async def async_setup_entry(
         entities.append(SmappeeMqttLastSeenSensor(coordinator, station_client, sid))
         entities.append(StationGridPower(coordinator, station_client, sid))
         entities.append(StationPvPower(coordinator, station_client, sid))
+        entities.append(StationHouseConsumptionPower(coordinator, station_client, sid))
         entities.append(StationGridEnergyImport(coordinator, station_client, sid))
         entities.append(StationGridEnergyExport(coordinator, station_client, sid))
         entities.append(StationPvEnergyImport(coordinator, station_client, sid))
@@ -147,6 +148,21 @@ class StationGridPower(_Base):
     def native_value(self) -> float | None:
         st = self.coordinator.data.station if self.coordinator.data else None
         v = getattr(st, "grid_power_total", None)
+        return float(v) if isinstance(v, int | float) else None
+
+
+class StationHouseConsumptionPower(_Base):
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+
+    def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
+        super().__init__(coordinator, sid, "House consumption power", "house_consumption_power")
+
+    @property
+    def native_value(self) -> float | None:
+        st = self.coordinator.data.station if self.coordinator.data else None
+        v = getattr(st, "house_consumption_power", None)
         return float(v) if isinstance(v, int | float) else None
 
 

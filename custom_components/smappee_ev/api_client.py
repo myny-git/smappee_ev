@@ -278,7 +278,6 @@ class SmappeeApiClient:
         _LOGGER.debug("Set charger available successfully")
 
     async def set_unavailable(self) -> None:
-        """Maak connector onbeschikbaar (per-connector actie)."""
         await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setUnavailable"
         resp = await self._session.post(

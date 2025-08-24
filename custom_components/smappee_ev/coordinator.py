@@ -670,10 +670,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 conn, payload, m.get("power", []), m.get("cons", [])
             )
 
-        # Prefer explicit totals from payload if present (optional)
         cp = payload.get("consumptionPower")
         if isinstance(cp, int | float) and cp != 0:
-            changed |= self._set_if_changed(st, "grid_power_total", int(cp))
+            changed |= self._set_if_changed(st, "house_consumption_power", int(cp))
         sp = payload.get("solarPower")
         if isinstance(sp, int | float) and sp != 0:
             changed |= self._set_if_changed(st, "pv_power_total", int(sp))
