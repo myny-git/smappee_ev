@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
 
 from .api_client import SmappeeApiClient
@@ -70,7 +71,7 @@ async def async_setup_entry(
 # ====================================================================================
 
 
-class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
+class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity, RestoreEntity):
     """Switch to control start/pause charging on a specific connector."""
 
     _attr_has_entity_name = True
@@ -92,7 +93,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
         num_lbl = f"{num}" if num is not None else uuid[-4:]
         self._attr_name = f"Connector {num_lbl} EVCC charging"
         self._attr_unique_id = f"{sid}:{serial}:{uuid}:charging_switch"
-        self._is_on = False  # UI-only latch
+        self._is_on = False  # EVCC intent latch only (authoritative)
 
     # ---------- Helpers ----------
 
@@ -118,11 +119,14 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
 
     @property
     def is_on(self) -> bool:
-        """Represent the user's last command; session state may differ briefly."""
+        """Show last EVCC intent only (not physical session state)."""
         return self._is_on
 
     async def async_added_to_hass(self) -> None:
-        self._is_on = False
+        # Restore last EVCC intent across restarts
+        last = await self.async_get_last_state()
+        if last is not None:
+            self._is_on = last.state == "on"
 
     # ---------- Actions ----------
 
@@ -141,10 +145,10 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
             current = getattr(self.api_client, "min_current", 6)
             mode = "NORMAL"
 
-        current = int(max(int(current or 6), 1))
+        current = int(max(int(current or 6), 6))
 
         try:
-            if (mode or "").upper() != "NORMAL":
+            if mode != "NORMAL":
                 _LOGGER.debug(
                     "Charging switch: switching mode to NORMAL before starting (sid=%s, uuid=%s)",
                     self._sid,
@@ -169,6 +173,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
             UpdateFailed,
         ) as err:
             _LOGGER.warning("Failed to start charging on %s: %s", self._uuid, err)
+            self.async_write_ha_state()
             raise
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -188,6 +193,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity)
             UpdateFailed,
         ) as err:
             _LOGGER.warning("Failed to pause charging on %s: %s", self._uuid, err)
+            self.async_write_ha_state()
             raise
 
 
