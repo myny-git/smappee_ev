@@ -70,33 +70,33 @@ This slider sets **how much of the minimum required current (6A or 3x6A)** must 
 - **`number.smappee_ev_YOURSERIAL_led_brightness`**  
 Sets the desired brightness level for the Wallbox LEDs, from 0 to 100%.
    
-- **`button.set_charging_mode_1`**  
+- **`button.smappee_ev_YOURSERIAL_set_charging_mode_1`**  
 Applies the currently selected `charging mode` from the select entity, and in case of NORMAL, it uses the current limit of the corresponding charging speed entity. Use this after changing the mode to activate it on the Wallbox. It is connector-specific.
 
-- **`button.start_charging_1`**  
+- **`button.smappee_ev_YOURSERIAL_start_charging_1`**  
 Starts a charging session using the value set in `max_charging_speed`. Pressing multiple times with different current levels has an impact, but you need to refresh your screen! Also connector-specific.
 
-- **`button.pause_charging_1`**  
+- **`button.smappee_ev_YOURSERIAL_pause_charging_1`**  
 Pauses the ongoing charging session. Charging can later be resumed.
 
-- **`button.stop_charging_1`**  
+- **`button.smappee_ev_YOURSERIAL_stop_charging_1`**  
 Stops the current charging session entirely. Useful for ending sessions manually or through automations. Also connector-specific.
 
 ### 📈 Sensor Entities
 
-**`sensor.connector_1_charging_state`**  
+**`sensor.smappee_ev_YOURSERIAL_connector_1_charging_state`**  
 Reports the current session state per connector ID. Possible values include:
 - `STARTED`: An active charging session is ongoing.
 - `SUSPENDED`: Charging is suspended, e.g., due to insufficient solar power or limits, or when you PAUSED the charging.
 
-**`sensor.connector_1_evcc_state`**  
+**`sensor.smappee_ev_YOURSERIAL_connector_1_evcc_state`**  
 Displays the EVCC (Electric Vehicle Communication Controller) state of the Wallbox, per connector ID, following IEC 61851:
 - `A`: No vehicle connected
 - `B`: Vehicle connected but not ready
 - `C`: Vehicle connected and ready for charging
 - `E`: Error state
 
-**`sensor.connector_1_evse_status`**  
+**`sensor.smappee_ev_YOURSERIAL_connector_1_evse_status`**  
 Displays the state of the Wallbox, per connector ID, similar as on the dashboard
 
 **`binary_sensor.smappee_ev_YOURSERIAL_mqtt_connected`**  
