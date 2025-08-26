@@ -74,6 +74,8 @@ async def async_setup_entry(
 class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     """Common base for station sensors."""
 
+    _attr_has_entity_name = True
+
     def __init__(
         self, coordinator: SmappeeCoordinator, sid: int, name_suffix: str, unique_suffix: str
     ) -> None:
@@ -96,6 +98,8 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
 
 class _ConnBase(CoordinatorEntity[SmappeeCoordinator], SensorEntity):
     """Common base for connector sensors."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -188,12 +192,21 @@ class StationGridEnergyImport(_Base):
 
     def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
         super().__init__(coordinator, sid, "Grid energy import", "grid_energy_import")
+        self._last_value = None
 
     @property
     def native_value(self) -> float | None:
         st = self.coordinator.data.station if self.coordinator.data else None
         v = getattr(st, "grid_energy_import_kwh", None)
-        return float(v) if isinstance(v, int | float) else None
+        value = float(v) if isinstance(v, int | float) else None
+
+        if value is None:
+            return self._last_value
+        if self._last_value is not None:
+            if value < self._last_value or value == 0:
+                return self._last_value
+        self._last_value = value
+        return value
 
 
 class StationGridEnergyExport(_Base):
@@ -203,12 +216,21 @@ class StationGridEnergyExport(_Base):
 
     def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
         super().__init__(coordinator, sid, "Grid energy export", "grid_energy_export")
+        self._last_value = None
 
     @property
     def native_value(self) -> float | None:
         st = self.coordinator.data.station if self.coordinator.data else None
         v = getattr(st, "grid_energy_export_kwh", None)
-        return float(v) if isinstance(v, int | float) else None
+        value = float(v) if isinstance(v, int | float) else None
+
+        if value is None:
+            return self._last_value
+        if self._last_value is not None:
+            if value < self._last_value or value == 0:
+                return self._last_value
+        self._last_value = value
+        return value
 
 
 class StationPvEnergyImport(_Base):
@@ -218,12 +240,21 @@ class StationPvEnergyImport(_Base):
 
     def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
         super().__init__(coordinator, sid, "PV energy import", "pv_energy_import")
+        self._last_value = None
 
     @property
     def native_value(self) -> float | None:
         st = self.coordinator.data.station if self.coordinator.data else None
         v = getattr(st, "pv_energy_import_kwh", None)
-        return float(v) if isinstance(v, int | float) else None
+        value = float(v) if isinstance(v, int | float) else None
+
+        if value is None:
+            return self._last_value
+        if self._last_value is not None:
+            if value < self._last_value or value == 0:
+                return self._last_value
+        self._last_value = value
+        return value
 
 
 # --------------- Connector sensors ---------------
@@ -316,12 +347,22 @@ class ConnEnergyImport(_ConnBase):
 
     def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
         super().__init__(c, api, sid, uuid, "Energy import", "energy_import_kwh")
+        self._last_value = None
 
     @property
     def native_value(self) -> float | None:
         st = self._conn_state
         v = getattr(st, "energy_import_kwh", None) if st else None
-        return float(v) if isinstance(v, int | float) else None
+        value = float(v) if isinstance(v, int | float) else None
+
+        # Only update if value is valid and not less than previous
+        if value is None:
+            return self._last_value
+        if self._last_value is not None:
+            if value < self._last_value or value == 0:
+                return self._last_value
+        self._last_value = value
+        return value
 
 
 class StationGridCurrents(_Base):

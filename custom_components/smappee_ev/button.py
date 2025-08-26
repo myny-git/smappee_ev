@@ -93,6 +93,8 @@ async def async_setup_entry(
 class SmappeeActionButton(CoordinatorEntity[SmappeeCoordinator], ButtonEntity):
     """Generic action button for a connector."""
 
+    _attr_has_entity_name = True
+
     def __init__(
         self,
         *,

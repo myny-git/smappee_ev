@@ -6,7 +6,7 @@
 ## 🧠 Credits
 The original code started as a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". 
 
-The codebase has been completely refactored, resulting in a **new and independent integration**. It is not compatible with configurations or entities from the original fork. The codebase has been improved to be compliant with Home Assistant.
+The codebase has been completely refactored, resulting in a **new and independent integration**. 
 
 This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging.
 <div align="center">
@@ -24,16 +24,16 @@ This integration is designed to be **complementary to the official Smappee integ
 [![Stars][stars-shield]][stars-url]
 [![Pull Requests][pulls-shield]][pulls-url]
 [![Community][community-shield]][community-url]
-[![Discord][discord-shield]][discord-url]
+<!-- This is a comment[![Discord][discord-shield]][discord-url] -->
 
 
 </div>
 
 ## 🔧 Features
 
-This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview). 
+This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview) and mqtt.smappee.net.
 
-The main ambition is to integrate these sensors in other energy management systems. The howto is written below. It has been tested for 2 connectors.
+The main ambition is to have independent control of the Smappee EV charger via Home Assistant and eventually add those sensors in other energy management systems.
 
 ### ✅ Charging Mode Control
 - Switch between all official Smappee charging modes:
@@ -109,52 +109,11 @@ During setup, you will be prompted to enter:
   → Set how frequently Home Assistant fetches data from your wallbox (don't make it too fast, not necessary)
 
 ### 🧩 Entities
-More information on the usage of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). Take care: names are subject to change as users can rename their Smappee device.
+More information on the specifics of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). Take care: names are subject to change as users can rename their Smappee device.
 
-#### Controls
+This is the current version of the entities (for my EV Wall Home single connector)
 
-| Entity                                   | Type     | Description                                                                  |
-|-------------------------------------------|----------|------------------------------------------------------------------------------|
-| `button.smappee_ev_set_charging_mode_1`          | Button   | Apply the selected charging mode on connector 1 or 2                   |
-| `button.smappee_ev_start_charging_1`             | Button   | Starts charging using the set current on connector 1 or 2              |
-| `button.smappee_ev_pause_charging_1`              | Button   | Pauses the current charging session on connector 1 or 2                 |
-| `button.smappee_ev_stop_charging_1`              | Button   | Stops the current charging session on connector 1 or 2                   |
-| `select.smappee_ev_charging_mode_1`   | Select   | Choose between `SMART`, `SOLAR`, `NORMAL` for connector 1 or 2             |
-| `number.smappee_ev_max_charging_speed_1`  | Number   | Set current in Amps for `NORMAL` mode on connector 1 or 2                    |       
-| `number.smappee_ev_wallbox_min_surplus_percentage_1`  | Number   | Minimum surplus (%) before enabling charging on connector 1 or 2  | | `switch.smappee_ev_connector_1_available`  | Number   | Modify connector avaialility            |
-| `switch.smappee_ev_wallbox_evcc_charging_control_1`             | Button   | EVCC switch for connector 1 or 2 to enable/disable charging  |
-
-#### Sensors
-
-| Entity                                   | Type    | Description                                                                  |
-|-------------------------------------------|---------|------------------------------------------------------------------------------|
-| `sensor.charging_state_1`           | Sensor  | Current charging state (`CHARGING`, `PAUSED`, `SUSPENDED`, ...) on connector 1 or 2    |
-| `sensor.evcc_state_1`              | Sensor  | EVCC state of the charger (`A`, `B`, `C`, `E`) for connector 1 or 2                    |
-| `sensor.evse_status_1`              | Sensor  | EVCC status as shown on the Smappee Dashboard for connector 1 or 2                    |
-
-#### Configuration
-
-| Entity                                   | Type    | Description                                                                  |
-|-------------------------------------------|---------|------------------------------------------------------------------------------|
-| `number.smappee_ev_wallbox_led_brightness`  | Number   | Brightness percentage used in Set LED Brightness                |
-
-#### Diagnostic
-
-| Entity                                   | Type    | Description                                                                  |
-|-------------------------------------------|---------|------------------------------------------------------------------------------|
-| `binary_sensor.smappee_ev_mqtt_connected`  | Binary_sensor   | Connection status of the MQTT service               |
-| `sensor.smappee_ev_mqtt_last_seen`  | Sensor  | MQTT update status       |
-
-
-### 🛠️ Services
-
-| Service                                   | Description                                                                 |
-|--------------------------------------------|-----------------------------------------------------------------------------|
-| `smappee_ev.set_charging_mode`             | Set mode: `SMART`, `SOLAR`, `NORMAL`               |
-| `smappee_ev.start_charging`                | Starts charging with a current limit                                      |
-| `smappee_ev.pause_charging`                | Pauses this charging session                                             |
-| `smappee_ev.stop_charging`                 | Stops the charging session                                                  |
-| `smappee_ev.set_min_surpluspct`            | Sets the min Surplus % before enabling the connector                                |
+![alt text](images\Sensors_sinceversion2025.8.12b6.png)
 
 > ⚠️ **Note**  
 > The Smappee APP is sometimes not correct or responsive. Better to use the online Smappee Dashboard to check functionality.

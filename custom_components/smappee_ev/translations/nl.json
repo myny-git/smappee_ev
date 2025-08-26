@@ -99,24 +99,6 @@
                     "description": "Laadmodus (NORMAL, SMART, SOLAR)."
                 }
             }
-        },
-        "set_min_surpluspct": {
-            "name": "Stel minimum overschot in",
-            "description": "Stel het minimum percentage zonne-overschot in dat vereist is voordat het laden start in SOLAR-modus.",
-            "fields": {
-                "service_location_id": {
-                    "name": "Service Location ID",
-                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
-                },
-                "connector_id": {
-                    "name": "Connector",
-                    "description": "Optioneel: connectornummer (1 of 2)."
-                },
-                "min_surpluspct": {
-                    "name": "Minimum overschot (%)",
-                    "description": "Minimaal vereist percentage zonne-overschot om laden toe te staan."
-                }
-            }
         }
     }
 }

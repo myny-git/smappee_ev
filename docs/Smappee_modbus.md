@@ -2,7 +2,9 @@
 
 This document explains how to connect your **Smappee EV Wall (Infinity series)** to **Home Assistant** using **Modbus TCP**, enabling real-time access to **power and current** data from your EV charger, grid, and PV system.
 
-> ✅ This setup is designed for advanced users and integrators who want fine-grained control for monitoring, automation, or integration with systems like [EVCC](https://github.com/evcc-io/evcc).
+
+> [!IMPORTANT]
+> Recent releases (from 2025.8.12 onwards) use MQTT.smappee.net to retrieve information, making the MODBUS interface obsolete. Unless you would like to have 'local' measurements. 
 
 ---
 

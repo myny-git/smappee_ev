@@ -99,24 +99,6 @@
           "description": "Charging mode (NORMAL, SMART, SOLAR)."
         }
       }
-    },
-    "set_min_surpluspct": {
-      "name": "Set minimum surplus",
-      "description": "Set the minimum solar surplus percentage required before charging starts in SOLAR mode.",
-      "fields": {
-        "service_location_id": {
-          "name": "Service Location ID",
-          "description": "Optional: ID of the site (leave empty if only one site)."
-        },
-        "connector_id": {
-          "name": "Connector ID",
-          "description": "Optional: connector number (1 or 2)."
-        },
-        "min_surpluspct": {
-          "name": "Minimum Surplus (%)",
-          "description": "Minimum percentage of solar surplus required to allow charging."
-        }
-      }
     }
   }
 }

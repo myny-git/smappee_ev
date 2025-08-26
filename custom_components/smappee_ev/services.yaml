@@ -87,30 +87,3 @@ start_charging:
           min: 6
           max: 32
           unit_of_measurement: "A"
-
-set_min_surpluspct:
-  description: "Set the minimum surplus percentage before charging starts in SOLAR mode."
-  fields:
-    service_location_id:
-      description: "Optional: Service Location ID."
-      required: false
-      example: 173311
-      selector:
-        number:
-          min: 1
-    connector_id:
-      description: "Optional: Connector number."
-      required: false
-      example: 1
-      selector:
-        number:
-          min: 1
-    min_surpluspct:
-      description: "Minimum surplus percentage required to start charging."
-      required: true
-      example: 80
-      selector:
-        number:
-          min: 0
-          max: 100
-          unit_of_measurement: "%"
