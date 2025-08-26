@@ -1,4 +1,7 @@
+from typing import Any
+
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry, ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
@@ -20,23 +23,21 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 4
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
 
         errors: dict[str, str] = {}
         session = async_get_clientsession(self.hass)
 
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_CLIENT_ID): str,
-                vol.Required(CONF_CLIENT_SECRET): str,
-                vol.Required(CONF_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
-                vol.Optional(CONF_UPDATE_INTERVAL, default=UPDATE_INTERVAL_DEFAULT): vol.All(
-                    int, vol.Range(min=5, max=3600)
-                ),
-            }
-        )
+        data_schema = vol.Schema({
+            vol.Required(CONF_CLIENT_ID): str,
+            vol.Required(CONF_CLIENT_SECRET): str,
+            vol.Required(CONF_USERNAME): str,
+            vol.Required(CONF_PASSWORD): str,
+            vol.Optional(CONF_UPDATE_INTERVAL, default=UPDATE_INTERVAL_DEFAULT): vol.All(
+                int, vol.Range(min=5, max=3600)
+            ),
+        })
 
         if user_input is None:
             return self.async_show_form(
@@ -68,7 +69,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: ConfigEntry) -> config_entries.OptionsFlow:
         return SmappeeEvOptionsFlow(config_entry)
 
 
@@ -78,25 +79,19 @@ class SmappeeEvOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
 
-    async def async_step_init(self, user_input=None):
-        data_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_CLIENT_ID, default=self.config_entry.data.get(CONF_CLIENT_ID)
-                ): str,
-                vol.Required(
-                    CONF_CLIENT_SECRET, default=self.config_entry.data.get(CONF_CLIENT_SECRET)
-                ): str,
-                vol.Required(CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME)): str,
-                vol.Required(CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD)): str,
-                vol.Optional(
-                    CONF_UPDATE_INTERVAL,
-                    default=self.config_entry.data.get(
-                        CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT
-                    ),
-                ): vol.All(int, vol.Range(min=5, max=3600)),
-            }
-        )
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        data_schema = vol.Schema({
+            vol.Required(CONF_CLIENT_ID, default=self.config_entry.data.get(CONF_CLIENT_ID)): str,
+            vol.Required(
+                CONF_CLIENT_SECRET, default=self.config_entry.data.get(CONF_CLIENT_SECRET)
+            ): str,
+            vol.Required(CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME)): str,
+            vol.Required(CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD)): str,
+            vol.Optional(
+                CONF_UPDATE_INTERVAL,
+                default=self.config_entry.data.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT),
+            ): vol.All(int, vol.Range(min=5, max=3600)),
+        })
         if user_input is None:
             return self.async_show_form(step_id="init", data_schema=data_schema)
         return self.async_create_entry(title="Smappee EV", data=user_input)

@@ -192,7 +192,7 @@ class StationGridEnergyImport(_Base):
 
     def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
         super().__init__(coordinator, sid, "Grid energy import", "grid_energy_import")
-        self._last_value = None
+        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
@@ -216,7 +216,7 @@ class StationGridEnergyExport(_Base):
 
     def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
         super().__init__(coordinator, sid, "Grid energy export", "grid_energy_export")
-        self._last_value = None
+        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
@@ -240,7 +240,7 @@ class StationPvEnergyImport(_Base):
 
     def __init__(self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int) -> None:
         super().__init__(coordinator, sid, "PV energy import", "pv_energy_import")
-        self._last_value = None
+        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
@@ -347,7 +347,7 @@ class ConnEnergyImport(_ConnBase):
 
     def __init__(self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, uuid: str) -> None:
         super().__init__(c, api, sid, uuid, "Energy import", "energy_import_kwh")
-        self._last_value = None
+        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:

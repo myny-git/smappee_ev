@@ -17,7 +17,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFa
 from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData
+from .data import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
             "manufacturer": "Smappee",
         }
 
-    def _station_state(self):
+    def _station_state(self) -> StationState | None:
         data: IntegrationData | None = self.coordinator.data
         return data.station if data else None
 
