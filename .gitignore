@@ -1,2 +1,5 @@
 .venv/
 .vscode/
+.devcontainer/
+.ha-config/
+custom_components/smappee_ev/__pycache__/
