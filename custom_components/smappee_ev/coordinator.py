@@ -644,8 +644,6 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         else:
             imp_kwh = None
 
-        imp_kwh = round(sum(_pick(imp_wh, cons_idxs)) / 1000.0, 3) if cons_idxs else None
-
         changed |= self._set_if_changed(conn, "power_phases", p_ph)
         changed |= self._set_if_changed(conn, "power_total", sum(p_ph) if p_ph else None)
         if i_ma:
