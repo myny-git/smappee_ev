@@ -636,10 +636,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             energy_values = _pick(imp_wh, cons_idxs)
             if energy_values and len(set(energy_values)) == 1:
                 # All values are identical -> total energy replicated across indices
-                imp_kwh = round(energy_values[0] / 1000.0, 3)
+                val = energy_values[0]
             else:
                 # Different values -> per-phase energy, sum them
-                imp_kwh = round(sum(energy_values) / 1000.0, 3)
+                val = sum(energy_values)
+            imp_kwh = round(val / 1000.0, 3)
         else:
             imp_kwh = None
 
