@@ -15,6 +15,7 @@ from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData
+from .helpers import make_device_info, make_unique_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,42 +25,52 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Smappee EV number entities from a config entry."""
+    """Set up Smappee EV number entities (multi-station)."""
     store = hass.data[DOMAIN][config_entry.entry_id]
-    coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
-    station_clients: dict[int, SmappeeApiClient] = store["station_clients"]
-    connector_clients: dict[int, dict[str, SmappeeApiClient]] = store["connector_clients"]
+    sites = store.get(
+        "sites", {}
+    )  # { sid: { "stations": { st_uuid: {coordinator, station_client, connector_clients, ...} } } }
 
     entities: list[NumberEntity] = []
+    for sid, site in (sites or {}).items():
+        stations = (site or {}).get("stations", {})
+        for st_uuid, bucket in (stations or {}).items():
+            coord: SmappeeCoordinator = bucket["coordinator"]
+            st_client: SmappeeApiClient = bucket["station_client"]
+            conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
 
-    for sid, coord in coordinators.items():
-        st_client = station_clients.get(sid)
-        if not st_client:
-            continue
+            # Per connector
+            for cuuid, client in (conns or {}).items():
+                entities.append(
+                    SmappeeCombinedCurrentSlider(
+                        coordinator=coord,
+                        api_client=client,
+                        sid=sid,
+                        station_uuid=st_uuid,
+                        connector_uuid=cuuid,
+                    )
+                )
+                entities.append(
+                    SmappeeMinSurplusPctNumber(
+                        coordinator=coord,
+                        api_client=client,
+                        sid=sid,
+                        station_uuid=st_uuid,
+                        connector_uuid=cuuid,
+                    )
+                )
 
-        # Per connector
-        for uuid, client in (connector_clients.get(sid) or {}).items():
+            # Station-level (LED Brightness)
             entities.append(
-                SmappeeCombinedCurrentSlider(
+                SmappeeBrightnessNumber(
                     coordinator=coord,
-                    api_client=client,
+                    api_client=st_client,
                     sid=sid,
-                    connector_uuid=uuid,
+                    station_uuid=st_uuid,
                 )
             )
-            entities.append(
-                SmappeeMinSurplusPctNumber(
-                    coordinator=coord,
-                    api_client=client,
-                    sid=sid,
-                    connector_uuid=uuid,
-                )
-            )
 
-        # Station number (LED Brightness)
-        entities.append(SmappeeBrightnessNumber(coord, st_client, sid))
-
-    async_add_entities(entities, update_before_add=True)
+    async_add_entities(entities, True)
 
 
 class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
@@ -74,8 +85,10 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
         api_client: SmappeeApiClient,
         *,
         sid: int,
+        station_uuid: str,
+        connector_uuid: str | None,
         name: str,
-        unique_id: str,
+        unique_id_suffix: str,
         unit: str,
         min_value: int,
         max_value: int,
@@ -84,8 +97,13 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
         super().__init__(coordinator)
         self.api_client = api_client
         self._sid = sid
+        self._station_uuid = station_uuid
+        self._connector_uuid = connector_uuid
+        self._serial = getattr(coordinator.station_client, "serial_id", "unknown")
         self._attr_name = name
-        self._attr_unique_id = unique_id
+        self._attr_unique_id = make_unique_id(
+            sid, self._serial, station_uuid, connector_uuid, unique_id_suffix
+        )
         self._attr_native_unit_of_measurement = unit
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
@@ -93,14 +111,14 @@ class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
 
     @property
     def device_info(self):
-        """Return device info for the wallbox."""
-        serial = getattr(self.coordinator.station_client, "serial_id", "unknown")
-        return {
-            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
-            "name": getattr(getattr(self.coordinator.data, "station", None), "name", None)
-            or f"Smappee EV {serial}",
-            "manufacturer": "Smappee",
-        }
+        """Return device info for the station device in HA."""
+        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
+        return make_device_info(
+            self._sid,
+            self._serial,
+            self._station_uuid,
+            station_name,
+        )
 
 
 class SmappeeCombinedCurrentSlider(_Base):
@@ -114,6 +132,7 @@ class SmappeeCombinedCurrentSlider(_Base):
         coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,
         sid: int,
+        station_uuid: str,
         connector_uuid: str,
     ) -> None:
         self._uuid = connector_uuid
@@ -127,8 +146,10 @@ class SmappeeCombinedCurrentSlider(_Base):
             coordinator,
             api_client,
             sid=sid,
-            name=f"Max charging speed {api_client.connector_number}",
-            unique_id=f"{sid}:{api_client.serial_id}_connector{api_client.connector_number}_combined_current",
+            station_uuid=station_uuid,
+            connector_uuid=connector_uuid,
+            name=f"Max charging speed {getattr(api_client, 'connector_number', None) or connector_uuid[-4:]}",
+            unique_id_suffix="number:current",
             unit=UnitOfElectricCurrent.AMPERE,
             min_value=min_current,
             max_value=max_current,
@@ -230,14 +251,20 @@ class SmappeeBrightnessNumber(_Base):
     _attr_native_unit_of_measurement = PERCENTAGE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api_client: SmappeeApiClient, sid: int
+        self,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeApiClient,
+        sid: int,
+        station_uuid: str,
     ) -> None:
         super().__init__(
             coordinator,
             api_client,
             sid=sid,
+            station_uuid=station_uuid,
+            connector_uuid=None,
             name="LED Brightness",
-            unique_id=f"{sid}:{api_client.serial_id}_led_brightness",
+            unique_id_suffix="number:led_brightness",
             unit=PERCENTAGE,
             min_value=0,
             max_value=100,
@@ -262,6 +289,7 @@ class SmappeeMinSurplusPctNumber(_Base):
         coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,
         sid: int,
+        station_uuid: str,
         connector_uuid: str,
     ) -> None:
         self._uuid = connector_uuid
@@ -269,9 +297,11 @@ class SmappeeMinSurplusPctNumber(_Base):
             coordinator,
             api_client,
             sid=sid,
-            name=f"Min Surplus Percentage {api_client.connector_number}",
-            unique_id=f"{sid}:{api_client.serial_id}_connector{api_client.connector_number}_min_surpluspct",
-            unit="%",
+            station_uuid=station_uuid,
+            connector_uuid=connector_uuid,
+            name=f"Min Surplus Percentage {getattr(api_client, 'connector_number', None) or connector_uuid[-4:]}",
+            unique_id_suffix="number:min_surpluspct",
+            unit=PERCENTAGE,
             min_value=0,
             max_value=100,
             step=1,

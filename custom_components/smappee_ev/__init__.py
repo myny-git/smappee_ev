@@ -29,6 +29,55 @@ PLATFORMS = [
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
+# -------------------------
+# Helpers for discovery
+# -------------------------
+
+
+def _is_station(dev: dict) -> bool:
+    """True if device is a CHARGINGSTATION smartdevice."""
+    t = dev.get("type")
+    if isinstance(t, dict):
+        return (t.get("category") or "").upper() == "CHARGINGSTATION"
+    return (dev.get("type") or "").upper() == "CHARGINGSTATION"
+
+
+def _is_connector(dev: dict) -> bool:
+    """True if device is a CARCHARGER smartdevice."""
+    t = dev.get("type")
+    if isinstance(t, dict):
+        return (t.get("category") or "").upper() == "CARCHARGER"
+    return (dev.get("type") or "").upper() == "CARCHARGER"
+
+
+def _safe_str(val) -> str | None:
+    """Convert to stripped string or None if not possible."""
+    try:
+        s = str(val)
+    except (TypeError, ValueError):
+        return None
+    return s.strip() or None
+
+
+def _find_in(dev: dict, *keys: str) -> str | None:
+    """Try to discover a 'serialNumber' (or similar) inside a smartdevice."""
+    # direct
+    for k in keys:
+        if k in dev and _safe_str(dev[k]):
+            return _safe_str(dev[k])
+    # scan configuration/properties for a field that looks like a serial
+    for bag in ("configurationProperties", "properties"):
+        for prop in dev.get(bag, []) or []:
+            spec = prop.get("spec") or {}
+            name = (spec.get("name") or "").lower()
+            if "serial" in name:
+                v = prop.get("value")
+                if isinstance(v, dict):
+                    v = v.get("value")
+                if _safe_str(v):
+                    return _safe_str(v)
+    return None
+
 
 async def _discover_service_locations(
     session: ClientSession, oauth_client: OAuth2Client
@@ -48,94 +97,129 @@ async def _discover_service_locations(
     return [sl for sl in locations if sl.get("deviceSerialNumber")]
 
 
-async def _prepare_site(
-    hass: HomeAssistant,
-    session: ClientSession,
-    oauth_client: OAuth2Client,
-    sl: dict,
-    update_interval: int,
-) -> tuple[
-    SmappeeCoordinator | None,
-    SmappeeMqtt | None,
-    SmappeeApiClient | None,
-    dict[str, SmappeeApiClient],
-]:
-    """Build clients, coordinator and MQTT for one service location."""
-    sid = sl["serviceLocationId"]
-    suuid = sl.get("serviceLocationUuid")
-    serial = sl.get("deviceSerialNumber")
-    name = (sl.get("name") or f"Smappee {sid}").strip()
-
-    if not isinstance(serial, str) or not serial.strip():
-        _LOGGER.warning("Service location %s has no valid deviceSerialNumber; skipping", sid)
-        return None, None, None, {}
-    serial_str = serial.strip()
-
+# prepare site helpers
+async def _fetch_devices(
+    session: ClientSession, oauth_client: OAuth2Client, sid: int
+) -> list[dict] | None:
     await oauth_client.ensure_token_valid()
     headers = {
         "Authorization": f"Bearer {oauth_client.access_token}",
         "Content-Type": "application/json",
     }
-    # Smartdevices
     resp = await session.get(f"{BASE_URL}/servicelocation/{sid}/smartdevices", headers=headers)
     if resp.status != 200:
         _LOGGER.warning(
             "GET smartdevices for %s failed: %s - %s", sid, resp.status, await resp.text()
         )
-        return None, None, None, {}
-    devices = await resp.json()
+        return None
+    return await resp.json()
 
-    st_dev = next(
-        (
-            d
-            for d in devices
-            if (
-                d.get("type", {}).get("category") == "CHARGINGSTATION"
-                or d.get("type") == "CHARGINGSTATION"
-            )
-        ),
-        None,
-    )
-    car_devs = [
-        d
-        for d in devices
-        if (d.get("type", {}).get("category") == "CARCHARGER" or d.get("type") == "CARCHARGER")
-    ]
-    if not st_dev and not car_devs:
-        _LOGGER.info("No chargers at %s (%s); skipping", name, sid)
-        return None, None, None, {}
-    if not st_dev:
-        _LOGGER.warning("No CHARGINGSTATION smartdevice at %s (%s); skipping site", name, sid)
-        return None, None, None, {}
 
-    # Station client (uuid/id are mandatory)
+def _split_devices(devices: list[dict]) -> tuple[list[dict], list[dict]]:
+    stations = [d for d in (devices or []) if _is_station(d)]
+    cars = [d for d in (devices or []) if _is_connector(d)]
+    return stations, cars
+
+
+async def _fetch_metering_cfg(
+    oauth_client, session, sid, serial_str, station_devs
+) -> dict[str, dict]:
+    """Return {station_serial: {connectors{uuid:{id,position}}}}"""
     try:
-        st_uuid = str(st_dev["uuid"])
-        st_id = str(st_dev["id"])
-    except KeyError as err:
-        _LOGGER.warning("Station device missing key %s at %s; skipping", err, sid)
-        return None, None, None, {}
+        tmp_client = SmappeeApiClient(
+            oauth_client,
+            serial_str,
+            _safe_str(station_devs[0].get("uuid")) or "station",
+            _safe_str(station_devs[0].get("id")) or "0",
+            sid,
+            session=session,
+            is_station=True,
+        )
+        cfg = await tmp_client.async_get_metering_configuration()
+    except (ClientError, ValueError, KeyError, TimeoutError) as err:
+        _LOGGER.warning("Failed to parse meteringconfiguration for %s: %s", sid, err)
+        return {}
 
-    station_client = SmappeeApiClient(
-        oauth_client,
-        serial_str,
-        st_uuid,
-        st_id,
-        sid,
-        session=session,
-        is_station=True,
-    )
-
-    # Connector clients
-    conn_map: dict[str, SmappeeApiClient] = {}
-    for d in car_devs:
-        try:
-            cuuid = str(d["uuid"])
-            cid = str(d["id"])
-        except KeyError as err:
-            _LOGGER.debug("Skip CARCHARGER with missing key %s at %s", err, sid)
+    out: dict[str, dict] = {}
+    for st in (cfg or {}).get("chargingStations", []) or []:
+        st_serial = _safe_str(st.get("serialNumber")) or _safe_str(st.get("serial"))
+        if not st_serial:
             continue
-        conn_map[cuuid] = SmappeeApiClient(
+        bucket = out.setdefault(st_serial, {"connectors": {}})
+        for chg in st.get("chargers", []) or []:
+            cuuid = _safe_str(chg.get("uuid"))
+            if not cuuid:
+                continue
+            bucket["connectors"][cuuid] = {
+                "id": _safe_str(chg.get("id")) or _safe_str(chg.get("smartDeviceId")),
+                "position": chg.get("position"),
+            }
+    return out
+
+
+def _make_station_clients(
+    oauth_client, serial_str, sid, session, station_devs: list[dict]
+) -> dict[str, dict]:
+    stations: dict[str, dict] = {}
+    for sd in station_devs:
+        st_uuid = _safe_str(sd.get("uuid"))
+        st_id = _safe_str(sd.get("id"))
+        if not st_uuid or not st_id:
+            continue
+        st_client = SmappeeApiClient(
+            oauth_client, serial_str, st_uuid, st_id, sid, session=session, is_station=True
+        )
+        stations[st_uuid] = {
+            "station_client": st_client,
+            "connector_clients": {},
+            "coordinator": None,
+            "mqtt": None,
+            "serial": _find_in(sd, "serialNumber", "serial"),
+        }
+    return stations
+
+
+def _assign_connectors(stations, car_devs, mapping, oauth_client, serial_str, sid, session):
+    for bucket in stations.values():
+        st_serial = bucket.get("serial")
+        if not st_serial or st_serial not in mapping:
+            continue
+        for cuuid, info in mapping[st_serial]["connectors"].items():
+            src = next((d for d in car_devs if _safe_str(d.get("uuid")) == cuuid), None)
+            if not src:
+                continue
+            cid = _safe_str(src.get("id")) or info.get("id") or "0"
+            bucket["connector_clients"][cuuid] = SmappeeApiClient(
+                oauth_client,
+                serial_str,
+                cuuid,
+                cid,
+                sid,
+                session=session,
+                connector_number=info.get("position")
+                or src.get("connectorNumber")
+                or src.get("position")
+                or 1,
+            )
+
+
+def _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session):
+    total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
+    if total_assigned > 0:
+        return
+    first_uuid = next(iter(stations.keys()), None)
+    if not first_uuid:
+        return
+    _LOGGER.warning(
+        "Could not map connectors to stations at %s; assigning all to first station", sid
+    )
+    subset = {}
+    for d in car_devs:
+        cuuid = _safe_str(d.get("uuid"))
+        cid = _safe_str(d.get("id"))
+        if not cuuid or not cid:
+            continue
+        subset[cuuid] = SmappeeApiClient(
             oauth_client,
             serial_str,
             cuuid,
@@ -144,47 +228,118 @@ async def _prepare_site(
             session=session,
             connector_number=d.get("connectorNumber") or d.get("position") or 1,
         )
+    stations[first_uuid]["connector_clients"] = subset
 
-    # Coordinator
-    coordinator = SmappeeCoordinator(
-        hass,
-        station_client=station_client,
-        connector_clients=conn_map,
-        update_interval=update_interval,
-    )
-    await coordinator.async_config_entry_first_refresh()
 
-    # MQTT
-    mqtt: SmappeeMqtt | None = None
-    if suuid:
-
-        def _on_props(topic: str, payload: dict) -> None:
-            coordinator.apply_mqtt_properties(topic, payload)
-            if coordinator.data and coordinator.data.station:
-                coordinator.data.station.last_mqtt_rx = time.time()
-                coordinator.async_set_updated_data(coordinator.data)
-
-        def _on_conn(up: bool) -> None:
-            if coordinator.data and coordinator.data.station:
-                coordinator.data.station.mqtt_connected = up
-                coordinator.data.station.last_mqtt_rx = time.time()
-                coordinator.async_set_updated_data(coordinator.data)
-
-        mqtt = SmappeeMqtt(
-            service_location_uuid=suuid,
-            client_id=f"ha-{hass.data.get(DOMAIN, {}).get('iid', 'x')}-{sid}",
-            serial_number=serial_str,
-            on_properties=_on_props,
-            service_location_id=sid,
-            on_connection_change=_on_conn,
+async def _create_coordinators(hass, stations, update_interval):
+    for bucket in stations.values():
+        coord = SmappeeCoordinator(
+            hass,
+            station_client=bucket["station_client"],
+            connector_clients=bucket["connector_clients"],
+            update_interval=update_interval,
         )
-        hass.async_create_task(mqtt.start())
-        # REST polling disabled
-        coordinator.update_interval = None
-    else:
-        _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
+        await coord.async_config_entry_first_refresh()
+        bucket["coordinator"] = coord
 
-    return coordinator, mqtt, station_client, conn_map
+
+def _setup_mqtt(hass, suuid, serial_str, sid, stations) -> SmappeeMqtt | None:
+    if not suuid:
+        _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
+        return None
+
+    def _on_props(topic: str, payload: dict) -> None:
+        for bucket in stations.values():
+            coord = bucket.get("coordinator")
+            if coord:
+                coord.apply_mqtt_properties(topic, payload)
+                if coord.data and coord.data.station:
+                    coord.data.station.last_mqtt_rx = time.time()
+                    coord.async_set_updated_data(coord.data)
+
+    def _on_conn(up: bool) -> None:
+        for bucket in stations.values():
+            coord = bucket.get("coordinator")
+            if coord and coord.data and coord.data.station:
+                coord.data.station.mqtt_connected = up
+                coord.data.station.last_mqtt_rx = time.time()
+                coord.async_set_updated_data(coord.data)
+
+    mqtt = SmappeeMqtt(
+        service_location_uuid=suuid,
+        client_id=f"ha-{hass.data.get(DOMAIN, {}).get('iid', 'x')}-{sid}",
+        serial_number=serial_str,
+        on_properties=_on_props,
+        service_location_id=sid,
+        on_connection_change=_on_conn,
+    )
+    hass.async_create_task(mqtt.start())
+
+    # disable polling if MQTT is active
+    for b in stations.values():
+        coord = b.get("coordinator")
+        if coord:
+            coord.update_interval = None
+    return mqtt
+
+
+async def _prepare_site(
+    hass: HomeAssistant,
+    session: ClientSession,
+    oauth_client: OAuth2Client,
+    sl: dict,
+    update_interval: int,
+) -> tuple[dict[str, dict] | None, SmappeeMqtt | None]:
+    """Build coordinators, station/connector clients and MQTT for one service location."""
+
+    sid = sl["serviceLocationId"]
+    suuid = sl.get("serviceLocationUuid")
+    serial_str = (sl.get("deviceSerialNumber") or "").strip()
+    if not serial_str:
+        _LOGGER.warning("Service location %s has no valid deviceSerialNumber; skipping", sid)
+        return None, None
+
+    devices = await _fetch_devices(session, oauth_client, sid)
+    if devices is None:
+        return None, None
+
+    station_devs, car_devs = _split_devices(devices)
+    if not station_devs and not car_devs:
+        _LOGGER.info("No chargers at %s (%s); skipping", sl.get("name") or f"Smappee {sid}", sid)
+        return None, None
+    if not station_devs:
+        _LOGGER.warning(
+            "No CHARGINGSTATION smartdevice at %s (%s); skipping site", sl.get("name"), sid
+        )
+        return None, None
+
+    # station_serial -> {connectors}
+    station_serial_to_connectors = await _fetch_metering_cfg(
+        oauth_client, session, sid, serial_str, station_devs
+    )
+
+    # build station map with station_client + empty connector buckets
+    stations = _make_station_clients(oauth_client, serial_str, sid, session, station_devs)
+
+    # fill connector buckets
+    _assign_connectors(
+        stations, car_devs, station_serial_to_connectors, oauth_client, serial_str, sid, session
+    )
+
+    # fallback if no assignment worked
+    _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
+
+    # create coordinators per station
+    await _create_coordinators(hass, stations, update_interval)
+
+    # MQTT (shared per site, but updates all station coordinators)
+    mqtt = _setup_mqtt(hass, suuid, serial_str, sid, stations)
+
+    # put mqtt ref in each bucket
+    for b in stations.values():
+        b["mqtt"] = mqtt
+
+    return stations, mqtt
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -216,35 +371,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning("No service locations with deviceSerialNumber found")
         return False
 
-    coordinators: dict[int, SmappeeCoordinator] = {}
+    sites: dict[int, dict] = {}
     mqtt_clients: dict[int, SmappeeMqtt] = {}
-    station_clients: dict[int, SmappeeApiClient] = {}
-    connector_clients: dict[int, dict[str, SmappeeApiClient]] = {}
 
     # 2) Prepare each site
     for sl in with_serial:
-        coord, mqtt, st_client, conn_map = await _prepare_site(
-            hass, session, oauth_client, sl, update_interval
-        )
-        if not coord or not st_client:
+        stations_map, mqtt = await _prepare_site(hass, session, oauth_client, sl, update_interval)
+        if not stations_map:
             continue
         sid = sl["serviceLocationId"]
-        coordinators[sid] = coord
-        station_clients[sid] = st_client
-        connector_clients[sid] = conn_map
         if mqtt:
             mqtt_clients[sid] = mqtt
+        sites[sid] = {"stations": stations_map}
 
-    if not coordinators:
+    if not sites:
         _LOGGER.error("No Smappee EV stations discovered; aborting setup")
         return False
 
     # Platforms store
     hass.data[DOMAIN][entry.entry_id] = {
         "api": oauth_client,
-        "coordinators": coordinators,  # {sid: coordinator}
-        "station_clients": station_clients,  # {sid: station_client}
-        "connector_clients": connector_clients,  # {sid: {uuid: client}}
+        "sites": sites,  # { sid: { "stations": { station_uuid: {coordinator, station_client, connector_clients, mqtt} } } }
         "mqtt": mqtt_clients,  # {sid: mqtt}
         "_last_options": dict(entry.options),
     }
@@ -273,8 +420,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
 
-    data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
-    # Stop all MQTT-clients
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}) or {}
+    # Stop all MQTT-clients per site
     for sid, mqtt in (data.get("mqtt") or {}).items():
         try:
             await mqtt.stop()

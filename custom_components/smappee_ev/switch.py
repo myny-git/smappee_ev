@@ -9,7 +9,6 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
@@ -18,6 +17,7 @@ from .api_client import SmappeeApiClient
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, StationState
+from .helpers import make_device_info, make_unique_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,44 +26,46 @@ def _station_serial(coord: SmappeeCoordinator) -> str:
     return getattr(coord.station_client, "serial_id", "unknown")
 
 
-def _station_name(coord: SmappeeCoordinator, sid: int) -> str:
-    st = coord.data.station if getattr(coord, "data", None) else None
-    return getattr(st, "name", None) or f"Smappee EV {_station_serial(coord)}"
-
-
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up Smappee EV switches for all discovered service locations."""
+    """Set up Smappee EV switches (multi-station)."""
     store = hass.data[DOMAIN][config_entry.entry_id]
-    coordinators: dict[int, SmappeeCoordinator] = store["coordinators"]
-    connector_clients_by_sid: dict[int, dict[str, SmappeeApiClient]] = store["connector_clients"]
-
-    station_clients: dict[int, SmappeeApiClient] = store["station_clients"]
+    sites = store.get(
+        "sites", {}
+    )  # { sid: { "stations": { st_uuid: { coordinator, station_client, connector_clients } } } }
 
     entities: list[SwitchEntity] = []
-    for sid, coord in coordinators.items():
-        station_client = station_clients.get(sid)
-        if station_client:
+    for sid, site in (sites or {}).items():
+        stations = (site or {}).get("stations", {})
+        for st_uuid, bucket in (stations or {}).items():
+            coord: SmappeeCoordinator = bucket["coordinator"]
+            st_client: SmappeeApiClient = bucket["station_client"]
+            conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
+
+            # Station-level switch
             entities.append(
                 SmappeeAvailabilitySwitch(
                     coordinator=coord,
-                    api_client=station_client,
+                    api_client=st_client,
                     sid=sid,
+                    station_uuid=st_uuid,
                 )
             )
 
-        for uuid, client in (connector_clients_by_sid.get(sid) or {}).items():
-            entities.append(
-                SmappeeChargingSwitch(
-                    coordinator=coord,
-                    api_client=client,
-                    sid=sid,
-                    uuid=uuid,
+            # Connector-level switches
+            for cuuid, client in (conns or {}).items():
+                entities.append(
+                    SmappeeChargingSwitch(
+                        coordinator=coord,
+                        api_client=client,
+                        sid=sid,
+                        station_uuid=st_uuid,
+                        connector_uuid=cuuid,
+                    )
                 )
-            )
 
-    async_add_entities(entities)
+    async_add_entities(entities, True)
 
 
 # ====================================================================================
@@ -82,17 +84,21 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
         coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,
         sid: int,
-        uuid: str,
+        station_uuid: str,
+        connector_uuid: str,
     ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
         self._sid = sid
-        self._uuid = uuid
-        serial = _station_serial(coordinator)
+        self._station_uuid = station_uuid
+        self._uuid = connector_uuid
+        self._serial = _station_serial(coordinator)
         num = getattr(api_client, "connector_number", None)
-        num_lbl = f"{num}" if num is not None else uuid[-4:]
+        num_lbl = f"{num}" if num is not None else connector_uuid[-4:]
         self._attr_name = f"Connector {num_lbl} EVCC charging"
-        self._attr_unique_id = f"{sid}:{serial}:{uuid}:charging_switch"
+        self._attr_unique_id = make_unique_id(
+            sid, self._serial, station_uuid, connector_uuid, "switch:charging"
+        )
         self._is_on = False  # EVCC intent latch only (authoritative)
 
     # ---------- Helpers ----------
@@ -103,19 +109,12 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
             return None
         return (data.connectors or {}).get(self._uuid)
 
-    def _device_serial(self) -> str:
-        return _station_serial(self.coordinator)
-
     # ---------- HA hooks ----------
 
     @property
-    def device_info(self) -> DeviceInfo:
-        serial = self._device_serial()
-        return {
-            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
-            "name": _station_name(self.coordinator, self._sid),
-            "manufacturer": "Smappee",
-        }
+    def device_info(self):
+        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
+        return make_device_info(self._sid, self._serial, self._station_uuid, station_name)
 
     @property
     def is_on(self) -> bool:
@@ -213,22 +212,22 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
         coordinator: SmappeeCoordinator,
         api_client: SmappeeApiClient,  # <-- station client
         sid: int,
+        station_uuid: str,
     ) -> None:
         super().__init__(coordinator)
         self.api_client = api_client
         self._sid = sid
-        serial = _station_serial(coordinator)
+        self._station_uuid = station_uuid
+        self._serial = _station_serial(coordinator)
         self._attr_name = "Station available"
-        self._attr_unique_id = f"{sid}:{serial}:station_available"
+        self._attr_unique_id = make_unique_id(
+            sid, self._serial, station_uuid, None, "switch:station_available"
+        )
 
     @property
-    def device_info(self) -> DeviceInfo:
-        serial = _station_serial(self.coordinator)
-        return {
-            "identifiers": {(DOMAIN, f"{self._sid}:{serial}")},
-            "name": _station_name(self.coordinator, self._sid),
-            "manufacturer": "Smappee",
-        }
+    def device_info(self):
+        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
+        return make_device_info(self._sid, self._serial, self._station_uuid, station_name)
 
     def _station_state(self) -> StationState | None:
         data: IntegrationData | None = self.coordinator.data
