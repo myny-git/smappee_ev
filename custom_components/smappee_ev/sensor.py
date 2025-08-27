@@ -482,6 +482,7 @@ class SmappeeMqttLastSeenSensor(CoordinatorEntity[SmappeeCoordinator], SensorEnt
     _attr_name = "MQTT last seen"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False  # Disable by default in UI
     _attr_icon = "mdi:clock-check"
 
     def __init__(

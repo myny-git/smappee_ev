@@ -632,6 +632,17 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         p_ph = _pick(active, power_idxs)
         i_ma = _pick(currents_ma, power_idxs)
+        if cons_idxs:
+            energy_values = _pick(imp_wh, cons_idxs)
+            if energy_values and len(set(energy_values)) == 1:
+                # All values are identical -> total energy replicated across indices
+                imp_kwh = round(energy_values[0] / 1000.0, 3)
+            else:
+                # Different values -> per-phase energy, sum them
+                imp_kwh = round(sum(energy_values) / 1000.0, 3)
+        else:
+            imp_kwh = None
+
         imp_kwh = round(sum(_pick(imp_wh, cons_idxs)) / 1000.0, 3) if cons_idxs else None
 
         changed |= self._set_if_changed(conn, "power_phases", p_ph)
