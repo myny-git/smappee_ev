@@ -336,7 +336,6 @@ async def _prepare_site(
     allowed_connector_uuids = {
         cu for m in station_serial_to_connectors.values() for cu in (m.get("connectors") or {})
     }
-    
     if allowed_connector_uuids:
         car_devs = [
             cd for cd in car_devs
