@@ -145,6 +145,13 @@ async def _fetch_metering_cfg(
         st_serial = _safe_str(st.get("serialNumber")) or _safe_str(st.get("serial"))
         if not st_serial:
             continue
+        # Only stations at this site
+        #-id == sid
+        # or connecSerialNumber == deviceserialNumber
+        st_id = _safe_str(st.get("id"))
+        connect_sn = _safe_str(st.get("connectSerialNumber"))
+        if not (st_id == _safe_str(sid) or connect_sn == serial_str):
+            continue        
         bucket = out.setdefault(st_serial, {"connectors": {}})
         for chg in st.get("chargers", []) or []:
             cuuid = _safe_str(chg.get("uuid"))
@@ -317,6 +324,22 @@ async def _prepare_site(
     station_serial_to_connectors = await _fetch_metering_cfg(
         oauth_client, session, sid, serial_str, station_devs
     )
+
+    # filter smartdevices who only belong in mappings to stations/connectors
+    allowed_station_serials = set(station_serial_to_connectors.keys())
+    if allowed_station_serials:
+        station_devs = [
+            sd for sd in station_devs
+            if (_find_in(sd, "serialNumber", "serial") or _safe_str(sd.get("uuid"))) in allowed_station_serials
+        ]
+    allowed_connector_uuids = {
+        cu for m in station_serial_to_connectors.values() for cu in (m.get("connectors") or {}).keys()
+    }
+    if allowed_connector_uuids:
+        car_devs = [
+            cd for cd in car_devs
+            if _safe_str(cd.get("uuid")) in allowed_connector_uuids
+        ]
 
     # build station map with station_client + empty connector buckets
     stations = _make_station_clients(oauth_client, serial_str, sid, session, station_devs)
