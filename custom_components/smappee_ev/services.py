@@ -176,16 +176,15 @@ async def handle_set_charging_mode(call: ServiceCall) -> None:
 # ----------------------------
 
 
-def register_services(hass: HomeAssistant) -> None:
+async def register_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Registering Smappee EV services")
-
     hass.services.async_register(DOMAIN, "start_charging", handle_start_charging)
     hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging)
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging)
     hass.services.async_register(DOMAIN, "set_charging_mode", handle_set_charging_mode)
 
 
-def unregister_services(hass: HomeAssistant) -> None:
+async def unregister_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Unregistering Smappee EV services")
     hass.services.async_remove(DOMAIN, "start_charging")
     hass.services.async_remove(DOMAIN, "pause_charging")

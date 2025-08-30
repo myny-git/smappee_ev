@@ -6,6 +6,7 @@ from aiohttp import ClientError, ClientSession
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
@@ -173,6 +174,8 @@ def _make_station_clients(
         st_id = _safe_str(sd.get("id"))
         if not st_uuid or not st_id:
             continue
+
+        st_serial = _find_in(sd, "serialNumber", "serial") or st_uuid
         st_client = SmappeeApiClient(
             oauth_client, serial_str, st_uuid, st_id, sid, session=session, is_station=True
         )
@@ -181,7 +184,7 @@ def _make_station_clients(
             "connector_clients": {},
             "coordinator": None,
             "mqtt": None,
-            "serial": _find_in(sd, "serialNumber", "serial"),
+            "serial": st_serial,
         }
     return stations
 
@@ -388,18 +391,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         with_serial = await _discover_service_locations(session, oauth_client)
     except (ClientError, RuntimeError, ValueError) as err:
-        _LOGGER.error("Loading service locations failed: %s", err)
-        return False
+        _LOGGER.debug("Transient error loading service locations: %s", err)  # was error+return
+        raise ConfigEntryNotReady(f"Loading service locations failed: {err}") from err
     if not with_serial:
-        _LOGGER.warning("No service locations with deviceSerialNumber found")
-        return False
+        _LOGGER.debug("No service locations with deviceSerialNumber found (retry later)")
+        raise ConfigEntryNotReady("No service locations with deviceSerialNumber found")
 
     sites: dict[int, dict] = {}
     mqtt_clients: dict[int, SmappeeMqtt] = {}
 
-    # 2) Prepare each site
-    for sl in with_serial:
-        stations_map, mqtt = await _prepare_site(hass, session, oauth_client, sl, update_interval)
+    # 2) Prepare each site in parallel
+    prep_tasks = [
+        _prepare_site(hass, session, oauth_client, sl, update_interval) for sl in with_serial
+    ]
+    results = await asyncio.gather(*prep_tasks, return_exceptions=True)
+    for sl, res in zip(with_serial, results, strict=True):
+        if isinstance(res, Exception):
+            _LOGGER.warning("Site %s preparation failed: %s", sl.get("serviceLocationId"), res)
+            continue
+        if not isinstance(res, tuple):
+            _LOGGER.error("Expected tuple from _prepare_site, got %s", type(res))
+            continue
+        stations_map, mqtt = res
         if not stations_map:
             continue
         sid = sl["serviceLocationId"]
@@ -408,8 +421,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sites[sid] = {"stations": stations_map}
 
     if not sites:
-        _LOGGER.error("No Smappee EV stations discovered; aborting setup")
-        return False
+        _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")
+        raise ConfigEntryNotReady("No Smappee EV stations discovered (will retry)")
 
     # Platforms store
     hass.data[DOMAIN][entry.entry_id] = {
@@ -423,7 +436,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     if not hass.data[DOMAIN].get("services_registered", False):
-        register_services(hass)
+        # register_services is sync; run in executor to keep event loop responsive
+        await register_services(hass)
         hass.data[DOMAIN]["services_registered"] = True
 
     for _svc in ("set_available", "set_unavailable", "set_brightness", "set_min_surpluspct"):
@@ -458,7 +472,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         active_keys = [k for k in hass.data[DOMAIN] if k != "services_registered"]
         if not active_keys:
-            unregister_services(hass)
+            await unregister_services(hass)
             hass.data.pop(DOMAIN, None)
     return unload_ok
 
