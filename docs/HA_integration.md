@@ -11,7 +11,7 @@ These entities are based on the API-call [Smappee API](https://smappee.atlassian
 
 This integration firstly creates several services, which can be called directly in automations, scripts, or the Developer Tools → Actions (UI) in Home Assistant.
 
-![alt text](..\images\setchargingmode.png)
+![Illustration of the charging mode selection screen in the Smappee EV Wallbox dashboard, showing options for SMART, SOLAR, and NORMAL modes.](../images/setchargingmode.png)
 
 - **`smappee_ev.set_charging_mode`**  
 Sets the desired charging mode. You must provide a `mode` parameter with one of the following values: `SMART`, `SOLAR` or `NORMAL` (Standard on the Smappee official App).

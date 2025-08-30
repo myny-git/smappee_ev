@@ -113,7 +113,7 @@ More information on the specifics of the entities/buttons/services can be found 
 
 This is the current version of the entities (for my EV Wall Home single connector)
 
-![alt text](images\Sensors_sinceversion2025.8.12b6.png)
+![Smappee EV entities overview](images/Sensors_sinceversion2025.8.12b6.png)
 
 > ⚠️ **Note**  
 > The Smappee APP is sometimes not correct or responsive. Better to use the online Smappee Dashboard to check functionality.
