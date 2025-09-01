@@ -13,7 +13,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api_client import SmappeeApiClient
-from .const import BASE_URL, DOMAIN, UPDATE_INTERVAL_DEFAULT, CONF_UPDATE_INTERVAL
+from .const import BASE_URL, CONF_UPDATE_INTERVAL, DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import SmappeeCoordinator
 from .data import RuntimeData
 from .mqtt_gateway import SmappeeMqtt
@@ -101,9 +101,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if CONF_UPDATE_INTERVAL in data:
             data.pop(CONF_UPDATE_INTERVAL)
             updated = True
-        if CONF_UPDATE_INTERVAL in options:             
+        if CONF_UPDATE_INTERVAL in options:
             options.pop(CONF_UPDATE_INTERVAL)
-            updated = True            
+            updated = True
         version = 2
 
     # Placeholder for future migrations (2 -> 3, 3 -> 4, etc.)
