@@ -9,13 +9,13 @@ from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api_client import SmappeeApiClient
-from .const import DOMAIN
+from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData
-from .helpers import make_device_info, make_unique_id
+from .data import ConnectorState, IntegrationData, RuntimeData
+from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,10 +26,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV number entities (multi-station)."""
-    store = hass.data[DOMAIN][config_entry.entry_id]
-    sites = store.get(
-        "sites", {}
-    )  # { sid: { "stations": { st_uuid: {coordinator, station_client, connector_clients, ...} } } }
+    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    sites = runtime.sites
 
     entities: list[NumberEntity] = []
     for sid, site in (sites or {}).items():
@@ -73,55 +71,18 @@ async def async_setup_entry(
     async_add_entities(entities, True)
 
 
-class _Base(CoordinatorEntity[SmappeeCoordinator], NumberEntity):
-    """Base class for Smappee EV numbers."""
-
+class _BaseNumber(NumberEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_mode = NumberMode.SLIDER
 
-    def __init__(
-        self,
-        coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
-        *,
-        sid: int,
-        station_uuid: str,
-        connector_uuid: str | None,
-        name: str,
-        unique_id_suffix: str,
-        unit: str,
-        min_value: int,
-        max_value: int,
-        step: int = 1,
-    ) -> None:
-        super().__init__(coordinator)
-        self.api_client = api_client
-        self._sid = sid
-        self._station_uuid = station_uuid
-        self._connector_uuid = connector_uuid
-        self._serial = getattr(coordinator.station_client, "serial_id", "unknown")
-        self._attr_name = name
-        self._attr_unique_id = make_unique_id(
-            sid, self._serial, station_uuid, connector_uuid, unique_id_suffix
-        )
+    def _post_init(self, unit: str, min_value: int, max_value: int, step: int) -> None:
         self._attr_native_unit_of_measurement = unit
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
 
-    @property
-    def device_info(self):
-        """Return device info for the station device in HA."""
-        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
-        return make_device_info(
-            self._sid,
-            self._serial,
-            self._station_uuid,
-            station_name,
-        )
 
-
-class SmappeeCombinedCurrentSlider(_Base):
+class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
     """Combined slider showing current (A), with percentage in attributes."""
 
     _attr_device_class = NumberDeviceClass.CURRENT
@@ -135,26 +96,24 @@ class SmappeeCombinedCurrentSlider(_Base):
         station_uuid: str,
         connector_uuid: str,
     ) -> None:
-        self._uuid = connector_uuid
         data: IntegrationData | None = coordinator.data
         st: ConnectorState | None = data.connectors.get(connector_uuid) if data else None
 
         min_current = st.min_current if st else 6
         max_current = st.max_current if st else 32
 
-        super().__init__(
+        SmappeeConnectorEntity.__init__(
+            self,
             coordinator,
-            api_client,
-            sid=sid,
-            station_uuid=station_uuid,
-            connector_uuid=connector_uuid,
-            name=f"Max charging speed {getattr(api_client, 'connector_number', None) or connector_uuid[-4:]}",
-            unique_id_suffix="number:current",
-            unit=UnitOfElectricCurrent.AMPERE,
-            min_value=min_current,
-            max_value=max_current,
-            step=1,
+            sid,
+            station_uuid,
+            connector_uuid,
+            unique_suffix="number:current",
+            name=f"Max charging speed {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
+        self.api_client = api_client
+        self._uuid = connector_uuid
+        self._post_init(UnitOfElectricCurrent.AMPERE, min_current, max_current, 1)
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
@@ -207,15 +166,20 @@ class SmappeeCombinedCurrentSlider(_Base):
         )
 
         if max_c <= min_c:
-            await self.api_client.start_charging(min_c)
+            _, pct = await self.api_client.start_charging(
+                min_c, min_current=min_c, max_current=max_c
+            )
             st.selected_current_limit = min_c
+            st.selected_percentage_limit = pct
         else:
             rng = max_c - min_c
             pct = int(round((val - min_c) * 100.0 / rng))
             pct = max(0, min(100, pct))
-            await self.api_client.set_percentage_limit(pct)
-            st.selected_current_limit = val
-            st.selected_percentage_limit = pct
+            cur, pct2 = await self.api_client.set_percentage_limit(
+                pct, min_current=min_c, max_current=max_c
+            )
+            st.selected_current_limit = cur
+            st.selected_percentage_limit = pct2
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -243,8 +207,32 @@ class SmappeeCombinedCurrentSlider(_Base):
 
         super()._handle_coordinator_update()
 
+    async def async_added_to_hass(self) -> None:  # RestoreEntity
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if not last or last.state in (None, "unknown", "unavailable"):
+            return
+        try:
+            restored = int(float(last.state))
+        except (TypeError, ValueError):
+            return
+        st = self._state()
+        if st:
+            # Only set if not yet populated so we don't fight real data
+            if st.selected_current_limit is None:
+                st.selected_current_limit = restored
+                # Derive percentage if range known
+                if st.max_current > st.min_current:
+                    rng = st.max_current - st.min_current
+                    pct = int(round((restored - st.min_current) * 100.0 / rng))
+                    st.selected_percentage_limit = max(0, min(100, pct))
+                data = self.coordinator.data
+                if data:
+                    self.coordinator.async_set_updated_data(data)
+        self.async_write_ha_state()
 
-class SmappeeBrightnessNumber(_Base):
+
+class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):
     """LED brightness setting for Smappee EV (station-level)."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -257,19 +245,16 @@ class SmappeeBrightnessNumber(_Base):
         sid: int,
         station_uuid: str,
     ) -> None:
-        super().__init__(
+        SmappeeStationEntity.__init__(
+            self,
             coordinator,
-            api_client,
-            sid=sid,
-            station_uuid=station_uuid,
-            connector_uuid=None,
+            sid,
+            station_uuid,
+            unique_suffix="number:led_brightness",
             name="LED Brightness",
-            unique_id_suffix="number:led_brightness",
-            unit=PERCENTAGE,
-            min_value=0,
-            max_value=100,
-            step=1,
         )
+        self.api_client = api_client
+        self._post_init(PERCENTAGE, 0, 100, 1)
 
     @property
     def native_value(self) -> int | None:
@@ -279,9 +264,29 @@ class SmappeeBrightnessNumber(_Base):
     async def async_set_native_value(self, value: float) -> None:
         val = max(0, min(100, int(value)))
         await self.api_client.set_brightness(val)
+        # Optimistic update for immediate UI feedback
+        data: IntegrationData | None = self.coordinator.data
+        if data and data.station:
+            data.station.led_brightness = val
+            self.coordinator.async_set_updated_data(data)
+
+    async def async_added_to_hass(self) -> None:  # RestoreEntity
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if not last or last.state in (None, "unknown", "unavailable"):
+            return
+        try:
+            restored = int(float(last.state))
+        except (TypeError, ValueError):
+            return
+        data: IntegrationData | None = self.coordinator.data
+        if data and data.station and getattr(data.station, "led_brightness", None) is None:
+            data.station.led_brightness = restored
+            self.coordinator.async_set_updated_data(data)
+        self.async_write_ha_state()
 
 
-class SmappeeMinSurplusPctNumber(_Base):
+class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     """Min Surplus Percentage (connector-level)."""
 
     def __init__(
@@ -292,20 +297,18 @@ class SmappeeMinSurplusPctNumber(_Base):
         station_uuid: str,
         connector_uuid: str,
     ) -> None:
-        self._uuid = connector_uuid
-        super().__init__(
+        SmappeeConnectorEntity.__init__(
+            self,
             coordinator,
-            api_client,
-            sid=sid,
-            station_uuid=station_uuid,
-            connector_uuid=connector_uuid,
-            name=f"Min Surplus Percentage {getattr(api_client, 'connector_number', None) or connector_uuid[-4:]}",
-            unique_id_suffix="number:min_surpluspct",
-            unit=PERCENTAGE,
-            min_value=0,
-            max_value=100,
-            step=1,
+            sid,
+            station_uuid,
+            connector_uuid,
+            unique_suffix="number:min_surpluspct",
+            name=f"Min Surplus Percentage {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
+        self.api_client = api_client
+        self._uuid = connector_uuid
+        self._post_init(PERCENTAGE, 0, 100, 1)
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
@@ -318,3 +321,27 @@ class SmappeeMinSurplusPctNumber(_Base):
 
     async def async_set_native_value(self, value: float) -> None:
         await self.api_client.set_min_surpluspct(int(value))
+        # Optimistic immediate update
+        st = self._state()
+        if st:
+            st.min_surpluspct = int(value)
+            data = self.coordinator.data
+            if data:
+                self.coordinator.async_set_updated_data(data)
+
+    async def async_added_to_hass(self) -> None:  # RestoreEntity
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if not last or last.state in (None, "unknown", "unavailable"):
+            return
+        try:
+            restored = int(float(last.state))
+        except (TypeError, ValueError):
+            return
+        st = self._state()
+        if st and st.min_surpluspct is None:
+            st.min_surpluspct = restored
+            data = self.coordinator.data
+            if data:
+                self.coordinator.async_set_updated_data(data)
+        self.async_write_ha_state()

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 import logging
 from typing import Any
 
@@ -40,16 +39,9 @@ class SmappeeApiClient:
         self._session: ClientSession = session
         self._timeout = ClientTimeout(connect=5, total=15)
         self.station_action_uuid = None
-
-        # local knobs used by commands
-        self.selected_mode = "NORMAL"
-        self.min_current = 6
-        self.max_current = 32
-        self.selected_current_limit: int | None = None
-        self.selected_percentage_limit: int | None = None
-
-        # callbacks kept only if you still wire them somewhere
-        self._callbacks: set[Callable[[], None]] = set()
+        # Stateless: no per-connector mutable charging attributes kept here.
+        # All dynamic values live in Coordinator/ConnectorState.
+        self._callbacks = set()  # kept for future hook use
 
         _LOGGER.info(
             "SmappeeApiClient initialized (serial=%s, connector=%s, station=%s)",
@@ -143,23 +135,24 @@ class SmappeeApiClient:
 
         return True
 
-    async def start_charging(self, current: int) -> None:
-        """Convert amps -> percentage and call action."""
+    async def start_charging(
+        self, current: int, *, min_current: int = 6, max_current: int = 32
+    ) -> tuple[int, int]:
+        """Start charging at (clamped) amperage.
 
+        Returns (current_amps, percentage_limit) so caller can update ConnectorState.
+        """
         await self.ensure_auth()
-        min_c = getattr(self, "min_current", 6)
-        max_c = getattr(self, "max_current", 32)
-        if max_c < min_c:
-            min_c, max_c = max_c, min_c  # sanity
+        if max_current < min_current:
+            min_current, max_current = max_current, min_current
 
-        if max_c == min_c:
-            target = int(min_c)
+        if max_current == min_current:
+            target = int(min_current)
             percentage = 100
-
         else:
-            target = max(min_c, min(int(current), max_c))
-            rng = max_c - min_c
-            percentage = int(max(0, min(100, round(((target - min_c) * 100.0) / rng))))
+            target = max(min_current, min(int(current), max_current))
+            rng = max_current - min_current
+            percentage = int(max(0, min(100, round(((target - min_current) * 100.0) / rng))))
 
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
@@ -170,9 +163,14 @@ class SmappeeApiClient:
             text = await resp.text()
             raise RuntimeError(f"start_charging failed: {text}")
 
-        _LOGGER.debug("Started charging successfully")
-        self.selected_current_limit = target
-        self.selected_percentage_limit = percentage
+        _LOGGER.debug(
+            "Started charging successfully (target=%s A, pct=%s, range=%s-%s)",
+            target,
+            percentage,
+            min_current,
+            max_current,
+        )
+        return target, percentage
 
     async def pause_charging(self) -> None:
         await self.ensure_auth()
@@ -242,7 +240,10 @@ class SmappeeApiClient:
             raise RuntimeError(f"set_min_surpluspct failed: {text}")
         _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
 
-    async def set_percentage_limit(self, percentage: int) -> None:
+    async def set_percentage_limit(
+        self, percentage: int, *, min_current: int = 6, max_current: int = 32
+    ) -> tuple[int, int]:
+        """Set percentage limit; returns (current_amps, percentage)."""
         await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setPercentageLimit"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
@@ -253,17 +254,14 @@ class SmappeeApiClient:
             text = await resp.text()
             raise RuntimeError(f"set_percentage_limit failed: {text}")
         _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
-        self.selected_percentage_limit = percentage
 
-        if self.max_current <= self.min_current:
-            # fixed range →  min_current
-            self.selected_current_limit = int(self.min_current)
+        if max_current <= min_current:
+            cur = int(min_current)
         else:
-            rng = self.max_current - self.min_current
-            cur = self.min_current + (float(percentage) / 100.0) * rng
-            self.selected_current_limit = max(
-                self.min_current, min(self.max_current, int(round(cur)))
-            )
+            rng = max_current - min_current
+            cur = min_current + (float(percentage) / 100.0) * rng
+            cur = max(min_current, min(max_current, int(round(cur))))
+        return int(cur), int(percentage)
 
     async def set_available(self) -> None:
         await self.ensure_auth()

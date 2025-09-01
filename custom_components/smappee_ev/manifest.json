@@ -16,5 +16,6 @@
   "requirements": [
     "aiomqtt==2.4.0"
   ],
-  "version": "2025.8.4"
+  "version": "2025.8.5",
+  "diagnostics": true
 }

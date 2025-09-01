@@ -11,7 +11,16 @@ from typing import cast
 
 from aiomqtt import Client, MqttError
 
-from .const import MQTT_HOST, MQTT_PORT_TLS, MQTT_TRACK_INTERVAL_SEC
+from .const import (
+    MQTT_HEARTBEAT_TOPIC_SUFFIX,
+    MQTT_HOST,
+    MQTT_PORT_TLS,
+    MQTT_QOS_AT_LEAST_ONCE,
+    MQTT_RECONNECT_INITIAL_BACKOFF,
+    MQTT_RECONNECT_MAX_BACKOFF,
+    MQTT_TRACK_INTERVAL_SEC,
+    MQTT_TRACKING_TYPE_RT_VALUES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,32 +76,16 @@ class SmappeeMqtt:
 
     async def _subscribe_all(self, client: Client) -> None:
         """(Re)subscribe all topics after connect/reconnect."""
-        await client.subscribe(
+        topics = [
             f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/state",
-            qos=1,
-        )
-        await client.subscribe(
             f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/property/chargingstate",
-            qos=1,
-        )
-        await client.subscribe(
             f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/updated",
-            qos=1,
-        )
-        await client.subscribe(
             f"servicelocation/{self._slu}/etc/led/acledcontroller/v1/devices/updated",
-            qos=1,
-        )
-
-        await client.subscribe(
-            f"servicelocation/{self._slu}/homeassistant/heartbeat",
-            qos=1,
-        )
-        # Optional: servicelocation power feed
-        await client.subscribe(
-            f"servicelocation/{self._slu}/power",
-            qos=1,
-        )
+            f"servicelocation/{self._slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}",
+            f"servicelocation/{self._slu}/power",  # optional
+        ]
+        for t in topics:
+            await client.subscribe(t, qos=MQTT_QOS_AT_LEAST_ONCE)
 
     def _notify_conn(self, up: bool) -> None:
         cb = self._on_conn
@@ -105,8 +98,8 @@ class SmappeeMqtt:
 
     async def _runner_main(self, ssl_ctx: ssl.SSLContext) -> None:
         """Maintain connection with auto-reconnect."""
-        backoff = 1.0  # seconds
-        max_backoff = 60.0
+        backoff = MQTT_RECONNECT_INITIAL_BACKOFF
+        max_backoff = MQTT_RECONNECT_MAX_BACKOFF
 
         try:
             while not self._stop.is_set():
@@ -126,18 +119,16 @@ class SmappeeMqtt:
                         self._notify_conn(True)
 
                         # Success → reset backoff
-                        backoff = 1.0
+                        backoff = MQTT_RECONNECT_INITIAL_BACKOFF
 
                         # (Re)subscribe all topics
-                        await self._subscribe_all(client)  # RESUBSCRIBE
+                        await self._subscribe_all(client)
 
                         # First tracking ping en periodically
                         await self._publish_tracking_once()
                         self._track_task = asyncio.create_task(
                             self._tracking_loop(), name="smappee-mqtt-tracking"
                         )
-
-                        # Consume loop
 
                         async for msg in client.messages:
                             if self._stop.is_set():
@@ -147,10 +138,8 @@ class SmappeeMqtt:
                                 msg.topic.value if hasattr(msg.topic, "value") else str(msg.topic)
                             )
                             payload_raw = self._to_text(msg.payload)
-
                             _LOGGER.debug("MQTT RX %s: %s", topic_str, payload_raw[:400])
 
-                            # JSON + jsonContent wrapper
                             try:
                                 payload = json.loads(payload_raw)
                                 if isinstance(payload, dict) and "jsonContent" in payload:
@@ -169,7 +158,7 @@ class SmappeeMqtt:
                                 )
                                 continue
 
-                            if topic_str.endswith("/homeassistant/heartbeat"):
+                            if topic_str.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
                                 self._notify_conn(True)
                                 try:
                                     self._on_properties(
@@ -194,11 +183,9 @@ class SmappeeMqtt:
                                 _LOGGER.warning("on_properties raised: %s", err)
 
                 except asyncio.CancelledError:
-                    # stop()
                     break
                 except (MqttError, OSError, TimeoutError) as err:
                     _LOGGER.warning("MQTT disconnected/error: %s (retry in %.0fs)", err, backoff)
-                    # self._notify_conn(False)
 
                     if self._track_task:
                         self._track_task.cancel()
@@ -221,7 +208,6 @@ class SmappeeMqtt:
                     _LOGGER.info("MQTT stopped (looping=%s)", not self._stop.is_set())
                     if self._stop.is_set():
                         self._notify_conn(False)
-
         finally:
             self._client = None
 
@@ -277,7 +263,7 @@ class SmappeeMqtt:
             "value": "ON",
             "clientId": self._client_id,
             "serialNumber": self._serial,
-            "type": "RT_VALUES",
+            "type": MQTT_TRACKING_TYPE_RT_VALUES,
         }
         with suppress(MqttError):
             await client.publish(topic, json.dumps(payload), qos=0)
@@ -287,14 +273,12 @@ class SmappeeMqtt:
         client = self._client
         if not client:
             return
-        topic = f"servicelocation/{self._slu}/homeassistant/heartbeat"
+        topic = f"servicelocation/{self._slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}"
         value: int | str | None = self._slu_id
         try:
-            # best-effort integer if str
             if isinstance(value, str):
                 value = int(value)
         except (TypeError, ValueError):
-            # keep as-is
             pass
         payload = {"serviceLocationId": value}
         with suppress(MqttError):

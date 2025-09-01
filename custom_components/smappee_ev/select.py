@@ -2,13 +2,13 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api_client import SmappeeApiClient
-from .const import DOMAIN
+from .base_entities import SmappeeConnectorEntity
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData
-from .helpers import make_device_info, make_unique_id
+from .data import ConnectorState, IntegrationData, RuntimeData
+from .helpers import build_connector_label
 
 MODES = ["SMART", "SOLAR", "NORMAL"]
 
@@ -18,10 +18,8 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    store = hass.data[DOMAIN][config_entry.entry_id]
-    sites = store.get(
-        "sites", {}
-    )  # { sid: { "stations": { st_uuid: { coordinator, station_client, connector_clients } } } }
+    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    sites = runtime.sites
 
     entities: list[SelectEntity] = []
     for sid, site in (sites or {}).items():
@@ -44,7 +42,7 @@ async def async_setup_entry(
     async_add_entities(entities, True)
 
 
-class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
+class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
     """Home Assistant select entity for Smappee charging mode."""
 
     _attr_has_entity_name = True
@@ -59,19 +57,17 @@ class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
         station_uuid: str,
         connector_uuid: str,
     ):
-        super().__init__(coordinator)
-        self.api_client = api_client
-        self._sid = sid
-        self._station_uuid = station_uuid
-        self._connector_uuid = connector_uuid
-        self._serial = getattr(coordinator.station_client, "serial_id", "unknown")
-
-        label = getattr(api_client, "connector_number", None) or connector_uuid[-4:]
-        self._attr_name = f"Charging Mode {label}"
-        # Globally stable unique_id
-        self._attr_unique_id = make_unique_id(
-            sid, self._serial, station_uuid, connector_uuid, "select:charging_mode"
+        label = build_connector_label(api_client, connector_uuid).split(" ", 1)[1]
+        SmappeeConnectorEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            connector_uuid,
+            unique_suffix="select:charging_mode",
+            name=f"Charging Mode {label}",
         )
+        self.api_client = api_client
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
@@ -83,25 +79,32 @@ class SmappeeModeSelect(CoordinatorEntity[SmappeeCoordinator], SelectEntity):
         if st:
             # Prefer explicit selected_mode; fall back to ui_mode_base; default NORMAL
             return st.selected_mode or st.ui_mode_base or "NORMAL"
-        return getattr(self.api_client, "selected_mode", "NORMAL")
+        return "NORMAL"
 
     async def async_select_option(self, option: str) -> None:
-        # Persist selection locally for instant UI feedback
-        self.api_client.selected_mode = option
         data = self.coordinator.data
-        if data and self._connector_uuid in (data.connectors or {}):
-            data.connectors[self._connector_uuid].selected_mode = option
+        if data and self.connector_uuid in (data.connectors or {}):
+            data.connectors[self.connector_uuid].selected_mode = option
             self.coordinator.async_set_updated_data(data)
-        # Send to backend
         await self.api_client.set_charging_mode(option)
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:  # RestoreEntity
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if not last or last.state in (None, "unknown", "unavailable"):
+            return
+        restored = last.state
+        if restored not in MODES:
+            return
+        st = self._state()
+        if st and st.selected_mode is None:
+            st.selected_mode = restored
+            data = self.coordinator.data
+            if data:
+                self.coordinator.async_set_updated_data(data)
         self.async_write_ha_state()
 
     @property
     def device_info(self):
-        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
-        return make_device_info(
-            self._sid,
-            self._serial,
-            self._station_uuid,
-            station_name,
-        )
+        return super().device_info

@@ -7,7 +7,15 @@ from typing import Any
 import aiohttp
 from aiohttp import ClientError
 
-from .const import BASE_URL
+from .const import (
+    BASE_URL,
+    OAUTH_CONNECT_TIMEOUT,
+    OAUTH_EARLY_RENEW_SKEW,
+    OAUTH_MAX_REFRESH_ATTEMPTS,
+    OAUTH_REFRESH_RETRY_BASE_DELAY,
+    OAUTH_TOTAL_TIMEOUT,
+    TOKEN_DEFAULT_EXPIRES_IN,
+)
 
 OAUTH_TOKEN_URL = f"{BASE_URL.replace('/v3', '/v1')}/oauth2/token"
 
@@ -19,7 +27,9 @@ class OAuth2Client:
 
     def __init__(self, data: Mapping[str, Any], session: aiohttp.ClientSession):
         self._session: aiohttp.ClientSession = session
-        self._timeout = aiohttp.ClientTimeout(connect=5, total=10)
+        self._timeout = aiohttp.ClientTimeout(
+            connect=OAUTH_CONNECT_TIMEOUT, total=OAUTH_TOTAL_TIMEOUT
+        )
         self.client_id: str = str(data.get("client_id") or "")
         self.client_secret: str = str(data.get("client_secret") or "")
         self.username: str = str(data.get("username") or "")
@@ -27,9 +37,9 @@ class OAuth2Client:
         self.access_token: str | None = data.get("access_token")
         self.refresh_token: str | None = data.get("refresh_token")
         self.token_expires_at: float | None = None
-        self.max_refresh_attempts: int = 3
+        self.max_refresh_attempts: int = OAUTH_MAX_REFRESH_ATTEMPTS
         self._refresh_lock = asyncio.Lock()
-        self._early_renew_skew = 60
+        self._early_renew_skew = OAUTH_EARLY_RENEW_SKEW
 
         _LOGGER.debug(
             "OAuth2Client initialized (client_id: %s, username: %s)", self.client_id, self.username
@@ -66,7 +76,9 @@ class OAuth2Client:
                     return None
                 self.access_token = tokens.get("access_token")
                 self.refresh_token = tokens.get("refresh_token")
-                self.token_expires_at = time.time() + tokens.get("expires_in", 3600)
+                self.token_expires_at = time.time() + tokens.get(
+                    "expires_in", TOKEN_DEFAULT_EXPIRES_IN
+                )
                 _LOGGER.info(
                     "Authentication succeeded, token valid until %s", self.token_expires_at
                 )
@@ -107,7 +119,9 @@ class OAuth2Client:
                             break
                         self.access_token = tokens.get("access_token")
                         self.refresh_token = tokens.get("refresh_token")
-                        self.token_expires_at = time.time() + tokens.get("expires_in", 3600)
+                        self.token_expires_at = time.time() + tokens.get(
+                            "expires_in", TOKEN_DEFAULT_EXPIRES_IN
+                        )
                         _LOGGER.info("Token refreshed, valid until %s", self.token_expires_at)
                         return
                     _LOGGER.error("Failed to refresh token (status %s): %s", response.status, text)
@@ -118,7 +132,7 @@ class OAuth2Client:
                     attempt + 1,
                     err,
                 )
-            await asyncio.sleep(2 * (attempt + 1))
+            await asyncio.sleep(OAUTH_REFRESH_RETRY_BASE_DELAY * (attempt + 1))
 
         _LOGGER.error("Failed to refresh token after %d attempts.", self.max_refresh_attempts)
         raise Exception("Unable to refresh token after multiple attempts.")

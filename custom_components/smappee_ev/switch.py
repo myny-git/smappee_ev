@@ -11,29 +11,26 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.update_coordinator import CoordinatorEntity, UpdateFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .api_client import SmappeeApiClient
-from .const import DOMAIN
+from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData, StationState
-from .helpers import make_device_info, make_unique_id
+from .data import ConnectorState, IntegrationData, RuntimeData, StationState
+from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _station_serial(coord: SmappeeCoordinator) -> str:
-    return getattr(coord.station_client, "serial_id", "unknown")
+# station_serial no longer needed; provided by base entity
 
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Smappee EV switches (multi-station)."""
-    store = hass.data[DOMAIN][config_entry.entry_id]
-    sites = store.get(
-        "sites", {}
-    )  # { sid: { "stations": { st_uuid: { coordinator, station_client, connector_clients } } } }
+    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    sites = runtime.sites
 
     entities: list[SwitchEntity] = []
     for sid, site in (sites or {}).items():
@@ -73,7 +70,7 @@ async def async_setup_entry(
 # ====================================================================================
 
 
-class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity, RestoreEntity):
+class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity):
     """Switch to control start/pause charging on a specific connector."""
 
     _attr_has_entity_name = True
@@ -87,19 +84,18 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
         station_uuid: str,
         connector_uuid: str,
     ) -> None:
-        super().__init__(coordinator)
-        self.api_client = api_client
-        self._sid = sid
-        self._station_uuid = station_uuid
-        self._uuid = connector_uuid
-        self._serial = _station_serial(coordinator)
-        num = getattr(api_client, "connector_number", None)
-        num_lbl = f"{num}" if num is not None else connector_uuid[-4:]
-        self._attr_name = f"Connector {num_lbl} EVCC charging"
-        self._attr_unique_id = make_unique_id(
-            sid, self._serial, station_uuid, connector_uuid, "switch:charging"
+        num_lbl = build_connector_label(api_client, connector_uuid).split(" ", 1)[1]
+        SmappeeConnectorEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            connector_uuid,
+            unique_suffix="switch:charging",
+            name=f"Connector {num_lbl} EVCC charging",
         )
-        self._is_on = False  # EVCC intent latch only (authoritative)
+        self.api_client = api_client
+        self._is_on = False
 
     # ---------- Helpers ----------
 
@@ -113,8 +109,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
 
     @property
     def device_info(self):
-        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
-        return make_device_info(self._sid, self._serial, self._station_uuid, station_name)
+        return super().device_info
 
     @property
     def is_on(self) -> bool:
@@ -141,7 +136,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
             )
             mode = getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None)
         else:
-            current = getattr(self.api_client, "min_current", 6)
+            current = 6
             mode = "NORMAL"
 
         current = int(max(int(current or 6), 6))
@@ -155,13 +150,23 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
                 )
                 await self.api_client.set_charging_mode("NORMAL", current)
 
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Charging switch ON → start_charging %s A (sid=%s, uuid=%s)",
                 current,
                 self._sid,
                 self._uuid,
             )
-            await self.api_client.start_charging(current)
+            cur, pct = await self.api_client.start_charging(
+                current,
+                min_current=st.min_current if st else 6,
+                max_current=st.max_current if st else 32,
+            )
+            if st:
+                st.selected_current_limit = cur
+                st.selected_percentage_limit = pct
+                data = self.coordinator.data
+                if data:
+                    self.coordinator.async_set_updated_data(data)
             self._is_on = True
             self.async_write_ha_state()
         except (
@@ -178,7 +183,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Pause charging."""
         try:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Charging switch OFF → pause_charging (sid=%s, uuid=%s)", self._sid, self._uuid
             )
             await self.api_client.pause_charging()
@@ -201,7 +206,7 @@ class SmappeeChargingSwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity,
 # ====================================================================================
 
 
-class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEntity):
+class SmappeeAvailabilitySwitch(SmappeeStationEntity, SwitchEntity):
     """Switch to toggle station availability (acchargingstation action)."""
 
     _attr_has_entity_name = True
@@ -214,20 +219,19 @@ class SmappeeAvailabilitySwitch(CoordinatorEntity[SmappeeCoordinator], SwitchEnt
         sid: int,
         station_uuid: str,
     ) -> None:
-        super().__init__(coordinator)
-        self.api_client = api_client
-        self._sid = sid
-        self._station_uuid = station_uuid
-        self._serial = _station_serial(coordinator)
-        self._attr_name = "Station available"
-        self._attr_unique_id = make_unique_id(
-            sid, self._serial, station_uuid, None, "switch:station_available"
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="switch:station_available",
+            name="Station available",
         )
+        self.api_client = api_client
 
     @property
     def device_info(self):
-        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
-        return make_device_info(self._sid, self._serial, self._station_uuid, station_name)
+        return super().device_info
 
     def _station_state(self) -> StationState | None:
         data: IntegrationData | None = self.coordinator.data

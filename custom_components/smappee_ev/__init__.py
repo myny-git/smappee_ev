@@ -1,12 +1,13 @@
 import asyncio
 import logging
 import time
+from typing import cast
 
 from aiohttp import ClientError, ClientSession
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
@@ -14,6 +15,7 @@ from homeassistant.helpers.typing import ConfigType
 from .api_client import SmappeeApiClient
 from .const import BASE_URL, CONF_UPDATE_INTERVAL, DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import SmappeeCoordinator
+from .data import RuntimeData
 from .mqtt_gateway import SmappeeMqtt
 from .oauth import OAuth2Client
 from .services import register_services, unregister_services
@@ -27,6 +29,9 @@ PLATFORMS = [
     Platform.SWITCH,
     Platform.BINARY_SENSOR,
 ]
+
+# Allow multiple parallel updates per platform (entities rely on single coordinator)
+PARALLEL_UPDATES = 0
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
@@ -78,6 +83,46 @@ def _find_in(dev: dict, *keys: str) -> str | None:
                 if _safe_str(v):
                     return _safe_str(v)
     return None
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate older config entry versions to the current format.
+
+    Current flow VERSION = 5. Perform incremental migrations so users can skip versions.
+    """
+    version = entry.version
+    data = dict(entry.data)
+    options = dict(entry.options)
+
+    updated = False
+
+    # Example: version < 2 stored update interval in data; move it to options
+    if version < 2:
+        if CONF_UPDATE_INTERVAL in data and CONF_UPDATE_INTERVAL not in options:
+            options[CONF_UPDATE_INTERVAL] = data.pop(CONF_UPDATE_INTERVAL)
+            updated = True
+        version = 2
+
+    # Placeholder for future migrations (2 -> 3, 3 -> 4, etc.)
+    if version < 3:
+        version = 3
+    if version < 4:
+        version = 4
+    if version < 5:
+        version = 5
+
+    if updated or version != entry.version:
+        hass.config_entries.async_update_entry(
+            entry, data=data, options=options, version=version
+        )
+        _LOGGER.info(
+            "Smappee EV config entry %s migrated to version %s", entry.entry_id, version
+        )
+    else:
+        _LOGGER.debug(
+            "Smappee EV config entry %s already at latest version %s", entry.entry_id, version
+        )
+    return True
 
 
 async def _discover_service_locations(
@@ -241,19 +286,22 @@ def _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
     stations[first_uuid]["connector_clients"] = subset
 
 
-async def _create_coordinators(hass, stations, update_interval):
+async def _create_coordinators(hass, stations, update_interval, config_entry=None):
     for bucket in stations.values():
         coord = SmappeeCoordinator(
             hass,
             station_client=bucket["station_client"],
             connector_clients=bucket["connector_clients"],
             update_interval=update_interval,
+            config_entry=config_entry,
         )
         await coord.async_config_entry_first_refresh()
         bucket["coordinator"] = coord
 
 
-def _setup_mqtt(hass, suuid, serial_str, sid, stations) -> SmappeeMqtt | None:
+def _setup_mqtt(
+    hass, suuid, serial_str, sid, stations, client_id_prefix: str
+) -> SmappeeMqtt | None:
     if not suuid:
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
         return None
@@ -277,7 +325,7 @@ def _setup_mqtt(hass, suuid, serial_str, sid, stations) -> SmappeeMqtt | None:
 
     mqtt = SmappeeMqtt(
         service_location_uuid=suuid,
-        client_id=f"ha-{hass.data.get(DOMAIN, {}).get('iid', 'x')}-{sid}",
+        client_id=f"{client_id_prefix}-{sid}",
         serial_number=serial_str,
         on_properties=_on_props,
         service_location_id=sid,
@@ -299,6 +347,8 @@ async def _prepare_site(
     oauth_client: OAuth2Client,
     sl: dict,
     update_interval: int,
+    client_id_prefix: str,
+    config_entry: ConfigEntry | None = None,
 ) -> tuple[dict[str, dict] | None, SmappeeMqtt | None]:
     """Build coordinators, station/connector clients and MQTT for one service location."""
 
@@ -356,10 +406,10 @@ async def _prepare_site(
     _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
 
     # create coordinators per station
-    await _create_coordinators(hass, stations, update_interval)
+    await _create_coordinators(hass, stations, update_interval, config_entry=config_entry)
 
     # MQTT (shared per site, but updates all station coordinators)
-    mqtt = _setup_mqtt(hass, suuid, serial_str, sid, stations)
+    mqtt = _setup_mqtt(hass, suuid, serial_str, sid, stations, client_id_prefix)
 
     # put mqtt ref in each bucket
     for b in stations.values():
@@ -391,7 +441,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         with_serial = await _discover_service_locations(session, oauth_client)
     except (ClientError, RuntimeError, ValueError) as err:
-        _LOGGER.debug("Transient error loading service locations: %s", err)  # was error+return
+        # Authentication / authorization problems should trigger reauth
+        if getattr(oauth_client, "access_token", None) is None:
+            raise ConfigEntryAuthFailed(f"Auth failed: {err}") from err
+        _LOGGER.debug("Transient error loading service locations: %s", err)
         raise ConfigEntryNotReady(f"Loading service locations failed: {err}") from err
     if not with_serial:
         _LOGGER.debug("No service locations with deviceSerialNumber found (retry later)")
@@ -401,8 +454,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     mqtt_clients: dict[int, SmappeeMqtt] = {}
 
     # 2) Prepare each site in parallel
+    client_id_prefix = f"ha-{entry.entry_id[-6:]}"
     prep_tasks = [
-        _prepare_site(hass, session, oauth_client, sl, update_interval) for sl in with_serial
+        _prepare_site(
+            hass,
+            session,
+            oauth_client,
+            sl,
+            update_interval,
+            client_id_prefix,
+            config_entry=entry,
+        )
+        for sl in with_serial
     ]
     results = await asyncio.gather(*prep_tasks, return_exceptions=True)
     for sl, res in zip(with_serial, results, strict=True):
@@ -418,19 +481,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sid = sl["serviceLocationId"]
         if mqtt:
             mqtt_clients[sid] = mqtt
-        sites[sid] = {"stations": stations_map}
+        sites[sid] = {
+            "stations": stations_map,
+            "name": sl.get("name"),
+            "serviceLocationUuid": sl.get("serviceLocationUuid"),
+            "deviceSerialNumber": sl.get("deviceSerialNumber"),
+        }
 
     if not sites:
         _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")
         raise ConfigEntryNotReady("No Smappee EV stations discovered (will retry)")
 
-    # Platforms store
-    hass.data[DOMAIN][entry.entry_id] = {
-        "api": oauth_client,
-        "sites": sites,  # { sid: { "stations": { station_uuid: {coordinator, station_client, connector_clients, mqtt} } } }
-        "mqtt": mqtt_clients,  # {sid: mqtt}
-        "_last_options": dict(entry.options),
-    }
+    # Store runtime data only on the entry (preferred pattern); avoid duplicating in hass.data
+    runtime = RuntimeData(
+        api=oauth_client,
+        sites=sites,
+        mqtt=cast(dict[int, object], mqtt_clients),
+        last_options=dict(entry.options),
+    )
+    entry.runtime_data = runtime  # type: ignore[attr-defined]
 
     # Platforms start
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -457,21 +526,54 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
 
-    data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}) or {}
-    # Stop all MQTT-clients per site
-    for sid, mqtt in (data.get("mqtt") or {}).items():
-        try:
-            await mqtt.stop()
-        except asyncio.CancelledError:
-            raise
-        except (RuntimeError, OSError) as err:
-            _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
+    # Stop all MQTT clients referenced in runtime_data
+    try:
+        rd: RuntimeData = entry.runtime_data  # type: ignore[attr-defined]
+        for sid, mqtt in (rd.mqtt or {}).items():
+            # mqtt stored generically as object; attempt to call stop if attribute exists
+            stop_fn = getattr(mqtt, "stop", None)
+            if not callable(stop_fn):  # pragma: no cover - defensive
+                continue
+            try:
+                result = stop_fn()
+                if asyncio.iscoroutine(result):
+                    await result
+            except asyncio.CancelledError:
+                raise
+            except (RuntimeError, OSError) as err:
+                _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
+    except AttributeError:
+        pass
+
+    # Allow coordinators to shutdown any background tasks
+    try:
+        rd: RuntimeData = entry.runtime_data  # type: ignore[attr-defined]
+        for site in (rd.sites or {}).values():
+            for bucket in site.get("stations", {}).values():
+                coord = bucket.get("coordinator")
+                if coord and hasattr(coord, "async_shutdown"):
+                    try:
+                        await coord.async_shutdown()
+                    except Exception as exc:  # noqa: BLE001 - defensive
+                        _LOGGER.debug("Coordinator shutdown issue: %s", exc)
+    except AttributeError:
+        pass
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        active_keys = [k for k in hass.data[DOMAIN] if k != "services_registered"]
-        if not active_keys:
+        # Remove runtime_data attribute if present
+        if hasattr(entry, "runtime_data"):
+            try:
+                delattr(entry, "runtime_data")
+            except AttributeError:
+                _LOGGER.debug("runtime_data attribute already removed for %s", entry.entry_id)
+        # If no other loaded entries, unregister services
+        active_entries = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if e.state is ConfigEntryState.LOADED
+        ]
+        if not active_entries and hass.data.get(DOMAIN, {}).get("services_registered"):
             await unregister_services(hass)
             hass.data.pop(DOMAIN, None)
     return unload_ok
@@ -479,13 +581,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle updates to config entry options."""
-    ctx = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
-    prev = ctx.get("_last_options", {})
-    cur = dict(entry.options)
+    try:
+        rd: RuntimeData = entry.runtime_data  # type: ignore[attr-defined]
+    except AttributeError:
+        _LOGGER.debug("ConfigEntry update before runtime_data available")
+        return
 
-    if cur != prev:
-        ctx["_last_options"] = cur
-        hass.data[DOMAIN][entry.entry_id] = ctx
-        await hass.config_entries.async_reload(entry.entry_id)
-    else:
-        _LOGGER.debug("ConfigEntry change.")
+    cur = dict(entry.options)
+    prev = getattr(rd, "last_options", {})
+    if cur == prev:
+        _LOGGER.debug("ConfigEntry options unchanged")
+        return
+
+    rd.last_options = cur
+    await hass.config_entries.async_reload(entry.entry_id)

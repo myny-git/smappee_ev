@@ -3,6 +3,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .const import (
+    DEFAULT_LED_BRIGHTNESS,
+    DEFAULT_MAX_CURRENT,
+    DEFAULT_MIN_CURRENT,
+    DEFAULT_MIN_SURPLUS_PERCENT,
+)
+
 
 @dataclass
 class ConnectorState:
@@ -13,9 +20,9 @@ class ConnectorState:
     selected_current_limit: int | None = None
     selected_percentage_limit: int | None = None
     selected_mode: str = "NORMAL"
-    min_current: int = 6
-    max_current: int = 32
-    min_surpluspct: int = 100
+    min_current: int = DEFAULT_MIN_CURRENT
+    max_current: int = DEFAULT_MAX_CURRENT
+    min_surpluspct: int = DEFAULT_MIN_SURPLUS_PERCENT
 
     connection_status: str | None = None  # CONNECTED / DISCONNECTED
     configuration_errors: list[str] | None = None
@@ -47,7 +54,7 @@ class ConnectorState:
 class StationState:
     """Holds state for the station (applies to all connectors)."""
 
-    led_brightness: int = 70
+    led_brightness: int = DEFAULT_LED_BRIGHTNESS
     available: bool = True
 
     mqtt_connected: bool | None = None
@@ -57,14 +64,15 @@ class StationState:
     grid_power_phases: list[int] | None = None
     grid_energy_import_kwh: float | None = None
     grid_energy_export_kwh: float | None = None
-    grid_current_phases: float | None = None
+    # list of per-phase currents (A)
+    grid_current_phases: list[float] | None = None
 
     house_consumption_power: int | None = None
 
     pv_power_total: int | None = None
     pv_power_phases: list[int] | None = None
     pv_energy_import_kwh: float | None = None
-    pv_current_phases: float | None = None
+    pv_current_phases: list[float] | None = None
 
 
 @dataclass
@@ -73,3 +81,16 @@ class IntegrationData:
 
     station: StationState
     connectors: dict[str, ConnectorState]  # keyed by UUID
+
+
+@dataclass
+class RuntimeData:
+    """Runtime storage placed on ConfigEntry.runtime_data.
+
+    Keeps the public objects platforms need without depending on hass.data.
+    """
+
+    api: object  # OAuth2Client (kept generic to avoid circular import in type checking)
+    sites: dict[int, dict]
+    mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt
+    last_options: dict

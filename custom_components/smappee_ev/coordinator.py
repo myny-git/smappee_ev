@@ -10,11 +10,18 @@ from time import time as _now
 from typing import Any, cast
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api_client import SmappeeApiClient
-from .const import BASE_URL
+from .const import (
+    BASE_URL,
+    DEFAULT_LED_BRIGHTNESS,
+    DEFAULT_MAX_CURRENT,
+    DEFAULT_MIN_CURRENT,
+    DEFAULT_MIN_SURPLUS_PERCENT,
+)
 from .data import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,12 +70,14 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         station_client: SmappeeApiClient,
         connector_clients: dict[str, SmappeeApiClient],  # keyed by UUID
         update_interval: int,
+        config_entry: ConfigEntry | None = None,
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name="Smappee EV Coordinator",
             update_interval=timedelta(seconds=update_interval),
+            config_entry=config_entry,
         )
         self.station_client = station_client
         self.connector_clients = connector_clients
@@ -100,10 +109,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         session_state="Initialize",
                         selected_current_limit=None,
                         selected_percentage_limit=None,
-                        selected_mode=getattr(client, "selected_mode", "NORMAL"),
-                        min_current=6,
-                        max_current=32,
-                        min_surpluspct=100,
+                        selected_mode="NORMAL",
+                        min_current=DEFAULT_MIN_CURRENT,
+                        max_current=DEFAULT_MAX_CURRENT,
+                        min_surpluspct=DEFAULT_MIN_SURPLUS_PERCENT,
                     )
                 else:
                     connectors_state[uuid] = cast(ConnectorState, res)
@@ -175,8 +184,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         """Read LED brightness by scanning all smartdevices for the station."""
         headers = client.auth_headers()
         url_all = f"{BASE_URL}/servicelocation/{client.service_location_id}/smartdevices"
-
-        led_brightness = 70
+        led_brightness = DEFAULT_LED_BRIGHTNESS
         try:
             resp = await self._session.get(url_all, headers=headers, timeout=self._timeout)
             if resp.status == 200:
@@ -208,13 +216,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         url_dev = f"{BASE_URL}/servicelocation/{client.service_location_id}/smartdevices/{client.smart_device_id}"
 
         # Defaults, will be overwritten by API values when present
-        session_state = getattr(client, "session_state", "Initialize")
-        selected_percentage = getattr(client, "selected_percentage_limit", None)
-        selected_current = getattr(client, "selected_current_limit", None)
-        selected_mode = getattr(client, "selected_mode", "NORMAL")
-        min_current = getattr(client, "min_current", 6)
-        max_current = getattr(client, "max_current", 32)
-        min_surpluspct = getattr(client, "min_surpluspct", 100)
+        session_state = "Initialize"
+        selected_percentage: int | None = None
+        selected_current: int | None = None
+        selected_mode = "NORMAL"
+        min_current = DEFAULT_MIN_CURRENT
+        max_current = DEFAULT_MAX_CURRENT
+        min_surpluspct = DEFAULT_MIN_SURPLUS_PERCENT
 
         resp = await self._session.get(url_dev, headers=headers, timeout=self._timeout)
         if resp.status != 200:
@@ -249,11 +257,6 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
                 with suppress(TypeError, ValueError):
                     min_surpluspct = _to_int(val, default=min_surpluspct)
-
-        client.min_current = min_current
-        client.max_current = max_current
-        client.selected_percentage_limit = selected_percentage
-        client.selected_current_limit = selected_current
 
         # If we know %, but not A, we can reconstruct A later in the Number entity;
         # here we just return the snapshot.

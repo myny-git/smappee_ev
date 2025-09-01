@@ -1,6 +1,10 @@
 set_charging_mode:
   description: "Set the charging mode (NORMAL, SMART, SOLAR)."
   fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -28,6 +32,10 @@ set_charging_mode:
 pause_charging:
   description: "Pause charging on a connector."
   fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -46,6 +54,10 @@ pause_charging:
 stop_charging:
   description: "Stop charging on a connector."
   fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -64,6 +76,10 @@ stop_charging:
 start_charging:
   description: "Start charging on a connector. "
   fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
