@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry, ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import voluptuous as vol
 
 from .const import (
     CONF_CLIENT_ID,
@@ -16,7 +16,6 @@ from .const import (
     DOMAIN,
 )
 from .oauth import OAuth2Client
-
 
 class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Smappee EV."""
