@@ -99,12 +99,6 @@ class SmappeeEvOptionsFlow(config_entries.OptionsFlow):
                 ): str,
                 vol.Required(CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME)): str,
                 vol.Required(CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD)): str,
-                vol.Optional(
-                    CONF_UPDATE_INTERVAL,
-                    default=self.config_entry.options.get(
-                        CONF_UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT
-                    ),
-                ): vol.All(int, vol.Range(min=5, max=3600)),
             }
         )
         if user_input is None:
