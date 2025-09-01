@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import logging
 from typing import Any
 
@@ -37,11 +38,11 @@ class SmappeeApiClient:
 
         self.is_station = is_station
         self._session: ClientSession = session
-        self._timeout = ClientTimeout(connect=5, total=15)
-        self.station_action_uuid = None
+        self._timeout: ClientTimeout = ClientTimeout(connect=5, total=15)
+        self.station_action_uuid: str | None = None
         # Stateless: no per-connector mutable charging attributes kept here.
         # All dynamic values live in Coordinator/ConnectorState.
-        self._callbacks = set()  # kept for future hook use
+        self._callbacks: set[Callable[..., Any]] = set()  # kept for future hook use
 
         _LOGGER.info(
             "SmappeeApiClient initialized (serial=%s, connector=%s, station=%s)",
@@ -256,12 +257,12 @@ class SmappeeApiClient:
         _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
 
         if max_current <= min_current:
-            cur = int(min_current)
+            cur_int = int(min_current)
         else:
             rng = max_current - min_current
-            cur = min_current + (float(percentage) / 100.0) * rng
-            cur = max(min_current, min(max_current, int(round(cur))))
-        return int(cur), int(percentage)
+            cur_float = min_current + (float(percentage) / 100.0) * rng
+            cur_int = max(min_current, min(max_current, int(round(cur_float))))
+        return cur_int, int(percentage)
 
     async def set_available(self) -> None:
         await self.ensure_auth()

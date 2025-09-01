@@ -32,44 +32,46 @@ async def async_setup_entry(
 
             for cuuid, client in (conns or {}).items():
                 lbl = build_connector_label(client, cuuid).split(" ", 1)[1]  # get number / tail
-                entities.extend([
-                    SmappeeActionButton(
-                        coordinator=coord,
-                        api_client=client,
-                        sid=sid,
-                        station_uuid=st_uuid,
-                        connector_uuid=cuuid,
-                        name=f"Start charging {lbl}",
-                        action="start_charging",
-                    ),
-                    SmappeeActionButton(
-                        coordinator=coord,
-                        api_client=client,
-                        sid=sid,
-                        station_uuid=st_uuid,
-                        connector_uuid=cuuid,
-                        name=f"Pause charging {lbl}",
-                        action="pause_charging",
-                    ),
-                    SmappeeActionButton(
-                        coordinator=coord,
-                        api_client=client,
-                        sid=sid,
-                        station_uuid=st_uuid,
-                        connector_uuid=cuuid,
-                        name=f"Stop charging {lbl}",
-                        action="stop_charging",
-                    ),
-                    SmappeeActionButton(
-                        coordinator=coord,
-                        api_client=client,
-                        sid=sid,
-                        station_uuid=st_uuid,
-                        connector_uuid=cuuid,
-                        name=f"Set charging mode {lbl}",
-                        action="set_charging_mode",
-                    ),
-                ])
+                entities.extend(
+                    [
+                        SmappeeActionButton(
+                            coordinator=coord,
+                            api_client=client,
+                            sid=sid,
+                            station_uuid=st_uuid,
+                            connector_uuid=cuuid,
+                            name=f"Start charging {lbl}",
+                            action="start_charging",
+                        ),
+                        SmappeeActionButton(
+                            coordinator=coord,
+                            api_client=client,
+                            sid=sid,
+                            station_uuid=st_uuid,
+                            connector_uuid=cuuid,
+                            name=f"Pause charging {lbl}",
+                            action="pause_charging",
+                        ),
+                        SmappeeActionButton(
+                            coordinator=coord,
+                            api_client=client,
+                            sid=sid,
+                            station_uuid=st_uuid,
+                            connector_uuid=cuuid,
+                            name=f"Stop charging {lbl}",
+                            action="stop_charging",
+                        ),
+                        SmappeeActionButton(
+                            coordinator=coord,
+                            api_client=client,
+                            sid=sid,
+                            station_uuid=st_uuid,
+                            connector_uuid=cuuid,
+                            name=f"Set charging mode {lbl}",
+                            action="set_charging_mode",
+                        ),
+                    ]
+                )
 
     async_add_entities(entities, True)
 

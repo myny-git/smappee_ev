@@ -112,12 +112,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         version = 5
 
     if updated or version != entry.version:
-        hass.config_entries.async_update_entry(
-            entry, data=data, options=options, version=version
-        )
-        _LOGGER.info(
-            "Smappee EV config entry %s migrated to version %s", entry.entry_id, version
-        )
+        hass.config_entries.async_update_entry(entry, data=data, options=options, version=version)
+        _LOGGER.info("Smappee EV config entry %s migrated to version %s", entry.entry_id, version)
     else:
         _LOGGER.debug(
             "Smappee EV config entry %s already at latest version %s", entry.entry_id, version
@@ -525,12 +521,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
-
-    # Stop all MQTT clients referenced in runtime_data
-    try:
-        rd: RuntimeData = entry.runtime_data  # type: ignore[attr-defined]
+    # Retrieve runtime data once
+    rd: RuntimeData | None = getattr(entry, "runtime_data", None)  # type: ignore[attr-defined]
+    if isinstance(rd, RuntimeData):
+        # Stop all MQTT clients referenced in runtime_data
         for sid, mqtt in (rd.mqtt or {}).items():
-            # mqtt stored generically as object; attempt to call stop if attribute exists
             stop_fn = getattr(mqtt, "stop", None)
             if not callable(stop_fn):  # pragma: no cover - defensive
                 continue
@@ -542,12 +537,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 raise
             except (RuntimeError, OSError) as err:
                 _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
-    except AttributeError:
-        pass
 
-    # Allow coordinators to shutdown any background tasks
-    try:
-        rd: RuntimeData = entry.runtime_data  # type: ignore[attr-defined]
+        # Allow coordinators to shutdown any background tasks
         for site in (rd.sites or {}).values():
             for bucket in site.get("stations", {}).values():
                 coord = bucket.get("coordinator")
@@ -556,8 +547,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         await coord.async_shutdown()
                     except Exception as exc:  # noqa: BLE001 - defensive
                         _LOGGER.debug("Coordinator shutdown issue: %s", exc)
-    except AttributeError:
-        pass
+
+    else:
+        _LOGGER.debug(
+            "Unload requested for %s but no runtime_data present (may have failed early)",
+            entry.entry_id,
+        )
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:

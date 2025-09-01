@@ -278,8 +278,11 @@ class SmappeeMqtt:
         try:
             if isinstance(value, str):
                 value = int(value)
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError):  # conversion best-effort; non-fatal
+            _LOGGER.debug(
+                "Heartbeat serviceLocationId not numeric (slu_id=%r); sending null", self._slu_id
+            )
+            value = None
         payload = {"serviceLocationId": value}
         with suppress(MqttError):
             await client.publish(topic, json.dumps(payload), qos=0)
