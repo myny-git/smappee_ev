@@ -98,9 +98,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Example: version < 2 stored update interval in data; move it to options
     if version < 2:
-        if CONF_UPDATE_INTERVAL in data and CONF_UPDATE_INTERVAL not in options:
-            options[CONF_UPDATE_INTERVAL] = data.pop(CONF_UPDATE_INTERVAL)
+        if CONF_UPDATE_INTERVAL in data:
+            data.pop(CONF_UPDATE_INTERVAL)
             updated = True
+        if CONF_UPDATE_INTERVAL in options:             
+            options.pop(CONF_UPDATE_INTERVAL)
+            updated = True            
         version = 2
 
     # Placeholder for future migrations (2 -> 3, 3 -> 4, etc.)
