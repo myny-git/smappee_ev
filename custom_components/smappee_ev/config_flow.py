@@ -12,10 +12,8 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     CONF_PASSWORD,
-    CONF_UPDATE_INTERVAL,
     CONF_USERNAME,
     DOMAIN,
-    UPDATE_INTERVAL_DEFAULT,
 )
 from .oauth import OAuth2Client
 
