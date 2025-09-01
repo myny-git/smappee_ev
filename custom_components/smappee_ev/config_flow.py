@@ -8,14 +8,9 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
-from .const import (
-    CONF_CLIENT_ID,
-    CONF_CLIENT_SECRET,
-    CONF_PASSWORD,
-    CONF_USERNAME,
-    DOMAIN,
-)
+from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from .oauth import OAuth2Client
+
 
 class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Smappee EV."""
