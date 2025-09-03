@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import config_validation as cv
+import voluptuous as vol
 
 from .api_client import SmappeeApiClient
-from .const import DOMAIN
+from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .data import RuntimeData
 
 _LOGGER = logging.getLogger(__name__)
@@ -17,7 +20,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _iter_loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
-    return [e for e in hass.config_entries.async_entries(DOMAIN) if e.state.name == "LOADED"]
+    return [
+        e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED
+    ]
 
 
 def _first_runtime(hass: HomeAssistant) -> RuntimeData | None:
@@ -33,7 +38,7 @@ def _runtime_by_entry_id(hass: HomeAssistant, entry_id: str | None) -> RuntimeDa
     if not entry_id:
         return None
     entry = hass.config_entries.async_get_entry(entry_id)
-    if not entry or entry.state.name != "LOADED":
+    if not entry or entry.state is not ConfigEntryState.LOADED:
         return None
     try:
         return entry.runtime_data  # type: ignore[attr-defined]
@@ -71,7 +76,11 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
     sid = call.data.get("service_location_id")
     if explicit_rt:
         if isinstance(sid, int):
-            return explicit_rt, sid if sid in explicit_rt.sites else None
+            if sid not in explicit_rt.sites:
+                raise ServiceValidationError(
+                    f"service_location_id {sid} does not belong to config_entry_id {entry_id}"
+                )
+            return explicit_rt, sid
         return explicit_rt, _only_or_single_sid(explicit_rt.sites)
 
     # No explicit entry: if sid given, try locate its runtime
@@ -144,22 +153,23 @@ async def async_handle_station_service(
     extra_args: dict | None = None,
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
+    if rt and sid is None and len(rt.sites) > 1:
+        raise ServiceValidationError(
+            "Multiple service locations detected. Provide 'service_location_id'."
+        )
     client = get_station_client(rt, sid)
     if not client:
-        _LOGGER.error(
-            "No station client found (config_entry_id=%s, service_location_id=%s)",
-            call.data.get("config_entry_id"),
-            call.data.get("service_location_id"),
+        raise ServiceValidationError(
+            f"No station client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')})"
         )
-        return
 
     method = getattr(client, method_name, None)
     if not method:
-        _LOGGER.error("Station method '%s' not found", method_name)
-        return
-
-    # Execute the station API method
-    await method(**(extra_args or {}))
+        raise ServiceValidationError(f"Station method '{method_name}' not found")
+    try:
+        await method(**(extra_args or {}))
+    except Exception as err:
+        raise HomeAssistantError(f"Station service '{method_name}' failed: {err}") from err
 
 
 async def async_handle_connector_service(
@@ -169,24 +179,24 @@ async def async_handle_connector_service(
     extra_args: dict | None = None,
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
+    if rt and sid is None and len(rt.sites) > 1:
+        raise ServiceValidationError(
+            "Multiple service locations detected. Provide 'service_location_id'."
+        )
     connector_id = call.data.get("connector_id")
     client = get_connector_client(rt, sid, connector_id)
     if not client:
-        _LOGGER.error(
-            "No matching connector client (config_entry_id=%s, service_location_id=%s, connector_id=%s)",
-            call.data.get("config_entry_id"),
-            call.data.get("service_location_id"),
-            connector_id,
+        raise ServiceValidationError(
+            f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')}, connector_id={connector_id})"
         )
-        return
 
     method = getattr(client, method_name, None)
     if not method:
-        _LOGGER.error("Connector method '%s' not found", method_name)
-        return
-
-    # Execute the connector API method
-    await method(**(extra_args or {}))
+        raise ServiceValidationError(f"Connector method '{method_name}' not found")
+    try:
+        await method(**(extra_args or {}))
+    except Exception as err:
+        raise HomeAssistantError(f"Connector service '{method_name}' failed: {err}") from err
 
     # Mode reset handled by coordinator state logic; client is stateless now.
 
@@ -197,9 +207,31 @@ async def async_handle_connector_service(
 
 
 async def handle_start_charging(call: ServiceCall) -> None:
-    await async_handle_connector_service(
-        call.hass, call, "start_charging", {"current": call.data.get("current")}
-    )
+    current = call.data.get("current")
+    if current is not None:
+        # Dynamic validation against connector limits
+        rt, sid = _resolve_sid(call.hass, call)
+        connector_id = call.data.get("connector_id")
+        client = get_connector_client(rt, sid, connector_id)
+        if not client:
+            raise ServiceValidationError(
+                "Cannot validate current: connector client not found (provide connector_id if ambiguous)"
+            )
+        try:
+            min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            min_c = DEFAULT_MIN_CURRENT
+        try:
+            max_c = int(getattr(client, "max_current", DEFAULT_MAX_CURRENT))
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            max_c = DEFAULT_MAX_CURRENT
+        if max_c < min_c:
+            max_c = min_c
+        if current < min_c or current > max_c:
+            raise ServiceValidationError(
+                f"current {current} A out of range {min_c}-{max_c} A for this connector"
+            )
+    await async_handle_connector_service(call.hass, call, "start_charging", {"current": current})
 
 
 async def handle_pause_charging(call: ServiceCall) -> None:
@@ -224,12 +256,42 @@ async def handle_set_charging_mode(call: ServiceCall) -> None:
 # ----------------------------
 
 
+START_CHARGING_SCHEMA = vol.Schema({
+    vol.Optional("config_entry_id"): cv.string,
+    vol.Optional("service_location_id"): cv.positive_int,
+    vol.Optional("connector_id"): cv.positive_int,
+    # Only enforce a sane minimum; device specific max validated dynamically in handler
+    vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
+})
+
+PAUSE_STOP_SCHEMA = vol.Schema({
+    vol.Optional("config_entry_id"): cv.string,
+    vol.Optional("service_location_id"): cv.positive_int,
+    vol.Optional("connector_id"): cv.positive_int,
+})
+
+SET_MODE_SCHEMA = vol.Schema({
+    vol.Optional("config_entry_id"): cv.string,
+    vol.Optional("service_location_id"): cv.positive_int,
+    vol.Optional("connector_id"): cv.positive_int,
+    vol.Required("mode"): vol.All(
+        str,
+        lambda s: s.upper(),  # normalize to uppercase
+        vol.In({"NORMAL", "STANDARD", "SMART", "SOLAR"}),
+    ),
+})
+
+
 async def register_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Registering Smappee EV services")
-    hass.services.async_register(DOMAIN, "start_charging", handle_start_charging)
-    hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging)
-    hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging)
-    hass.services.async_register(DOMAIN, "set_charging_mode", handle_set_charging_mode)
+    hass.services.async_register(
+        DOMAIN, "start_charging", handle_start_charging, START_CHARGING_SCHEMA
+    )
+    hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging, PAUSE_STOP_SCHEMA)
+    hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging, PAUSE_STOP_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, "set_charging_mode", handle_set_charging_mode, SET_MODE_SCHEMA
+    )
 
 
 async def unregister_services(hass: HomeAssistant) -> None:

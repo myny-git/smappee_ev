@@ -8,8 +8,7 @@
                     "client_secret": "Je client secret",
                     "username": "Je gebruikersnaam op het Smappee-dashboard",
                     "password": "Je wachtwoord op het Smappee-dashboard",
-                    "serial": "Het serienummer van je laadpunt",
-                    "update_interval": "Update-interval (seconden)"
+                    "serial": "Het serienummer van je laadpunt"
                 }
             }
         },
@@ -26,8 +25,7 @@
                     "client_secret": "Je client secret",
                     "username": "Je gebruikersnaam op het Smappee-dashboard",
                     "password": "Je wachtwoord op het Smappee-dashboard",
-                    "serial": "Het serienummer van je laadpunt",
-                    "update_interval": "Update-interval (seconden)"
+                    "serial": "Het serienummer van je laadpunt"
                 }
             }
         },

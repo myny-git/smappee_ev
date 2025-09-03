@@ -21,6 +21,8 @@ from .const import (
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
     DEFAULT_MIN_SURPLUS_PERCENT,
+    HTTP_CONNECT_TIMEOUT,
+    HTTP_TOTAL_TIMEOUT,
 )
 from .data import ConnectorState, IntegrationData, StationState
 
@@ -83,7 +85,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self.connector_clients = connector_clients
         # reuse HA's client session via any existing client
         self._session: ClientSession = station_client.get_http_session()
-        self._timeout = ClientTimeout(connect=5, total=15)
+        self._timeout = ClientTimeout(connect=HTTP_CONNECT_TIMEOUT, total=HTTP_TOTAL_TIMEOUT)
         self._power_index_map: dict[str, Any] | None = None
 
     async def _async_update_data(self) -> IntegrationData:
@@ -683,11 +685,14 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 conn, payload, m.get("power", []), m.get("cons", [])
             )
 
+        # Aggregate house consumption (positive load behind meter). Allow real zero.
         cp = payload.get("consumptionPower")
-        if isinstance(cp, int | float) and cp != 0:
+        if isinstance(cp, int | float):
             changed |= self._set_if_changed(st, "house_consumption_power", int(cp))
+
+        # Aggregate solar production (PV). Allow zero (night) to overwrite previous value.
         sp = payload.get("solarPower")
-        if isinstance(sp, int | float) and sp != 0:
+        if isinstance(sp, int | float):
             changed |= self._set_if_changed(st, "pv_power_total", int(sp))
 
         return changed

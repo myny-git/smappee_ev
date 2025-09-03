@@ -8,8 +8,7 @@
           "client_secret": "Your client secret",
           "username": "Your username on Smappee dashboard",
           "password": "Your password on Smappee dashboard",
-          "serial": "The serial number of your charging point",
-          "update_interval": "Update interval (seconds)"
+          "serial": "The serial number of your charging point"
         }
       }
     },
@@ -26,8 +25,7 @@
           "client_secret": "Your client secret",
           "username": "Your username on Smappee dashboard",
           "password": "Your password on Smappee dashboard",
-          "serial": "The serial number of your charging point",
-          "update_interval": "Update interval (seconds)"
+          "serial": "The serial number of your charging point"
         }
       }
     },

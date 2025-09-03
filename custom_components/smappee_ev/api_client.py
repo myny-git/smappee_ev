@@ -7,7 +7,7 @@ from typing import Any
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout
 
-from .const import BASE_URL
+from .const import BASE_URL, HTTP_CONNECT_TIMEOUT, HTTP_TOTAL_TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +38,9 @@ class SmappeeApiClient:
 
         self.is_station = is_station
         self._session: ClientSession = session
-        self._timeout: ClientTimeout = ClientTimeout(connect=5, total=15)
+        self._timeout: ClientTimeout = ClientTimeout(
+            connect=HTTP_CONNECT_TIMEOUT, total=HTTP_TOTAL_TIMEOUT
+        )
         self.station_action_uuid: str | None = None
         # Stateless: no per-connector mutable charging attributes kept here.
         # All dynamic values live in Coordinator/ConnectorState.
@@ -89,51 +91,51 @@ class SmappeeApiClient:
         raise RuntimeError("LED controller smartdevice not found on this service location")
 
     # ------------------------------------------------------------------
+    # Generic request helper (auth + error handling)
+    # ------------------------------------------------------------------
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        json: Any | None = None,
+        expected: tuple[int, ...] = (200, 204),
+        return_json: bool = False,
+    ) -> Any | None:
+        await self.ensure_auth()
+        async with self._session.request(
+            method,
+            url,
+            json=json,
+            headers=self.auth_headers(),
+            timeout=self._timeout,
+        ) as resp:
+            if resp.status not in expected:
+                text = await resp.text()
+                raise RuntimeError(f"Request failed {resp.status} ({method} {url}): {text}")
+            if return_json:
+                if resp.content_length == 0:
+                    return None
+                return await resp.json()
+            return None
+
+    # ------------------------------------------------------------------
     # COMMANDS (write actions)
     # ------------------------------------------------------------------
     async def set_charging_mode(self, mode: str, limit: int | None = None) -> bool:
-        await self.ensure_auth()
         _LOGGER.debug("Setting charging mode: %s, limit: %s", mode, limit)
-
-        # Build URL/payload/method
-        payload: dict[str, Any] | list[dict[str, Any]]
-
         if mode == "NORMAL":
             mode = "STANDARD"
-
         if mode in ("SMART", "SOLAR", "STANDARD"):
             url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
-            payload = [{"spec": {"name": "mode", "species": "String"}, "value": mode}]
-            method = self._session.post
-
-        # elif mode == "NORMAL":
-        #     if self.connector_number is None:
-        #         raise ValueError("connector_number is required for NORMAL mode")
-
-        #     # Clamp limit to safe range if provided (or fall back to min_current)
-        #     min_c = getattr(self, "min_current", 6)
-        #     max_c = getattr(self, "max_current", 32)
-        #     use_limit = limit if limit is not None else min_c
-        #     use_limit = max(min_c, min(int(use_limit), max_c))
-
-        #     url = (
-        #         f"{BASE_URL}/chargingstations/{self.serial}/connectors/{self.connector_number}/mode"
-        #     )
-        #     payload = {"mode": mode, "limit": {"unit": "AMPERE", "value": use_limit}}
-        #     method = self._session.put
+            payload: list[dict[str, Any]] = [
+                {"spec": {"name": "mode", "species": "String"}, "value": mode}
+            ]
         else:
             _LOGGER.warning("Unsupported charging mode: %s", mode)
             return False
-
-        # Do request
-        resp = await method(url, json=payload, headers=self.auth_headers(), timeout=self._timeout)
-        if resp.status not in (200, 204):
-            text = await resp.text()
-            _LOGGER.error("set_charging_mode failed (%s): %s", resp.status, text)
-            raise RuntimeError(f"set_charging_mode failed: {text}")
-
+        await self._request("POST", url, json=payload, expected=(200, 204))
         _LOGGER.debug("Charging mode set successfully")
-
         return True
 
     async def start_charging(
@@ -143,7 +145,7 @@ class SmappeeApiClient:
 
         Returns (current_amps, percentage_limit) so caller can update ConnectorState.
         """
-        await self.ensure_auth()
+        # _request handles auth
         if max_current < min_current:
             min_current, max_current = max_current, min_current
 
@@ -157,12 +159,7 @@ class SmappeeApiClient:
 
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
-        resp = await self._session.post(
-            url, json=payload, headers=self.auth_headers(), timeout=self._timeout
-        )
-        if resp.status != 200:
-            text = await resp.text()
-            raise RuntimeError(f"start_charging failed: {text}")
+        await self._request("POST", url, json=payload, expected=(200,))
 
         _LOGGER.debug(
             "Started charging successfully (target=%s A, pct=%s, range=%s-%s)",
@@ -174,30 +171,16 @@ class SmappeeApiClient:
         return target, percentage
 
     async def pause_charging(self) -> None:
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/pauseCharging"
-        resp = await self._session.post(
-            url, json=[], headers=self.auth_headers(), timeout=self._timeout
-        )
-        if resp.status != 200:
-            text = await resp.text()
-            raise RuntimeError(f"pause_charging failed: {text}")
+        await self._request("POST", url, json=[], expected=(200,))
         _LOGGER.debug("Paused charging successfully")
 
     async def stop_charging(self) -> None:
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/stopCharging"
-        resp = await self._session.post(
-            url, json=[], headers=self.auth_headers(), timeout=self._timeout
-        )
-        if resp.status != 200:
-            text = await resp.text()
-            raise RuntimeError(f"stop_charging failed: {text}")
+        await self._request("POST", url, json=[], expected=(200,))
         _LOGGER.debug("Stopped charging successfully")
 
     async def set_brightness(self, brightness: int) -> None:
-        await self.ensure_auth()
-
         if not self.smart_device_uuid:
             raise RuntimeError("set_brightness: missing station smart_device_uuid")
 
@@ -211,16 +194,10 @@ class SmappeeApiClient:
                 "value": int(brightness),
             }
         ]
-        resp = await self._session.post(
-            url, json=payload, headers=self.auth_headers(), timeout=self._timeout
-        )
-        if resp.status != 200:
-            text = await resp.text()
-            raise RuntimeError(f"set_brightness failed: {text}")
+        await self._request("POST", url, json=payload, expected=(200,))
         _LOGGER.info("LED brightness set successfully to %d%%", brightness)
 
     async def set_min_surpluspct(self, min_surpluspct: int) -> None:
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_id}"
         payload = {
             "configurationProperties": [
@@ -233,27 +210,16 @@ class SmappeeApiClient:
                 }
             ]
         }
-        resp = await self._session.patch(
-            url, json=payload, headers=self.auth_headers(), timeout=self._timeout
-        )
-        if resp.status != 200:
-            text = await resp.text()
-            raise RuntimeError(f"set_min_surpluspct failed: {text}")
+        await self._request("PATCH", url, json=payload, expected=(200,))
         _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
 
     async def set_percentage_limit(
         self, percentage: int, *, min_current: int = 6, max_current: int = 32
     ) -> tuple[int, int]:
         """Set percentage limit; returns (current_amps, percentage)."""
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setPercentageLimit"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
-        resp = await self._session.post(
-            url, json=payload, headers=self.auth_headers(), timeout=self._timeout
-        )
-        if resp.status != 200:
-            text = await resp.text()
-            raise RuntimeError(f"set_percentage_limit failed: {text}")
+        await self._request("POST", url, json=payload, expected=(200,))
         _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
 
         if max_current <= min_current:
@@ -265,26 +231,13 @@ class SmappeeApiClient:
         return cur_int, int(percentage)
 
     async def set_available(self) -> None:
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setAvailable"
-        resp = await self._session.post(
-            url, json=[], headers=self.auth_headers(), timeout=self._timeout
-        )
-
-        if resp.status not in (200, 204):
-            text = await resp.text()
-            raise RuntimeError(f"set_available failed: {text}")
+        await self._request("POST", url, json=[], expected=(200, 204))
         _LOGGER.debug("Set charger available successfully")
 
     async def set_unavailable(self) -> None:
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setUnavailable"
-        resp = await self._session.post(
-            url, json=[], headers=self.auth_headers(), timeout=self._timeout
-        )
-        if resp.status not in (200, 204):
-            text = await resp.text()
-            raise RuntimeError(f"set_unavailable failed: {text}")
+        await self._request("POST", url, json=[], expected=(200, 204))
         _LOGGER.debug("Set charger unavailable successfully")
 
     async def async_get_metering_configuration(self) -> dict | None:

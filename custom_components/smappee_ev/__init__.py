@@ -13,7 +13,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api_client import SmappeeApiClient
-from .const import BASE_URL, CONF_UPDATE_INTERVAL, DOMAIN, UPDATE_INTERVAL_DEFAULT
+from .const import BASE_URL, DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import SmappeeCoordinator
 from .data import RuntimeData
 from .mqtt_gateway import SmappeeMqtt
@@ -88,7 +88,11 @@ def _find_in(dev: dict, *keys: str) -> str | None:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate older config entry versions to the current format.
 
-    Current flow VERSION = 5. Perform incremental migrations so users can skip versions.
+    Flow VERSION = 5.
+    Version history relevant here:
+      - v4 (and earlier) could still persist an 'update_interval' in data/options.
+      - v5 removes user control of update interval (internal only) and drops that field.
+    We migrate incrementally so users can skip versions safely.
     """
     version = entry.version
     data = dict(entry.data)
@@ -96,22 +100,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     updated = False
 
-    # Example: version < 2 stored update interval in data; move it to options
-    if version < 2:
-        if CONF_UPDATE_INTERVAL in data:
-            data.pop(CONF_UPDATE_INTERVAL)
-            updated = True
-        if CONF_UPDATE_INTERVAL in options:
-            options.pop(CONF_UPDATE_INTERVAL)
-            updated = True
-        version = 2
-
-    # Placeholder for future migrations (2 -> 3, 3 -> 4, etc.)
-    if version < 3:
-        version = 3
-    if version < 4:
-        version = 4
+    # v5 cleanup: remove legacy 'update_interval' key if present (from v4 or earlier)
     if version < 5:
+        if "update_interval" in data:
+            data.pop("update_interval")
+            updated = True
+        if "update_interval" in options:
+            options.pop("update_interval")
+            updated = True
         version = 5
 
     if updated or version != entry.version:
@@ -420,6 +416,10 @@ async def _prepare_site(
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Smappee EV component."""
     hass.data.setdefault(DOMAIN, {})
+    # Register services once domain-wide (multi-entry safe)
+    if not hass.data[DOMAIN].get("services_registered"):
+        await register_services(hass)
+        hass.data[DOMAIN]["services_registered"] = True
     return True
 
 
@@ -503,10 +503,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Platforms start
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    if not hass.data[DOMAIN].get("services_registered", False):
-        # register_services is sync; run in executor to keep event loop responsive
-        await register_services(hass)
-        hass.data[DOMAIN]["services_registered"] = True
+    # Services already registered domain-wide in async_setup
 
     for _svc in ("set_available", "set_unavailable", "set_brightness", "set_min_surpluspct"):
         try:

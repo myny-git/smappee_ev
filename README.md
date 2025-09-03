@@ -105,8 +105,6 @@ During setup, you will be prompted to enter:
 - **Password** on the Smappee dashboard
 - **Serial number** of your charging station  
 → You can find it in the Smappee dashboard (go to EV line → click to view serial number)
-- **Update interval (seconds)** (optional, default: 30)  
-  → Set how frequently Home Assistant fetches data from your wallbox (don't make it too fast, not necessary)
 
 ### 🧩 Entities
 More information on the specifics of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). Take care: names are subject to change as users can rename their Smappee device.

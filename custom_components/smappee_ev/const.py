@@ -2,6 +2,7 @@ from typing import Final
 
 DOMAIN = "smappee_ev"
 
+# Coordinator polling interval (seconds) – kept internal, no user option anymore
 UPDATE_INTERVAL_DEFAULT: Final = 30
 
 # Common numeric defaults / ranges
@@ -9,10 +10,6 @@ DEFAULT_MIN_CURRENT: Final = 6
 DEFAULT_MAX_CURRENT: Final = 32
 DEFAULT_LED_BRIGHTNESS: Final = 70
 DEFAULT_MIN_SURPLUS_PERCENT: Final = 100
-
-# Options flow range for update interval
-OPTIONS_UPDATE_INTERVAL_MIN: Final = 5
-OPTIONS_UPDATE_INTERVAL_MAX: Final = 3600
 
 # OAuth / auth related constants
 OAUTH_EARLY_RENEW_SKEW: Final = 60  # seconds before expiry to refresh
@@ -41,7 +38,6 @@ CONF_SERVICE_LOCATION_ID: str = "service_location_id"
 CONF_SERVICE_LOCATION_UUID: str = "service_location_uuid"
 CONF_SMART_DEVICE_UUID: str = "smart_device_uuid"
 CONF_SMART_DEVICE_ID: str = "smart_device_id"
-CONF_UPDATE_INTERVAL: str = "update_interval"
 
 # Service names
 SERVICE_SET_CHARGING_MODE = "set_charging_mode"
@@ -60,6 +56,10 @@ BASE_URL = "https://app1pub.smappee.net/dev/v3"
 MQTT_HOST = "mqtt.smappee.net"
 MQTT_PORT_TLS = 443
 MQTT_TRACK_INTERVAL_SEC = 60
+
+# Shared HTTP timeout (aiohttp.ClientTimeout) parameters
+HTTP_CONNECT_TIMEOUT: Final = 5
+HTTP_TOTAL_TIMEOUT: Final = 15
 
 # OAuth timeouts / retry constants
 OAUTH_CONNECT_TIMEOUT: Final = 5
