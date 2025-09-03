@@ -5,3 +5,4 @@
 .ruff_cache/
 custom_components/smappee_ev/__pycache__/
 custom_components/smappee_ev/quality_scale.yaml
+/tests/
