@@ -25,12 +25,14 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         session = async_get_clientsession(self.hass)
 
         # Initial form excludes update interval (moved to options)
-        data_schema = vol.Schema({
-            vol.Required(CONF_CLIENT_ID): str,
-            vol.Required(CONF_CLIENT_SECRET): str,
-            vol.Required(CONF_USERNAME): str,
-            vol.Required(CONF_PASSWORD): str,
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_CLIENT_ID): str,
+                vol.Required(CONF_CLIENT_SECRET): str,
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str,
+            }
+        )
 
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=data_schema)
@@ -80,14 +82,22 @@ class SmappeeEvOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        schema = vol.Schema({
-            vol.Required(CONF_CLIENT_ID, default=self._config_entry.data.get(CONF_CLIENT_ID)): str,
-            vol.Required(
-                CONF_CLIENT_SECRET, default=self._config_entry.data.get(CONF_CLIENT_SECRET)
-            ): str,
-            vol.Required(CONF_USERNAME, default=self._config_entry.data.get(CONF_USERNAME)): str,
-            vol.Required(CONF_PASSWORD, default=self._config_entry.data.get(CONF_PASSWORD)): str,
-        })
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_CLIENT_ID, default=self._config_entry.data.get(CONF_CLIENT_ID)
+                ): str,
+                vol.Required(
+                    CONF_CLIENT_SECRET, default=self._config_entry.data.get(CONF_CLIENT_SECRET)
+                ): str,
+                vol.Required(
+                    CONF_USERNAME, default=self._config_entry.data.get(CONF_USERNAME)
+                ): str,
+                vol.Required(
+                    CONF_PASSWORD, default=self._config_entry.data.get(CONF_PASSWORD)
+                ): str,
+            }
+        )
         if user_input is None:
             return self.async_show_form(step_id="init", data_schema=schema)
         return self.async_create_entry(title="Smappee EV", data=user_input)

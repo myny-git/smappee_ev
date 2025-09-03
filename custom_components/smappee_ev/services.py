@@ -256,30 +256,36 @@ async def handle_set_charging_mode(call: ServiceCall) -> None:
 # ----------------------------
 
 
-START_CHARGING_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("service_location_id"): cv.positive_int,
-    vol.Optional("connector_id"): cv.positive_int,
-    # Only enforce a sane minimum; device specific max validated dynamically in handler
-    vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
-})
+START_CHARGING_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+        # Only enforce a sane minimum; device specific max validated dynamically in handler
+        vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
+    }
+)
 
-PAUSE_STOP_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("service_location_id"): cv.positive_int,
-    vol.Optional("connector_id"): cv.positive_int,
-})
+PAUSE_STOP_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+    }
+)
 
-SET_MODE_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("service_location_id"): cv.positive_int,
-    vol.Optional("connector_id"): cv.positive_int,
-    vol.Required("mode"): vol.All(
-        str,
-        lambda s: s.upper(),  # normalize to uppercase
-        vol.In({"NORMAL", "STANDARD", "SMART", "SOLAR"}),
-    ),
-})
+SET_MODE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+        vol.Required("mode"): vol.All(
+            str,
+            lambda s: s.upper(),  # normalize to uppercase
+            vol.In({"NORMAL", "STANDARD", "SMART", "SOLAR"}),
+        ),
+    }
+)
 
 
 async def register_services(hass: HomeAssistant) -> None:
