@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfElectricCurrent, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
@@ -449,7 +450,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
         return str(getattr(st, "session_state", None)) if st else None
 
 
-class SmappeeEVCCStateSensor(SmappeeConnectorEntity, SensorEntity):
+class SmappeeEVCCStateSensor(SmappeeConnectorEntity, SensorEntity, RestoreEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, c, api, sid, station_uuid, uuid):
@@ -458,28 +459,55 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, SensorEntity):
             self, c, sid, station_uuid, uuid, unique_suffix="sensor:evcc_state", name=name
         )
         self.api_client = api
+        self._restored_value = None
+        self._restored_attributes = {}
 
     @property
     def native_value(self):
         st = self._conn_state
-        return str(getattr(st, "evcc_state", None)) if st else None
+        if st and getattr(st, "evcc_state", None) is not None:
+            return str(getattr(st, "evcc_state", None))
+        return self._restored_value
 
     @property
     def extra_state_attributes(self):
         st = self._conn_state
-        if not st:
-            return None
-        return {
-            "iec_status": getattr(st, "iec_status", None),
-            "session_state": getattr(st, "session_state", None),
-            "charging_mode": getattr(st, "raw_charging_mode", None),
-            "optimization_strategy": getattr(st, "optimization_strategy", None),
-            "paused": getattr(st, "paused", None),
-            "status_current": getattr(st, "session_cause", None),
-        }
+        if st:
+            return {
+                "iec_status": getattr(st, "iec_status", None),
+                "session_state": getattr(st, "session_state", None),
+                "charging_mode": getattr(st, "raw_charging_mode", None),
+                "optimization_strategy": getattr(st, "optimization_strategy", None),
+                "paused": getattr(st, "paused", None),
+                "status_current": getattr(st, "session_cause", None),
+            }
+        # Return restored attributes if we have them and no current state
+        if self._restored_attributes:
+            return self._restored_attributes
+        return None
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added."""
+        await super().async_added_to_hass()
+
+        # Restore previous state if available
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (None, "unknown", "unavailable"):
+            self._restored_value = last_state.state
+            # Also restore attributes
+            if last_state.attributes:
+                self._restored_attributes = {
+                    "iec_status": last_state.attributes.get("iec_status"),
+                    "session_state": last_state.attributes.get("session_state"),
+                    "charging_mode": last_state.attributes.get("charging_mode"),
+                    "optimization_strategy": last_state.attributes.get("optimization_strategy"),
+                    "paused": last_state.attributes.get("paused"),
+                    "status_current": last_state.attributes.get("status_current"),
+                }
+            self.async_write_ha_state()
 
 
-class SmappeeEvseStatusSensor(SmappeeConnectorEntity, SensorEntity):
+class SmappeeEvseStatusSensor(SmappeeConnectorEntity, SensorEntity, RestoreEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, c, api, sid, station_uuid, uuid):
@@ -488,11 +516,24 @@ class SmappeeEvseStatusSensor(SmappeeConnectorEntity, SensorEntity):
             self, c, sid, station_uuid, uuid, unique_suffix="sensor:status_current", name=name
         )
         self.api_client = api
+        self._restored_value = None
 
     @property
     def native_value(self):
         st = self._conn_state
-        return str(getattr(st, "status_current", None)) if st else None
+        if st and getattr(st, "status_current", None) is not None:
+            return str(getattr(st, "status_current", None))
+        return self._restored_value
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added."""
+        await super().async_added_to_hass()
+
+        # Restore previous state if available
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (None, "unknown", "unavailable"):
+            self._restored_value = last_state.state
+            self.async_write_ha_state()
 
 
 class SmappeeMqttLastSeenSensor(SmappeeStationEntity, SensorEntity):
