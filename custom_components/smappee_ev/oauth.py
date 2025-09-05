@@ -82,7 +82,7 @@ class OAuth2Client:
                 _LOGGER.info("Authentication succeeded; token validity window established")
                 return tokens
 
-        except (TimeoutError, ClientError, asyncio.CancelledError) as err:
+        except (TimeoutError, ClientError, asyncio.CancelledError, OSError, ConnectionError) as err:
             _LOGGER.error("Exception during authentication: %s", err)
             return None
 
