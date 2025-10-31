@@ -41,15 +41,11 @@ class OAuth2Client:
         self._refresh_lock = asyncio.Lock()
         self._early_renew_skew = OAUTH_EARLY_RENEW_SKEW
 
-        _LOGGER.debug(
-            "OAuth2Client initialized (client_id: %s, username: %s)", self.client_id, self.username
-        )
+        _LOGGER.debug("OAuth2Client initialized")
 
     async def authenticate(self) -> dict[str, Any] | None:
         """Authenticate using username/password and return tokens."""
-        _LOGGER.info(
-            "Authenticating with client_id: %s, username: %s", self.client_id, self.username
-        )
+        _LOGGER.debug("Authenticating")
 
         payload = {
             "grant_type": "password",
@@ -63,11 +59,9 @@ class OAuth2Client:
             async with self._session.post(
                 OAUTH_TOKEN_URL, data=payload, timeout=self._timeout
             ) as response:
-                text = await response.text()
-                _LOGGER.debug("Token endpoint response (authenticate): %s", text)
                 if response.status != 200:
                     _LOGGER.error(
-                        "Authentication failed: status=%s, body=%s", response.status, text
+                        "Authentication failed: status=%s", response.status
                     )
                     return None
                 tokens = await response.json()
@@ -79,7 +73,7 @@ class OAuth2Client:
                 self.token_expires_at = time.time() + tokens.get(
                     "expires_in", TOKEN_DEFAULT_EXPIRES_IN
                 )
-                _LOGGER.info("Authentication succeeded; token validity window established")
+                _LOGGER.debug("Authentication succeeded; token validity window established")
                 return tokens
 
         except (TimeoutError, ClientError, asyncio.CancelledError, OSError, ConnectionError) as err:
@@ -88,10 +82,10 @@ class OAuth2Client:
 
     async def _refresh_token(self) -> None:
         """Refresh the access token if needed, with a retry limit."""
-        _LOGGER.info("Refreshing access token using refresh token.")
+        _LOGGER.debug("Refreshing access token using refresh token")
 
         if not self.refresh_token:
-            _LOGGER.warning("No refresh_token available; falling back to authenticate().")
+            _LOGGER.debug("No refresh_token available; falling back to authenticate()")
             tokens = await self.authenticate()
             if not tokens:
                 raise Exception("No refresh_token and authenticate() failed.")
@@ -120,9 +114,23 @@ class OAuth2Client:
                         self.token_expires_at = time.time() + tokens.get(
                             "expires_in", TOKEN_DEFAULT_EXPIRES_IN
                         )
-                        _LOGGER.info("Access token refreshed; new validity window established")
+                        _LOGGER.debug("Access token refreshed; new validity window established")
                         return
-                    _LOGGER.error("Failed to refresh token (status %s): %s", response.status, text)
+                    # If refresh token is invalid/expired, fall back to fresh authentication once
+                    if response.status == 400 and "invalid" in (text or "").lower():
+                        _LOGGER.debug(
+                            "Refresh token invalid (400); attempting fresh authentication with username/password"
+                        )
+                        tokens = await self.authenticate()
+                        if tokens and tokens.get("access_token"):
+                            _LOGGER.debug("Recovered by authenticating; new tokens obtained")
+                            return
+                        _LOGGER.error(
+                            "Fresh authentication failed after invalid refresh token; aborting"
+                        )
+                        raise Exception("Unable to refresh token after invalid refresh.")
+
+                    _LOGGER.error("Failed to refresh token (status %s)", response.status)
 
             except (TimeoutError, ClientError, asyncio.CancelledError) as err:
                 _LOGGER.error(
@@ -144,7 +152,7 @@ class OAuth2Client:
             or not self.token_expires_at
             or now >= (self.token_expires_at - self._early_renew_skew)
         ):
-            _LOGGER.info("Access token missing/expired or near expiry; refreshing")
+            _LOGGER.debug("Access token missing/expired or near expiry; refreshing")
             await self._refresh_token()
         else:
             _LOGGER.debug("Access token still valid; no refresh needed")
