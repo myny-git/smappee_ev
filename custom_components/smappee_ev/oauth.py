@@ -60,9 +60,7 @@ class OAuth2Client:
                 OAUTH_TOKEN_URL, data=payload, timeout=self._timeout
             ) as response:
                 if response.status != 200:
-                    _LOGGER.error(
-                        "Authentication failed: status=%s", response.status
-                    )
+                    _LOGGER.error("Authentication failed: status=%s", response.status)
                     return None
                 tokens = await response.json()
                 if "access_token" not in tokens:
