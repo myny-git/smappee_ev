@@ -208,10 +208,31 @@ async def async_handle_connector_service(
 
 async def handle_start_charging(call: ServiceCall) -> None:
     current = call.data.get("current")
+    connector_id = call.data.get("connector_id")
+
+    if current is None:
+        rt, sid = _resolve_sid(call.hass, call)
+        client = get_connector_client(rt, sid, connector_id)
+        if not client:
+            raise ServiceValidationError(
+                "Cannot infer current: connector client not found (provide connector_id if ambiguous)"
+            )
+        try:
+            min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
+        except (TypeError, ValueError):
+            min_c = DEFAULT_MIN_CURRENT
+        try:
+            max_c = int(getattr(client, "max_current", DEFAULT_MAX_CURRENT))
+        except (TypeError, ValueError):
+            max_c = DEFAULT_MAX_CURRENT
+        if max_c < min_c:
+            max_c = min_c
+        # Default minimum of the connector
+        current = min_c
+
     if current is not None:
         # Dynamic validation against connector limits
         rt, sid = _resolve_sid(call.hass, call)
-        connector_id = call.data.get("connector_id")
         client = get_connector_client(rt, sid, connector_id)
         if not client:
             raise ServiceValidationError(
@@ -219,11 +240,11 @@ async def handle_start_charging(call: ServiceCall) -> None:
             )
         try:
             min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
-        except (TypeError, ValueError):  # pragma: no cover - defensive
+        except (TypeError, ValueError):
             min_c = DEFAULT_MIN_CURRENT
         try:
             max_c = int(getattr(client, "max_current", DEFAULT_MAX_CURRENT))
-        except (TypeError, ValueError):  # pragma: no cover - defensive
+        except (TypeError, ValueError):
             max_c = DEFAULT_MAX_CURRENT
         if max_c < min_c:
             max_c = min_c
@@ -231,6 +252,7 @@ async def handle_start_charging(call: ServiceCall) -> None:
             raise ServiceValidationError(
                 f"current {current} A out of range {min_c}-{max_c} A for this connector"
             )
+
     await async_handle_connector_service(call.hass, call, "start_charging", {"current": current})
 
 
