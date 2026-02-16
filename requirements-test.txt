@@ -8,7 +8,7 @@ pytest>=8.2,<10
 pytest-asyncio==1.3.0
 pytest>=8.2,<10
 pytest-asyncio==1.3.0
-pytest-homeassistant-custom-component==0.13.314
+pytest-homeassistant-custom-component==0.13.315
 
 # Home Assistant core + type stubs (keep in sync!)
 # If homeassistant-stubs 2025.1.4 does not exist, downgrade both to 2025.1.1.
