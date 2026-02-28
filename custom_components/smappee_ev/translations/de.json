@@ -115,8 +115,8 @@
       }
     },
     "set_charging_mode_api2": {
-      "name": "Lademodus setzen (Legacy)",
-      "description": "Setzt den Lademodus über den Legacy-Endpunkt chargingstations.",
+      "name": "Lademodus setzen (API 2)",
+      "description": "Setzt den Lademodus über den chargingstations-Endpunkt (API 2).",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",

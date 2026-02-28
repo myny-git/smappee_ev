@@ -146,7 +146,7 @@ class SmappeeApiClient:
         limit_unit: Literal["AMPERE", "PERCENTAGE"] = "AMPERE",
         connector: int | None = None,
     ) -> bool:
-        """Set charging mode using the second chargingstations endpoint.
+        """Set charging mode using the API 2 chargingstations endpoint.
 
         Endpoint pattern:
         /chargingstations/{serial}/connectors/{connector}/mode
@@ -167,7 +167,7 @@ class SmappeeApiClient:
         if mode_up == "NORMAL" and limit is not None:
             payload["limit"] = {"unit": limit_unit, "value": int(limit)}
 
-        await self._request("PUT", url, json=payload, expected=(200, 204))
+        await self._request("POST", url, json=payload, expected=(200, 204))
         _LOGGER.debug(
             "Charging mode set successfully via api2 (mode=%s, connector=%s, limit=%s %s)",
             mode_up,

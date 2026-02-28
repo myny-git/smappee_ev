@@ -115,8 +115,8 @@
             }
         },
         "set_charging_mode_api2": {
-            "name": "Stel laadmodus in (legacy)",
-            "description": "Stel de laadmodus in via de legacy chargingstations endpoint.",
+            "name": "Stel laadmodus in (API 2)",
+            "description": "Stel de laadmodus in via de API 2 chargingstations endpoint.",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",

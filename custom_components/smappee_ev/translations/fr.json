@@ -115,8 +115,8 @@
       }
     },
     "set_charging_mode_api2": {
-      "name": "Définir le mode de charge (legacy)",
-      "description": "Définit le mode de charge via l’endpoint legacy chargingstations.",
+      "name": "Définir le mode de charge (API 2)",
+      "description": "Définit le mode de charge via l’endpoint chargingstations (API 2).",
       "fields": {
         "config_entry_id": {
           "name": "ID de l’entrée de configuration",

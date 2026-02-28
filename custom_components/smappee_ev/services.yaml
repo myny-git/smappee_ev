@@ -30,7 +30,7 @@ set_charging_mode:
             - SOLAR
 
 set_charging_mode_api2:
-  description: "Set the charging mode using the legacy chargingstations endpoint (NORMAL, SMART, PAUSED)."
+  description: "Set the charging mode using the API 2 chargingstations endpoint (NORMAL, SMART, PAUSED)."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -51,7 +51,7 @@ set_charging_mode_api2:
         number:
           min: 1
     mode:
-      description: "Charging mode to apply (legacy endpoint)."
+      description: "Charging mode to apply (API 2 endpoint)."
       required: true
       selector:
         select:
