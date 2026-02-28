@@ -1,0 +1,148 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Veuillez ajouter la clé API de la plateforme Smappee",
+        "data": {
+          "client_id": "Votre identifiant client API",
+          "client_secret": "Votre secret client",
+          "username": "Votre nom d’utilisateur sur le tableau de bord Smappee",
+          "password": "Votre mot de passe sur le tableau de bord Smappee",
+          "serial": "Le numéro de série de votre borne de recharge"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Autorisation échouée"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Mettez à jour vos identifiants et l’intervalle d’interrogation",
+        "data": {
+          "client_id": "Votre identifiant client API",
+          "client_secret": "Votre secret client",
+          "username": "Votre nom d’utilisateur sur le tableau de bord Smappee",
+          "password": "Votre mot de passe sur le tableau de bord Smappee",
+          "serial": "Le numéro de série de votre borne de recharge"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Une instance avec ce numéro de série existe déjà"
+    }
+  },
+  "services": {
+    "start_charging": {
+      "name": "Démarrer la charge",
+      "description": "Démarre la charge. Si ‘current’ n’est pas fourni, le courant configuré ou minimal sera utilisé.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l’entrée de configuration",
+          "description": "Optionnel : ID d’entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s’il n’y a qu’un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2, laisser vide s’il n’y en a qu’un)."
+        },
+        "current": {
+          "name": "Courant (A)",
+          "description": "Optionnel : courant de charge à utiliser (en ampères)."
+        }
+      }
+    },
+    "pause_charging": {
+      "name": "Mettre en pause la charge",
+      "description": "Met en pause la charge pour le connecteur sélectionné.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l’entrée de configuration",
+          "description": "Optionnel : ID d’entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s’il n’y a qu’un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "stop_charging": {
+      "name": "Arrêter la charge",
+      "description": "Arrête la charge pour le connecteur sélectionné.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l’entrée de configuration",
+          "description": "Optionnel : ID d’entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s’il n’y a qu’un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "set_charging_mode": {
+      "name": "Définir le mode de charge",
+      "description": "Définit le mode de charge d’un connecteur.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l’entrée de configuration",
+          "description": "Optionnel : ID d’entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s’il n’y a qu’un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Mode de charge (NORMAL, SMART, SOLAR)."
+        }
+      }
+    },
+    "set_charging_mode_api2": {
+      "name": "Définir le mode de charge (legacy)",
+      "description": "Définit le mode de charge via l’endpoint legacy chargingstations.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l’entrée de configuration",
+          "description": "Optionnel : ID d’entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s’il n’y a qu’un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Mode de charge (NORMAL, SMART, PAUSED)."
+        },
+        "limit": {
+          "name": "Limite",
+          "description": "Optionnel : valeur limite (utilisée uniquement lorsque le mode est NORMAL)."
+        },
+        "limit_unit": {
+          "name": "Unité de la limite",
+          "description": "Optionnel : unité de la limite lorsque le mode est NORMAL (AMPERE ou PERCENTAGE)."
+        }
+      }
+    }
+  }
+}

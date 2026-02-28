@@ -38,6 +38,10 @@
       "name": "Start charging",
       "description": "Start charging. If 'current' is omitted, the configured or minimum current will be used.",
       "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
         "service_location_id": {
           "name": "Service Location ID",
           "description": "Optional: ID of the site (leave empty if only one site)."
@@ -56,6 +60,10 @@
       "name": "Pause charging",
       "description": "Pause charging for the selected connector.",
       "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
         "service_location_id": {
           "name": "Service Location ID",
           "description": "Optional: ID of the site (leave empty if only one site)."
@@ -70,6 +78,10 @@
       "name": "Stop charging",
       "description": "Stop charging for the selected connector.",
       "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
         "service_location_id": {
           "name": "Service Location ID",
           "description": "Optional: ID of the site (leave empty if only one site)."
@@ -84,6 +96,10 @@
       "name": "Set charging mode",
       "description": "Set the charging mode of a connector.",
       "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
         "service_location_id": {
           "name": "Service Location ID",
           "description": "Optional: ID of the site (leave empty if only one site)."
@@ -95,6 +111,36 @@
         "mode": {
           "name": "Mode",
           "description": "Charging mode (NORMAL, SMART, SOLAR)."
+        }
+      }
+    },
+    "set_charging_mode_api2": {
+      "name": "Set charging mode (legacy)",
+      "description": "Set the charging mode using the legacy chargingstations endpoint.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2)."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Charging mode (NORMAL, SMART, PAUSED)."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Optional: limit value (only used when mode is NORMAL)."
+        },
+        "limit_unit": {
+          "name": "Limit unit",
+          "description": "Optional: unit for limit when mode is NORMAL (AMPERE or PERCENTAGE)."
         }
       }
     }

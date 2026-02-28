@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout
@@ -136,6 +136,45 @@ class SmappeeApiClient:
             return False
         await self._request("POST", url, json=payload, expected=(200, 204))
         _LOGGER.debug("Charging mode set successfully")
+        return True
+
+    async def set_charging_mode_api2(
+        self,
+        mode: str,
+        *,
+        limit: int | None = None,
+        limit_unit: Literal["AMPERE", "PERCENTAGE"] = "AMPERE",
+        connector: int | None = None,
+    ) -> bool:
+        """Set charging mode using the second chargingstations endpoint.
+
+        Endpoint pattern:
+        /chargingstations/{serial}/connectors/{connector}/mode
+
+        Supports modes: NORMAL, SMART, PAUSED.
+        Optionally supports a limit for NORMAL (AMPERE or PERCENTAGE).
+        """
+
+        mode_up = (mode or "").upper()
+        if mode_up not in ("NORMAL", "SMART", "PAUSED"):
+            _LOGGER.warning("Unsupported charging mode for api2: %s", mode)
+            return False
+
+        connector_id = int(connector or self.connector_number or 1)
+        url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/{connector_id}/mode"
+
+        payload: dict[str, Any] = {"mode": mode_up}
+        if mode_up == "NORMAL" and limit is not None:
+            payload["limit"] = {"unit": limit_unit, "value": int(limit)}
+
+        await self._request("PUT", url, json=payload, expected=(200, 204))
+        _LOGGER.debug(
+            "Charging mode set successfully via api2 (mode=%s, connector=%s, limit=%s %s)",
+            mode_up,
+            connector_id,
+            limit,
+            limit_unit,
+        )
         return True
 
     async def start_charging(

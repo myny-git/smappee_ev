@@ -38,6 +38,10 @@
             "name": "Start laden",
             "description": "Start laden. Als geen stroomsterkte wordt opgegeven, wordt de ingestelde of minimale stroom gebruikt.",
             "fields": {
+                "config_entry_id": {
+                    "name": "Config entry ID",
+                    "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
+                },
                 "service_location_id": {
                     "name": "Service Location ID",
                     "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
@@ -56,6 +60,10 @@
             "name": "Pauzeer laden",
             "description": "Pauzeer het laden voor de geselecteerde connector.",
             "fields": {
+                "config_entry_id": {
+                    "name": "Config entry ID",
+                    "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
+                },
                 "service_location_id": {
                     "name": "Service Location ID",
                     "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
@@ -70,6 +78,10 @@
             "name": "Stop laden",
             "description": "Stop het laden voor de geselecteerde connector.",
             "fields": {
+                "config_entry_id": {
+                    "name": "Config entry ID",
+                    "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
+                },
                 "service_location_id": {
                     "name": "Service Location ID",
                     "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
@@ -84,6 +96,10 @@
             "name": "Stel laadmodus in",
             "description": "Stel de laadmodus van een connector in.",
             "fields": {
+                "config_entry_id": {
+                    "name": "Config entry ID",
+                    "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
+                },
                 "service_location_id": {
                     "name": "Service Location ID",
                     "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
@@ -95,6 +111,36 @@
                 "mode": {
                     "name": "Modus",
                     "description": "Laadmodus (NORMAL, SMART, SOLAR)."
+                }
+            }
+        },
+        "set_charging_mode_api2": {
+            "name": "Stel laadmodus in (legacy)",
+            "description": "Stel de laadmodus in via de legacy chargingstations endpoint.",
+            "fields": {
+                "config_entry_id": {
+                    "name": "Config entry ID",
+                    "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
+                },
+                "service_location_id": {
+                    "name": "Service Location ID",
+                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
+                },
+                "connector_id": {
+                    "name": "Connector",
+                    "description": "Optioneel: connectornummer (1 of 2)."
+                },
+                "mode": {
+                    "name": "Modus",
+                    "description": "Laadmodus (NORMAL, SMART, PAUSED)."
+                },
+                "limit": {
+                    "name": "Limiet",
+                    "description": "Optioneel: limietwaarde (alleen gebruikt wanneer modus NORMAL is)."
+                },
+                "limit_unit": {
+                    "name": "Eenheid limiet",
+                    "description": "Optioneel: eenheid voor limiet wanneer modus NORMAL is (AMPERE of PERCENTAGE)."
                 }
             }
         }

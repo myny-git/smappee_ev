@@ -29,6 +29,53 @@ set_charging_mode:
             - SMART
             - SOLAR
 
+set_charging_mode_api2:
+  description: "Set the charging mode using the legacy chargingstations endpoint (NORMAL, SMART, PAUSED)."
+  fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
+    service_location_id:
+      description: "Optional: Service Location ID."
+      required: false
+      example: 173311
+      selector:
+        number:
+          min: 1
+    connector_id:
+      description: "Optional: Connector number."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+    mode:
+      description: "Charging mode to apply (legacy endpoint)."
+      required: true
+      selector:
+        select:
+          options:
+            - NORMAL
+            - SMART
+            - PAUSED
+    limit:
+      description: "Optional: Limit value (only used when mode=NORMAL)."
+      required: false
+      example: 16
+      selector:
+        number:
+          min: 0
+    limit_unit:
+      description: "Optional: Unit for limit when mode=NORMAL."
+      required: false
+      example: "AMPERE"
+      selector:
+        select:
+          options:
+            - AMPERE
+            - PERCENTAGE
+
 pause_charging:
   description: "Pause charging on a connector."
   fields:

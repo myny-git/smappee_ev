@@ -273,6 +273,20 @@ async def handle_set_charging_mode(call: ServiceCall) -> None:
     )
 
 
+async def handle_set_charging_mode_api2(call: ServiceCall) -> None:
+    await async_handle_connector_service(
+        call.hass,
+        call,
+        "set_charging_mode_api2",
+        {
+            "mode": call.data.get("mode"),
+            "limit": call.data.get("limit"),
+            "limit_unit": call.data.get("limit_unit"),
+            "connector": call.data.get("connector_id"),
+        },
+    )
+
+
 # ----------------------------
 # Service registration
 # ----------------------------
@@ -310,6 +324,26 @@ SET_MODE_SCHEMA = vol.Schema(
 )
 
 
+SET_MODE_API2_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+        vol.Required("mode"): vol.All(
+            str,
+            lambda s: s.upper(),
+            vol.In({"NORMAL", "SMART", "PAUSED"}),
+        ),
+        vol.Optional("limit"): vol.Coerce(int),
+        vol.Optional("limit_unit", default="AMPERE"): vol.All(
+            str,
+            lambda s: s.upper(),
+            vol.In({"AMPERE", "PERCENTAGE"}),
+        ),
+    }
+)
+
+
 async def register_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Registering Smappee EV services")
     hass.services.async_register(
@@ -320,6 +354,9 @@ async def register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "set_charging_mode", handle_set_charging_mode, SET_MODE_SCHEMA
     )
+    hass.services.async_register(
+        DOMAIN, "set_charging_mode_api2", handle_set_charging_mode_api2, SET_MODE_API2_SCHEMA
+    )
 
 
 async def unregister_services(hass: HomeAssistant) -> None:
@@ -328,3 +365,4 @@ async def unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, "pause_charging")
     hass.services.async_remove(DOMAIN, "stop_charging")
     hass.services.async_remove(DOMAIN, "set_charging_mode")
+    hass.services.async_remove(DOMAIN, "set_charging_mode_api2")
