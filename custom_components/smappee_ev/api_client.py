@@ -26,9 +26,11 @@ class SmappeeApiClient:
         session: ClientSession,
         connector_number: int | None = None,
         is_station: bool = False,
+        charging_station_serial: str | None = None,
     ):
         self.oauth_client = oauth_client
         self.serial = serial
+        self.charging_station_serial = charging_station_serial
         self.smart_device_uuid = smart_device_uuid
         self.smart_device_id = smart_device_id
         self.service_location_id = service_location_id
@@ -166,7 +168,8 @@ class SmappeeApiClient:
             return False
 
         connector_id = int(connector or self.connector_number or 1)
-        url = f"{BASE_URL}/chargingstations/{self.serial}/connectors/{connector_id}/mode"
+        station_serial = self.charging_station_serial or self.serial
+        url = f"{BASE_URL}/chargingstations/{station_serial}/connectors/{connector_id}/mode"
 
         payload: dict[str, Any] = {"mode": mode_up}
         if mode_up == "NORMAL" and limit is not None:

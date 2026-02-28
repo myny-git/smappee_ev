@@ -250,6 +250,7 @@ def _assign_connectors(stations, car_devs, mapping, oauth_client, serial_str, si
                 or src.get("connectorNumber")
                 or src.get("position")
                 or 1,
+                charging_station_serial=st_serial,
             )
 
 
@@ -260,6 +261,7 @@ def _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
     first_uuid = next(iter(stations.keys()), None)
     if not first_uuid:
         return
+    st_serial = stations.get(first_uuid, {}).get("serial")
     _LOGGER.warning(
         "Could not map connectors to stations at %s; assigning all to first station", sid
     )
@@ -277,6 +279,7 @@ def _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
             sid,
             session=session,
             connector_number=d.get("connectorNumber") or d.get("position") or 1,
+            charging_station_serial=st_serial,
         )
     stations[first_uuid]["connector_clients"] = subset
 
