@@ -164,9 +164,7 @@ class SmappeeApiClient:
 
         limit_unit_up = (str(limit_unit or "")).upper()
         if limit_unit_up not in ("AMPERE", "PERCENTAGE"):
-            _LOGGER.warning(
-                "Unsupported limit unit for chargingstations endpoint: %s", limit_unit
-            )
+            _LOGGER.warning("Unsupported limit unit for chargingstations endpoint: %s", limit_unit)
             return False
 
         connector_id = int(connector or self.connector_number or 1)
