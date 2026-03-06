@@ -140,7 +140,7 @@ class SmappeeApiClient:
         _LOGGER.debug("Charging mode set successfully")
         return True
 
-    async def set_charging_mode_api2(
+    async def set_charging_mode_chargingstations(
         self,
         mode: str,
         *,
@@ -148,7 +148,7 @@ class SmappeeApiClient:
         limit_unit: Literal["AMPERE", "PERCENTAGE"] = "AMPERE",
         connector: int | None = None,
     ) -> bool:
-        """Set charging mode using the API 2 chargingstations endpoint.
+        """Set charging mode using the chargingstations endpoint.
 
         Endpoint pattern:
         /chargingstations/{serial}/connectors/{connector}/mode
@@ -159,12 +159,14 @@ class SmappeeApiClient:
 
         mode_up = (mode or "").upper()
         if mode_up not in ("NORMAL", "SMART", "PAUSED"):
-            _LOGGER.warning("Unsupported charging mode for api2: %s", mode)
+            _LOGGER.warning("Unsupported charging mode for chargingstations endpoint: %s", mode)
             return False
 
         limit_unit_up = (str(limit_unit or "")).upper()
         if limit_unit_up not in ("AMPERE", "PERCENTAGE"):
-            _LOGGER.warning("Unsupported limit unit for api2: %s", limit_unit)
+            _LOGGER.warning(
+                "Unsupported limit unit for chargingstations endpoint: %s", limit_unit
+            )
             return False
 
         connector_id = int(connector or self.connector_number or 1)
@@ -177,7 +179,7 @@ class SmappeeApiClient:
 
         await self._request("PUT", url, json=payload, expected=(200, 204))
         _LOGGER.debug(
-            "Charging mode set successfully via api2 (mode=%s, connector=%s, limit=%s %s)",
+            "Charging mode set successfully via chargingstations endpoint (mode=%s, connector=%s, limit=%s %s)",
             mode_up,
             connector_id,
             limit,

@@ -114,21 +114,21 @@
         }
       }
     },
-    "set_charging_mode_api2": {
-      "name": "Définir le mode de charge (API 2)",
+    "set_charging_mode_chargingstations": {
+      "name": "Définir le mode de charge (chargingstations)",
       "description": "Définit le mode de charge via l’endpoint chargingstations (API 2).",
       "fields": {
         "config_entry_id": {
           "name": "ID de l’entrée de configuration",
           "description": "Optionnel : ID d’entrée de configuration à cibler (en cas de plusieurs entrées)."
         },
-        "service_location_id": {
-          "name": "ID du site (Service Location)",
-          "description": "Optionnel : ID du site (laisser vide s’il n’y a qu’un seul site)."
+        "charging_station_serial": {
+          "name": "Numéro de série de la borne",
+          "description": "Optionnel : numéro de série de la borne de recharge. À fournir si plusieurs bornes partagent la même position de connecteur."
         },
         "connector_id": {
           "name": "ID du connecteur",
-          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+          "description": "Obligatoire : position du connecteur utilisée par l’endpoint API 2 (par exemple 1 ou 2)."
         },
         "mode": {
           "name": "Mode",

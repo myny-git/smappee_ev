@@ -123,7 +123,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             return IntegrationData(station=station_state, connectors=connectors_state)
 
-        except (ClientError, TimeoutError, asyncio.CancelledError) as err:
+        except asyncio.CancelledError:
+            raise
+        except (ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
 
     async def _ensure_power_index_map(self) -> None:
@@ -206,7 +208,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             else:
                 txt = await resp.text()
                 _LOGGER.debug("Station brightness fetch status=%s body=%s", resp.status, txt)
-        except (TimeoutError, ClientError, asyncio.CancelledError) as err:
+        except asyncio.CancelledError:
+            raise
+        except (TimeoutError, ClientError) as err:
             _LOGGER.debug("Station brightness fetch exception: %s", err)
 
         return StationState(led_brightness=led_brightness, available=True)

@@ -3,13 +3,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
+from homeassistant.components.number import (
+    NumberDeviceClass,
+    NumberEntity,
+    NumberMode,
+    RestoreNumber,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
@@ -71,7 +75,7 @@ async def async_setup_entry(
     async_add_entities(entities, True)
 
 
-class _BaseNumber(NumberEntity, RestoreEntity):
+class _BaseNumber(RestoreNumber):
     _attr_has_entity_name = True
     _attr_mode = NumberMode.SLIDER
 
@@ -209,11 +213,11 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
 
     async def async_added_to_hass(self) -> None:  # RestoreEntity
         await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if not last or last.state in (None, "unknown", "unavailable"):
+        last = await self.async_get_last_number_data()
+        if not last or last.native_value is None:
             return
         try:
-            restored = int(float(last.state))
+            restored = int(float(last.native_value))
         except (TypeError, ValueError):
             return
         st = self._state()
@@ -272,11 +276,11 @@ class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):
 
     async def async_added_to_hass(self) -> None:  # RestoreEntity
         await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if not last or last.state in (None, "unknown", "unavailable"):
+        last = await self.async_get_last_number_data()
+        if not last or last.native_value is None:
             return
         try:
-            restored = int(float(last.state))
+            restored = int(float(last.native_value))
         except (TypeError, ValueError):
             return
         data: IntegrationData | None = self.coordinator.data
@@ -331,11 +335,11 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
 
     async def async_added_to_hass(self) -> None:  # RestoreEntity
         await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if not last or last.state in (None, "unknown", "unavailable"):
+        last = await self.async_get_last_number_data()
+        if not last or last.native_value is None:
             return
         try:
-            restored = int(float(last.state))
+            restored = int(float(last.native_value))
         except (TypeError, ValueError):
             return
         st = self._state()

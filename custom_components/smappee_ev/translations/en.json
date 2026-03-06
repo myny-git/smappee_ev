@@ -114,21 +114,21 @@
         }
       }
     },
-    "set_charging_mode_api2": {
-      "name": "Set charging mode (API 2)",
+    "set_charging_mode_chargingstations": {
+      "name": "Set charging mode (chargingstations)",
       "description": "Set the charging mode using the API 2 chargingstations endpoint.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
           "description": "Optional: specific config entry id to target (when multiple entries)."
         },
-        "service_location_id": {
-          "name": "Service Location ID",
-          "description": "Optional: ID of the site (leave empty if only one site)."
+        "charging_station_serial": {
+          "name": "Charging station serial",
+          "description": "Optional: charging station serial number. Provide it when multiple stations share the same connector position."
         },
         "connector_id": {
           "name": "Connector ID",
-          "description": "Optional: connector number (1 or 2)."
+          "description": "Required: connector position used by the API 2 endpoint (for example 1 or 2)."
         },
         "mode": {
           "name": "Mode",

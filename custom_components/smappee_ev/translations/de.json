@@ -114,21 +114,21 @@
         }
       }
     },
-    "set_charging_mode_api2": {
-      "name": "Lademodus setzen (API 2)",
+    "set_charging_mode_chargingstations": {
+      "name": "Lademodus setzen (chargingstations)",
       "description": "Setzt den Lademodus über den chargingstations-Endpunkt (API 2).",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
           "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
         },
-        "service_location_id": {
-          "name": "Service-Location-ID",
-          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        "charging_station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "Optional: Seriennummer der Ladestation. Angeben, wenn mehrere Stationen dieselbe Connector-Position verwenden."
         },
         "connector_id": {
           "name": "Connector-ID",
-          "description": "Optional: Connector-Nummer (1 oder 2)."
+          "description": "Erforderlich: Connector-Position, die im API-2-Endpunkt verwendet wird (z. B. 1 oder 2)."
         },
         "mode": {
           "name": "Modus",

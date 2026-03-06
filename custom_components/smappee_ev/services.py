@@ -108,17 +108,20 @@ def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeApiCli
     return first.get("station_client") if first else None
 
 
+def _connector_clients_for_site(site: dict) -> list[SmappeeApiClient]:
+    conns: list[SmappeeApiClient] = []
+    for bucket in (site.get("stations") or {}).values():
+        conns.extend(list((bucket.get("connector_clients") or {}).values()))
+    return conns
+
+
 def get_connector_client(
     rt: RuntimeData | None, sid: int | None, connector_id: int | None
 ) -> SmappeeApiClient | None:
     if not rt or sid is None:
         return None
     site = rt.sites.get(sid) or {}
-    stations = (site.get("stations") or {}).values()
-    # Aggregate all connector clients
-    conns: list[SmappeeApiClient] = []
-    for bucket in stations:
-        conns.extend(list((bucket.get("connector_clients") or {}).values()))
+    conns = _connector_clients_for_site(site)
     if connector_id is not None:
         for client in conns:
             if getattr(client, "connector_number", None) == connector_id:
@@ -126,6 +129,61 @@ def get_connector_client(
         return None
     if len(conns) == 1:
         return conns[0]
+    return None
+
+
+def _client_station_serial(client: SmappeeApiClient) -> str:
+    return str(
+        getattr(client, "charging_station_serial", None) or getattr(client, "serial", "") or ""
+    ).strip()
+
+
+def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> SmappeeApiClient | None:
+    """Resolve an API 2 connector using charging station serial and connector position.
+
+    API 2 uses /chargingstations/{serial}/connectors/{position}/mode, so service
+    location id is not used for target selection.
+    """
+
+    entry_id = call.data.get("config_entry_id")
+    connector_id = call.data.get("connector_id")
+    station_serial = str(call.data.get("charging_station_serial") or "").strip().casefold()
+
+    explicit_rt = _runtime_by_entry_id(hass, entry_id)
+    if explicit_rt:
+        runtimes = [explicit_rt]
+    else:
+        runtimes = []
+        for entry in _iter_loaded_entries(hass):
+            try:
+                runtimes.append(entry.runtime_data)  # type: ignore[attr-defined]
+            except AttributeError:  # pragma: no cover - defensive
+                continue
+
+    matches: list[SmappeeApiClient] = []
+    seen: set[int] = set()
+    for rt in runtimes:
+        if not rt:
+            continue
+        for site in rt.sites.values():
+            if not site:
+                continue
+            for client in _connector_clients_for_site(site):
+                if station_serial and _client_station_serial(client).casefold() != station_serial:
+                    continue
+                if (
+                    connector_id is not None
+                    and getattr(client, "connector_number", None) != connector_id
+                ):
+                    continue
+                marker = id(client)
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                matches.append(client)
+
+    if len(matches) == 1:
+        return matches[0]
     return None
 
 
@@ -201,6 +259,31 @@ async def async_handle_connector_service(
     # Mode reset handled by coordinator state logic; client is stateless now.
 
 
+async def async_handle_connector_service_api2(
+    hass: HomeAssistant,
+    call: ServiceCall,
+    method_name: str,
+    extra_args: dict | None = None,
+) -> None:
+    client = get_api2_connector_client(hass, call)
+    if not client:
+        raise ServiceValidationError(
+            "No matching API 2 connector client "
+            f"(config_entry_id={call.data.get('config_entry_id')}, "
+            f"charging_station_serial={call.data.get('charging_station_serial')}, "
+            f"connector_id={call.data.get('connector_id')}). "
+            "Provide 'charging_station_serial' if multiple charging stations share the same connector position."
+        )
+
+    method = getattr(client, method_name, None)
+    if not method:
+        raise ServiceValidationError(f"Connector method '{method_name}' not found")
+    try:
+        await method(**(extra_args or {}))
+    except Exception as err:
+        raise HomeAssistantError(f"Connector service '{method_name}' failed: {err}") from err
+
+
 # ----------------------------
 # Service function wrappers
 # ----------------------------
@@ -273,11 +356,11 @@ async def handle_set_charging_mode(call: ServiceCall) -> None:
     )
 
 
-async def handle_set_charging_mode_api2(call: ServiceCall) -> None:
-    await async_handle_connector_service(
+async def handle_set_charging_mode_chargingstations(call: ServiceCall) -> None:
+    await async_handle_connector_service_api2(
         call.hass,
         call,
-        "set_charging_mode_api2",
+        "set_charging_mode_chargingstations",
         {
             "mode": call.data.get("mode"),
             "limit": call.data.get("limit"),
@@ -292,56 +375,48 @@ async def handle_set_charging_mode_api2(call: ServiceCall) -> None:
 # ----------------------------
 
 
-START_CHARGING_SCHEMA = vol.Schema(
-    {
-        vol.Optional("config_entry_id"): cv.string,
-        vol.Optional("service_location_id"): cv.positive_int,
-        vol.Optional("connector_id"): cv.positive_int,
-        # Only enforce a sane minimum; device specific max validated dynamically in handler
-        vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
-    }
-)
+START_CHARGING_SCHEMA = vol.Schema({
+    vol.Optional("config_entry_id"): cv.string,
+    vol.Optional("service_location_id"): cv.positive_int,
+    vol.Optional("connector_id"): cv.positive_int,
+    # Only enforce a sane minimum; device specific max validated dynamically in handler
+    vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
+})
 
-PAUSE_STOP_SCHEMA = vol.Schema(
-    {
-        vol.Optional("config_entry_id"): cv.string,
-        vol.Optional("service_location_id"): cv.positive_int,
-        vol.Optional("connector_id"): cv.positive_int,
-    }
-)
+PAUSE_STOP_SCHEMA = vol.Schema({
+    vol.Optional("config_entry_id"): cv.string,
+    vol.Optional("service_location_id"): cv.positive_int,
+    vol.Optional("connector_id"): cv.positive_int,
+})
 
-SET_MODE_SCHEMA = vol.Schema(
-    {
-        vol.Optional("config_entry_id"): cv.string,
-        vol.Optional("service_location_id"): cv.positive_int,
-        vol.Optional("connector_id"): cv.positive_int,
-        vol.Required("mode"): vol.All(
-            str,
-            lambda s: s.upper(),  # normalize to uppercase
-            vol.In({"NORMAL", "STANDARD", "SMART", "SOLAR"}),
-        ),
-    }
-)
+SET_MODE_SCHEMA = vol.Schema({
+    vol.Optional("config_entry_id"): cv.string,
+    vol.Optional("service_location_id"): cv.positive_int,
+    vol.Optional("connector_id"): cv.positive_int,
+    vol.Required("mode"): vol.All(
+        str,
+        lambda s: s.upper(),  # normalize to uppercase
+        vol.In({"NORMAL", "STANDARD", "SMART", "SOLAR"}),
+    ),
+})
 
 
-SET_MODE_API2_SCHEMA = vol.Schema(
-    {
-        vol.Optional("config_entry_id"): cv.string,
-        vol.Optional("service_location_id"): cv.positive_int,
-        vol.Optional("connector_id"): cv.positive_int,
-        vol.Required("mode"): vol.All(
-            str,
-            lambda s: s.upper(),
-            vol.In({"NORMAL", "SMART", "PAUSED"}),
-        ),
-        vol.Optional("limit"): vol.Coerce(int),
-        vol.Optional("limit_unit", default="AMPERE"): vol.All(
-            str,
-            lambda s: s.upper(),
-            vol.In({"AMPERE", "PERCENTAGE"}),
-        ),
-    }
-)
+SET_MODE_API2_SCHEMA = vol.Schema({
+    vol.Optional("config_entry_id"): cv.string,
+    vol.Optional("charging_station_serial"): vol.All(str, lambda s: s.strip()),
+    vol.Required("connector_id"): cv.positive_int,
+    vol.Required("mode"): vol.All(
+        str,
+        lambda s: s.upper(),
+        vol.In({"NORMAL", "SMART", "PAUSED"}),
+    ),
+    vol.Optional("limit"): vol.Coerce(int),
+    vol.Optional("limit_unit", default="AMPERE"): vol.All(
+        str,
+        lambda s: s.upper(),
+        vol.In({"AMPERE", "PERCENTAGE"}),
+    ),
+})
 
 
 async def register_services(hass: HomeAssistant) -> None:
@@ -355,7 +430,10 @@ async def register_services(hass: HomeAssistant) -> None:
         DOMAIN, "set_charging_mode", handle_set_charging_mode, SET_MODE_SCHEMA
     )
     hass.services.async_register(
-        DOMAIN, "set_charging_mode_api2", handle_set_charging_mode_api2, SET_MODE_API2_SCHEMA
+        DOMAIN,
+        "set_charging_mode_chargingstations",
+        handle_set_charging_mode_chargingstations,
+        SET_MODE_API2_SCHEMA,
     )
 
 
@@ -365,4 +443,4 @@ async def unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, "pause_charging")
     hass.services.async_remove(DOMAIN, "stop_charging")
     hass.services.async_remove(DOMAIN, "set_charging_mode")
-    hass.services.async_remove(DOMAIN, "set_charging_mode_api2")
+    hass.services.async_remove(DOMAIN, "set_charging_mode_chargingstations")

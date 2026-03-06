@@ -114,21 +114,21 @@
                 }
             }
         },
-        "set_charging_mode_api2": {
-            "name": "Stel laadmodus in (API 2)",
+        "set_charging_mode_chargingstations": {
+            "name": "Stel laadmodus in (chargingstations)",
             "description": "Stel de laadmodus in via de API 2 chargingstations endpoint.",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",
                     "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
                 },
-                "service_location_id": {
-                    "name": "Service Location ID",
-                    "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
+                "charging_station_serial": {
+                    "name": "Serienummer laadstation",
+                    "description": "Optioneel: serienummer van het laadstation. Geef dit op als meerdere stations dezelfde connectorpositie gebruiken."
                 },
                 "connector_id": {
                     "name": "Connector",
-                    "description": "Optioneel: connectornummer (1 of 2)."
+                    "description": "Verplicht: connectorpositie die in de API 2-endpoint wordt gebruikt (bijvoorbeeld 1 of 2)."
                 },
                 "mode": {
                     "name": "Modus",

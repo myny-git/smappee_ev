@@ -74,7 +74,9 @@ class OAuth2Client:
                 _LOGGER.debug("Authentication succeeded; token validity window established")
                 return tokens
 
-        except (TimeoutError, ClientError, asyncio.CancelledError, OSError, ConnectionError) as err:
+        except asyncio.CancelledError:
+            raise
+        except (TimeoutError, ClientError, OSError, ConnectionError) as err:
             _LOGGER.error("Exception during authentication: %s", err)
             return None
 
@@ -130,7 +132,9 @@ class OAuth2Client:
 
                     _LOGGER.error("Failed to refresh token (status %s)", response.status)
 
-            except (TimeoutError, ClientError, asyncio.CancelledError) as err:
+            except asyncio.CancelledError:
+                raise
+            except (TimeoutError, ClientError) as err:
                 _LOGGER.error(
                     "Exception during token refresh attempt %d: %s",
                     attempt + 1,

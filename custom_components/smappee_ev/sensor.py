@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfElectricCurrent, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
@@ -450,7 +454,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
         return str(getattr(st, "session_state", None)) if st else None
 
 
-class SmappeeEVCCStateSensor(SmappeeConnectorEntity, SensorEntity, RestoreEntity):
+class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, c, api, sid, station_uuid, uuid):
@@ -491,23 +495,30 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, SensorEntity, RestoreEntity
         await super().async_added_to_hass()
 
         # Restore previous state if available
+        last_data = await self.async_get_last_sensor_data()
+        restored_value = last_data.native_value if last_data else None
+        if isinstance(restored_value, str) and restored_value in ("unknown", "unavailable"):
+            restored_value = None
+        if restored_value is not None:
+            self._restored_value = restored_value
+
+        # Restore attributes (not part of RestoreSensor data)
         last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in (None, "unknown", "unavailable"):
-            self._restored_value = last_state.state
-            # Also restore attributes
-            if last_state.attributes:
-                self._restored_attributes = {
-                    "iec_status": last_state.attributes.get("iec_status"),
-                    "session_state": last_state.attributes.get("session_state"),
-                    "charging_mode": last_state.attributes.get("charging_mode"),
-                    "optimization_strategy": last_state.attributes.get("optimization_strategy"),
-                    "paused": last_state.attributes.get("paused"),
-                    "status_current": last_state.attributes.get("status_current"),
-                }
+        if last_state and last_state.attributes:
+            self._restored_attributes = {
+                "iec_status": last_state.attributes.get("iec_status"),
+                "session_state": last_state.attributes.get("session_state"),
+                "charging_mode": last_state.attributes.get("charging_mode"),
+                "optimization_strategy": last_state.attributes.get("optimization_strategy"),
+                "paused": last_state.attributes.get("paused"),
+                "status_current": last_state.attributes.get("status_current"),
+            }
+
+        if self._restored_value is not None or self._restored_attributes:
             self.async_write_ha_state()
 
 
-class SmappeeEvseStatusSensor(SmappeeConnectorEntity, SensorEntity, RestoreEntity):
+class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, c, api, sid, station_uuid, uuid):
@@ -530,9 +541,12 @@ class SmappeeEvseStatusSensor(SmappeeConnectorEntity, SensorEntity, RestoreEntit
         await super().async_added_to_hass()
 
         # Restore previous state if available
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in (None, "unknown", "unavailable"):
-            self._restored_value = last_state.state
+        last_data = await self.async_get_last_sensor_data()
+        restored_value = last_data.native_value if last_data else None
+        if isinstance(restored_value, str) and restored_value in ("unknown", "unavailable"):
+            restored_value = None
+        if restored_value is not None:
+            self._restored_value = restored_value
             self.async_write_ha_state()
 
 
