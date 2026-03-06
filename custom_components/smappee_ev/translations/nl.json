@@ -116,7 +116,7 @@
         },
         "set_charging_mode_chargingstations": {
             "name": "Stel laadmodus in (chargingstations)",
-            "description": "Stel de laadmodus in via de API 2 chargingstations endpoint.",
+            "description": "Stel de laadmodus in via de chargingstations endpoint.",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",
@@ -128,7 +128,7 @@
                 },
                 "connector_id": {
                     "name": "Connector",
-                    "description": "Verplicht: connectorpositie die in de API 2-endpoint wordt gebruikt (bijvoorbeeld 1 of 2)."
+                    "description": "Verplicht: connectorpositie die in de chargingstations-endpoint wordt gebruikt (bijvoorbeeld 1 of 2)."
                 },
                 "mode": {
                     "name": "Modus",

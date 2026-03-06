@@ -30,7 +30,7 @@ set_charging_mode:
             - SOLAR
 
 set_charging_mode_chargingstations:
-  description: "Set the charging mode using the API 2 chargingstations endpoint (NORMAL, SMART, PAUSED)."
+  description: "Set the charging mode using the chargingstations endpoint (NORMAL, SMART, PAUSED)."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -43,14 +43,14 @@ set_charging_mode_chargingstations:
       selector:
         text:
     connector_id:
-      description: "Connector number (position in the API 2 endpoint)."
+      description: "Connector number (position in the chargingstations endpoint)."
       required: true
       example: 1
       selector:
         number:
           min: 1
     mode:
-      description: "Charging mode to apply (API 2 endpoint)."
+      description: "Charging mode to apply (chargingstations endpoint)."
       required: true
       selector:
         select:

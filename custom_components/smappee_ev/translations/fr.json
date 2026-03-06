@@ -116,7 +116,7 @@
     },
     "set_charging_mode_chargingstations": {
       "name": "Définir le mode de charge (chargingstations)",
-      "description": "Définit le mode de charge via l’endpoint chargingstations (API 2).",
+      "description": "Définit le mode de charge via l’endpoint chargingstations.",
       "fields": {
         "config_entry_id": {
           "name": "ID de l’entrée de configuration",
@@ -128,7 +128,7 @@
         },
         "connector_id": {
           "name": "ID du connecteur",
-          "description": "Obligatoire : position du connecteur utilisée par l’endpoint API 2 (par exemple 1 ou 2)."
+          "description": "Obligatoire : position du connecteur utilisée par l’endpoint chargingstations (par exemple 1 ou 2)."
         },
         "mode": {
           "name": "Mode",

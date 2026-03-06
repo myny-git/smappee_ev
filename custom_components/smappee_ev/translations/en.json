@@ -116,7 +116,7 @@
     },
     "set_charging_mode_chargingstations": {
       "name": "Set charging mode (chargingstations)",
-      "description": "Set the charging mode using the API 2 chargingstations endpoint.",
+      "description": "Set the charging mode using the chargingstations endpoint.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -128,7 +128,7 @@
         },
         "connector_id": {
           "name": "Connector ID",
-          "description": "Required: connector position used by the API 2 endpoint (for example 1 or 2)."
+          "description": "Required: connector position used by the chargingstations endpoint (for example 1 or 2)."
         },
         "mode": {
           "name": "Mode",

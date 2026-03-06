@@ -116,7 +116,7 @@
     },
     "set_charging_mode_chargingstations": {
       "name": "Lademodus setzen (chargingstations)",
-      "description": "Setzt den Lademodus über den chargingstations-Endpunkt (API 2).",
+      "description": "Setzt den Lademodus über den chargingstations-Endpunkt.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
