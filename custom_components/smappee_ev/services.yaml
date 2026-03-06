@@ -40,6 +40,8 @@ set_charging_mode_chargingstations:
       description: "Optional: Charging station serial number. Use this when multiple stations share the same connector number."
       required: false
       example: "1234567890"
+      selector:
+        text:
     connector_id:
       description: "Connector number (position in the API 2 endpoint)."
       required: true
