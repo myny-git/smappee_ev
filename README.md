@@ -36,17 +36,18 @@ This custom integration unlocks **more control over your Smappee** charger and c
 The main ambition is to have independent control of the Smappee EV charger via Home Assistant and eventually add those sensors in other energy management systems.
 
 ### ✅ Charging Mode Control
-- Switch between all official Smappee charging modes:
-  - `SMART` – Dynamic smart charging based on usage and pricing
-  - `SOLAR` – Charge using only excess solar energy
-  - `STANDARD` (also called `NORMAL` according to the API) – Fixed current charging
-- Set mode via select entity or dedicated service
-- Apply selected mode with **Set Charging Mode** button
+- Two different service paths to set the charging modes:
+  - The regular `smappee_ev.set_charging_mode` service, which works with the integration's existing mode flow (`SMART`, `SOLAR`, `NORMAL`).
+  - The newer `smappee_ev.set_charging_mode_chargingstations` service, which calls Smappee's `chargingstations` endpoint directly and supports `NORMAL`, `SMART`, and `PAUSED`, with an optional limit for `NORMAL`. This advanced service seems to be more stable but reuires to be manually called.
+
+- Apply the selected UI mode with the **Set Charging Mode** button, take care that this uses the set_charging_mode service.
+- Use the `chargingstations` service for direct connector control with `NORMAL`, `SMART`, or `PAUSED`, including an optional limit in `AMPERE` or `PERCENTAGE` when using `NORMAL`
 
 ### ✅ Direct Charger Control
 - Start, Pause, or Stop charging sessions from Home Assistant
 - Set fixed charging **currents** (in Amps)
 - Change Wallbox availability (set available/unavailable)
+- Target a specific connector directly through the `chargingstations` endpoint when needed, which is especially useful in multi-station setups
 
 ### ✅ LED Brightness Control
 - Adjust LED ring brightness (%)
@@ -108,6 +109,10 @@ During setup, you will be prompted to enter:
 
 ### 🧩 Entities
 More information on the specifics of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). Take care: names are subject to change as users can rename their Smappee device.
+
+The integration currently exposes two charging-mode paths:
+- The regular Home Assistant entities and `smappee_ev.set_charging_mode` service work with the integration's existing mode flow (`SMART`, `SOLAR`, `NORMAL`).
+- The newer `smappee_ev.set_charging_mode_chargingstations` service calls Smappee's `chargingstations` endpoint directly and supports `NORMAL`, `SMART`, and `PAUSED`, with an optional limit for `NORMAL`.
 
 This is the current version of the entities (for my EV Wall Home single connector)
 
