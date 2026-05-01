@@ -111,7 +111,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         session_state="Initialize",
                         selected_current_limit=None,
                         selected_percentage_limit=None,
-                        selected_mode="NORMAL",
+                        selected_mode=None,
                         min_current=DEFAULT_MIN_CURRENT,
                         max_current=DEFAULT_MAX_CURRENT,
                         min_surpluspct=DEFAULT_MIN_SURPLUS_PERCENT,
@@ -225,7 +225,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         session_state = "Initialize"
         selected_percentage: int | None = None
         selected_current: int | None = None
-        selected_mode = "NORMAL"
+        selected_mode: str | None = None
         min_current = DEFAULT_MIN_CURRENT
         max_current = DEFAULT_MAX_CURRENT
         min_surpluspct = DEFAULT_MIN_SURPLUS_PERCENT

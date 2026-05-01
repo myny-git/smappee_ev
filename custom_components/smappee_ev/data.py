@@ -19,7 +19,7 @@ class ConnectorState:
     session_state: str = "Initialize"
     selected_current_limit: int | None = None
     selected_percentage_limit: int | None = None
-    selected_mode: str = "NORMAL"
+    selected_mode: str | None = None
     min_current: int = DEFAULT_MIN_CURRENT
     max_current: int = DEFAULT_MAX_CURRENT
     min_surpluspct: int = DEFAULT_MIN_SURPLUS_PERCENT
