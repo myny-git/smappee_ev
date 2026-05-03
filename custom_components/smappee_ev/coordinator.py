@@ -142,16 +142,43 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         Returns:
         {
-            "grid": {"power":[...], "cons":[...]},
-            "pv":   {"power":[...], "cons":[...]},
-            "cars": { "<uuid>": {"power":[...], "cons":[...], "position": int|None, "serial": str|None } }
+            "grid": {"power":[...], "cons":[...], "energy":[...]},
+            "pv":   {"power":[...], "cons":[...], "energy":[...]},
+            "cars": { "<uuid>": {"power":[...], "cons":[...], "energy":[...], "position": int|None, "serial": str|None } }
         }
+
+        ``power`` indices are used for activePowerData/currentData (sparse,
+        indexed by physical CT input number).
+
+        ``energy`` indices are used for importActiveEnergyData/
+        exportActiveEnergyData which use a dense sequential layout
+        (rank among all configured consumptionIndex values).
         """
         mapping: dict[str, Any] = {
-            "grid": {"power": [], "cons": []},
-            "pv": {"power": [], "cons": []},
+            "grid": {"power": [], "cons": [], "energy": []},
+            "pv": {"power": [], "cons": [], "energy": []},
             "cars": {},
         }
+
+        # First pass: collect every consumptionIndex so we can rank them.
+        all_cons: list[int] = []
+        all_cons.extend(
+            int(ch["consumptionIndex"])
+            for meas in cfg.get("measurements") or []
+            for ch in meas.get("channels") or []
+            if "consumptionIndex" in ch
+        )
+        all_cons.extend(
+            int(ch["consumptionIndex"])
+            for cs in cfg.get("chargingStations") or []
+            for chg in cs.get("chargers") or []
+            for ch in chg.get("channels") or []
+            if "consumptionIndex" in ch
+        )
+
+        # Build rank lookup: consumptionIndex → 0-based position in sorted order.
+        sorted_cons = sorted(set(all_cons))
+        cons_to_rank = {ci: rank for rank, ci in enumerate(sorted_cons)}
 
         # measurements → GRID / PRODUCTION(PV)
         for meas in cfg.get("measurements") or []:
@@ -159,10 +186,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             chans = meas.get("channels") or []
             pidx = [int(ch["powerTopicIndex"]) for ch in chans if "powerTopicIndex" in ch]
             cidx = [int(ch["consumptionIndex"]) for ch in chans if "consumptionIndex" in ch]
+            eidx = [cons_to_rank[ci] for ci in cidx if ci in cons_to_rank]
             if mtype == "GRID":
                 mapping["grid"]["power"], mapping["grid"]["cons"] = pidx, cidx
+                mapping["grid"]["energy"] = eidx
             elif mtype == "PRODUCTION":
                 mapping["pv"]["power"], mapping["pv"]["cons"] = pidx, cidx
+                mapping["pv"]["energy"] = eidx
 
         # chargingStations[].chargers[] → per-connector
         for cs in cfg.get("chargingStations") or []:
@@ -173,9 +203,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 chans = chg.get("channels") or []
                 pidx = [int(ch["powerTopicIndex"]) for ch in chans if "powerTopicIndex" in ch]
                 cidx = [int(ch["consumptionIndex"]) for ch in chans if "consumptionIndex" in ch]
+                eidx = [cons_to_rank[ci] for ci in cidx if ci in cons_to_rank]
                 mapping["cars"][uuid] = {
                     "power": pidx,
                     "cons": cidx,
+                    "energy": eidx,
                     "position": chg.get("position"),
                     "serial": chg.get("serialNumber"),
                 }
@@ -596,7 +628,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         st,  # StationState
         payload: dict,
         power_idxs: list[int],
-        cons_idxs: list[int],
+        energy_idxs: list[int],
         power_key_prefix: str,  # "grid" or "pv"
     ) -> bool:
         changed = False
@@ -613,17 +645,17 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if i_ph:
                 changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
 
-        if cons_idxs:
+        if energy_idxs:
             if power_key_prefix == "grid":
                 changed |= self._set_if_changed(
-                    st, "grid_energy_import_kwh", round(sum(_pick(imp_wh, cons_idxs)) / 1000.0, 3)
+                    st, "grid_energy_import_kwh", round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3)
                 )
                 changed |= self._set_if_changed(
-                    st, "grid_energy_export_kwh", round(sum(_pick(exp_wh, cons_idxs)) / 1000.0, 3)
+                    st, "grid_energy_export_kwh", round(sum(_pick(exp_wh, energy_idxs)) / 1000.0, 3)
                 )
             else:  # pv
                 changed |= self._set_if_changed(
-                    st, "pv_energy_import_kwh", round(sum(_pick(imp_wh, cons_idxs)) / 1000.0, 3)
+                    st, "pv_energy_import_kwh", round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3)
                 )
         return changed
 
@@ -632,7 +664,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         conn,  # ConnectorState
         payload: dict,
         power_idxs: list[int],
-        cons_idxs: list[int],
+        energy_idxs: list[int],
     ) -> bool:
         changed = False
         active = payload.get("activePowerData") or []
@@ -641,8 +673,8 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         p_ph = _pick(active, power_idxs)
         i_ma = _pick(currents_ma, power_idxs)
-        if cons_idxs:
-            energy_values = _pick(imp_wh, cons_idxs)
+        if energy_idxs:
+            energy_values = _pick(imp_wh, energy_idxs)
             if energy_values and len(set(energy_values)) == 1:
                 # All values are identical -> total energy replicated across indices
                 val = energy_values[0]
@@ -674,10 +706,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         # Station groups
         changed |= self._apply_station_group(
-            st, payload, grid.get("power", []), grid.get("cons", []), "grid"
+            st, payload, grid.get("power", []), grid.get("energy", []), "grid"
         )
         changed |= self._apply_station_group(
-            st, payload, pv.get("power", []), pv.get("cons", []), "pv"
+            st, payload, pv.get("power", []), pv.get("energy", []), "pv"
         )
 
         # Connectors
@@ -686,7 +718,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if not conn:
                 continue
             changed |= self._apply_connector_values(
-                conn, payload, m.get("power", []), m.get("cons", [])
+                conn, payload, m.get("power", []), m.get("energy", [])
             )
 
         # Aggregate house consumption (positive load behind meter). Allow real zero.
