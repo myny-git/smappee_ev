@@ -162,15 +162,19 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         # First pass: collect every consumptionIndex so we can rank them.
         all_cons: list[int] = []
-        for meas in cfg.get("measurements") or []:
-            for ch in meas.get("channels") or []:
-                if "consumptionIndex" in ch:
-                    all_cons.append(int(ch["consumptionIndex"]))
-        for cs in cfg.get("chargingStations") or []:
-            for chg in cs.get("chargers") or []:
-                for ch in chg.get("channels") or []:
-                    if "consumptionIndex" in ch:
-                        all_cons.append(int(ch["consumptionIndex"]))
+        all_cons.extend(
+            int(ch["consumptionIndex"])
+            for meas in cfg.get("measurements") or []
+            for ch in meas.get("channels") or []
+            if "consumptionIndex" in ch
+        )
+        all_cons.extend(
+            int(ch["consumptionIndex"])
+            for cs in cfg.get("chargingStations") or []
+            for chg in cs.get("chargers") or []
+            for ch in chg.get("channels") or []
+            if "consumptionIndex" in ch
+        )
 
         # Build rank lookup: consumptionIndex → 0-based position in sorted order.
         sorted_cons = sorted(set(all_cons))
