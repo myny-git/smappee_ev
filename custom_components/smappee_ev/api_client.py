@@ -191,8 +191,11 @@ class SmappeeApiClient:
         """Start charging at (clamped) amperage.
 
         Returns (current_amps, percentage_limit) so caller can update ConnectorState.
+
+        Uses the chargingstations endpoint (NORMAL mode with AMPERE limit) instead of
+        the smartdevices/actions/startCharging action. The latter results in the cloud
+        suspending the session after ~5 minutes (EVSE -> SUSPENDED_EVSE), see issue #103.
         """
-        # _request handles auth
         if max_current < min_current:
             min_current, max_current = max_current, min_current
 
@@ -204,9 +207,7 @@ class SmappeeApiClient:
             rng = max_current - min_current
             percentage = int(max(0, min(100, round(((target - min_current) * 100.0) / rng))))
 
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
-        payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
-        await self._request("POST", url, json=payload, expected=(200,))
+        await self.set_charging_mode_chargingstations("NORMAL", limit=target, limit_unit="AMPERE")
 
         _LOGGER.debug(
             "Started charging successfully (target=%s A, pct=%s, range=%s-%s)",
@@ -218,8 +219,12 @@ class SmappeeApiClient:
         return target, percentage
 
     async def pause_charging(self) -> None:
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/pauseCharging"
-        await self._request("POST", url, json=[], expected=(200,))
+        """Pause charging.
+
+        Uses the chargingstations endpoint (PAUSED mode) for consistency with
+        start_charging and to avoid the smartdevices/actions session timeout.
+        """
+        await self.set_charging_mode_chargingstations("PAUSED")
         _LOGGER.debug("Paused charging successfully")
 
     async def stop_charging(self) -> None:

@@ -125,7 +125,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     # ---------- Actions ----------
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Start charging using selected or minimum current; set NORMAL mode first if needed."""
+        """Start charging using selected or minimum current."""
         st = self._conn_state()
         # Prefer selected current; else min_current; guard to >= 1
         if st:
@@ -134,22 +134,12 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
                 if st.selected_current_limit is not None
                 else st.min_current
             )
-            mode = getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None)
         else:
             current = 6
-            mode = "NORMAL"
 
         current = int(max(int(current or 6), 6))
 
         try:
-            if mode != "NORMAL":
-                _LOGGER.debug(
-                    "Charging switch: switching mode to NORMAL before starting (sid=%s, uuid=%s)",
-                    self._sid,
-                    self._uuid,
-                )
-                await self.api_client.set_charging_mode("NORMAL", current)
-
             _LOGGER.debug(
                 "Charging switch ON → start_charging %s A (sid=%s, uuid=%s)",
                 current,
