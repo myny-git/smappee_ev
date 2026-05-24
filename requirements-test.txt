@@ -20,4 +20,4 @@ homeassistant-stubs==2026.5.2
 # (No explicit aiomqtt or paho-mqtt pin here; paho-mqtt 1.6.1 pulled transitively.)
 
 # Linting
-ruff>=0.15.12
+ruff>=0.15.13
