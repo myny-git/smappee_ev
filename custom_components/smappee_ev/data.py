@@ -23,6 +23,7 @@ class ConnectorState:
     min_current: int = DEFAULT_MIN_CURRENT
     max_current: int = DEFAULT_MAX_CURRENT
     min_surpluspct: int = DEFAULT_MIN_SURPLUS_PERCENT
+    support_grid: int | None = None
 
     connection_status: str | None = None  # CONNECTED / DISCONNECTED
     configuration_errors: list[str] | None = None

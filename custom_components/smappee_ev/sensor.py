@@ -55,6 +55,7 @@ async def async_setup_entry(
             for cuuid, client in (conns or {}).items():
                 entities.append(ConnectorPowerSensor(coord, client, sid, st_uuid, cuuid))
                 entities.append(ConnectorCurrentASensor(coord, client, sid, st_uuid, cuuid))
+                entities.append(SmappeeSupportGridSensor(coord, client, sid, st_uuid, cuuid))
                 entities.append(ConnEnergyImport(coord, client, sid, st_uuid, cuuid))
                 entities.append(SmappeeChargingStateSensor(coord, client, sid, st_uuid, cuuid))
                 entities.append(SmappeeEVCCStateSensor(coord, client, sid, st_uuid, cuuid))
@@ -343,6 +344,25 @@ class ConnectorCurrentASensor(SmappeeConnectorEntity, SensorEntity):
             except (TypeError, ValueError):
                 return None
         return None
+
+
+class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(
+        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+    ) -> None:
+        name = f"{build_connector_label(api, uuid)} Support Grid"
+        SmappeeConnectorEntity.__init__(
+            self, c, sid, station_uuid, uuid, unique_suffix="sensor:support_grid", name=name
+        )
+        self.api_client = api
+
+    @property
+    def native_value(self) -> float | None:
+        st = self._conn_state
+        v = getattr(st, "support_grid", None) if st else None
+        return float(v) if isinstance(v, int | float) else None
 
 
 class ConnEnergyImport(SmappeeConnectorEntity, SensorEntity):

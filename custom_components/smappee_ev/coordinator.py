@@ -229,6 +229,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         min_current = DEFAULT_MIN_CURRENT
         max_current = DEFAULT_MAX_CURRENT
         min_surpluspct = DEFAULT_MIN_SURPLUS_PERCENT
+        support_grid: int | None = None
 
         resp = await self._session.get(url_dev, headers=headers, timeout=self._timeout)
         if resp.status != 200:
@@ -248,7 +249,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 with suppress(TypeError, ValueError):
                     selected_percentage = int(val)
 
-        # configurationProperties: max/min current, min.excesspct
+        # configurationProperties: max/min current, min.excesspct, grid support
         for prop in data.get("configurationProperties", []):
             spec = prop.get("spec", {}) or {}
             name = spec.get("name")
@@ -263,6 +264,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
                 with suppress(TypeError, ValueError):
                     min_surpluspct = _to_int(val, default=min_surpluspct)
+            elif name == "etc.smart.device.type.car.charger.config.max.gridassistanceamps":
+                with suppress(TypeError, ValueError):
+                    support_grid = _to_int(val)
 
         # If we know %, but not A, we can reconstruct A later in the Number entity;
         # here we just return the snapshot.
@@ -275,6 +279,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             min_current=min_current,
             max_current=max_current,
             min_surpluspct=min_surpluspct,
+            support_grid=support_grid,
         )
 
     # =====================================================================
@@ -320,10 +325,16 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     @staticmethod
     def _derive_base_mode(mode: str | None, strategy: str | None) -> str:
         """Map to NORMAL/SMART/SOLAR."""
+        m = (mode or "").upper()
         s = (strategy or "").upper()
+
+        if m == "NORMAL":
+            return "NORMAL"
         if s == "EXCESS_ONLY":
             return "SOLAR"
         if s == "SCHEDULES_FIRST_THEN_EXCESS":
+            return "SMART"
+        if m == "SMART":
             return "SMART"
         return "NORMAL"
 
@@ -434,13 +445,20 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if mc_max is not None:
                 changed |= self._set_if_changed(conn, "max_current", mc_max)
 
-        # custom configuration properties: min excesspct + connector number
+        # custom configuration properties: min excesspct, grid support + connector number
         ccp = payload.get("customConfigurationProperties") or {}
         if isinstance(ccp, dict):
             v = ccp.get("etc.smart.device.type.car.charger.config.min.excesspct")
             v_int = self._as_int(v, None)
             if v_int is not None:
                 changed |= self._set_if_changed(conn, "min_surpluspct", v_int)
+
+            grid_support = self._as_int(
+                ccp.get("etc.smart.device.type.car.charger.config.max.gridassistanceamps"),
+                None,
+            )
+            if grid_support is not None:
+                changed |= self._set_if_changed(conn, "support_grid", grid_support)
 
             n = ccp.get("etc.smart.device.type.car.charger.smappee.charger.number")
             try:
