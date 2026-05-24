@@ -17,6 +17,8 @@ This integration firstly creates several services, which can be called directly 
 Sets the desired charging mode. You must provide a `mode` parameter with one of the following values: `SMART`, `SOLAR` or `NORMAL` (Standard on the Smappee official App).
 The standard mode does not have smart features, you can only set the charging speed or current. In this mode, you can set the current limit (in A) in integer values. The programmed current is the max current you allow in THIS mode.
 
+![Illustration of the charging mode selection screen in the Smappee EV Wallbox dashboard, showing options for SMART, SOLAR, and NORMAL modes.](../images/setchargingmode2.png)
+
 - **`smappee_ev.set_charging_mode_chargingstations`**  
 Sets the charging mode through the Smappee `chargingstations` endpoint. This service is intended for direct connector control and supports `NORMAL`, `SMART`, and `PAUSED`.
 When using `NORMAL`, you can optionally pass a `limit` together with `limit_unit` (`AMPERE` or `PERCENTAGE`).

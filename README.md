@@ -38,7 +38,7 @@ The main ambition is to have independent control of the Smappee EV charger via H
 ### ✅ Charging Mode Control
 - Two different service paths to set the charging modes:
   - The regular `smappee_ev.set_charging_mode` service, which works with the integration's existing mode flow (`SMART`, `SOLAR`, `NORMAL`).
-  - The newer `smappee_ev.set_charging_mode_chargingstations` service, which calls Smappee's `chargingstations` endpoint directly and supports `NORMAL`, `SMART`, and `PAUSED`, with an optional limit for `NORMAL`. This advanced service seems to be more stable but reuires to be manually called.
+  - The newer `smappee_ev.set_charging_mode_chargingstations` service, which calls Smappee's `chargingstations` endpoint directly and supports `NORMAL`, `SMART`, and `PAUSED`, with an optional limit for `NORMAL`. This advanced service seems to be more stable but requires to be manually called.
 
 - Apply the selected UI mode with the **Set Charging Mode** button, take care that this uses the set_charging_mode service.
 - Use the `chargingstations` service for direct connector control with `NORMAL`, `SMART`, or `PAUSED`, including an optional limit in `AMPERE` or `PERCENTAGE` when using `NORMAL`

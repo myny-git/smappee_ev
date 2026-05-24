@@ -40,6 +40,6 @@ jobs:
 
       # Step 5: Upload ZIP as a release asset (for HACS)
       - name: ⬆️ Upload zip to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ github.workspace }}/custom_components/smappee_ev/smappee_ev.zip
