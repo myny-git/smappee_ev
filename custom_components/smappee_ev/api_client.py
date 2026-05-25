@@ -183,7 +183,9 @@ class SmappeeApiClient:
         connector: int | None = None,
     ) -> bool:
         """Backward-compatible alias for set_charging_mode (used by the HA service)."""
-        return await self.set_charging_mode(mode, limit=limit, limit_unit=limit_unit, connector=connector)
+        return await self.set_charging_mode(
+            mode, limit=limit, limit_unit=limit_unit, connector=connector
+        )
 
     async def start_charging(
         self, current: int, *, min_current: int = 6, max_current: int = 32
