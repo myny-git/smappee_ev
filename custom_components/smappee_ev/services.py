@@ -292,10 +292,10 @@ async def async_handle_connector_service_api2(
 async def handle_start_charging(call: ServiceCall) -> None:
     current = call.data.get("current")
     connector_id = call.data.get("connector_id")
+    rt, sid = _resolve_sid(call.hass, call)
+    client = get_connector_client(rt, sid, connector_id)
 
     if current is None:
-        rt, sid = _resolve_sid(call.hass, call)
-        client = get_connector_client(rt, sid, connector_id)
         if not client:
             raise ServiceValidationError(
                 "Cannot infer current: connector client not found (provide connector_id if ambiguous)"
@@ -315,8 +315,6 @@ async def handle_start_charging(call: ServiceCall) -> None:
 
     if current is not None:
         # Dynamic validation against connector limits
-        rt, sid = _resolve_sid(call.hass, call)
-        client = get_connector_client(rt, sid, connector_id)
         if not client:
             raise ServiceValidationError(
                 "Cannot validate current: connector client not found (provide connector_id if ambiguous)"
@@ -400,7 +398,7 @@ SET_MODE_SCHEMA = vol.Schema(
         vol.Optional("connector_id"): cv.positive_int,
         vol.Required("mode"): vol.All(
             str,
-            lambda s: s.upper(),  # normalize to uppercase
+            str.upper,  # normalize to uppercase
             vol.In({"NORMAL", "STANDARD", "SMART", "SOLAR"}),
         ),
     }
@@ -411,19 +409,19 @@ SET_MODE_API2_SCHEMA = vol.Schema(
     {
         vol.Optional("config_entry_id"): cv.string,
         vol.Optional("charging_station_serial"): vol.Any(
-            vol.All(str, lambda s: s.strip()),
-            vol.All(vol.Coerce(int), lambda value: str(value)),
+            vol.All(str, str.strip),
+            vol.All(vol.Coerce(int), str),
         ),
         vol.Required("connector_id"): cv.positive_int,
         vol.Required("mode"): vol.All(
             str,
-            lambda s: s.upper(),
+            str.upper,
             vol.In({"NORMAL", "SMART", "PAUSED"}),
         ),
         vol.Optional("limit"): vol.Coerce(int),
         vol.Optional("limit_unit", default="AMPERE"): vol.All(
             str,
-            lambda s: s.upper(),
+            str.upper,
             vol.In({"AMPERE", "PERCENTAGE"}),
         ),
     }
