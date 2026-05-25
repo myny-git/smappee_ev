@@ -304,12 +304,6 @@ async def handle_start_charging(call: ServiceCall) -> None:
             min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
         except (TypeError, ValueError):
             min_c = DEFAULT_MIN_CURRENT
-        try:
-            max_c = int(getattr(client, "max_current", DEFAULT_MAX_CURRENT))
-        except (TypeError, ValueError):
-            max_c = DEFAULT_MAX_CURRENT
-        if max_c < min_c:
-            max_c = min_c
         # Default minimum of the connector
         current = min_c
 
