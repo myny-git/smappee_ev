@@ -111,7 +111,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         session_state="Initialize",
                         selected_current_limit=None,
                         selected_percentage_limit=None,
-                        selected_mode=None,
+                        selected_mode="NORMAL",
                         min_current=DEFAULT_MIN_CURRENT,
                         max_current=DEFAULT_MAX_CURRENT,
                         min_surpluspct=DEFAULT_MIN_SURPLUS_PERCENT,
@@ -257,7 +257,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         session_state = "Initialize"
         selected_percentage: int | None = None
         selected_current: int | None = None
-        selected_mode: str | None = None
+        selected_mode = "NORMAL"
         min_current = DEFAULT_MIN_CURRENT
         max_current = DEFAULT_MAX_CURRENT
         min_surpluspct = DEFAULT_MIN_SURPLUS_PERCENT
@@ -360,7 +360,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         m = (mode or "").upper()
         s = (strategy or "").upper()
 
-        if m == "NORMAL":
+        if m in ("NORMAL", "PAUSED"):
             return "NORMAL"
         if s == "EXCESS_ONLY":
             return "SOLAR"
@@ -625,9 +625,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         if strategy is not None:
             changed |= self._set_if_changed(conn, "optimization_strategy", str(strategy))
 
-        base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
-        changed |= self._set_if_changed(conn, "ui_mode_base", base)
-        changed |= self._set_if_changed(conn, "selected_mode", base)  # backward compat
+        if (conn.raw_charging_mode or "").upper() == "PAUSED":
+            changed |= self._set_if_changed(conn, "ui_mode_base", "NORMAL")
+            changed |= self._set_if_changed(conn, "selected_mode", "NORMAL")
+        else:
+            base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
+            changed |= self._set_if_changed(conn, "ui_mode_base", base)
+            changed |= self._set_if_changed(conn, "selected_mode", base)  # backward compat
         paused = self._is_paused(conn.raw_charging_mode, conn.session_state, conn.session_cause)
         changed |= self._set_if_changed(conn, "paused", paused)
         return changed

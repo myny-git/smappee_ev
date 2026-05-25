@@ -169,21 +169,14 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             max_c,
         )
 
-        if max_c <= min_c:
-            _, pct = await self.api_client.start_charging(
-                min_c, min_current=min_c, max_current=max_c
-            )
-            st.selected_current_limit = min_c
-            st.selected_percentage_limit = pct
-        else:
+        await self.api_client.set_charging_mode("NORMAL", limit=val)
+        st.selected_current_limit = val
+        if max_c > min_c:
             rng = max_c - min_c
             pct = int(round((val - min_c) * 100.0 / rng))
-            pct = max(0, min(100, pct))
-            cur, pct2 = await self.api_client.set_percentage_limit(
-                pct, min_current=min_c, max_current=max_c
-            )
-            st.selected_current_limit = cur
-            st.selected_percentage_limit = pct2
+            st.selected_percentage_limit = max(0, min(100, pct))
+        else:
+            st.selected_percentage_limit = 100
 
     @callback
     def _handle_coordinator_update(self) -> None:

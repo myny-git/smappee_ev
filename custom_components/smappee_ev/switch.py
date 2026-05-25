@@ -125,7 +125,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     # ---------- Actions ----------
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Start charging using selected or minimum current; set NORMAL mode first if needed."""
+        """Start charging using selected or minimum current."""
         st = self._conn_state()
         # Prefer selected current; else min_current; guard to >= 1
         if st:
@@ -134,36 +134,32 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
                 if st.selected_current_limit is not None
                 else st.min_current
             )
-            mode = getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None)
         else:
             current = 6
-            mode = "NORMAL"
 
-        current = int(max(int(current or 6), 6))
+        min_c = int((st.min_current if st else None) or 6)
+        max_c = int((st.max_current if st else None) or 32)
+        current = int(max(min_c, min(int(current or min_c), max_c)))
 
         try:
-            if mode != "NORMAL":
-                _LOGGER.debug(
-                    "Charging switch: switching mode to NORMAL before starting (sid=%s, uuid=%s)",
-                    self._sid,
-                    self._uuid,
-                )
-                await self.api_client.set_charging_mode("NORMAL", current)
-
             _LOGGER.debug(
-                "Charging switch ON → start_charging %s A (sid=%s, uuid=%s)",
+                "Charging switch ON → NORMAL %s A (sid=%s, uuid=%s)",
                 current,
                 self._sid,
                 self._uuid,
             )
-            cur, pct = await self.api_client.start_charging(
-                current,
-                min_current=st.min_current if st else 6,
-                max_current=st.max_current if st else 32,
+            await self.api_client.set_charging_mode_chargingstations(
+                "NORMAL", limit=current, limit_unit="AMPERE"
             )
             if st:
-                st.selected_current_limit = cur
-                st.selected_percentage_limit = pct
+                st.selected_current_limit = current
+                st.selected_mode = "NORMAL"
+                if max_c > min_c:
+                    rng = max_c - min_c
+                    pct = int(round((current - min_c) * 100.0 / rng))
+                    st.selected_percentage_limit = max(0, min(100, pct))
+                else:
+                    st.selected_percentage_limit = 100
                 data = self.coordinator.data
                 if data:
                     self.coordinator.async_set_updated_data(data)
@@ -179,10 +175,8 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Pause charging."""
         try:
-            _LOGGER.debug(
-                "Charging switch OFF → pause_charging (sid=%s, uuid=%s)", self._sid, self._uuid
-            )
-            await self.api_client.pause_charging()
+            _LOGGER.debug("Charging switch OFF → PAUSED (sid=%s, uuid=%s)", self._sid, self._uuid)
+            await self.api_client.set_charging_mode_chargingstations("PAUSED")
             self._is_on = False
             self.async_write_ha_state()
         except asyncio.CancelledError:

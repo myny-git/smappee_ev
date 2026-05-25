@@ -86,7 +86,14 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         if data and self.connector_uuid in (data.connectors or {}):
             data.connectors[self.connector_uuid].selected_mode = option
             self.coordinator.async_set_updated_data(data)
-        await self.api_client.set_charging_mode(option)
+        # For NORMAL, pass the slider's current limit so the charger
+        # doesn't revert to MAX when switching back from SMART/SOLAR.
+        limit: int | None = None
+        if option.upper() == "NORMAL":
+            st = self._state()
+            if st and st.selected_current_limit is not None:
+                limit = st.selected_current_limit
+        await self.api_client.set_charging_mode(option, limit=limit)
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:  # RestoreEntity

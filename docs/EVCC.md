@@ -21,6 +21,8 @@ Below, you can find a full example for a Smappee EV Wallbox. The configuration w
 
 We do not use the smart functions of the Smappee app, in contrary, we use it in Standard mode, with specific current targets.
 
+> **Note:** Since the session timeout fix (issue #103), both the EVCC switch and the max charging speed slider route directly through the `chargingstations` endpoint. This prevents the Smappee cloud from suspending the session after ~5 minutes (EVSE → SUSPENDED_EVSE).
+
 🔌 Key Item: Charging Enable Control
 
 Below is the full yaml for the charger. If you have changed the name of your wallbox, some entities will also have a different name in Home Assistant. Please always doublecheck prior to uploading the YAML. Also if you have two connectors, you should make two instances of the chargers, one per connector ID.
@@ -50,7 +52,7 @@ chargers:
       insecure: true
       jq: '.state == "on"'
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    enable: # also mandatory, this is to enable the charging mode.
+    enable: # turn_on calls set_charging_mode_chargingstations(NORMAL, limit=current A); turn_off calls PAUSED
       source: http
       uri: http://HAlocalIP:8123/api/services/switch/{{ if .enable }}turn_on{{ else }}turn_off{{ end }}
       method: POST
@@ -62,7 +64,7 @@ chargers:
           "entity_id": "switch.smappee_ev_evcc_charging_control_1"
         }
       timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    maxcurrent: # set charging mode to normal and provide the current.
+    maxcurrent: # sets NORMAL mode with the given current limit (A) via set_charging_mode_chargingstations
       source: http
       uri: http://HAlocalIP:8123/api/services/number/set_value
       method: POST
