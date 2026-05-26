@@ -9,7 +9,7 @@ Thanks to [@marq24](https://github.com/marq24) for the pioneering guide on this 
 All details can be found in following link: 🔗 [Home Assistant as EVCC Source](https://github.com/marq24/ha-evcc/blob/main/HA_AS_EVCC_SOURCE.md)
 
 ### ✅ Step 1: Make Home Assistant Data Accessible
-- Create a **long-lived access token** in Home Assistant.
+- Create a **long-lived access token** in Home Assistant.  #not sure this is still required!
 - Make sure Home Assistant is reachable over your LAN (e.g. `http://192.168.x.x:8123`).
 
 ### ✅ Step 2: Collect Sensor Names
@@ -21,111 +21,33 @@ Below, you can find a full example for a Smappee EV Wallbox. The configuration w
 
 We do not use the smart functions of the Smappee app, in contrary, we use it in Standard mode, with specific current targets.
 
-> **Note:** Since the session timeout fix (issue #103), both the EVCC switch and the max charging speed slider route directly through the `chargingstations` endpoint. This prevents the Smappee cloud from suspending the session after ~5 minutes (EVSE → SUSPENDED_EVSE).
-
 🔌 Key Item: Charging Enable Control
 
 Below is the full yaml for the charger. If you have changed the name of your wallbox, some entities will also have a different name in Home Assistant. Please always doublecheck prior to uploading the YAML. Also if you have two connectors, you should make two instances of the chargers, one per connector ID.
 
 ```yaml
-# see https://docs.evcc.io/docs/devices/chargers
+# see https://docs.evcc.io/en/chargers/home-assistant-charger/
 chargers:
   - name: smappee
-    type: custom
-    status: # charger status A..F --> the evcc_state integration does the job!
-      source: http
-      uri: http://HAlocalIP:8123/api/states/sensor.evcc_state_1  ## depending on your connector ID
-      method: GET
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      insecure: true
-      jq: .state[0:1]
-      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    enabled: # also mandatory
-      source: http
-      uri: http://HAlocalIP:8123/api/states/switch.smappee_ev_evcc_charging_control_1
-      method: GET
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      insecure: true
-      jq: '.state == "on"'
-      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    enable: # turn_on calls set_charging_mode_chargingstations(NORMAL, limit=current A); turn_off calls PAUSED
-      source: http
-      uri: http://HAlocalIP:8123/api/services/switch/{{ if .enable }}turn_on{{ else }}turn_off{{ end }}
-      method: POST
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      body: >
-        {
-          "entity_id": "switch.smappee_ev_evcc_charging_control_1"
-        }
-      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    maxcurrent: # sets NORMAL mode with the given current limit (A) via set_charging_mode_chargingstations
-      source: http
-      uri: http://HAlocalIP:8123/api/services/number/set_value
-      method: POST
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      body: >
-       {
-         "entity_id": "number.smappee_ev_max_charging_speed_1",
-         "value": {{ .maxcurrent }}
-       }
-      insecure: true  
-      ## POWER / CURRENTS / ENERGY from the modbus (or the official Smappee) integration
-    power: # not mandatory, but take the power sensor of the smappee charger.(see the Smappee_modbus.md for more info)
-      source: http
-      uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_power_total_car
-      method: GET
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      insecure: true
-      jq: .state | tonumber
-      timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-    currents:  ## I used here the modbus entities, but this will change depending on your personal setup
-      - source: http
-        uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_current_l1_car
-        method: GET
-        headers:
-          - Authorization: Bearer long_lived_TOKEN
-          - Content-Type: application/json
-        insecure: true
-        jq: .state | tonumber
-        timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-      - source: http
-        uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_current_l2_car
-        method: GET
-        headers:
-          - Authorization: Bearer long_lived_TOKEN
-          - Content-Type: application/json
-        insecure: true
-        jq: .state | tonumber
-        timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration
-      - source: http
-        uri: http://HAlocalIP:8123/api/states/sensor.smappee_modbus_current_l3_car
-        method: GET
-        headers:
-          - Authorization: Bearer long_lived_TOKEN
-          - Content-Type: application/json
-        insecure: true
-        jq: .state | tonumber
-        timeout: 2s # timeout in golang duration format, see https://golang.org/pkg/time/#ParseDuration                
-    energy: ## this is a template sensor, combining [energy_import_car(L1 + L2 + L3) / 1000]
-      source: http
-      uri: http://HAlocalIP:8123/api/states/sensor.smappee_energy_import_car
-      method: GET
-      headers:
-        - Authorization: Bearer long_lived_TOKEN
-        - Content-Type: application/json
-      jq: .state | tonumber
-      timeout: 2s
-      insecure: true        
+    type: template
+    template: homeassistant
+    uri: http://HAlocalIP:8123
+    status: sensor.evcc_state_1 # Charging status sensor, Entity ID for charging status (A=ready, B=connected, C=charging)
+    enabled: switch.smappee_ev_evcc_charging_control_1 # Enabled status sensor, Entity ID for enabled state (`sensor`, `binary_sensor` or `switch` with `on`/`off` or `true`/`false` state)
+    enable: switch.smappee_ev_evcc_charging_control_1 #  Enable switch, Entity ID for enable/disable control (`switch` or `input_boolean`)
+    setMaxCurrent: number.smappee_ev_max_charging_speed_1 # Maximum current entity [A], Entity ID for setting maximum current in amperes (`number` or `input_number` entity)
+    ## POWER / CURRENTS / ENERGY from the modbus (or the official Smappee) integration
+    power: number.smappee_ev_connector_1_power # Power entity, Entity ID for instantaneous power measurement in watts (optional)
+    energy: sensor.smappee_ev_connector_1_energy_import # Energy entity, Entity ID for cumulative energy measurement in kWh (optional)
+    currentL1: sensor.smappee_ev_connector_1_current_l1 # L1 current entity, Entity ID for L1 current measurement in amperes (optional)
+    currentL2: sensor.smappee_ev_connector_1_current_l2 # L2 current entity, Entity ID for L2 current measurement in amperes (optional)
+    currentL3: sensor.smappee_ev_connector_1_current_l3 # L3 current entity, Entity ID for L3 current measurement in amperes (optional)      
+    #voltageL1: sensor.charger_voltage_l1 # L1 voltage entity, Entity ID for L1 voltage measurement in volts (optional)
+    #voltageL2: sensor.charger_voltage_l2 # L2 voltage entity, Entity ID for L2 voltage measurement in volts (optional)
+    #voltageL3: sensor.charger_voltage_l3 # L3 voltage entity, Entity ID for L3 voltage measurement in volts (optional)
+    #phaseswitch: select.charger_phases # Phase switching entity, Entity ID for 1p/3p phase switching (select entity with options "1" and "3") (optional)
+    #heating: # Heating device, Shows °C instead of % (optional)
+    #integrateddevice: # Integrated device, Integrated device. No charging sessions (optional)    
 ```
 ## 🔌 YAML Example: circuits configuration for peak shaving / load balancing ??
 
@@ -145,21 +67,5 @@ loadpoints:
       charger: smappee # charger
       vehicle: Ford_explorer # default vehicle
       circuit: main
-      phases: 0  ## to allow for 1 and 3 phases - to be evaluated
+      phases: 3  ## 1 or 3 phases
 ```
-
-## ⚠️ EVCC requires high update rates for sensors
-
-The original Smappee integration (with Smappee Infinity/Connect) does not provide sufficiently fast updates.
-
-Therefore, I integrated this via Modbus.
-
-The Smappee Infinity/Genius also supports MQTT, which is nicely explained by Smappee.
-
-👉 Please see the new [document](./Smappee_modbus.md) for details on using Modbus sensors in Home Assistant with Smappee Connect.
-
-Other options to consider as input for EVCC include:
-- Your P1 meter
-- Direct sensor data from your PV system
-All those integrations are nicely explained on the EVCC website documentation.
-
