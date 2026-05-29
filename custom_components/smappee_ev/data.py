@@ -67,6 +67,8 @@ class StationState:
     grid_energy_export_kwh: float | None = None
     # list of per-phase currents (A)
     grid_current_phases: list[float] | None = None
+    # list of per-phase voltages (V, integer)
+    grid_voltage_phases: list[int] | None = None
 
     house_consumption_power: int | None = None
 

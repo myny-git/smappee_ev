@@ -9,7 +9,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfElectricCurrent, UnitOfEnergy, UnitOfPower
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -49,7 +55,16 @@ async def async_setup_entry(
             entities.append(StationGridEnergyExport(coord, st_client, sid, st_uuid))
             entities.append(StationPvEnergyImport(coord, st_client, sid, st_uuid))
             entities.append(StationGridCurrents(coord, st_client, sid, st_uuid))
+            entities.append(StationGridCurrentL1(coord, st_client, sid, st_uuid))
+            entities.append(StationGridCurrentL2(coord, st_client, sid, st_uuid))
+            entities.append(StationGridCurrentL3(coord, st_client, sid, st_uuid))
             entities.append(StationPvCurrents(coord, st_client, sid, st_uuid))
+            entities.append(StationPvCurrentL1(coord, st_client, sid, st_uuid))
+            entities.append(StationPvCurrentL2(coord, st_client, sid, st_uuid))
+            entities.append(StationPvCurrentL3(coord, st_client, sid, st_uuid))
+            entities.append(StationGridVoltageL1(coord, st_client, sid, st_uuid))
+            entities.append(StationGridVoltageL2(coord, st_client, sid, st_uuid))
+            entities.append(StationGridVoltageL3(coord, st_client, sid, st_uuid))
 
             # ---- Connector sensors ----
             for cuuid, client in (conns or {}).items():
@@ -454,6 +469,204 @@ class StationPvCurrents(SmappeeStationEntity, SensorEntity):
             if isinstance(vals, list) and len(vals) >= 3
             else {}
         )
+
+
+class StationGridCurrentL1(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:grid_current_l1",
+            name="Grid current L1",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_current_phases", None) if st else None
+        return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
+
+
+class StationGridCurrentL2(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:grid_current_l2",
+            name="Grid current L2",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_current_phases", None) if st else None
+        return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
+
+
+class StationGridCurrentL3(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:grid_current_l3",
+            name="Grid current L3",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_current_phases", None) if st else None
+        return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
+
+
+class StationPvCurrentL1(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:pv_current_l1",
+            name="PV current L1",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "pv_current_phases", None) if st else None
+        return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
+
+
+class StationPvCurrentL2(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:pv_current_l2",
+            name="PV current L2",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "pv_current_phases", None) if st else None
+        return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
+
+
+class StationPvCurrentL3(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:pv_current_l3",
+            name="PV current L3",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "pv_current_phases", None) if st else None
+        return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
+
+
+class StationGridVoltageL1(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.VOLTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:grid_voltage_l1",
+            name="Grid voltage L1",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_voltage_phases", None) if st else None
+        return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
+
+
+class StationGridVoltageL2(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.VOLTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:grid_voltage_l2",
+            name="Grid voltage L2",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_voltage_phases", None) if st else None
+        return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
+
+
+class StationGridVoltageL3(SmappeeStationEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.VOLTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
+
+    def __init__(self, coordinator, api, sid, station_uuid):
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="sensor:grid_voltage_l3",
+            name="Grid voltage L3",
+        )
+
+    @property
+    def native_value(self):
+        st = self.coordinator.data.station if self.coordinator.data else None
+        vals = getattr(st, "grid_voltage_phases", None) if st else None
+        return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
 
 class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):

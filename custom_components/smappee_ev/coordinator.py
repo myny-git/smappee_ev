@@ -51,6 +51,11 @@ def _amps_from_ma(ma: list[int]) -> list[float]:
     return [round(x / 1000.0, 3) for x in ma] if ma else []
 
 
+def _volts_from_dv(dv: list[int]) -> list[int]:
+    """Convert deci-volt list to V as integers."""
+    return [round(x / 10) for x in dv] if dv else []
+
+
 class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     """Single source of truth: fetch station + all connector state here."""
 
@@ -656,6 +661,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         changed = False
         active = payload.get("activePowerData") or []
         currents_ma = payload.get("currentData") or []
+        voltage_dv = payload.get("phaseVoltageData") or []
         imp_wh = payload.get("importActiveEnergyData") or []
         exp_wh = payload.get("exportActiveEnergyData") or []
 
@@ -666,6 +672,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             i_ph = _amps_from_ma(_pick(currents_ma, power_idxs))
             if i_ph:
                 changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
+
+        if power_key_prefix == "grid":
+            # Voltage is always in the first 3 entries of phaseVoltageData
+            # (L1, L2, L3 of the grid connection), independent of powerTopicIndex.
+            v_ph = _volts_from_dv(_pick(voltage_dv, [0, 1, 2]))
+            if v_ph:
+                changed |= self._set_if_changed(st, "grid_voltage_phases", v_ph)
 
         if energy_idxs:
             if power_key_prefix == "grid":
