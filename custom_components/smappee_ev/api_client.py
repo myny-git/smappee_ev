@@ -206,7 +206,9 @@ class SmappeeApiClient:
             rng = max_current - min_current
             percentage = int(max(0, min(100, round(((target - min_current) * 100.0) / rng))))
 
-        await self.set_charging_mode("NORMAL", limit=percentage, limit_unit="PERCENTAGE")
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
+        payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
+        await self._request("POST", url, json=payload, expected=(200,))
 
         _LOGGER.debug(
             "Started charging successfully (target=%s A, pct=%s, range=%s-%s)",

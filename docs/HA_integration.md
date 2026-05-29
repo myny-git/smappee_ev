@@ -24,7 +24,7 @@ If you have multiple charging stations sharing connector `1` or `2`, also provid
 Sets the desired charging mode (`SMART`, `SOLAR`, or `NORMAL`). Kept for backward compatibility — internally routes to `set_charging_mode_chargingstations` for `NORMAL` and `PAUSED`; `SMART` and `SOLAR` use the smartdevices endpoint.
 
 - **`smappee_ev.start_charging`**  
-Starts a charging session using a **current limit** parameter. Internally uses `set_charging_mode_chargingstations` with `NORMAL` mode.
+Starts a charging session using a **current limit** parameter. Requesting this multiple times with different current levels has an impact, but you need to refresh your screen, or switch to another tab (like Smart) and return.
 
 - **`smappee_ev.pause_charging`**  
 Pauses the currently active charging session. Internally uses `set_charging_mode_chargingstations` with `PAUSED` mode.
@@ -79,8 +79,11 @@ Sets the desired brightness level for the Wallbox LEDs, from 0 to 100%.
 - **`button.smappee_ev_YOURSERIAL_set_charging_mode_1`**  
 Applies the currently selected `charging mode` from the select entity via the `chargingstations` endpoint. In `NORMAL` mode, the current limit from the `max_charging_speed` slider is sent directly in amperes. Use this after changing the mode or current to activate it on the Wallbox. It is connector-specific.
 
+- **`button.smappee_ev_YOURSERIAL_start_charging_1`**  
+Starts a charging session using the value set in `max_charging_speed`. Pressing multiple times with different current levels has an impact, but you need to refresh your screen! Also connector-specific.
+
 - **`button.smappee_ev_YOURSERIAL_pause_charging_1`**  
-Pauses the ongoing charging session via `PAUSED` on the `chargingstations` endpoint. Charging can later be resumed.
+Pauses the ongoing charging session. Charging can later be resumed.
 
 - **`button.smappee_ev_YOURSERIAL_stop_charging_1`**  
 Stops the current charging session entirely. Useful for ending sessions manually or through automations. Also connector-specific.

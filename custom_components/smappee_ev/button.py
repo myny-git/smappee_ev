@@ -5,7 +5,6 @@ import logging
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api_client import SmappeeApiClient
@@ -24,17 +23,6 @@ async def async_setup_entry(
     runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
     sites = runtime.sites
 
-    # Remove stale start_charging button entities left over from older versions
-    registry = er.async_get(hass)
-    stale = [
-        entry.entity_id
-        for entry in er.async_entries_for_config_entry(registry, config_entry.entry_id)
-        if entry.unique_id.endswith(":button:start_charging")
-    ]
-    for entity_id in stale:
-        registry.async_remove(entity_id)
-        _LOGGER.debug("Removed stale start_charging button entity: %s", entity_id)
-
     entities: list[ButtonEntity] = []
     for sid, site in (sites or {}).items():
         stations = (site or {}).get("stations", {})
@@ -46,6 +34,15 @@ async def async_setup_entry(
                 lbl = build_connector_label(client, cuuid).split(" ", 1)[1]  # get number / tail
                 entities.extend(
                     [
+                        SmappeeActionButton(
+                            coordinator=coord,
+                            api_client=client,
+                            sid=sid,
+                            station_uuid=st_uuid,
+                            connector_uuid=cuuid,
+                            name=f"Start charging {lbl}",
+                            action="start_charging",
+                        ),
                         SmappeeActionButton(
                             coordinator=coord,
                             api_client=client,
@@ -108,8 +105,29 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Execute the action on press."""
-        if self._action == "pause_charging":
-            await self.api_client.set_charging_mode("PAUSED")
+        if self._action == "start_charging":
+            data = self.coordinator.data if self.coordinator else None
+            target_a = 6
+            conn = None
+            if data and self.connector_uuid in (data.connectors or {}):
+                conn = data.connectors[self.connector_uuid]
+                sel = getattr(conn, "selected_current_limit", None)
+                mn = getattr(conn, "min_current", None)
+                if isinstance(sel, int) and sel > 0:
+                    target_a = sel
+                elif isinstance(mn, int) and mn > 0:
+                    target_a = mn
+            cur, pct = await self.api_client.start_charging(
+                current=target_a,
+                min_current=getattr(conn, "min_current", 6) if conn else 6,
+                max_current=getattr(conn, "max_current", 32) if conn else 32,
+            )
+            if data and conn is not None:
+                conn.selected_current_limit = cur
+                conn.selected_percentage_limit = pct
+                self.coordinator.async_set_updated_data(data)
+        elif self._action == "pause_charging":
+            await self.api_client.pause_charging()
         elif self._action == "stop_charging":
             await self.api_client.stop_charging()
         elif self._action == "set_charging_mode":
