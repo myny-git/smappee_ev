@@ -58,7 +58,25 @@
     },
     "pause_charging": {
       "name": "Laden pausieren",
-      "description": "Pausiert den Ladevorgang für den ausgewählten Connector.",
+      "description": "Pausiert den Ladevorgang für den ausgewählten Connector. Verwendet den chargingstations-API-Endpunkt.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2)."
+        }
+      }
+    },
+    "pause_charging_smartdevices": {
+      "name": "Laden pausieren (smartdevices)",
+      "description": "Pausiert den Ladevorgang über den smartdevices-API-Endpunkt. Verwenden, wenn der Charger den chargingstations-Endpunkt nicht unterstützt.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",

@@ -1,14 +1,12 @@
 # Smappee EV Home Assistant Integration (HACS)
 
 > [!IMPORTANT]
-> This is a personal project developed by me and is not affiliated with, maintained, authorized, or endorsed by Smappee in any way. Use at your own risk.
+> This is a personal project developed by me and I am not affiliated with Smappee in any way. Use at your own risk.
 
 ## 🧠 Credits
-The original code started as a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". 
+The original code started as a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". However, the codebase has been completely refactored, resulting in a **new and independent integration**.
 
-The codebase has been completely refactored, resulting in a **new and independent integration**. 
-
-This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging.
+This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging. However, energy data may also be available in this integration. Feel free to join the discord channel if you have questions or want to contribute! 
 <div align="center">
 
 [![HACS][hacs-shield]][hacs-url]
@@ -24,9 +22,7 @@ This integration is designed to be **complementary to the official Smappee integ
 [![Stars][stars-shield]][stars-url]
 [![Pull Requests][pulls-shield]][pulls-url]
 [![Community][community-shield]][community-url]
-<!-- This is a comment[![Discord][discord-shield]][discord-url] -->
-
-
+[![Discord][discord-shield]][discord-url]
 </div>
 
 ## 🔧 Features
@@ -36,13 +32,14 @@ This custom integration unlocks **more control over your Smappee** charger and c
 The main ambition is to have independent control of the Smappee EV charger via Home Assistant and eventually add those sensors in other energy management systems.
 
 ### ✅ Charging Mode Control
-- All UI controls (buttons, select, number slider, switch) route through the **`chargingstations` endpoint**, which is stable and avoids the cloud-side session timeout issue (EVSE → SUSPENDED_EVSE, see issue #103).
+- All UI controls (buttons, select, number slider, switch) route through the **`chargingstations` endpoint**, which is stable and avoids the cloud-side session timeout issue, as reported before.
 - The `smappee_ev.set_charging_mode_chargingstations` service provides direct connector control with `NORMAL`, `SMART`, or `PAUSED`, including an optional limit in `AMPERE` or `PERCENTAGE` when using `NORMAL`.
 - The `smappee_ev.set_charging_mode` service is kept for backward compatibility and also routes internally to the `chargingstations` endpoint (except `SOLAR`, which has no equivalent on that endpoint).
 - Apply the selected UI mode with the **Set Charging Mode** button.
 
 ### ✅ Direct Charger Control
-- Pause or Stop charging sessions from Home Assistant
+- Pause charging via **`smappee_ev.pause_charging`** (chargingstations endpoint) or **`smappee_ev.pause_charging_smartdevices`** (smartdevices endpoint, for chargers that do not support the chargingstations endpoint)
+- Stop charging sessions from Home Assistant
 - Set fixed charging **currents** (in Amps)
 - Change Wallbox availability (set available/unavailable)
 - Target a specific connector directly through the `chargingstations` endpoint when needed, which is especially useful in multi-station setups
@@ -182,5 +179,5 @@ If this integration is useful to you, feel free to support its development:
 [community-url]: https://community.home-assistant.io/t/smappee-ev/915116
 
 [discord-shield]: https://img.shields.io/badge/Discord-Chat-blue?style=flat-square&logo=discord&logoColor=white
-[discord-url]: https://discord.gg/CHnVjqDQ
+[discord-url]: https://discord.gg/43uydPgaNf
 

@@ -58,7 +58,25 @@
     },
     "pause_charging": {
       "name": "Pause charging",
-      "description": "Pause charging for the selected connector.",
+      "description": "Pause charging for the selected connector. Uses the chargingstations API endpoint.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2)."
+        }
+      }
+    },
+    "pause_charging_smartdevices": {
+      "name": "Pause charging (smartdevices)",
+      "description": "Pause charging using the smartdevices API endpoint. Use this if your charger does not support the chargingstations endpoint.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",

@@ -58,7 +58,25 @@
     },
     "pause_charging": {
       "name": "Mettre en pause la charge",
-      "description": "Met en pause la charge pour le connecteur sélectionné.",
+      "description": "Met en pause la charge pour le connecteur sélectionné. Utilise le point de terminaison API chargingstations.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "pause_charging_smartdevices": {
+      "name": "Mettre en pause la charge (smartdevices)",
+      "description": "Met en pause la charge via le point de terminaison API smartdevices. À utiliser si votre chargeur ne prend pas en charge le point de terminaison chargingstations.",
       "fields": {
         "config_entry_id": {
           "name": "ID de l’entrée de configuration",

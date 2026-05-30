@@ -222,6 +222,12 @@ class SmappeeApiClient:
     async def pause_charging(self) -> None:
         await self.set_charging_mode("PAUSED")
 
+    async def pause_charging_smartdevices(self) -> None:
+        """Pause charging via the legacy smartdevices endpoint (for older firmware)."""
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/pauseCharging"
+        await self._request("POST", url, json=[], expected=(200,))
+        _LOGGER.debug("Paused charging successfully (legacy smartdevices endpoint)")
+
     async def stop_charging(self) -> None:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/stopCharging"
         await self._request("POST", url, json=[], expected=(200,))

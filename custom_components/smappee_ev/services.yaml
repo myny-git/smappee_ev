@@ -76,7 +76,29 @@ set_charging_mode_chargingstations:
             - PERCENTAGE
 
 pause_charging:
-  description: "Pause charging on a connector."
+  description: "Pause charging on a connector (via chargingstations endpoint)."
+  fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
+    service_location_id:
+      description: "Optional: Service Location ID."
+      required: false
+      example: 173311
+      selector:
+        number:
+          min: 1
+    connector_id:
+      description: "Optional: Connector number."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+
+pause_charging_smartdevices:
+  description: "Pause charging via the legacy smartdevices endpoint (for older firmware that does not support the chargingstations endpoint)."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
