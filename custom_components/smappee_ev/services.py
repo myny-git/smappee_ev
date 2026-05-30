@@ -432,7 +432,9 @@ async def register_services(hass: HomeAssistant) -> None:
         DOMAIN, "start_charging", handle_start_charging, START_CHARGING_SCHEMA
     )
     hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging, PAUSE_STOP_SCHEMA)
-    hass.services.async_register(DOMAIN, "pause_charging_smartdevices", handle_pause_charging_smartdevices, PAUSE_STOP_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, "pause_charging_smartdevices", handle_pause_charging_smartdevices, PAUSE_STOP_SCHEMA
+    )
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging, PAUSE_STOP_SCHEMA)
     hass.services.async_register(
         DOMAIN, "set_charging_mode", handle_set_charging_mode, SET_MODE_SCHEMA
