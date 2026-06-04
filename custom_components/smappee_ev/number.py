@@ -79,7 +79,7 @@ class _BaseNumber(RestoreNumber):
     _attr_has_entity_name = True
     _attr_mode = NumberMode.SLIDER
 
-    def _post_init(self, unit: str, min_value: int, max_value: int, step: int) -> None:
+    def _post_init(self, unit: str, min_value: float, max_value: float, step: float) -> None:
         self._attr_native_unit_of_measurement = unit
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
@@ -117,32 +117,34 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         )
         self.api_client = api_client
         self._uuid = connector_uuid
-        self._post_init(UnitOfElectricCurrent.AMPERE, min_current, max_current, 1)
+        self._post_init(UnitOfElectricCurrent.AMPERE, float(min_current), float(max_current), 0.1)
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
         return data.connectors.get(self._uuid) if data else None
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> float | None:
         st = self._state()
         if not st:
             return None
         if st.selected_current_limit is not None:
-            return int(st.selected_current_limit)
+            return round(float(st.selected_current_limit), 1)
         if st.max_current <= st.min_current:
-            return int(st.min_current)
+            return round(float(st.min_current), 1)
         rng = st.max_current - st.min_current
         pct = st.selected_percentage_limit or 0
         cur = st.min_current + (float(pct) / 100.0) * rng
-        return max(st.min_current, min(st.max_current, int(round(cur))))
+        return round(max(float(st.min_current), min(float(st.max_current), cur)), 1)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         st = self._state()
         if not st:
             return {}
-        cur = self.native_value or st.min_current
+        cur = self.native_value
+        if cur is None:
+            cur = float(st.min_current)
         if st.max_current <= st.min_current:
             return {
                 "percentage": None,
@@ -159,31 +161,37 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             return
         min_c, max_c = st.min_current, st.max_current
 
-        val = int(max(min_c, min(int(value), max_c)))
+        val = max(float(min_c), min(round(float(value), 1), float(max_c)))
+
+        # Convert amps to integer percentage for the API
+        if max_c > min_c:
+            rng = max_c - min_c
+            pct = int(round((val - min_c) / float(rng) * 100))
+        else:
+            pct = 100
+        pct = max(0, min(100, pct))
 
         _LOGGER.debug(
-            "Setting current: requested=%s → clamped=%s (range %s-%s)",
+            "Setting current: requested=%s → clamped=%.1f A → %d%% (range %s-%s)",
             value,
             val,
+            pct,
             min_c,
             max_c,
         )
 
-        await self.api_client.set_charging_mode("NORMAL", limit=val)
-        st.selected_current_limit = val
-        if max_c > min_c:
-            rng = max_c - min_c
-            pct = int(round((val - min_c) * 100.0 / rng))
-            st.selected_percentage_limit = max(0, min(100, pct))
-        else:
-            st.selected_percentage_limit = 100
+        cur_float, pct_int = await self.api_client.set_percentage_limit(
+            pct, min_current=int(min_c), max_current=int(max_c)
+        )
+        st.selected_current_limit = cur_float
+        st.selected_percentage_limit = pct_int
 
     @callback
     def _handle_coordinator_update(self) -> None:
         st = self._state()
         if st:
-            new_min = int(st.min_current)
-            new_max = int(st.max_current)
+            new_min = float(st.min_current)
+            new_max = float(st.max_current)
 
             old_min = self._attr_native_min_value
             old_max = self._attr_native_max_value
@@ -195,7 +203,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
                 self._attr_native_max_value = new_max
             if old_min != new_min or old_max != new_max:
                 _LOGGER.debug(
-                    "Updated slider range to %s–%s A (was %s–%s)",
+                    "Updated slider range to %.1f–%.1f A (was %.1f–%.1f)",
                     new_min,
                     new_max,
                     old_min,
@@ -210,7 +218,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         if not last or last.native_value is None:
             return
         try:
-            restored = int(float(last.native_value))
+            restored = round(float(last.native_value), 1)
         except (TypeError, ValueError):
             return
         st = self._state()

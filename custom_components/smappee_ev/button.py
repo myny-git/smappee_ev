@@ -132,13 +132,13 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
             await self.api_client.stop_charging()
         elif self._action == "set_charging_mode":
             data = self.coordinator.data if self.coordinator else None
-            mode = "NORMAL"
+            mode = "STANDARD"
             if data and self.connector_uuid in (data.connectors or {}):
                 conn = data.connectors[self.connector_uuid]
                 mode = (
                     getattr(conn, "selected_mode", None)
                     or getattr(conn, "ui_mode_base", None)
-                    or "NORMAL"
+                    or "STANDARD"
                 )
             await self.api_client.set_charging_mode(mode)
         else:

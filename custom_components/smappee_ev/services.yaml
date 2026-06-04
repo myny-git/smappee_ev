@@ -1,5 +1,37 @@
+set_current:
+  description: "Set charging current in Ampere (1 decimal precision). The value is translated to the nearest integer percentage and sent via setPercentageLimit. The slider and number entities update immediately."
+  fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
+    service_location_id:
+      description: "Optional: Service Location ID."
+      required: false
+      example: 173311
+      selector:
+        number:
+          min: 1
+    connector_id:
+      description: "Optional: Connector number."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+    current:
+      description: "Charging current in Ampere (1 decimal place, e.g. 11.4). Clamped to the connector's configured min–max range."
+      required: true
+      example: 11.4
+      selector:
+        number:
+          min: 6.0
+          max: 32.0
+          step: 0.1
+          unit_of_measurement: "A"
+
 set_charging_mode:
-  description: "Set the charging mode (NORMAL, SMART, SOLAR)."
+  description: "Set the charging mode (STANDARD, SMART, SOLAR) via the smartdevices endpoint."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -25,7 +57,7 @@ set_charging_mode:
       selector:
         select:
           options:
-            - NORMAL
+            - STANDARD
             - SMART
             - SOLAR
 
@@ -76,7 +108,7 @@ set_charging_mode_chargingstations:
             - PERCENTAGE
 
 pause_charging:
-  description: "Pause charging on a connector (via chargingstations endpoint)."
+  description: "Pause charging on a connector (via smartdevices endpoint — recommended, matches Smappee app behaviour)."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -97,8 +129,8 @@ pause_charging:
         number:
           min: 1
 
-pause_charging_smartdevices:
-  description: "Pause charging via the legacy smartdevices endpoint (for older firmware that does not support the chargingstations endpoint)."
+pause_charging_chargingstations:
+  description: "Pause charging via the chargingstations endpoint (legacy fallback — use pause_charging for normal operation)."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."

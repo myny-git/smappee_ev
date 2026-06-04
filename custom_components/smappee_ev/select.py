@@ -10,7 +10,7 @@ from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, RuntimeData
 from .helpers import build_connector_label
 
-MODES = ["SMART", "SOLAR", "NORMAL"]
+MODES = ["STANDARD", "SMART", "SOLAR"]
 
 
 async def async_setup_entry(
@@ -77,23 +77,16 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
     def current_option(self) -> str | None:
         st = self._state()
         if st:
-            # Prefer explicit selected_mode; fall back to ui_mode_base; default NORMAL
-            return st.selected_mode or st.ui_mode_base or "NORMAL"
-        return "NORMAL"
+            # Prefer explicit selected_mode; fall back to ui_mode_base; default STANDARD
+            return st.selected_mode or st.ui_mode_base or "STANDARD"
+        return "STANDARD"
 
     async def async_select_option(self, option: str) -> None:
         data = self.coordinator.data
         if data and self.connector_uuid in (data.connectors or {}):
             data.connectors[self.connector_uuid].selected_mode = option
             self.coordinator.async_set_updated_data(data)
-        # For NORMAL, pass the slider's current limit so the charger
-        # doesn't revert to MAX when switching back from SMART/SOLAR.
-        limit: int | None = None
-        if option.upper() == "NORMAL":
-            st = self._state()
-            if st and st.selected_current_limit is not None:
-                limit = st.selected_current_limit
-        await self.api_client.set_charging_mode(option, limit=limit)
+        await self.api_client.set_charging_mode(option)
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:  # RestoreEntity

@@ -58,7 +58,7 @@
     },
     "pause_charging": {
       "name": "Mettre en pause la charge",
-      "description": "Met en pause la charge pour le connecteur sélectionné. Utilise le point de terminaison API chargingstations.",
+      "description": "Met en pause la charge pour le connecteur sélectionné. Utilise le point de terminaison API smartdevices (recommandé — correspond au comportement de l’application).",
       "fields": {
         "config_entry_id": {
           "name": "ID de l'entrée de configuration",
@@ -74,9 +74,9 @@
         }
       }
     },
-    "pause_charging_smartdevices": {
-      "name": "Mettre en pause la charge (smartdevices)",
-      "description": "Met en pause la charge via le point de terminaison API smartdevices. À utiliser si votre chargeur ne prend pas en charge le point de terminaison chargingstations.",
+    "pause_charging_chargingstations": {
+      "name": "Mettre en pause la charge (chargingstations)",
+      "description": "Met en pause la charge via le point de terminaison API chargingstations. Solution de repli héritée — utilisez pause_charging pour un fonctionnement normal.",
       "fields": {
         "config_entry_id": {
           "name": "ID de l’entrée de configuration",
@@ -109,8 +109,28 @@
           "description": "Optionnel : numéro de connecteur (1 ou 2)."
         }
       }
-    },
-    "set_charging_mode": {
+    },    "set_current": {
+      "name": "Définir le courant",
+      "description": "Définit le courant de charge en ampères (1 décimale). Converti en pourcentage entier le plus proche et envoyé via setPercentageLimit. Le curseur et les entités numériques se mettent à jour immédiatement.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
+        },
+        "current": {
+          "name": "Courant (A)",
+          "description": "Courant de charge en ampères (1 décimale, ex. 11,4). Limité à la plage min–max configurée du connecteur."
+        }
+      }
+    },    "set_charging_mode": {
       "name": "Définir le mode de charge",
       "description": "Définit le mode de charge d’un connecteur.",
       "fields": {
@@ -128,7 +148,7 @@
         },
         "mode": {
           "name": "Mode",
-          "description": "Mode de charge (NORMAL, SMART, SOLAR)."
+          "description": "Mode de charge (STANDARD, SMART, SOLAR)."
         }
       }
     },

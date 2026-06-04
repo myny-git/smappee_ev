@@ -37,6 +37,8 @@ chargers:
     enabled: switch.smappee_ev_evcc_charging_control_1 # Enabled status sensor, Entity ID for enabled state (`sensor`, `binary_sensor` or `switch` with `on`/`off` or `true`/`false` state)
     enable: switch.smappee_ev_evcc_charging_control_1 #  Enable switch, Entity ID for enable/disable control (`switch` or `input_boolean`)
     setMaxCurrent: number.smappee_ev_max_charging_speed_1 # Maximum current entity [A], Entity ID for setting maximum current in amperes (`number` or `input_number` entity)
+    # ⚡ The number entity has step=0.1 A, so EVCC can send mA-precision current targets (e.g. 10.3 A).
+    # The integration converts the float value internally to an integer percentage before sending it to the API.
     ## POWER / CURRENTS / ENERGY from the modbus (or the official Smappee) integration
     power: number.smappee_ev_connector_1_power # Power entity, Entity ID for instantaneous power measurement in watts (optional)
     energy: sensor.smappee_ev_connector_1_energy_import # Energy entity, Entity ID for cumulative energy measurement in kWh (optional)

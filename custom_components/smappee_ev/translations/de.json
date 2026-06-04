@@ -58,7 +58,7 @@
     },
     "pause_charging": {
       "name": "Laden pausieren",
-      "description": "Pausiert den Ladevorgang für den ausgewählten Connector. Verwendet den chargingstations-API-Endpunkt.",
+      "description": "Pausiert den Ladevorgang für den ausgewählten Connector. Verwendet den smartdevices-API-Endpunkt (empfohlen — entspricht dem App-Verhalten).",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
@@ -74,9 +74,9 @@
         }
       }
     },
-    "pause_charging_smartdevices": {
-      "name": "Laden pausieren (smartdevices)",
-      "description": "Pausiert den Ladevorgang über den smartdevices-API-Endpunkt. Verwenden, wenn der Charger den chargingstations-Endpunkt nicht unterstützt.",
+    "pause_charging_chargingstations": {
+      "name": "Laden pausieren (chargingstations)",
+      "description": "Pausiert den Ladevorgang über den chargingstations-API-Endpunkt. Veralteter Fallback — für den normalen Betrieb bitte pause_charging verwenden.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
@@ -110,6 +110,28 @@
         }
       }
     },
+    "set_current": {
+      "name": "Strom setzen",
+      "description": "Setzt den Ladestrom in Ampere (1 Dezimalstelle). Wird in den n\u00e4chsten ganzzahligen Prozentwert umgerechnet und \u00fcber setPercentageLimit gesendet. Schieberegler und Zahlen-Entit\u00e4ten werden sofort aktualisiert.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Eintr\u00e4gen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2; leer lassen, wenn nur einer vorhanden ist)."
+        },
+        "current": {
+          "name": "Strom (A)",
+          "description": "Ladestrom in Ampere (1 Dezimalstelle, z.\u00a0B. 11,4). Wird auf den konfigurierten Min\u2013Max-Bereich des Connectors begrenzt."
+        }
+      }
+    },
     "set_charging_mode": {
       "name": "Lademodus setzen",
       "description": "Setzt den Lademodus eines Connectors.",
@@ -128,7 +150,7 @@
         },
         "mode": {
           "name": "Modus",
-          "description": "Lademodus (NORMAL, SMART, SOLAR)."
+          "description": "Lademodus (STANDARD, SMART, SOLAR)."
         }
       }
     },

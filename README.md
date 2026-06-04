@@ -32,13 +32,13 @@ This custom integration unlocks **more control over your Smappee** charger and c
 The main ambition is to have independent control of the Smappee EV charger via Home Assistant and eventually add those sensors in other energy management systems.
 
 ### ✅ Charging Mode Control
-- All UI controls (buttons, select, number slider, switch) route through the **`chargingstations` endpoint**, which is stable and avoids the cloud-side session timeout issue, as reported before.
-- The `smappee_ev.set_charging_mode_chargingstations` service provides direct connector control with `NORMAL`, `SMART`, or `PAUSED`, including an optional limit in `AMPERE` or `PERCENTAGE` when using `NORMAL`.
-- The `smappee_ev.set_charging_mode` service is kept for backward compatibility and also routes internally to the `chargingstations` endpoint (except `SOLAR`, which has no equivalent on that endpoint).
-- Apply the selected UI mode with the **Set Charging Mode** button.
+- UI controls (select, number slider, **Set Charging Mode** button) use the **`smartdevices` endpoint**, which matches the Smappee app buttons exactly and avoids the cloud-side session timeout issue (issue #103).
+- The EVCC switch uses the **`chargingstations` endpoint** for enable (`NORMAL`) and disable (`PAUSED`).
+- `smappee_ev.set_charging_mode` sets mode via the smartdevices endpoint: `STANDARD`, `SMART`, or `SOLAR`.
+- `smappee_ev.set_charging_mode_chargingstations` provides direct chargingstations control: `NORMAL`, `SMART`, or `PAUSED`, with an optional limit in `AMPERE` or `PERCENTAGE`.
 
 ### ✅ Direct Charger Control
-- Pause charging via **`smappee_ev.pause_charging`** (chargingstations endpoint) or **`smappee_ev.pause_charging_smartdevices`** (smartdevices endpoint, for chargers that do not support the chargingstations endpoint)
+- Pause charging via **`smappee_ev.pause_charging`** (smartdevices endpoint — matches Smappee app, recommended) or **`smappee_ev.pause_charging_chargingstations`** (chargingstations endpoint, legacy fallback)
 - Stop charging sessions from Home Assistant
 - Set fixed charging **currents** (in Amps)
 - Change Wallbox availability (set available/unavailable)

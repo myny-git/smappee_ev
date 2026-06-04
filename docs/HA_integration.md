@@ -24,7 +24,7 @@ Used in this integration for:
 | Set mode to Normal | `NORMAL` | optional `limit` with `unit` (`AMPERE` or `PERCENTAGE`) |
 | Pause charging | `PAUSED` | — |
 
-> This is the **default endpoint** for all UI controls (select, buttons, number slider, switch) — it is stable and avoids the cloud-side session timeout issue (EVSE → SUSPENDED_EVSE, see issue #103).
+> This endpoint is used by the `set_charging_mode_chargingstations` service.
 
 #### 2. `smartdevices` endpoint
 ```
@@ -37,15 +37,15 @@ Used in this integration for:
 |-------------|-------------------|-------------|
 | `startCharging` | `start_charging` | Start a session at a given current (converted to `percentageLimit`) |
 | `setPercentageLimit` | `set_percentage_limit` | Set charging speed as a percentage of max current |
+| `setPercentageLimit` | `set_current` | Set charging speed as a float Ampere value (converted internally to percentage) |
 | `stopCharging` | `stop_charging` | Stop the active charging session |
-| `pauseCharging` | `pause_charging_smartdevices` | Pause charging — use if your charger does not support the `chargingstations` endpoint |
-| `setChargingMode` | `set_charging_mode` (SMART / SOLAR) | Set mode to `SMART` or `SOLAR` |
+| `pauseCharging` | `pause_charging` | Pause charging — recommended default (matches Smappee app behaviour) |
+| `setChargingMode` STANDARD | `set_charging_mode` (STANDARD) | Set mode to Standard (equivalent to app Standard button; avoids session timeout issue #103) |
+| `setChargingMode` SMART | `set_charging_mode` (SMART) | Set mode to SMART |
+| `setChargingMode` SOLAR | `set_charging_mode` (SOLAR) | Set mode to SOLAR |
 | `setAvailable` | `set_available` | Mark the station available for use |
 | `setUnavailable` | `set_unavailable` | Mark the station unavailable for use |
 | `setBrightness` | `set_brightness` | Set LED brightness (station-level) |
-| `normalChargingMode` | — | Not implemented separately; covered by `setChargingMode` → STANDARD |
-| `smartChargingMode` | — | Not implemented separately; covered by `setChargingMode` → SMART |
-| `controlChargingExternally` | — | Not implemented |
 
 ---
 
@@ -55,39 +55,40 @@ This integration firstly creates several services, which can be called directly 
 
 ![Illustration of the charging mode selection screen in the Smappee EV Wallbox dashboard, showing options for SMART, SOLAR, and NORMAL modes.](../images/setchargingmode.png)
 
+- **`smappee_ev.set_charging_mode`**  
+Sets the desired charging mode (`STANDARD`, `SMART`, or `SOLAR`) via the **smartdevices endpoint**. This matches the Smappee app mode buttons exactly and avoids the session timeout issue described in issue #103. No current/percentage limit is used here; use the `max_charging_speed` number entity (or `set_percentage_limit`) to control charging speed independently.
+
 - **`smappee_ev.set_charging_mode_chargingstations`**  
-The primary service for direct connector control. Supports `NORMAL`, `SMART`, and `PAUSED`.
+The legacy service for direct connector control via the `chargingstations` endpoint. Supports `NORMAL`, `SMART`, and `PAUSED`.
 When using `NORMAL`, you can optionally pass a `limit` together with `limit_unit` (`AMPERE` or `PERCENTAGE`).
 If you have multiple charging stations sharing connector `1` or `2`, also provide `charging_station_serial` so the integration can resolve the correct connector unambiguously.
-
-![Illustration of the charging mode selection screen in the Smappee EV Wallbox dashboard, showing options for SMART, SOLAR, and NORMAL modes.](../images/setchargingmode2.png)
-
-- **`smappee_ev.set_charging_mode`**  
-Sets the desired charging mode (`SMART`, `SOLAR`, or `NORMAL`). Kept for backward compatibility — internally routes to `set_charging_mode_chargingstations` for `NORMAL` and `PAUSED`; `SMART` and `SOLAR` use the smartdevices endpoint.
 
 - **`smappee_ev.start_charging`**  
 Starts a charging session using a **current limit** parameter. Requesting this multiple times with different current levels has an impact, but you need to refresh your screen, or switch to another tab (like Smart) and return.
 
 - **`smappee_ev.pause_charging`**  
-Pauses the currently active charging session via the `chargingstations` endpoint (`PAUSED` mode).
+Pauses the currently active charging session via the `smartdevices/actions/pauseCharging` endpoint (recommended — matches the Smappee app Pause button exactly).
 
-- **`smappee_ev.pause_charging_smartdevices`**  
-Pauses the currently active charging session via the `smartdevices/actions/pauseCharging` endpoint. Use this if your charger does not support the `chargingstations` endpoint.
+- **`smappee_ev.pause_charging_chargingstations`**  
+Pauses the currently active charging session via the `chargingstations` endpoint (`PAUSED` mode). Use as a fallback if your firmware does not respond to the smartdevices endpoint.
 
 - **`smappee_ev.stop_charging`**  
 Stops the charging session. 
+
+- **`smappee_ev.set_current`**  
+Sets the charging current in **Ampere with 1 decimal precision** (e.g. `11.4`). The value is translated to the nearest integer percentage of the connector's configured min–max range and sent via `setPercentageLimit`. The `max_charging_speed` slider and number entity update immediately, without waiting for the next poll.
 
 ### 🔘 Buttons, numbers and select entities
 This integration also created a few buttons, number and select entities, which make use of aforementioned services. You can use them in your Home Assistant dashboards. Some entities will be created per connector number. 
 
 - **`select.smappee_ev_YOURSERIAL_charging_mode_1`**  
 Allows you to choose between the following official Smappee charging modes per connector (1 or 2), as they appear in the Smappee App or Dashboard:
+  - `STANDARD`: Charges at a fixed current limit (set via the `max_charging_speed` entity)
   - `SMART`: Balances grid and solar energy
   - `SOLAR`: Charges using solar power only
-  - `NORMAL`: Charges at a fixed current limit (with the `max_charging_speed` entity)
 
 - **`number.smappee_ev_YOURSERIAL_max_charging_speed_1`**  
-Defines the current (in Amps) to be used when operating in `NORMAL` mode (aka Standard). Adjust this to match your desired charging speed. This number will be available per connector (1 or 2). Some examples:
+Defines the current (in Amps, with 0.1 A precision) to be used when operating in `STANDARD` mode. Adjust this to match your desired charging speed. The value is converted internally to a percentage and sent via `setPercentageLimit`. This number will be available per connector (1 or 2). Some examples:
 #### 🚗 Charging Power Table
 
 | Current (A) | Power (1 phase, kW) | Power (3 phases, kW) |
@@ -122,7 +123,7 @@ This slider sets **how much of the minimum required current (6A or 3x6A)** must 
 Sets the desired brightness level for the Wallbox LEDs, from 0 to 100%.
    
 - **`button.smappee_ev_YOURSERIAL_set_charging_mode_1`**  
-Applies the currently selected `charging mode` from the select entity via the `chargingstations` endpoint. In `NORMAL` mode, the current limit from the `max_charging_speed` slider is sent directly in amperes. Use this after changing the mode or current to activate it on the Wallbox. It is connector-specific.
+Applies the currently selected `charging mode` from the select entity via the `smartdevices` endpoint. The mode is STANDARD, SMART or SOLAR. Use this after changing the mode to activate it on the Wallbox. It is connector-specific.
 
 - **`button.smappee_ev_YOURSERIAL_start_charging_1`**  
 Starts a charging session using the value set in `max_charging_speed`. Pressing multiple times with different current levels has an impact, but you need to refresh your screen! Also connector-specific.
@@ -160,8 +161,8 @@ Shows when the MQTT has been updated
 
 **`switch.smappee_ev_YOURSERIAL_connector_1_evcc_charging`**  
 The integration of EVCC requires a switch (per connector ID), which:
-- `turn_on`: calls `set_charging_mode_chargingstations` with `NORMAL` mode and the selected current limit (or `min_current` as fallback).
-- `turn_off`: calls `set_charging_mode_chargingstations` with `PAUSED` mode.
+- `turn_on`: calls `set_charging_mode` with `STANDARD` (smartdevices endpoint — matches Smappee app behaviour).
+- `turn_off`: calls `pause_charging` (smartdevices endpoint).
 Please see the [EVCC](https://github.com/myny-git/smappee_ev/blob/main/docs/EVCC.md) documentation for the usage.
 
 ### 📈 Power/Current/Energy Sensors

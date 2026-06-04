@@ -335,8 +335,8 @@ async def handle_pause_charging(call: ServiceCall) -> None:
     await async_handle_connector_service(call.hass, call, "pause_charging")
 
 
-async def handle_pause_charging_smartdevices(call: ServiceCall) -> None:
-    await async_handle_connector_service(call.hass, call, "pause_charging_smartdevices")
+async def handle_pause_charging_chargingstations(call: ServiceCall) -> None:
+    await async_handle_connector_service(call.hass, call, "pause_charging_chargingstations")
 
 
 async def handle_stop_charging(call: ServiceCall) -> None:
@@ -363,6 +363,38 @@ async def handle_set_charging_mode_chargingstations(call: ServiceCall) -> None:
             "limit_unit": call.data.get("limit_unit"),
             "connector": call.data.get("connector_id"),
         },
+    )
+
+
+async def handle_set_current(call: ServiceCall) -> None:
+    current = round(float(call.data["current"]), 1)
+    connector_id = call.data.get("connector_id")
+    rt, sid = _resolve_sid(call.hass, call)
+    client = get_connector_client(rt, sid, connector_id)
+    if not client:
+        raise ServiceValidationError(
+            f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, "
+            f"sid={call.data.get('service_location_id')}, connector_id={connector_id})"
+        )
+    try:
+        min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
+    except (TypeError, ValueError):
+        min_c = DEFAULT_MIN_CURRENT
+    try:
+        max_c = int(getattr(client, "max_current", DEFAULT_MAX_CURRENT))
+    except (TypeError, ValueError):
+        max_c = DEFAULT_MAX_CURRENT
+    if max_c < min_c:
+        max_c = min_c
+    if current < float(min_c) or current > float(max_c):
+        raise ServiceValidationError(
+            f"current {current} A out of range {min_c}-{max_c} A for this connector"
+        )
+    await async_handle_connector_service(
+        call.hass,
+        call,
+        "set_current",
+        {"current": current, "min_current": min_c, "max_current": max_c},
     )
 
 
@@ -397,18 +429,28 @@ SET_MODE_SCHEMA = vol.Schema(
         vol.Required("mode"): vol.All(
             str,
             str.upper,  # normalize to uppercase
-            vol.In({"NORMAL", "STANDARD", "SMART", "SOLAR"}),
+            vol.In({"STANDARD", "SMART", "SOLAR"}),
         ),
     }
 )
 
+
+SET_CURRENT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+        # Sane lower bound; upper bound validated dynamically against connector limits
+        vol.Required("current"): vol.All(vol.Coerce(float), vol.Range(min=1.0)),
+    }
+)
 
 SET_MODE_API2_SCHEMA = vol.Schema(
     {
         vol.Optional("config_entry_id"): cv.string,
         vol.Optional("charging_station_serial"): vol.Any(
             vol.All(str, str.strip),
-            vol.All(vol.Coerce(int), str),
+            vol.All(vol.Coerce(int), vol.Coerce(str)),
         ),
         vol.Required("connector_id"): cv.positive_int,
         vol.Required("mode"): vol.All(
@@ -433,7 +475,10 @@ async def register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging, PAUSE_STOP_SCHEMA)
     hass.services.async_register(
-        DOMAIN, "pause_charging_smartdevices", handle_pause_charging_smartdevices, PAUSE_STOP_SCHEMA
+        DOMAIN,
+        "pause_charging_chargingstations",
+        handle_pause_charging_chargingstations,
+        PAUSE_STOP_SCHEMA,
     )
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging, PAUSE_STOP_SCHEMA)
     hass.services.async_register(
@@ -445,13 +490,15 @@ async def register_services(hass: HomeAssistant) -> None:
         handle_set_charging_mode_chargingstations,
         SET_MODE_API2_SCHEMA,
     )
+    hass.services.async_register(DOMAIN, "set_current", handle_set_current, SET_CURRENT_SCHEMA)
 
 
 async def unregister_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Unregistering Smappee EV services")
     hass.services.async_remove(DOMAIN, "start_charging")
     hass.services.async_remove(DOMAIN, "pause_charging")
-    hass.services.async_remove(DOMAIN, "pause_charging_smartdevices")
+    hass.services.async_remove(DOMAIN, "pause_charging_chargingstations")
     hass.services.async_remove(DOMAIN, "stop_charging")
     hass.services.async_remove(DOMAIN, "set_charging_mode")
     hass.services.async_remove(DOMAIN, "set_charging_mode_chargingstations")
+    hass.services.async_remove(DOMAIN, "set_current")

@@ -58,7 +58,7 @@
         },
         "pause_charging": {
             "name": "Pauzeer laden",
-            "description": "Pauzeer het laden voor de geselecteerde connector. Gebruikt het chargingstations API-eindpunt.",
+            "description": "Pauzeer het laden voor de geselecteerde connector. Gebruikt het smartdevices API-eindpunt (aanbevolen — komt overeen met het app-gedrag).",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",
@@ -74,9 +74,9 @@
                 }
             }
         },
-        "pause_charging_smartdevices": {
-            "name": "Pauzeer laden (smartdevices)",
-            "description": "Pauzeer het laden via het smartdevices API-eindpunt. Gebruik dit als je lader het chargingstations-eindpunt niet ondersteunt.",
+        "pause_charging_chargingstations": {
+            "name": "Pauzeer laden (chargingstations)",
+            "description": "Pauzeer het laden via het chargingstations API-eindpunt. Verouderde fallback — gebruik pause_charging voor normaal gebruik.",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",
@@ -110,6 +110,28 @@
                 }
             }
         },
+        "set_current": {
+            "name": "Stel stroom in",
+            "description": "Stel de laadstroom in Amp\u00e8re in (1 decimaal nauwkeurig). Wordt omgezet naar het dichtstbijzijnde percentage en verzonden via setPercentageLimit. De schuifregelaar en getalsentiteiten worden direct bijgewerkt.",
+            "fields": {
+                "config_entry_id": {
+                    "name": "Config entry ID",
+                    "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
+                },
+                "service_location_id": {
+                    "name": "Service Location ID",
+                    "description": "Optioneel: ID van de site (laat leeg als er maar \u00e9\u00e9n site is)."
+                },
+                "connector_id": {
+                    "name": "Connector",
+                    "description": "Optioneel: connectornummer (1 of 2, laat leeg bij slechts \u00e9\u00e9n connector)."
+                },
+                "current": {
+                    "name": "Stroom (A)",
+                    "description": "Laadstroom in Amp\u00e8re (1 decimaal, bijv. 11,4). Wordt begrensd tot het geconfigureerde min\u2013max bereik van de connector."
+                }
+            }
+        },
         "set_charging_mode": {
             "name": "Stel laadmodus in",
             "description": "Stel de laadmodus van een connector in.",
@@ -128,7 +150,7 @@
                 },
                 "mode": {
                     "name": "Modus",
-                    "description": "Laadmodus (NORMAL, SMART, SOLAR)."
+                    "description": "Laadmodus (STANDARD, SMART, SOLAR)."
                 }
             }
         },

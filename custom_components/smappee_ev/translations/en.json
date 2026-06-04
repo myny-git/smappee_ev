@@ -58,7 +58,7 @@
     },
     "pause_charging": {
       "name": "Pause charging",
-      "description": "Pause charging for the selected connector. Uses the chargingstations API endpoint.",
+      "description": "Pause charging for the selected connector. Uses the smartdevices API endpoint (recommended — matches Smappee app behaviour).",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -74,9 +74,9 @@
         }
       }
     },
-    "pause_charging_smartdevices": {
-      "name": "Pause charging (smartdevices)",
-      "description": "Pause charging using the smartdevices API endpoint. Use this if your charger does not support the chargingstations endpoint.",
+    "pause_charging_chargingstations": {
+      "name": "Pause charging (chargingstations)",
+      "description": "Pause charging via the chargingstations API endpoint. Legacy fallback — use pause_charging for normal operation.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -110,6 +110,28 @@
         }
       }
     },
+    "set_current": {
+      "name": "Set current",
+      "description": "Set the charging current in Ampere (1 decimal precision). Converted to the nearest integer percentage and sent via setPercentageLimit. The slider and number entities update immediately.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2, leave empty if only one)."
+        },
+        "current": {
+          "name": "Current (A)",
+          "description": "Charging current in Ampere (1 decimal, e.g. 11.4). Clamped to the connector's configured min\u2013max range."
+        }
+      }
+    },
     "set_charging_mode": {
       "name": "Set charging mode",
       "description": "Set the charging mode of a connector.",
@@ -128,7 +150,7 @@
         },
         "mode": {
           "name": "Mode",
-          "description": "Charging mode (NORMAL, SMART, SOLAR)."
+          "description": "Charging mode (STANDARD, SMART, SOLAR)."
         }
       }
     },

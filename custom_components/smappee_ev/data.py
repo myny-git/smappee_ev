@@ -17,9 +17,9 @@ class ConnectorState:
 
     connector_number: int
     session_state: str = "Initialize"
-    selected_current_limit: int | None = None
+    selected_current_limit: float | None = None
     selected_percentage_limit: int | None = None
-    selected_mode: str = "NORMAL"
+    selected_mode: str = "STANDARD"
     min_current: int = DEFAULT_MIN_CURRENT
     max_current: int = DEFAULT_MAX_CURRENT
     min_surpluspct: int = DEFAULT_MIN_SURPLUS_PERCENT
@@ -36,7 +36,7 @@ class ConnectorState:
     # Modus/strategy + returned UI-modus en paused-overlay
     raw_charging_mode: str | None = None  # NORMAL / SMART / PAUSED
     optimization_strategy: str | None = None  # NONE / EXCESS_ONLY / SCHEDULES_FIRST_THEN_EXCESS
-    ui_mode_base: str | None = None  # NORMAL / STANDARD / SOLAR
+    ui_mode_base: str | None = None  # STANDARD / SMART / SOLAR
     paused: bool = False  # overlay
 
     status_current: str | None = None

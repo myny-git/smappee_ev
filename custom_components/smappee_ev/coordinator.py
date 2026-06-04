@@ -262,7 +262,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         session_state = "Initialize"
         selected_percentage: int | None = None
         selected_current: int | None = None
-        selected_mode = "NORMAL"
+        selected_mode = "STANDARD"
         min_current = DEFAULT_MIN_CURRENT
         max_current = DEFAULT_MAX_CURRENT
         min_surpluspct = DEFAULT_MIN_SURPLUS_PERCENT
@@ -361,19 +361,19 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     # UI mappings
     @staticmethod
     def _derive_base_mode(mode: str | None, strategy: str | None) -> str:
-        """Map to NORMAL/SMART/SOLAR."""
+        """Map raw API mode/strategy to the UI mode (STANDARD/SMART/SOLAR)."""
         m = (mode or "").upper()
         s = (strategy or "").upper()
 
-        if m in ("NORMAL", "PAUSED"):
-            return "NORMAL"
+        if m in ("NORMAL", "PAUSED", "STANDARD"):
+            return "STANDARD"
         if s == "EXCESS_ONLY":
             return "SOLAR"
         if s == "SCHEDULES_FIRST_THEN_EXCESS":
             return "SMART"
         if m == "SMART":
             return "SMART"
-        return "NORMAL"
+        return "STANDARD"
 
     @staticmethod
     def _is_paused(
@@ -513,7 +513,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                     if self._set_if_changed(conn, "selected_percentage_limit", pct):
                         changed = True
                     rng = max(int(conn.max_current) - int(conn.min_current), 1)
-                    cur = int(round((pct / 100) * rng + int(conn.min_current)))
+                    cur = round((pct / 100.0) * rng + float(conn.min_current), 1)
                     changed |= self._set_if_changed(conn, "selected_current_limit", cur)
             # else: in SMART/SOLAR do not update
 
@@ -611,7 +611,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                     if self._set_if_changed(conn, "selected_percentage_limit", pct):
                         changed = True
                     rng = max(int(conn.max_current) - int(conn.min_current), 1)
-                    cur = int(round((pct / 100) * rng + int(conn.min_current)))
+                    cur = round((pct / 100.0) * rng + float(conn.min_current), 1)
                     changed |= self._set_if_changed(conn, "selected_current_limit", cur)
 
         avail = self._get_any(payload, "available")
@@ -631,8 +631,8 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             changed |= self._set_if_changed(conn, "optimization_strategy", str(strategy))
 
         if (conn.raw_charging_mode or "").upper() == "PAUSED":
-            changed |= self._set_if_changed(conn, "ui_mode_base", "NORMAL")
-            changed |= self._set_if_changed(conn, "selected_mode", "NORMAL")
+            changed |= self._set_if_changed(conn, "ui_mode_base", "STANDARD")
+            changed |= self._set_if_changed(conn, "selected_mode", "STANDARD")
         else:
             base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
             changed |= self._set_if_changed(conn, "ui_mode_base", base)

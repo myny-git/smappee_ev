@@ -127,31 +127,53 @@ class SmappeeApiClient:
     async def set_charging_mode(
         self,
         mode: str,
+    ) -> bool:
+        """Set charging mode via the smartdevices endpoint (STANDARD, SMART, SOLAR).
+
+        This matches the Smappee app mode buttons exactly:
+        - Standard button → setchargingmode = {"mode":"STANDARD"}  --> also matches the "resume" action when paused
+        - Smart button    → setchargingmode = {"mode":"SMART"}
+        - Solar button    → setchargingmode = {"mode":"SOLAR"}
+
+        No current/percentage limit is used here; use set_percentage_limit for speed control.
+        """
+        mode_up = (mode or "").upper()
+        if mode_up not in ("STANDARD", "SMART", "SOLAR"):
+            _LOGGER.warning(
+                "Unsupported charging mode for smartdevices endpoint: %s. Use STANDARD, SMART or SOLAR.",
+                mode,
+            )
+            return False
+
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
+        payload: list[dict[str, Any]] = [
+            {"spec": {"name": "mode", "species": "String"}, "value": mode_up}
+        ]
+        await self._request("POST", url, json=payload, expected=(200, 204))
+        _LOGGER.debug("Charging mode set successfully (%s via smartdevices)", mode_up)
+        return True
+
+    async def set_charging_mode_chargingstations(
+        self,
+        mode: str,
+        *,
         limit: int | None = None,
         limit_unit: Literal["AMPERE", "PERCENTAGE"] = "AMPERE",
         connector: int | None = None,
     ) -> bool:
-        """Single entry point for all charging mode changes.
+        """Set charging mode via the chargingstations endpoint (NORMAL, SMART, PAUSED).
 
-        SMART/SOLAR use the smartdevices endpoint.
-        NORMAL/PAUSED route through the chargingstations endpoint.
-        An optional connector override is supported for the chargingstations endpoint.
+        This is the legacy endpoint matching the chargingstations REST API:
+          PUT /chargingstations/{serial}/connectors/{pos}/mode
+        For NORMAL mode an optional ``limit`` (with ``limit_unit`` AMPERE or PERCENTAGE) may
+        be supplied.  SMART and PAUSED do not accept a limit.
         """
         mode_up = (mode or "").upper()
-        if mode_up == "STANDARD":
-            mode_up = "NORMAL"
-
-        if mode_up in ("SMART", "SOLAR"):
-            url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setChargingMode"
-            payload: list[dict[str, Any]] = [
-                {"spec": {"name": "mode", "species": "String"}, "value": mode_up}
-            ]
-            await self._request("POST", url, json=payload, expected=(200, 204))
-            _LOGGER.debug("Charging mode set successfully (%s via smartdevices)", mode_up)
-            return True
-
-        if mode_up not in ("NORMAL", "PAUSED"):
-            _LOGGER.warning("Unsupported charging mode: %s", mode)
+        if mode_up not in ("NORMAL", "SMART", "PAUSED"):
+            _LOGGER.warning(
+                "Unsupported charging mode for chargingstations endpoint: %s. Use NORMAL, SMART or PAUSED.",
+                mode,
+            )
             return False
 
         connector_id = int(connector or self.connector_number or 1)
@@ -168,24 +190,11 @@ class SmappeeApiClient:
 
         await self._request("PUT", url, json=cs_payload, expected=(200, 204))
         _LOGGER.debug(
-            "Charging mode set successfully (mode=%s, connector=%s)",
+            "Charging mode set successfully via chargingstations (mode=%s, connector=%s)",
             mode_up,
             connector_id,
         )
         return True
-
-    async def set_charging_mode_chargingstations(
-        self,
-        mode: str,
-        *,
-        limit: int | None = None,
-        limit_unit: Literal["AMPERE", "PERCENTAGE"] = "AMPERE",
-        connector: int | None = None,
-    ) -> bool:
-        """Backward-compatible alias for set_charging_mode (used by the HA service)."""
-        return await self.set_charging_mode(
-            mode, limit=limit, limit_unit=limit_unit, connector=connector
-        )
 
     async def start_charging(
         self, current: int, *, min_current: int = 6, max_current: int = 32
@@ -208,7 +217,7 @@ class SmappeeApiClient:
 
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
-        await self._request("POST", url, json=payload, expected=(200,))
+        await self._request("POST", url, json=payload, expected=(200, 204))
 
         _LOGGER.debug(
             "Started charging successfully (target=%s A, pct=%s, range=%s-%s)",
@@ -220,17 +229,25 @@ class SmappeeApiClient:
         return target, percentage
 
     async def pause_charging(self) -> None:
-        await self.set_charging_mode("PAUSED")
+        """Pause charging via the smartdevices endpoint (recommended, more stable).
 
-    async def pause_charging_smartdevices(self) -> None:
-        """Pause charging via the legacy smartdevices endpoint (for older firmware)."""
+        This matches the Smappee app Pause button:  pausecharging = {}
+        """
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/pauseCharging"
-        await self._request("POST", url, json=[], expected=(200,))
-        _LOGGER.debug("Paused charging successfully (legacy smartdevices endpoint)")
+        await self._request("POST", url, json=[], expected=(200, 204))
+        _LOGGER.debug("Paused charging successfully (smartdevices endpoint)")
+
+    async def pause_charging_chargingstations(self) -> None:
+        """Pause charging via the chargingstations endpoint (legacy).
+
+        Sends mode=PAUSED to /chargingstations/{serial}/connectors/{pos}/mode.
+        Use this as a fallback if your firmware does not respond to the smartdevices endpoint.
+        """
+        await self.set_charging_mode_chargingstations("PAUSED")
 
     async def stop_charging(self) -> None:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/stopCharging"
-        await self._request("POST", url, json=[], expected=(200,))
+        await self._request("POST", url, json=[], expected=(200, 204))
         _LOGGER.debug("Stopped charging successfully")
 
     async def set_brightness(self, brightness: int) -> None:
@@ -247,7 +264,7 @@ class SmappeeApiClient:
                 "value": int(brightness),
             }
         ]
-        await self._request("POST", url, json=payload, expected=(200,))
+        await self._request("POST", url, json=payload, expected=(200, 204))
         _LOGGER.info("LED brightness set successfully to %d%%", brightness)
 
     async def set_min_surpluspct(self, min_surpluspct: int) -> None:
@@ -263,25 +280,54 @@ class SmappeeApiClient:
                 }
             ]
         }
-        await self._request("PATCH", url, json=payload, expected=(200,))
+        await self._request("PATCH", url, json=payload, expected=(200, 204))
         _LOGGER.info("min.surpluspct set successfully to %d%%", min_surpluspct)
 
     async def set_percentage_limit(
         self, percentage: int, *, min_current: int = 6, max_current: int = 32
-    ) -> tuple[int, int]:
-        """Set percentage limit; returns (current_amps, percentage)."""
+    ) -> tuple[float, int]:
+        """Set percentage limit; returns (current_amps_float, percentage)."""
+        pct_int = max(0, min(100, int(round(percentage))))
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setPercentageLimit"
-        payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
-        await self._request("POST", url, json=payload, expected=(200,))
-        _LOGGER.debug("Set percentage limit successfully to %d%%", percentage)
+        payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": pct_int}]
+        await self._request("POST", url, json=payload, expected=(200, 204))
+        _LOGGER.debug("Set percentage limit successfully to %d%%", pct_int)
 
         if max_current <= min_current:
-            cur_int = int(min_current)
+            cur_float = float(min_current)
         else:
             rng = max_current - min_current
-            cur_float = min_current + (float(percentage) / 100.0) * rng
-            cur_int = max(min_current, min(max_current, int(round(cur_float))))
-        return cur_int, int(percentage)
+            cur_float = round(min_current + (float(pct_int) / 100.0) * rng, 1)
+            cur_float = max(float(min_current), min(float(max_current), cur_float))
+        return cur_float, pct_int
+
+    async def set_current(
+        self, current: float, *, min_current: int = 6, max_current: int = 32
+    ) -> tuple[float, int]:
+        """Set charging current in Ampere (1 decimal precision).
+
+        Converts the requested current to the nearest integer percentage of the
+        configured min–max range and delegates to set_percentage_limit.
+        Returns (current_amps_float, percentage) so the caller can update
+        ConnectorState immediately without waiting for the next poll.
+        """
+        if max_current <= min_current:
+            pct = 100
+        else:
+            val = max(float(min_current), min(round(float(current), 1), float(max_current)))
+            rng = max_current - min_current
+            pct = int(round((val - min_current) / float(rng) * 100))
+            pct = max(0, min(100, pct))
+        _LOGGER.debug(
+            "set_current: %.1f A → %d%% (range %s–%s A)",
+            current,
+            pct,
+            min_current,
+            max_current,
+        )
+        return await self.set_percentage_limit(
+            pct, min_current=min_current, max_current=max_current
+        )
 
     async def set_available(self) -> None:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/setAvailable"
