@@ -133,7 +133,6 @@ class OAuth2Client:
                 async with self._session.post(
                     OAUTH_TOKEN_URL, data=payload, timeout=self._timeout
                 ) as response:
-                    text = await response.text()
                     if response.status == 200:
                         tokens = await response.json()
                         if "access_token" not in tokens:
@@ -142,6 +141,8 @@ class OAuth2Client:
                         self._apply_tokens(tokens, replace_refresh=False)
                         _LOGGER.debug("Access token refreshed; new validity window established")
                         return
+
+                    text = await response.text()
                     # If refresh token is invalid/expired, fall back to fresh authentication once
                     if response.status == 400 and "invalid" in (text or "").lower():
                         if not self.password:
@@ -164,7 +165,7 @@ class OAuth2Client:
 
             except asyncio.CancelledError:
                 raise
-            except (TimeoutError, ClientError) as err:
+            except (TimeoutError, ClientError, OSError, ConnectionError) as err:
                 _LOGGER.error(
                     "Exception during token refresh attempt %d: %s",
                     attempt + 1,
@@ -178,13 +179,23 @@ class OAuth2Client:
 
     async def ensure_token_valid(self) -> None:
         """Ensure the access token is valid, refreshing if necessary."""
-        now = time.time()
-        if (
-            not self.access_token
-            or not self.token_expires_at
-            or now >= (self.token_expires_at - self._early_renew_skew)
-        ):
+
+        def _needs_refresh() -> bool:
+            now = time.time()
+            return (
+                not self.access_token
+                or not self.token_expires_at
+                or now >= (self.token_expires_at - self._early_renew_skew)
+            )
+
+        if not _needs_refresh():
+            _LOGGER.debug("Access token still valid; no refresh needed")
+            return
+
+        async with self._refresh_lock:
+            if not _needs_refresh():
+                _LOGGER.debug("Access token was refreshed by another coroutine")
+                return
+
             _LOGGER.debug("Access token missing/expired or near expiry; refreshing")
             await self._refresh_token()
-        else:
-            _LOGGER.debug("Access token still valid; no refresh needed")

@@ -552,7 +552,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if coord and hasattr(coord, "async_shutdown"):
                     try:
                         await coord.async_shutdown()
-                    except Exception as exc:  # noqa: BLE001 - defensive
+                    except asyncio.CancelledError:
+                        raise
+                    except (RuntimeError, OSError, ValueError) as exc:
                         _LOGGER.debug("Coordinator shutdown issue: %s", exc)
 
     else:

@@ -188,7 +188,7 @@ class _TotalIncreasingEnergySensor(RestoreSensor):
         last = await self.async_get_last_sensor_data()
         if last is None or last.native_value is None:
             return
-        if isinstance(last.native_value, (int, float, str)):
+        if isinstance(last.native_value, int | float | str):
             with contextlib.suppress(TypeError, ValueError):
                 self._last_value = float(last.native_value)
 
@@ -363,6 +363,8 @@ class ConnectorCurrentASensor(SmappeeConnectorEntity, SensorEntity):
 
 
 class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(

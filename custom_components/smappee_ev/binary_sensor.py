@@ -16,8 +16,6 @@ from .helpers import station_serial
 def _station_serial(coord: SmappeeCoordinator) -> str:
     return station_serial(coord)
 
-    # removed unused _station_name helper
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
