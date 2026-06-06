@@ -117,6 +117,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         return self._is_on
 
     async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
         # Restore last EVCC intent across restarts
         last = await self.async_get_last_state()
         if last is not None:

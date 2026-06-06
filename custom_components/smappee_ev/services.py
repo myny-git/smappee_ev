@@ -10,7 +10,7 @@ import voluptuous as vol
 
 from .api_client import SmappeeApiClient
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
-from .data import RuntimeData
+from .data import ConnectorState, RuntimeData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -187,16 +187,34 @@ def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> Smappee
     return None
 
 
-def _all_coordinators(rt: RuntimeData | None) -> list:
+def _get_connector_state(rt: RuntimeData | None, client: SmappeeApiClient) -> ConnectorState | None:
+    """Return the live ConnectorState for *client* from its coordinator, or None."""
     if not rt:
-        return []
-    out = []
+        return None
+    uuid = getattr(client, "smart_device_uuid", None)
+    if not uuid:
+        return None
     for site in rt.sites.values():
         for bucket in (site.get("stations") or {}).values():
             coord = bucket.get("coordinator")
-            if coord:
-                out.append(coord)
-    return out
+            if coord and coord.data:
+                conn = coord.data.connectors.get(uuid)
+                if conn is not None:
+                    return conn
+    return None
+
+
+def _connector_current_range(
+    rt: RuntimeData | None,
+    client: SmappeeApiClient,
+) -> tuple[int, int]:
+    """Return (min_current, max_current) from live ConnectorState, or defaults."""
+    conn_state = _get_connector_state(rt, client)
+    min_c = conn_state.min_current if conn_state else DEFAULT_MIN_CURRENT
+    max_c = conn_state.max_current if conn_state else DEFAULT_MAX_CURRENT
+    if max_c < min_c:
+        max_c = min_c
+    return min_c, max_c
 
 
 # ----------------------------
@@ -295,40 +313,27 @@ async def handle_start_charging(call: ServiceCall) -> None:
     rt, sid = _resolve_sid(call.hass, call)
     client = get_connector_client(rt, sid, connector_id)
 
+    if not client:
+        raise ServiceValidationError(
+            "Cannot resolve connector client (provide connector_id if ambiguous)"
+        )
+
+    min_c, max_c = _connector_current_range(rt, client)
+
     if current is None:
-        if not client:
-            raise ServiceValidationError(
-                "Cannot infer current: connector client not found (provide connector_id if ambiguous)"
-            )
-        try:
-            min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
-        except (TypeError, ValueError):
-            min_c = DEFAULT_MIN_CURRENT
-        # Default minimum of the connector
+        # Default to the connector's configured minimum
         current = min_c
+    elif current < min_c or current > max_c:
+        raise ServiceValidationError(
+            f"current {current} A out of range {min_c}-{max_c} A for this connector"
+        )
 
-    if current is not None:
-        # Dynamic validation against connector limits
-        if not client:
-            raise ServiceValidationError(
-                "Cannot validate current: connector client not found (provide connector_id if ambiguous)"
-            )
-        try:
-            min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
-        except (TypeError, ValueError):
-            min_c = DEFAULT_MIN_CURRENT
-        try:
-            max_c = int(getattr(client, "max_current", DEFAULT_MAX_CURRENT))
-        except (TypeError, ValueError):
-            max_c = DEFAULT_MAX_CURRENT
-        if max_c < min_c:
-            max_c = min_c
-        if current < min_c or current > max_c:
-            raise ServiceValidationError(
-                f"current {current} A out of range {min_c}-{max_c} A for this connector"
-            )
-
-    await async_handle_connector_service(call.hass, call, "start_charging", {"current": current})
+    await async_handle_connector_service(
+        call.hass,
+        call,
+        "start_charging",
+        {"current": current, "min_current": min_c, "max_current": max_c},
+    )
 
 
 async def handle_pause_charging(call: ServiceCall) -> None:
@@ -376,16 +381,7 @@ async def handle_set_current(call: ServiceCall) -> None:
             f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, "
             f"sid={call.data.get('service_location_id')}, connector_id={connector_id})"
         )
-    try:
-        min_c = int(getattr(client, "min_current", DEFAULT_MIN_CURRENT))
-    except (TypeError, ValueError):
-        min_c = DEFAULT_MIN_CURRENT
-    try:
-        max_c = int(getattr(client, "max_current", DEFAULT_MAX_CURRENT))
-    except (TypeError, ValueError):
-        max_c = DEFAULT_MAX_CURRENT
-    if max_c < min_c:
-        max_c = min_c
+    min_c, max_c = _connector_current_range(rt, client)
     if current < float(min_c) or current > float(max_c):
         raise ServiceValidationError(
             f"current {current} A out of range {min_c}-{max_c} A for this connector"

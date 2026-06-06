@@ -160,28 +160,8 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         if not st:
             return
         min_c, max_c = st.min_current, st.max_current
-
-        val = max(float(min_c), min(round(float(value), 1), float(max_c)))
-
-        # Convert amps to integer percentage for the API
-        if max_c > min_c:
-            rng = max_c - min_c
-            pct = int(round((val - min_c) / float(rng) * 100))
-        else:
-            pct = 100
-        pct = max(0, min(100, pct))
-
-        _LOGGER.debug(
-            "Setting current: requested=%s → clamped=%.1f A → %d%% (range %s-%s)",
-            value,
-            val,
-            pct,
-            min_c,
-            max_c,
-        )
-
-        cur_float, pct_int = await self.api_client.set_percentage_limit(
-            pct, min_current=int(min_c), max_current=int(max_c)
+        cur_float, pct_int = await self.api_client.set_current(
+            value, min_current=int(min_c), max_current=int(max_c)
         )
         st.selected_current_limit = cur_float
         st.selected_percentage_limit = pct_int

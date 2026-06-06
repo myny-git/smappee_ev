@@ -10,6 +10,24 @@
           "password": "Votre mot de passe sur le tableau de bord Smappee",
           "serial": "Le numéro de série de votre borne de recharge"
         }
+      },
+      "reauth_confirm": {
+        "description": "Mettez à jour vos identifiants API Smappee pour vous reconnecter",
+        "data": {
+          "client_id": "Votre identifiant client API",
+          "client_secret": "Votre secret client",
+          "username": "Votre nom d’utilisateur sur le tableau de bord Smappee",
+          "password": "Votre mot de passe sur le tableau de bord Smappee"
+        }
+      },
+      "reconfigure": {
+        "description": "Mettez à jour vos identifiants API Smappee",
+        "data": {
+          "client_id": "Votre identifiant client API",
+          "client_secret": "Votre secret client",
+          "username": "Votre nom d’utilisateur sur le tableau de bord Smappee",
+          "password": "Votre mot de passe sur le tableau de bord Smappee"
+        }
       }
     },
     "error": {

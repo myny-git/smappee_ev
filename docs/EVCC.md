@@ -27,30 +27,110 @@ We do not use the smart functions of the Smappee app, in contrary, we use it in 
 Below is the full yaml for the charger. If you have changed the name of your wallbox, some entities will also have a different name in Home Assistant. Please always doublecheck prior to uploading the YAML. Also if you have two connectors, you should make two instances of the chargers, one per connector ID.
 
 ```yaml
-# see https://docs.evcc.io/en/chargers/home-assistant-charger/
+##custom charger, as the main home-assistant charger does not enable decimals for currents
 chargers:
   - name: smappee
-    type: template
-    template: homeassistant
-    uri: http://HAlocalIP:8123
-    status: sensor.evcc_state_1 # Charging status sensor, Entity ID for charging status (A=ready, B=connected, C=charging)
-    enabled: switch.smappee_ev_evcc_charging_control_1 # Enabled status sensor, Entity ID for enabled state (`sensor`, `binary_sensor` or `switch` with `on`/`off` or `true`/`false` state)
-    enable: switch.smappee_ev_evcc_charging_control_1 #  Enable switch, Entity ID for enable/disable control (`switch` or `input_boolean`)
-    setMaxCurrent: number.smappee_ev_max_charging_speed_1 # Maximum current entity [A], Entity ID for setting maximum current in amperes (`number` or `input_number` entity)
-    # ⚡ The number entity has step=0.1 A, so EVCC can send mA-precision current targets (e.g. 10.3 A).
-    # The integration converts the float value internally to an integer percentage before sending it to the API.
-    ## POWER / CURRENTS / ENERGY from the modbus (or the official Smappee) integration
-    power: number.smappee_ev_connector_1_power # Power entity, Entity ID for instantaneous power measurement in watts (optional)
-    energy: sensor.smappee_ev_connector_1_energy_import # Energy entity, Entity ID for cumulative energy measurement in kWh (optional)
-    currentL1: sensor.smappee_ev_connector_1_current_l1 # L1 current entity, Entity ID for L1 current measurement in amperes (optional)
-    currentL2: sensor.smappee_ev_connector_1_current_l2 # L2 current entity, Entity ID for L2 current measurement in amperes (optional)
-    currentL3: sensor.smappee_ev_connector_1_current_l3 # L3 current entity, Entity ID for L3 current measurement in amperes (optional)      
-    #voltageL1: sensor.charger_voltage_l1 # L1 voltage entity, Entity ID for L1 voltage measurement in volts (optional)
-    #voltageL2: sensor.charger_voltage_l2 # L2 voltage entity, Entity ID for L2 voltage measurement in volts (optional)
-    #voltageL3: sensor.charger_voltage_l3 # L3 voltage entity, Entity ID for L3 voltage measurement in volts (optional)
-    #phaseswitch: select.charger_phases # Phase switching entity, Entity ID for 1p/3p phase switching (select entity with options "1" and "3") (optional)
-    #heating: # Heating device, Shows °C instead of % (optional)
-    #integrateddevice: # Integrated device, Integrated device. No charging sessions (optional)    
+    type: custom
+    status:
+      source: http
+      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_evcc_state
+      method: GET
+      auth:
+        type: bearer
+        token: YOUR BEARER TOKEN HERE
+      jq: .state
+      timeout: 10s
+
+    enabled:
+      source: http
+      uri: http://192.168.LOCALIP:8123/api/states/switch.smappee_ev_YOURSERIAL_connector_1_evcc_charging
+      method: GET
+      auth:
+        type: bearer
+        token: YOUR BEARER TOKEN HERE
+      jq: .state == "on"
+      timeout: 10s
+
+    enable:
+      source: http
+      uri: 'http://192.168.LOCALIP:8123/api/services/switch/{{ if .enable }}turn_on{{ else }}turn_off{{ end }}'
+      method: POST
+      auth:
+        type: bearer
+        token: YOUR BEARER TOKEN HERE
+      headers:
+        - content-type: application/json
+      body: '{"entity_id":"switch.smappee_ev_YOURSERIAL_connector_1_evcc_charging"}'
+
+    # fallback: integer A
+    maxcurrent:
+      source: http
+      uri: http://192.168.LOCALIP:8123/api/services/number/set_value
+      method: POST
+      auth:
+        type: bearer
+        token: YOUR BEARER TOKEN HERE
+      headers:
+        - content-type: application/json
+      body: '{"entity_id":"number.smappee_ev_YOURSERIAL_max_charging_speed_1","value":${maxcurrent}}'
+
+    # fine control: decimal A, e.g. 6.4
+    maxcurrentmillis:
+      source: http
+      uri: http://192.168.LOCALIP:8123/api/services/number/set_value
+      method: POST
+      auth:
+        type: bearer
+        token: YOUR BEARER TOKEN HERE
+      headers:
+        - content-type: application/json
+      body: '{"entity_id":"number.smappee_ev_YOURSERIAL_max_charging_speed_1","value":${maxcurrentmillis}}'
+
+    power:
+      source: http
+      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_power
+      method: GET
+      auth:
+        type: bearer
+        token: YOUR BEARER TOKEN HERE
+      jq: .state | tonumber
+      timeout: 10s
+
+    energy:
+      source: http
+      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_energy_import
+      method: GET
+      auth:
+        type: bearer
+        token: YOUR BEARER TOKEN HERE
+      jq: .state | tonumber
+      timeout: 10s
+
+    currents:
+      - source: http
+        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_current_l1
+        method: GET
+        auth:
+          type: bearer
+          token: YOUR BEARER TOKEN HERE
+        jq: .state | tonumber
+        timeout: 10s
+      - source: http
+        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_current_l2
+        method: GET
+        auth:
+          type: bearer
+          token: YOUR BEARER TOKEN HERE
+        jq: .state | tonumber
+        timeout: 10s
+      - source: http
+        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_current_l3
+        method: GET
+        auth:
+          type: bearer
+          token: YOUR BEARER TOKEN HERE
+        jq: .state | tonumber
+        timeout: 10s
 ```
 ## 🔌 YAML Example: circuits configuration for peak shaving / load balancing ??
 
@@ -71,4 +151,8 @@ loadpoints:
       vehicle: Ford_explorer # default vehicle
       circuit: main
       phases: 3  ## 1 or 3 phases
+      enable:  
+        delay: 2m ## add these if your car does not support fast switching between on and off.
+      disable:
+        delay: 2m ## add these if your car does not support fast switching between on and off.
 ```

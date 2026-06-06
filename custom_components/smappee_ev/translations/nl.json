@@ -10,6 +10,24 @@
                     "password": "Je wachtwoord op het Smappee-dashboard",
                     "serial": "Het serienummer van je laadpunt"
                 }
+            },
+            "reauth_confirm": {
+                "description": "Werk je Smappee API-inloggegevens bij om opnieuw te verbinden",
+                "data": {
+                    "client_id": "Je API client-id",
+                    "client_secret": "Je client secret",
+                    "username": "Je gebruikersnaam op het Smappee-dashboard",
+                    "password": "Je wachtwoord op het Smappee-dashboard"
+                }
+            },
+            "reconfigure": {
+                "description": "Werk je Smappee API-inloggegevens bij",
+                "data": {
+                    "client_id": "Je API client-id",
+                    "client_secret": "Je client secret",
+                    "username": "Je gebruikersnaam op het Smappee-dashboard",
+                    "password": "Je wachtwoord op het Smappee-dashboard"
+                }
             }
         },
         "error": {

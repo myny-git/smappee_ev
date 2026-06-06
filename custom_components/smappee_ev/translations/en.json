@@ -10,6 +10,24 @@
           "password": "Your password on Smappee dashboard",
           "serial": "The serial number of your charging point"
         }
+      },
+      "reauth_confirm": {
+        "description": "Update your Smappee API credentials to reconnect",
+        "data": {
+          "client_id": "Your API client id",
+          "client_secret": "Your client secret",
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard"
+        }
+      },
+      "reconfigure": {
+        "description": "Update your Smappee API credentials",
+        "data": {
+          "client_id": "Your API client id",
+          "client_secret": "Your client secret",
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard"
+        }
       }
     },
     "error": {

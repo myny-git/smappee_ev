@@ -8,6 +8,7 @@ import aiohttp
 from aiohttp import ClientSession, ClientTimeout
 
 from .const import BASE_URL, HTTP_CONNECT_TIMEOUT, HTTP_TOTAL_TIMEOUT
+from .oauth import SmappeeAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,6 +81,8 @@ class SmappeeApiClient:
         resp = await self._session.get(url, headers=self.auth_headers(), timeout=self._timeout)
         if resp.status != 200:
             txt = await resp.text()
+            if resp.status in (401, 403):
+                raise SmappeeAuthError(f"LED discovery authentication failed: {txt}")
             raise RuntimeError(f"LED discovery failed: {txt}")
         devices = await resp.json()
         for dev in devices or []:
@@ -114,6 +117,10 @@ class SmappeeApiClient:
         ) as resp:
             if resp.status not in expected:
                 text = await resp.text()
+                if resp.status in (401, 403):
+                    raise SmappeeAuthError(
+                        f"Request authentication failed {resp.status} ({method} {url}): {text}"
+                    )
                 raise RuntimeError(f"Request failed {resp.status} ({method} {url}): {text}")
             if return_json:
                 if resp.content_length == 0:
@@ -349,6 +356,10 @@ class SmappeeApiClient:
             ) as resp:
                 if resp.status != 200:
                     text = await resp.text()
+                    if resp.status in (401, 403):
+                        raise SmappeeAuthError(
+                            f"Metering configuration authentication failed: {text}"
+                        )
                     _LOGGER.warning(
                         "Metering configuration fetch failed (status %s): %s",
                         resp.status,

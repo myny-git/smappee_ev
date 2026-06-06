@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 from typing import cast
 
 from aiohttp import ClientError, ClientSession
@@ -13,11 +12,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api_client import SmappeeApiClient
-from .const import BASE_URL, DOMAIN, UPDATE_INTERVAL_DEFAULT
+from .const import BASE_URL, CONF_PASSWORD, DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import SmappeeCoordinator
 from .data import RuntimeData
 from .mqtt_gateway import SmappeeMqtt
-from .oauth import OAuth2Client
+from .oauth import OAuth2Client, SmappeeAuthError
 from .services import register_services, unregister_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -109,6 +108,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             options.pop("update_interval")
             updated = True
         version = 5
+
+    if data.get("refresh_token") and CONF_PASSWORD in data:
+        data.pop(CONF_PASSWORD)
+        updated = True
 
     if updated or version != entry.version:
         hass.config_entries.async_update_entry(entry, data=data, options=options, version=version)
@@ -309,17 +312,12 @@ def _setup_mqtt(
             coord = bucket.get("coordinator")
             if coord:
                 coord.apply_mqtt_properties(topic, payload)
-                if coord.data and coord.data.station:
-                    coord.data.station.last_mqtt_rx = time.time()
-                    coord.async_set_updated_data(coord.data)
 
     def _on_conn(up: bool) -> None:
         for bucket in stations.values():
             coord = bucket.get("coordinator")
-            if coord and coord.data and coord.data.station:
-                coord.data.station.mqtt_connected = up
-                coord.data.station.last_mqtt_rx = time.time()
-                coord.async_set_updated_data(coord.data)
+            if coord:
+                coord.apply_mqtt_connection_change(up)
 
     mqtt = SmappeeMqtt(
         service_location_uuid=suuid,
@@ -437,11 +435,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     update_interval = UPDATE_INTERVAL_DEFAULT
 
-    oauth_client = OAuth2Client(entry.data, session=session)
+    def _store_tokens(tokens: dict[str, object]) -> None:
+        data = dict(entry.data)
+        data.update(tokens)
+        if data.get("refresh_token"):
+            data.pop(CONF_PASSWORD, None)
+        hass.config_entries.async_update_entry(entry, data=data)
+
+    oauth_client = OAuth2Client(
+        entry.data, session=session, token_update_callback=_store_tokens
+    )
 
     # 1) Discover sites
     try:
         with_serial = await _discover_service_locations(session, oauth_client)
+    except SmappeeAuthError as err:
+        raise ConfigEntryAuthFailed(f"Auth failed: {err}") from err
     except (ClientError, RuntimeError, ValueError) as err:
         # Authentication / authorization problems should trigger reauth
         if getattr(oauth_client, "access_token", None) is None:
@@ -499,7 +508,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         api=oauth_client,
         sites=sites,
         mqtt=cast(dict[int, object], mqtt_clients),
-        last_options=dict(entry.options),
     )
     entry.runtime_data = runtime  # type: ignore[attr-defined]
 
@@ -515,8 +523,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.info("Removed deprecated service %s.%s", DOMAIN, _svc)
         except (RuntimeError, ValueError) as err:
             _LOGGER.debug("While removing deprecated service %s: %s", _svc, err)
-
-    entry.async_on_unload(entry.add_update_listener(async_entry_update_listener))
 
     return True
 
@@ -575,21 +581,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await unregister_services(hass)
             hass.data.pop(DOMAIN, None)
     return unload_ok
-
-
-async def async_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle updates to config entry options."""
-    try:
-        rd: RuntimeData = entry.runtime_data  # type: ignore[attr-defined]
-    except AttributeError:
-        _LOGGER.debug("ConfigEntry update before runtime_data available")
-        return
-
-    cur = dict(entry.options)
-    prev = getattr(rd, "last_options", {})
-    if cur == prev:
-        _LOGGER.debug("ConfigEntry options unchanged")
-        return
-
-    rd.last_options = cur
-    await hass.config_entries.async_reload(entry.entry_id)

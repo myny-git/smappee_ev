@@ -10,6 +10,24 @@
           "password": "Ihr Passwort im Smappee-Dashboard",
           "serial": "Die Seriennummer Ihrer Ladestation"
         }
+      },
+      "reauth_confirm": {
+        "description": "Aktualisieren Sie Ihre Smappee API-Zugangsdaten, um die Verbindung wiederherzustellen",
+        "data": {
+          "client_id": "Ihre API-Client-ID",
+          "client_secret": "Ihr Client-Secret",
+          "username": "Ihr Benutzername im Smappee-Dashboard",
+          "password": "Ihr Passwort im Smappee-Dashboard"
+        }
+      },
+      "reconfigure": {
+        "description": "Aktualisieren Sie Ihre Smappee API-Zugangsdaten",
+        "data": {
+          "client_id": "Ihre API-Client-ID",
+          "client_secret": "Ihr Client-Secret",
+          "username": "Ihr Benutzername im Smappee-Dashboard",
+          "password": "Ihr Passwort im Smappee-Dashboard"
+        }
       }
     },
     "error": {

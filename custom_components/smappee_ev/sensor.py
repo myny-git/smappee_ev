@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 
 from homeassistant.components.sensor import (
@@ -165,11 +166,34 @@ class StationPvPower(SmappeeStationEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-class StationGridEnergyImport(SmappeeStationEntity, SensorEntity):
+class _TotalIncreasingEnergySensor(RestoreSensor):
+    """Mixin for TOTAL_INCREASING energy sensors with cross-restart value protection."""
+
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
+    def _total_increasing_value(self, candidate: object) -> float | None:
+        last = getattr(self, "_last_value", None)
+        raw_value: float | None = None
+        if not isinstance(candidate, bool) and candidate is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                raw_value = float(candidate)  # type: ignore[arg-type]
+        value = update_total_increasing(last, raw_value)
+        self._last_value = value
+        return value
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last is None or last.native_value is None:
+            return
+        if isinstance(last.native_value, (int, float, str)):
+            with contextlib.suppress(TypeError, ValueError):
+                self._last_value = float(last.native_value)
+
+
+class StationGridEnergyImport(_TotalIncreasingEnergySensor, SmappeeStationEntity):
     def __init__(
         self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
     ) -> None:
@@ -181,23 +205,14 @@ class StationGridEnergyImport(SmappeeStationEntity, SensorEntity):
             unique_suffix="sensor:grid_energy_import_kwh",
             name="Grid energy import",
         )
-        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
         st = self.coordinator.data.station if self.coordinator.data else None
-        v = getattr(st, "grid_energy_import_kwh", None)
-        candidate = float(v) if isinstance(v, int | float) else None
-        value = update_total_increasing(self._last_value, candidate)
-        self._last_value = value
-        return value
+        return self._total_increasing_value(getattr(st, "grid_energy_import_kwh", None))
 
 
-class StationGridEnergyExport(SmappeeStationEntity, SensorEntity):
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-
+class StationGridEnergyExport(_TotalIncreasingEnergySensor, SmappeeStationEntity):
     def __init__(
         self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
     ) -> None:
@@ -209,23 +224,14 @@ class StationGridEnergyExport(SmappeeStationEntity, SensorEntity):
             unique_suffix="sensor:grid_energy_export_kwh",
             name="Grid energy export",
         )
-        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
         st = self.coordinator.data.station if self.coordinator.data else None
-        v = getattr(st, "grid_energy_export_kwh", None)
-        candidate = float(v) if isinstance(v, int | float) else None
-        value = update_total_increasing(self._last_value, candidate)
-        self._last_value = value
-        return value
+        return self._total_increasing_value(getattr(st, "grid_energy_export_kwh", None))
 
 
-class StationPvEnergyImport(SmappeeStationEntity, SensorEntity):
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-
+class StationPvEnergyImport(_TotalIncreasingEnergySensor, SmappeeStationEntity):
     def __init__(
         self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
     ) -> None:
@@ -237,16 +243,11 @@ class StationPvEnergyImport(SmappeeStationEntity, SensorEntity):
             unique_suffix="sensor:pv_energy_import_kwh",
             name="PV energy import",
         )
-        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
         st = self.coordinator.data.station if self.coordinator.data else None
-        v = getattr(st, "pv_energy_import_kwh", None)
-        candidate = float(v) if isinstance(v, int | float) else None
-        value = update_total_increasing(self._last_value, candidate)
-        self._last_value = value
-        return value
+        return self._total_increasing_value(getattr(st, "pv_energy_import_kwh", None))
 
 
 # --------------- Connector sensors ---------------
@@ -380,11 +381,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-class ConnEnergyImport(SmappeeConnectorEntity, SensorEntity):
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-
+class ConnEnergyImport(_TotalIncreasingEnergySensor, SmappeeConnectorEntity):
     def __init__(
         self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
     ) -> None:
@@ -393,16 +390,11 @@ class ConnEnergyImport(SmappeeConnectorEntity, SensorEntity):
             self, c, sid, station_uuid, uuid, unique_suffix="sensor:energy_import_kwh", name=name
         )
         self.api_client = api
-        self._last_value: float | None = None
 
     @property
     def native_value(self) -> float | None:
         st = self._conn_state
-        v = getattr(st, "energy_import_kwh", None) if st else None
-        candidate = float(v) if isinstance(v, int | float) else None
-        value = update_total_increasing(self._last_value, candidate)
-        self._last_value = value
-        return value
+        return self._total_increasing_value(getattr(st, "energy_import_kwh", None) if st else None)
 
 
 class StationGridCurrents(SmappeeStationEntity, SensorEntity):

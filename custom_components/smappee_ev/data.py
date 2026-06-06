@@ -96,4 +96,3 @@ class RuntimeData:
     api: object  # OAuth2Client (kept generic to avoid circular import in type checking)
     sites: dict[int, dict]
     mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt
-    last_options: dict

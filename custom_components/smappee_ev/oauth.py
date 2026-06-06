@@ -1,11 +1,12 @@
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import logging
 import time
 from typing import Any
 
 import aiohttp
 from aiohttp import ClientError
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     BASE_URL,
@@ -22,11 +23,21 @@ OAUTH_TOKEN_URL = f"{BASE_URL.replace('/v3', '/v1')}/oauth2/token"
 _LOGGER = logging.getLogger(__name__)
 
 
+class SmappeeAuthError(HomeAssistantError):
+    """Raised when Smappee authentication or token refresh fails."""
+
+
 class OAuth2Client:
     """Handles OAuth2 authentication and token refresh for the Smappee API."""
 
-    def __init__(self, data: Mapping[str, Any], session: aiohttp.ClientSession):
+    def __init__(
+        self,
+        data: Mapping[str, Any],
+        session: aiohttp.ClientSession,
+        token_update_callback: Callable[[dict[str, Any]], None] | None = None,
+    ):
         self._session: aiohttp.ClientSession = session
+        self._token_update_callback = token_update_callback
         self._timeout = aiohttp.ClientTimeout(
             connect=OAUTH_CONNECT_TIMEOUT, total=OAUTH_TOTAL_TIMEOUT
         )
@@ -36,12 +47,37 @@ class OAuth2Client:
         self.password: str = str(data.get("password") or "")
         self.access_token: str | None = data.get("access_token")
         self.refresh_token: str | None = data.get("refresh_token")
-        self.token_expires_at: float | None = None
+        try:
+            self.token_expires_at: float | None = (
+                float(data["token_expires_at"]) if data.get("token_expires_at") else None
+            )
+        except (TypeError, ValueError):
+            self.token_expires_at = None
         self.max_refresh_attempts: int = OAUTH_MAX_REFRESH_ATTEMPTS
         self._refresh_lock = asyncio.Lock()
         self._early_renew_skew = OAUTH_EARLY_RENEW_SKEW
 
         _LOGGER.debug("OAuth2Client initialized")
+
+    def _apply_tokens(self, tokens: Mapping[str, Any], *, replace_refresh: bool) -> None:
+        """Apply received tokens and persist them if a callback is configured."""
+        self.access_token = tokens.get("access_token")
+        refresh_token = tokens.get("refresh_token")
+        if replace_refresh:
+            self.refresh_token = str(refresh_token) if refresh_token else None
+        elif refresh_token:
+            self.refresh_token = str(refresh_token)
+        self.token_expires_at = time.time() + tokens.get(
+            "expires_in", TOKEN_DEFAULT_EXPIRES_IN
+        )
+        if self._token_update_callback:
+            self._token_update_callback(
+                {
+                    "access_token": self.access_token,
+                    "refresh_token": self.refresh_token,
+                    "token_expires_at": self.token_expires_at,
+                }
+            )
 
     async def authenticate(self) -> dict[str, Any] | None:
         """Authenticate using username/password and return tokens."""
@@ -66,11 +102,7 @@ class OAuth2Client:
                 if "access_token" not in tokens:
                     _LOGGER.error("No access token in response: %s", tokens)
                     return None
-                self.access_token = tokens.get("access_token")
-                self.refresh_token = tokens.get("refresh_token")
-                self.token_expires_at = time.time() + tokens.get(
-                    "expires_in", TOKEN_DEFAULT_EXPIRES_IN
-                )
+                self._apply_tokens(tokens, replace_refresh=True)
                 _LOGGER.debug("Authentication succeeded; token validity window established")
                 return tokens
 
@@ -88,7 +120,7 @@ class OAuth2Client:
             _LOGGER.debug("No refresh_token available; falling back to authenticate()")
             tokens = await self.authenticate()
             if not tokens:
-                raise Exception("No refresh_token and authenticate() failed.")
+                raise SmappeeAuthError("No refresh_token and authenticate() failed.")
             return
 
         payload = {
@@ -109,15 +141,15 @@ class OAuth2Client:
                         if "access_token" not in tokens:
                             _LOGGER.error("No access token in refresh response: %s", tokens)
                             break
-                        self.access_token = tokens.get("access_token")
-                        self.refresh_token = tokens.get("refresh_token")
-                        self.token_expires_at = time.time() + tokens.get(
-                            "expires_in", TOKEN_DEFAULT_EXPIRES_IN
-                        )
+                        self._apply_tokens(tokens, replace_refresh=False)
                         _LOGGER.debug("Access token refreshed; new validity window established")
                         return
                     # If refresh token is invalid/expired, fall back to fresh authentication once
                     if response.status == 400 and "invalid" in (text or "").lower():
+                        if not self.password:
+                            raise SmappeeAuthError(
+                                "Refresh token invalid; reauthentication required."
+                            )
                         _LOGGER.debug(
                             "Refresh token invalid (400); attempting fresh authentication with username/password"
                         )
@@ -128,7 +160,7 @@ class OAuth2Client:
                         _LOGGER.error(
                             "Fresh authentication failed after invalid refresh token; aborting"
                         )
-                        raise Exception("Unable to refresh token after invalid refresh.")
+                        raise SmappeeAuthError("Unable to refresh token after invalid refresh.")
 
                     _LOGGER.error("Failed to refresh token (status %s)", response.status)
 
@@ -144,7 +176,7 @@ class OAuth2Client:
 
         # Generic message without dynamic values to avoid CodeQL clear-text alert on variables
         _LOGGER.error("Failed to refresh access token after maximum attempts")
-        raise Exception("Unable to refresh token after multiple attempts.")
+        raise SmappeeAuthError("Unable to refresh token after multiple attempts.")
 
     async def ensure_token_valid(self) -> None:
         """Ensure the access token is valid, refreshing if necessary."""

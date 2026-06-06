@@ -12,6 +12,7 @@ from typing import Any, cast
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api_client import SmappeeApiClient
@@ -25,6 +26,7 @@ from .const import (
     HTTP_TOTAL_TIMEOUT,
 )
 from .data import ConnectorState, IntegrationData, StationState
+from .oauth import SmappeeAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +110,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             connectors_state: dict[str, ConnectorState] = {}
             for (uuid, client), res in zip(pairs, results, strict=True):
+                if isinstance(res, ConfigEntryAuthFailed):
+                    raise res
+                if isinstance(res, SmappeeAuthError):
+                    raise ConfigEntryAuthFailed(f"Smappee authentication failed: {res}") from res
                 if isinstance(res, Exception):
                     _LOGGER.warning("Connector %s update failed: %s", uuid, res)
                     # Fall back to safe defaults
@@ -130,6 +136,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         except asyncio.CancelledError:
             raise
+        except ConfigEntryAuthFailed:
+            raise
+        except SmappeeAuthError as err:
+            raise ConfigEntryAuthFailed(f"Smappee authentication failed: {err}") from err
         except (ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
 
@@ -244,6 +254,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                             break
             else:
                 txt = await resp.text()
+                if resp.status in (401, 403):
+                    raise ConfigEntryAuthFailed(
+                        f"Smappee authentication failed while fetching station state: {txt}"
+                    )
                 _LOGGER.debug("Station brightness fetch status=%s body=%s", resp.status, txt)
         except asyncio.CancelledError:
             raise
@@ -271,6 +285,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         resp = await self._session.get(url_dev, headers=headers, timeout=self._timeout)
         if resp.status != 200:
             txt = await resp.text()
+            if resp.status in (401, 403):
+                raise ConfigEntryAuthFailed(
+                    f"Smappee authentication failed while fetching connector state: {txt}"
+                )
             raise RuntimeError(f"smartdevice fetch {client.smart_device_id} failed: {txt}")
 
         data = await resp.json()
@@ -412,7 +430,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 changed = True
             changed = True
         else:
-            pass
+            if getattr(st, "mqtt_connected", None) is not False:
+                st.mqtt_connected = False
+                st.last_mqtt_rx = _now()
+                changed = True
 
         if changed:
             self.async_set_updated_data(data)
