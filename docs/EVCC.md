@@ -6,8 +6,7 @@ Thanks to [@marq24](https://github.com/marq24) for the pioneering guide on this 
 
 
 ## 🚀 Step-by-Step Setup
-All details can be found in following link: 🔗 [Home Assistant as EVCC Source](https://github.com/marq24/ha-evcc/blob/main/HA_AS_EVCC_SOURCE.md)
-Since recent updates of EVCC, the configuration has changed a bit. No more long-lived access token is required, but you still need to make sure that Home Assistant is reachable over your LAN.
+All details can be found in following link: 🔗 [Home Assistant as EVCC Source](https://github.com/marq24/ha-evcc/blob/main/HA_AS_EVCC_SOURCE.md) 
 
 ### ✅ Step 1: Make Home Assistant Data Accessible
 - Create a **long-lived access token** in Home Assistant.  #not sure this is still required!

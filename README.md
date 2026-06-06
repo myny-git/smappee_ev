@@ -33,7 +33,7 @@ The main ambition is to have independent control of the Smappee EV charger via H
 
 ### ✅ Charging Mode Control
 - UI controls (select, number slider, **Set Charging Mode** button) use the **`smartdevices` endpoint**, which matches the Smappee app buttons exactly and avoids the cloud-side session timeout issue (issue #103).
-- The EVCC switch uses the **`chargingstations` endpoint** for enable (`NORMAL`) and disable (`PAUSED`).
+- The EVCC switch uses the **`smartdevices` endpoint** for enable (`STANDARD`) and disable (`PAUSED`).
 - `smappee_ev.set_charging_mode` sets mode via the smartdevices endpoint: `STANDARD`, `SMART`, or `SOLAR`.
 - `smappee_ev.set_charging_mode_chargingstations` provides direct chargingstations control: `NORMAL`, `SMART`, or `PAUSED`, with an optional limit in `AMPERE` or `PERCENTAGE`.
 

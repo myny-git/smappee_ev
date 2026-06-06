@@ -166,34 +166,58 @@ class StationPvPower(SmappeeStationEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-class _TotalIncreasingEnergySensor(RestoreSensor):
-    """Mixin for TOTAL_INCREASING energy sensors with cross-restart value protection."""
+def _total_increasing_value(entity: object, candidate: object) -> float | None:
+    """Protect total-increasing sensors from decreasing across restarts."""
+    last = getattr(entity, "_last_value", None)
+    raw_value: float | None = None
+    if not isinstance(candidate, bool) and candidate is not None:
+        with contextlib.suppress(TypeError, ValueError):
+            raw_value = float(candidate)  # type: ignore[arg-type]
+    value = update_total_increasing(last, raw_value)
+    entity._last_value = value  # type: ignore[attr-defined]
+    return value
+
+
+async def _async_restore_last_total_value(sensor: RestoreSensor) -> None:
+    last = await sensor.async_get_last_sensor_data()
+    if last is None or last.native_value is None:
+        return
+    if isinstance(last.native_value, int | float | str):
+        with contextlib.suppress(TypeError, ValueError):
+            sensor._last_value = float(last.native_value)  # type: ignore[attr-defined]
+
+
+class RestoredEnergyStationSensor(SmappeeStationEntity, RestoreSensor):
+    """Station energy sensor with restore support and coordinator lifecycle."""
 
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def _total_increasing_value(self, candidate: object) -> float | None:
-        last = getattr(self, "_last_value", None)
-        raw_value: float | None = None
-        if not isinstance(candidate, bool) and candidate is not None:
-            with contextlib.suppress(TypeError, ValueError):
-                raw_value = float(candidate)  # type: ignore[arg-type]
-        value = update_total_increasing(last, raw_value)
-        self._last_value = value
-        return value
+        return _total_increasing_value(self, candidate)
 
     async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_sensor_data()
-        if last is None or last.native_value is None:
-            return
-        if isinstance(last.native_value, int | float | str):
-            with contextlib.suppress(TypeError, ValueError):
-                self._last_value = float(last.native_value)
+        await SmappeeStationEntity.async_added_to_hass(self)
+        await _async_restore_last_total_value(self)
 
 
-class StationGridEnergyImport(_TotalIncreasingEnergySensor, SmappeeStationEntity):
+class RestoredEnergyConnectorSensor(SmappeeConnectorEntity, RestoreSensor):
+    """Connector energy sensor with restore support and coordinator lifecycle."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def _total_increasing_value(self, candidate: object) -> float | None:
+        return _total_increasing_value(self, candidate)
+
+    async def async_added_to_hass(self) -> None:
+        await SmappeeConnectorEntity.async_added_to_hass(self)
+        await _async_restore_last_total_value(self)
+
+
+class StationGridEnergyImport(RestoredEnergyStationSensor):
     def __init__(
         self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
     ) -> None:
@@ -212,7 +236,7 @@ class StationGridEnergyImport(_TotalIncreasingEnergySensor, SmappeeStationEntity
         return self._total_increasing_value(getattr(st, "grid_energy_import_kwh", None))
 
 
-class StationGridEnergyExport(_TotalIncreasingEnergySensor, SmappeeStationEntity):
+class StationGridEnergyExport(RestoredEnergyStationSensor):
     def __init__(
         self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
     ) -> None:
@@ -231,7 +255,7 @@ class StationGridEnergyExport(_TotalIncreasingEnergySensor, SmappeeStationEntity
         return self._total_increasing_value(getattr(st, "grid_energy_export_kwh", None))
 
 
-class StationPvEnergyImport(_TotalIncreasingEnergySensor, SmappeeStationEntity):
+class StationPvEnergyImport(RestoredEnergyStationSensor):
     def __init__(
         self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
     ) -> None:
@@ -383,7 +407,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-class ConnEnergyImport(_TotalIncreasingEnergySensor, SmappeeConnectorEntity):
+class ConnEnergyImport(RestoredEnergyConnectorSensor):
     def __init__(
         self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
     ) -> None:
@@ -678,7 +702,8 @@ class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
     @property
     def native_value(self) -> str | None:
         st = self._conn_state
-        return str(getattr(st, "session_state", None)) if st else None
+        value = getattr(st, "session_state", None) if st else None
+        return str(value) if value is not None else None
 
 
 class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
@@ -696,8 +721,9 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
     @property
     def native_value(self):
         st = self._conn_state
-        if st and getattr(st, "evcc_state", None) is not None:
-            return str(getattr(st, "evcc_state", None))
+        value = getattr(st, "evcc_state", None) if st else None
+        if value is not None:
+            return str(value)
         return self._restored_value
 
     @property
@@ -710,7 +736,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
                 "charging_mode": getattr(st, "raw_charging_mode", None),
                 "optimization_strategy": getattr(st, "optimization_strategy", None),
                 "paused": getattr(st, "paused", None),
-                "status_current": getattr(st, "session_cause", None),
+                "status_current": getattr(st, "status_current", None),
             }
         # Return restored attributes if we have them and no current state
         if self._restored_attributes:
@@ -719,7 +745,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added."""
-        await super().async_added_to_hass()
+        await SmappeeConnectorEntity.async_added_to_hass(self)
 
         # Restore previous state if available
         last_data = await self.async_get_last_sensor_data()
@@ -759,13 +785,14 @@ class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
     @property
     def native_value(self):
         st = self._conn_state
-        if st and getattr(st, "status_current", None) is not None:
-            return str(getattr(st, "status_current", None))
+        value = getattr(st, "status_current", None) if st else None
+        if value is not None:
+            return str(value)
         return self._restored_value
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added."""
-        await super().async_added_to_hass()
+        await SmappeeConnectorEntity.async_added_to_hass(self)
 
         # Restore previous state if available
         last_data = await self.async_get_last_sensor_data()
