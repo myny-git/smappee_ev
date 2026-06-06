@@ -442,9 +442,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             data.pop(CONF_PASSWORD, None)
         hass.config_entries.async_update_entry(entry, data=data)
 
-    oauth_client = OAuth2Client(
-        entry.data, session=session, token_update_callback=_store_tokens
-    )
+    oauth_client = OAuth2Client(entry.data, session=session, token_update_callback=_store_tokens)
 
     # 1) Discover sites
     try:

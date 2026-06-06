@@ -12,9 +12,7 @@ from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_PASSWORD, CONF_USERN
 from .oauth import OAuth2Client
 
 
-def _required_with_optional_default(
-    key: str, defaults: Mapping[str, Any]
-) -> vol.Required:
+def _required_with_optional_default(key: str, defaults: Mapping[str, Any]) -> vol.Required:
     """Return a required field with a default only when one is available."""
     if key in defaults and defaults[key] is not None:
         return vol.Required(key, default=defaults[key])
@@ -107,9 +105,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._abort_if_unique_id_configured()
 
-        return self.async_create_entry(
-            title=f"Smappee EV — {user_input[CONF_USERNAME]}", data=data
-        )
+        return self.async_create_entry(title=f"Smappee EV — {user_input[CONF_USERNAME]}", data=data)
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:  # type: ignore[override]
         """Begin re-authentication flow."""

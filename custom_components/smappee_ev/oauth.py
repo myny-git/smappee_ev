@@ -67,9 +67,7 @@ class OAuth2Client:
             self.refresh_token = str(refresh_token) if refresh_token else None
         elif refresh_token:
             self.refresh_token = str(refresh_token)
-        self.token_expires_at = time.time() + tokens.get(
-            "expires_in", TOKEN_DEFAULT_EXPIRES_IN
-        )
+        self.token_expires_at = time.time() + tokens.get("expires_in", TOKEN_DEFAULT_EXPIRES_IN)
         if self._token_update_callback:
             self._token_update_callback(
                 {
