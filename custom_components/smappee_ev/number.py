@@ -247,7 +247,9 @@ class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):
     @property
     def native_value(self) -> int | None:
         data: IntegrationData | None = self.coordinator.data
-        return int(data.station.led_brightness) if data and data.station else None
+        if not data or not data.station or data.station.led_brightness is None:
+            return None
+        return int(data.station.led_brightness)
 
     async def async_set_native_value(self, value: float) -> None:
         val = max(0, min(100, int(value)))
@@ -268,10 +270,13 @@ class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):
         except (TypeError, ValueError):
             return
         data: IntegrationData | None = self.coordinator.data
+        updated_data = False
         if data and data.station and getattr(data.station, "led_brightness", None) is None:
             data.station.led_brightness = restored
             self.coordinator.async_set_updated_data(data)
-        self.async_write_ha_state()
+            updated_data = True
+        if not updated_data:
+            self.async_write_ha_state()
 
 
 class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
@@ -305,7 +310,9 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     @property
     def native_value(self) -> int | None:
         st = self._state()
-        return int(st.min_surpluspct) if st else None
+        if not st or st.min_surpluspct is None:
+            return None
+        return int(st.min_surpluspct)
 
     async def async_set_native_value(self, value: float) -> None:
         await self.api_client.set_min_surpluspct(int(value))
@@ -327,9 +334,12 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
         except (TypeError, ValueError):
             return
         st = self._state()
+        updated_data = False
         if st and st.min_surpluspct is None:
             st.min_surpluspct = restored
             data = self.coordinator.data
             if data:
                 self.coordinator.async_set_updated_data(data)
-        self.async_write_ha_state()
+                updated_data = True
+        if not updated_data:
+            self.async_write_ha_state()

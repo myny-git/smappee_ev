@@ -478,7 +478,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ]
     results = await asyncio.gather(*prep_tasks, return_exceptions=True)
     for sl, res in zip(with_serial, results, strict=True):
-        if isinstance(res, Exception):
+        if isinstance(res, asyncio.CancelledError):
+            raise res
+        if isinstance(res, BaseException):
             _LOGGER.warning("Site %s preparation failed: %s", sl.get("serviceLocationId"), res)
             continue
         stations_map, mqtt = res

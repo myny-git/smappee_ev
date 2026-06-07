@@ -92,7 +92,7 @@ async def async_get_config_entry_diagnostics(
         mqtt_connected_any = any(_station_connected(b) for b in (stations or {}).values())
 
         def _mask(v):
-            return "**REDACTED**" if v else None
+            return "**REDACTED**" if v is not None else None
 
         sites_detail.append(
             {

@@ -18,7 +18,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api_client import SmappeeApiClient
 from .const import (
     BASE_URL,
-    DEFAULT_LED_BRIGHTNESS,
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
     DEFAULT_MIN_SURPLUS_PERCENT,
@@ -122,7 +121,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         session_state="Initialize",
                         selected_current_limit=None,
                         selected_percentage_limit=None,
-                        selected_mode="NORMAL",
+                        selected_mode="STANDARD",
                         min_current=DEFAULT_MIN_CURRENT,
                         max_current=DEFAULT_MAX_CURRENT,
                         min_surpluspct=DEFAULT_MIN_SURPLUS_PERCENT,
@@ -233,7 +232,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     # -----------------------------
     async def _fetch_station_state(self, client: SmappeeApiClient) -> StationState:
         """Read LED brightness by scanning all smartdevices for the station."""
-        led_brightness = DEFAULT_LED_BRIGHTNESS
+        led_brightness: int | None = None
         try:
             devices = await client.async_get_smartdevices()
             for dev in devices or []:
@@ -246,7 +245,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         raw = prop.get("value")
                         val = raw.get("value") if isinstance(raw, dict) else raw
                         with suppress(TypeError, ValueError):
-                            led_brightness = _to_int(val, default=led_brightness)
+                            led_brightness = int(val)
                         break
         except asyncio.CancelledError:
             raise
@@ -274,7 +273,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         selected_mode = "STANDARD"
         min_current = DEFAULT_MIN_CURRENT
         max_current = DEFAULT_MAX_CURRENT
-        min_surpluspct = DEFAULT_MIN_SURPLUS_PERCENT
+        min_surpluspct: int | None = None
         support_grid: int | None = None
 
         resp = await self._session.get(url_dev, headers=headers, timeout=self._timeout)
@@ -313,7 +312,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                     min_current = _to_int(val, default=min_current)
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
                 with suppress(TypeError, ValueError):
-                    min_surpluspct = _to_int(val, default=min_surpluspct)
+                    min_surpluspct = int(val)
             elif name == "etc.smart.device.type.car.charger.config.max.gridassistanceamps":
                 with suppress(TypeError, ValueError):
                     support_grid = _to_int(val)

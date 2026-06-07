@@ -7,8 +7,7 @@
                     "client_id": "Je API client-id",
                     "client_secret": "Je client secret",
                     "username": "Je gebruikersnaam op het Smappee-dashboard",
-                    "password": "Je wachtwoord op het Smappee-dashboard",
-                    "serial": "Het serienummer van je laadpunt"
+                    "password": "Je wachtwoord op het Smappee-dashboard"
                 }
             },
             "reauth_confirm": {

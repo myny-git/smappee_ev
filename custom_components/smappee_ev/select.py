@@ -83,10 +83,19 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
 
     async def async_select_option(self, option: str) -> None:
         data = self.coordinator.data
-        if data and self.connector_uuid in (data.connectors or {}):
-            data.connectors[self.connector_uuid].selected_mode = option
+        conn = (data.connectors or {}).get(self.connector_uuid) if data else None
+        previous_mode = conn.selected_mode if conn else None
+        if conn:
+            conn.selected_mode = option
             self.coordinator.async_set_updated_data(data)
-        await self.api_client.set_charging_mode(option)
+        try:
+            await self.api_client.set_charging_mode(option)
+        except Exception:
+            if conn:
+                conn.selected_mode = previous_mode
+                if data:
+                    self.coordinator.async_set_updated_data(data)
+            raise
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:  # RestoreEntity
@@ -98,12 +107,15 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         if restored not in MODES:
             return
         st = self._state()
+        updated_data = False
         if st and st.selected_mode is None:
             st.selected_mode = restored
             data = self.coordinator.data
             if data:
                 self.coordinator.async_set_updated_data(data)
-        self.async_write_ha_state()
+                updated_data = True
+        if not updated_data:
+            self.async_write_ha_state()
 
     @property
     def device_info(self):

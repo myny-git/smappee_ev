@@ -3,12 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .const import (
-    DEFAULT_LED_BRIGHTNESS,
-    DEFAULT_MAX_CURRENT,
-    DEFAULT_MIN_CURRENT,
-    DEFAULT_MIN_SURPLUS_PERCENT,
-)
+from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 
 
 @dataclass
@@ -19,10 +14,10 @@ class ConnectorState:
     session_state: str = "Initialize"
     selected_current_limit: float | None = None
     selected_percentage_limit: int | None = None
-    selected_mode: str = "STANDARD"
+    selected_mode: str | None = None
     min_current: int = DEFAULT_MIN_CURRENT
     max_current: int = DEFAULT_MAX_CURRENT
-    min_surpluspct: int = DEFAULT_MIN_SURPLUS_PERCENT
+    min_surpluspct: int | None = None
     support_grid: int | None = None
 
     connection_status: str | None = None  # CONNECTED / DISCONNECTED
@@ -55,7 +50,7 @@ class ConnectorState:
 class StationState:
     """Holds state for the station (applies to all connectors)."""
 
-    led_brightness: int = DEFAULT_LED_BRIGHTNESS
+    led_brightness: int | None = None
     available: bool = True
 
     mqtt_connected: bool | None = None
