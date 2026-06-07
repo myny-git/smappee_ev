@@ -745,8 +745,8 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
             self, c, sid, station_uuid, uuid, unique_suffix="sensor:evcc_state", name=name
         )
         self.api_client = api
-        self._restored_value = None
-        self._restored_attributes = {}
+        self._restored_value: str | None = None
+        self._restored_attributes: dict[str, object] = {}
 
     @property
     def native_value(self):
@@ -783,7 +783,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
         if isinstance(restored_value, str) and restored_value in ("unknown", "unavailable"):
             restored_value = None
         if restored_value is not None:
-            self._restored_value = restored_value
+            self._restored_value = str(restored_value)
 
         # Restore attributes (not part of RestoreSensor data)
         last_state = await self.async_get_last_state()
@@ -812,7 +812,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
             self, c, sid, station_uuid, uuid, unique_suffix="sensor:status_current", name=name
         )
         self.api_client = api
-        self._restored_value = None
+        self._restored_value: str | None = None
 
     @property
     def native_value(self):
@@ -832,7 +832,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
         if isinstance(restored_value, str) and restored_value in ("unknown", "unavailable"):
             restored_value = None
         if restored_value is not None:
-            self._restored_value = restored_value
+            self._restored_value = str(restored_value)
             self.async_write_ha_state()
 
 
