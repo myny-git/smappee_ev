@@ -424,7 +424,6 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return
 
         changed = False
-        heartbeat_touch = False
 
         st = getattr(data, "station", None)
         if st is not None:
@@ -453,7 +452,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         elif "/etc/led/acledcontroller/" in topic and topic.endswith("/devices/updated"):
             changed |= self._handle_led_updated(payload)
 
-        if changed or heartbeat_touch:
+        if changed:
             self.async_set_updated_data(data)
 
     # ---------- split helpers to reduce complexity ----------

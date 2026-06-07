@@ -207,8 +207,8 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         updated_data = False
         st = self._state()
         if st:
-            # Only set if not yet populated so we don't fight real data
-            if st.selected_current_limit is None:
+            # Only restore when the API has not provided either representation.
+            if st.selected_current_limit is None and st.selected_percentage_limit is None:
                 st.selected_current_limit = restored
                 # Derive percentage if range known
                 if st.max_current > st.min_current:

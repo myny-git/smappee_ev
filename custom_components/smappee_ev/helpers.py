@@ -53,13 +53,6 @@ def station_serial(coord) -> str:
     return getattr(getattr(coord, "station_client", None), "serial_id", "unknown")
 
 
-def station_name(coord) -> str | None:
-    """Return the station's display name if available."""
-    data = getattr(coord, "data", None)
-    st = getattr(data, "station", None) if data else None
-    return getattr(st, "name", None)
-
-
 def connector_state(coordinator, connector_uuid: str) -> Any | None:
     """Lookup a connector state object from coordinator data."""
     data = getattr(coordinator, "data", None)
@@ -110,7 +103,6 @@ __all__ = [
     "make_device_info",
     "make_unique_id",
     "station_serial",
-    "station_name",
     "connector_state",
     "build_connector_label",
     "update_total_increasing",
