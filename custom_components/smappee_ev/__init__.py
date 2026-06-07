@@ -527,40 +527,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
-    # Retrieve runtime data once
-    rd: RuntimeData | None = getattr(entry, "runtime_data", None)
-    if isinstance(rd, RuntimeData):
-        # Stop all MQTT clients referenced in runtime_data
-        for sid, mqtt in (rd.mqtt or {}).items():
-            stop_fn = getattr(mqtt, "stop", None)
-            if not callable(stop_fn):  # pragma: no cover - defensive
-                continue
-            try:
-                result = stop_fn()
-                if asyncio.iscoroutine(result):
-                    await result
-            except asyncio.CancelledError:
-                raise
-            except (RuntimeError, OSError) as err:
-                _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
-
-        # Allow coordinators to shutdown any background tasks
-        for site in (rd.sites or {}).values():
-            for bucket in site.get("stations", {}).values():
-                coord = bucket.get("coordinator")
-                if coord and hasattr(coord, "async_shutdown"):
-                    try:
-                        await coord.async_shutdown()
-                    except asyncio.CancelledError:
-                        raise
-                    except (RuntimeError, OSError, ValueError) as exc:
-                        _LOGGER.debug("Coordinator shutdown issue: %s", exc)
-
-    else:
+    try:
+        rd = entry.runtime_data
+    except AttributeError:
         _LOGGER.debug(
             "Unload requested for %s but no runtime_data present (may have failed early)",
             entry.entry_id,
         )
+    else:
+        if isinstance(rd, RuntimeData):
+            # Stop all MQTT clients referenced in runtime_data
+            for sid, mqtt in (rd.mqtt or {}).items():
+                stop_fn = getattr(mqtt, "stop", None)
+                if not callable(stop_fn):  # pragma: no cover - defensive
+                    continue
+                try:
+                    result = stop_fn()
+                    if asyncio.iscoroutine(result):
+                        await result
+                except asyncio.CancelledError:
+                    raise
+                except (RuntimeError, OSError) as err:
+                    _LOGGER.warning(
+                        "Failed to stop MQTT client for service location %s: %s", sid, err
+                    )
+
+            # Allow coordinators to shutdown any background tasks
+            for site in (rd.sites or {}).values():
+                for bucket in site.get("stations", {}).values():
+                    coord = bucket.get("coordinator")
+                    if coord and hasattr(coord, "async_shutdown"):
+                        try:
+                            await coord.async_shutdown()
+                        except asyncio.CancelledError:
+                            raise
+                        except (RuntimeError, OSError, ValueError) as exc:
+                            _LOGGER.debug("Coordinator shutdown issue: %s", exc)
+        else:
+            _LOGGER.debug(
+                "Unload requested for %s but runtime_data is invalid (may have failed early)",
+                entry.entry_id,
+            )
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
@@ -578,7 +585,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
 
 def _current_station_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]:
     """Return Smappee EV device identifiers currently known for this entry."""
-    rd: RuntimeData | None = getattr(entry, "runtime_data", None)
+    try:
+        rd = entry.runtime_data
+    except AttributeError:
+        return set()
     if not isinstance(rd, RuntimeData):
         return set()
 
