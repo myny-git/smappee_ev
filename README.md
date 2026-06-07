@@ -101,13 +101,11 @@ During setup, you will be prompted to enter:
 
 - **Username** on the Smappee dashboard
 - **Password** on the Smappee dashboard
-- **Serial number** of your charging station  
-→ You can find it in the Smappee dashboard (go to EV line → click to view serial number)
 
 ### 🧩 Entities
 More information on the specifics of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). Take care: names are subject to change as users can rename their Smappee device.
 
-All UI controls (select, buttons, number slider, EVCC switch) now route through the `chargingstations` endpoint, which resolves the session timeout issue (#103). The `smappee_ev.set_charging_mode_chargingstations` service is the primary path; `smappee_ev.set_charging_mode` is kept for backward compatibility and routes internally to the same endpoint (except `SOLAR`).
+All UI controls (select, buttons, number slider, EVCC switch) route through the `smartdevices` endpoint, which matches the Smappee app behaviour and avoids the cloud-side session timeout issue (#103). The `smappee_ev.set_charging_mode` service uses this same endpoint. The `smappee_ev.set_charging_mode_chargingstations` service provides direct access to the `chargingstations` endpoint when needed.
 
 This is the current version of the entities (for my EV Wall Home single connector)
 
