@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from homeassistant.config_entries import ConfigEntry
+
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 
 
@@ -91,3 +93,6 @@ class RuntimeData:
     api: object  # OAuth2Client (kept generic to avoid circular import in type checking)
     sites: dict[int, dict]
     mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt
+
+
+type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]

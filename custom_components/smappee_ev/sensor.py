@@ -9,7 +9,6 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     EntityCategory,
     UnitOfElectricCurrent,
@@ -23,17 +22,17 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import RuntimeData
+from .data import SmappeeEvConfigEntry
 from .helpers import build_connector_label, safe_sum, update_total_increasing
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: SmappeeEvConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     # Access runtime data directly (preferred over hass.data lookups)
-    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    runtime = config_entry.runtime_data
     sites = (
         runtime.sites
     )  # { sid: { "stations": { st_uuid: {coordinator, station_client, connector_clients} } } }

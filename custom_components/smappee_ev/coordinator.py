@@ -10,14 +10,13 @@ from time import time as _now
 from typing import Any, cast
 
 from aiohttp import ClientError
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api_client import SmappeeApiClient
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
-from .data import ConnectorState, IntegrationData, StationState
+from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .oauth import SmappeeAuthError
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,7 +70,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         station_client: SmappeeApiClient,
         connector_clients: dict[str, SmappeeApiClient],  # keyed by UUID
         update_interval: int,
-        config_entry: ConfigEntry | None = None,
+        config_entry: SmappeeEvConfigEntry | None = None,
     ) -> None:
         super().__init__(
             hass,

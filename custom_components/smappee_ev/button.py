@@ -3,24 +3,25 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity
 from .coordinator import SmappeeCoordinator
-from .data import RuntimeData
+from .data import SmappeeEvConfigEntry
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    config_entry: SmappeeEvConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV buttons (multi-station)."""
-    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    runtime = config_entry.runtime_data
     sites = runtime.sites
 
     entities: list[ButtonEntity] = []
