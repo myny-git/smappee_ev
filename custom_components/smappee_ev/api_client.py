@@ -112,7 +112,9 @@ class SmappeeApiClient:
 
     async def async_get_smartdevice(self, smart_device_id: str) -> dict[str, Any] | None:
         """Fetch a single smartdevice by its numeric/string ID."""
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{smart_device_id}"
+        url = (
+            f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{smart_device_id}"
+        )
         data = await self._request("GET", url, expected=(200,), return_json=True)
         return data if isinstance(data, dict) else None
 
