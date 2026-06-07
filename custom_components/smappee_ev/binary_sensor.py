@@ -70,9 +70,7 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
-        # st = self.coordinator.data.station if self.coordinator.data else None
         return {
-            #            "last_mqtt_rx": getattr(st, "last_mqtt_rx", None),
             "service_location_id": self._sid,
             "station_serial": self._serial,
             "station_uuid": self._station_uuid,

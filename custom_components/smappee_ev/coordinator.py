@@ -428,9 +428,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         st = getattr(data, "station", None)
         if st is not None:
             st.last_mqtt_rx = _now()
+            changed = True
             if not getattr(st, "mqtt_connected", False):
                 st.mqtt_connected = True
-                changed = True
 
         # devices/updated (connector)
         if "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith("/devices/updated"):

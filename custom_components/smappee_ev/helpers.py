@@ -11,12 +11,11 @@ def make_device_info(
     sid: int,
     serial: str,
     station_uuid: str,
-    name: str | None = None,
 ) -> dict:
     """Return a Home Assistant device_info dict for a given station."""
     return {
         "identifiers": {(DOMAIN, f"{sid}:{serial}:{station_uuid}")},
-        "name": name or f"Smappee EV {serial}",
+        "name": f"Smappee EV {serial}",
         "manufacturer": "Smappee",
     }
 
