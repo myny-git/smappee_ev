@@ -244,8 +244,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                     ):
                         raw = prop.get("value")
                         val = raw.get("value") if isinstance(raw, dict) else raw
-                        with suppress(TypeError, ValueError):
-                            led_brightness = int(val)
+                        if val is not None:
+                            with suppress(TypeError, ValueError):
+                                led_brightness = int(val)
                         break
         except asyncio.CancelledError:
             raise
@@ -311,8 +312,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 with suppress(TypeError, ValueError):
                     min_current = _to_int(val, default=min_current)
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
-                with suppress(TypeError, ValueError):
-                    min_surpluspct = int(val)
+                if val is not None:
+                    with suppress(TypeError, ValueError):
+                        min_surpluspct = int(val)
             elif name == "etc.smart.device.type.car.charger.config.max.gridassistanceamps":
                 with suppress(TypeError, ValueError):
                     support_grid = _to_int(val)
