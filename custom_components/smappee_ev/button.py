@@ -113,14 +113,20 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
                 conn = data.connectors[self.connector_uuid]
                 sel = getattr(conn, "selected_current_limit", None)
                 mn = getattr(conn, "min_current", None)
-                if isinstance(sel, int) and sel > 0:
+                if isinstance(sel, int | float) and sel > 0:
                     target_a = sel
                 elif isinstance(mn, int) and mn > 0:
                     target_a = mn
+            min_current = getattr(conn, "min_current", 6) if conn else 6
+            max_current = getattr(conn, "max_current", 32) if conn else 32
+            if not isinstance(min_current, int | float) or min_current <= 0:
+                min_current = 6
+            if not isinstance(max_current, int | float) or max_current <= 0:
+                max_current = 32
             cur, pct = await self.api_client.start_charging(
                 current=target_a,
-                min_current=getattr(conn, "min_current", 6) if conn else 6,
-                max_current=getattr(conn, "max_current", 32) if conn else 32,
+                min_current=int(min_current),
+                max_current=int(max_current),
             )
             if data and conn is not None:
                 conn.selected_current_limit = cur

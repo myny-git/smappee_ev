@@ -101,7 +101,11 @@ class SmappeeApiClient:
             if return_json:
                 if resp.content_length == 0:
                     return None
-                return await resp.json()
+                try:
+                    return await resp.json()
+                except (aiohttp.ContentTypeError, ValueError) as err:
+                    _LOGGER.debug("Empty or invalid JSON response for %s %s: %s", method, url, err)
+                    return None
             return None
 
     async def async_get_smartdevices(self) -> list[dict[str, Any]] | None:
@@ -194,8 +198,8 @@ class SmappeeApiClient:
         return True
 
     async def start_charging(
-        self, current: int, *, min_current: int = 6, max_current: int = 32
-    ) -> tuple[int, int]:
+        self, current: float, *, min_current: int = 6, max_current: int = 32
+    ) -> tuple[float, int]:
         """Start charging at (clamped) amperage.
 
         Returns (current_amps, percentage_limit) so caller can update ConnectorState.
@@ -204,13 +208,18 @@ class SmappeeApiClient:
         if max_current < min_current:
             min_current, max_current = max_current, min_current
 
-        if max_current == min_current:
-            target = int(min_current)
+        min_current_f = float(min_current)
+        max_current_f = float(max_current)
+        current_f = round(float(current), 1)
+
+        if max_current_f == min_current_f:
+            target = round(min_current_f, 1)
             percentage = 100
         else:
-            target = max(min_current, min(int(current), max_current))
-            rng = max_current - min_current
-            percentage = int(max(0, min(100, round(((target - min_current) * 100.0) / rng))))
+            requested = max(min_current_f, min(current_f, max_current_f))
+            rng = max_current_f - min_current_f
+            percentage = int(max(0, min(100, round(((requested - min_current_f) * 100.0) / rng))))
+            target = round(min_current_f + (percentage / 100.0) * rng, 1)
 
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]

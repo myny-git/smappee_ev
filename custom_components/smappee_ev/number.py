@@ -165,6 +165,9 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         )
         st.selected_current_limit = cur_float
         st.selected_percentage_limit = pct_int
+        data = self.coordinator.data
+        if data:
+            self.coordinator.async_set_updated_data(data)
 
     @callback
     def _handle_coordinator_update(self) -> None:
