@@ -36,8 +36,6 @@ class SmappeeApiClient:
         self.smart_device_id = smart_device_id
         self.service_location_id = service_location_id
         self.connector_number = connector_number
-        self.led_device_id: str | None = None
-        self.led_device_uuid: str | None = None
 
         self.is_station = is_station
         self._session: ClientSession = session
@@ -72,28 +70,6 @@ class SmappeeApiClient:
     @property
     def serial_id(self) -> str:
         return self.serial
-
-    async def _ensure_led_device(self) -> None:
-        if self.led_device_id and self.led_device_uuid:
-            return
-        await self.ensure_auth()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
-        resp = await self._session.get(url, headers=self.auth_headers(), timeout=self._timeout)
-        if resp.status != 200:
-            txt = await resp.text()
-            if resp.status in (401, 403):
-                raise SmappeeAuthError(f"LED discovery authentication failed: {txt}")
-            raise RuntimeError(f"LED discovery failed: {txt}")
-        devices = await resp.json()
-        for dev in devices or []:
-            for prop in dev.get("configurationProperties", []) or []:
-                spec = prop.get("spec") or {}
-                if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
-                    self.led_device_id = str(dev.get("id"))
-                    self.led_device_uuid = str(dev.get("uuid"))
-                    return
-
-        raise RuntimeError("LED controller smartdevice not found on this service location")
 
     # ------------------------------------------------------------------
     # Generic request helper (auth + error handling)
@@ -354,25 +330,12 @@ class SmappeeApiClient:
 
     async def async_get_metering_configuration(self) -> dict | None:
         """Fetch metering configuration for this service location."""
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/meteringconfiguration"
         try:
-            async with self._session.get(
-                url, headers=self.auth_headers(), timeout=self._timeout
-            ) as resp:
-                if resp.status != 200:
-                    text = await resp.text()
-                    if resp.status in (401, 403):
-                        raise SmappeeAuthError(
-                            f"Metering configuration authentication failed: {text}"
-                        )
-                    _LOGGER.warning(
-                        "Metering configuration fetch failed (status %s): %s",
-                        resp.status,
-                        text,
-                    )
-                    return None
-                return await resp.json()
-        except (TimeoutError, aiohttp.ClientError) as exc:
+            data = await self._request("GET", url, expected=(200,), return_json=True)
+        except SmappeeAuthError:
+            raise
+        except (RuntimeError, TimeoutError, aiohttp.ClientError) as exc:
             _LOGGER.warning("Metering configuration fetch failed: %s", exc)
             return None
+        return data if isinstance(data, dict) else None
