@@ -107,7 +107,7 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         """Execute the action on press."""
         if self._action == "start_charging":
             data = self.coordinator.data if self.coordinator else None
-            target_a = 6
+            target_a: float = 6.0
             conn = None
             if data and self.connector_uuid in (data.connectors or {}):
                 conn = data.connectors[self.connector_uuid]
