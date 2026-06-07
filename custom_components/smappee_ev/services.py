@@ -148,6 +148,8 @@ def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> Smappee
     entry_id = call.data.get("config_entry_id")
     connector_id = call.data.get("connector_id")
     station_serial = str(call.data.get("charging_station_serial") or "").strip().casefold()
+    if connector_id is None:
+        return None
 
     explicit_rt = _runtime_by_entry_id(hass, entry_id)
     if explicit_rt:

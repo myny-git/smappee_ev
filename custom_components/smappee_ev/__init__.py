@@ -7,7 +7,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
@@ -20,6 +20,7 @@ from .oauth import OAuth2Client, SmappeeAuthError
 from .services import register_services, unregister_services
 
 _LOGGER = logging.getLogger(__name__)
+_SERVICE_REGISTRATION_SENTINEL = "start_charging"
 PLATFORMS = [
     Platform.SENSOR,
     Platform.NUMBER,
@@ -418,9 +419,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Smappee EV component."""
     hass.data.setdefault(DOMAIN, {})
     # Register services once domain-wide (multi-entry safe)
-    if not hass.data[DOMAIN].get("services_registered"):
+    if not hass.services.has_service(DOMAIN, _SERVICE_REGISTRATION_SENTINEL):
         await register_services(hass)
-        hass.data[DOMAIN]["services_registered"] = True
     return True
 
 
@@ -480,9 +480,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     for sl, res in zip(with_serial, results, strict=True):
         if isinstance(res, Exception):
             _LOGGER.warning("Site %s preparation failed: %s", sl.get("serviceLocationId"), res)
-            continue
-        if not isinstance(res, tuple):
-            _LOGGER.error("Expected tuple from _prepare_site, got %s", type(res))
             continue
         stations_map, mqtt = res
         if not stations_map:
@@ -565,19 +562,52 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        # Remove runtime_data attribute if present
-        if hasattr(entry, "runtime_data"):
-            try:
-                delattr(entry, "runtime_data")
-            except AttributeError:
-                _LOGGER.debug("runtime_data attribute already removed for %s", entry.entry_id)
         # If no other loaded entries, unregister services
         active_entries = [
             e
             for e in hass.config_entries.async_entries(DOMAIN)
             if e.state is ConfigEntryState.LOADED
         ]
-        if not active_entries and hass.data.get(DOMAIN, {}).get("services_registered"):
+        if not active_entries and hass.services.has_service(DOMAIN, _SERVICE_REGISTRATION_SENTINEL):
             await unregister_services(hass)
             hass.data.pop(DOMAIN, None)
     return unload_ok
+
+
+def _current_station_device_identifiers(entry: ConfigEntry) -> set[str]:
+    """Return Smappee EV device identifiers currently known for this entry."""
+    rd: RuntimeData | None = getattr(entry, "runtime_data", None)  # type: ignore[attr-defined]
+    if not isinstance(rd, RuntimeData):
+        return set()
+
+    identifiers: set[str] = set()
+    for sid, site in (rd.sites or {}).items():
+        for station_uuid, bucket in (site.get("stations") or {}).items():
+            serial = bucket.get("serial")
+            if not serial:
+                station_client = bucket.get("station_client")
+                serial = getattr(station_client, "serial_id", None) or getattr(
+                    station_client, "serial", None
+                )
+            if serial:
+                identifiers.add(f"{sid}:{serial}:{station_uuid}")
+    return identifiers
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Allow users to remove stale Smappee EV devices from the registry."""
+    domain_identifiers = {
+        identifier for domain, identifier in device_entry.identifiers if domain == DOMAIN
+    }
+    if not domain_identifiers:
+        return True
+
+    current_identifiers = _current_station_device_identifiers(entry)
+    if not current_identifiers:
+        return False
+
+    return domain_identifiers.isdisjoint(current_identifiers)

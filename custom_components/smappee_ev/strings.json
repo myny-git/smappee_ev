@@ -59,7 +59,7 @@
     },
     "pause_charging": {
       "name": "Pause charging",
-      "description": "Pause charging for the selected connector. Uses the smartdevices API endpoint (recommended — matches Smappee app behaviour).",
+      "description": "Pause charging for the selected connector. Uses the smartdevices API endpoint (recommended \u2014 matches Smappee app behaviour).",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -77,7 +77,7 @@
     },
     "pause_charging_chargingstations": {
       "name": "Pause charging (chargingstations)",
-      "description": "Pause charging via the chargingstations API endpoint. Legacy fallback — use pause_charging for normal operation.",
+      "description": "Pause charging via the chargingstations API endpoint. Legacy fallback \u2014 use pause_charging for normal operation.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",

@@ -233,36 +233,31 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     # -----------------------------
     async def _fetch_station_state(self, client: SmappeeApiClient) -> StationState:
         """Read LED brightness by scanning all smartdevices for the station."""
-        headers = client.auth_headers()
-        url_all = f"{BASE_URL}/servicelocation/{client.service_location_id}/smartdevices"
         led_brightness = DEFAULT_LED_BRIGHTNESS
         try:
-            resp = await self._session.get(url_all, headers=headers, timeout=self._timeout)
-            if resp.status == 200:
-                devices = await resp.json()
-                for dev in devices:
-                    for prop in dev.get("configurationProperties", []):
-                        spec = prop.get("spec", {}) or {}
-                        if (
-                            spec.get("name")
-                            == "etc.smart.device.type.car.charger.led.config.brightness"
-                        ):
-                            raw = prop.get("value")
-                            val = raw.get("value") if isinstance(raw, dict) else raw
-                            with suppress(TypeError, ValueError):
-                                led_brightness = _to_int(val, default=led_brightness)
-                            break
-            else:
-                txt = await resp.text()
-                if resp.status in (401, 403):
-                    raise ConfigEntryAuthFailed(
-                        f"Smappee authentication failed while fetching station state: {txt}"
-                    )
-                _LOGGER.debug("Station brightness fetch status=%s body=%s", resp.status, txt)
+            devices = await client.async_get_smartdevices()
+            for dev in devices or []:
+                for prop in dev.get("configurationProperties", []):
+                    spec = prop.get("spec", {}) or {}
+                    if (
+                        spec.get("name")
+                        == "etc.smart.device.type.car.charger.led.config.brightness"
+                    ):
+                        raw = prop.get("value")
+                        val = raw.get("value") if isinstance(raw, dict) else raw
+                        with suppress(TypeError, ValueError):
+                            led_brightness = _to_int(val, default=led_brightness)
+                        break
         except asyncio.CancelledError:
             raise
+        except SmappeeAuthError as err:
+            raise ConfigEntryAuthFailed(
+                f"Smappee authentication failed while fetching station state: {err}"
+            ) from err
         except (TimeoutError, ClientError) as err:
             _LOGGER.debug("Station brightness fetch exception: %s", err)
+        except RuntimeError as err:
+            _LOGGER.debug("Station brightness fetch failed: %s", err)
 
         return StationState(led_brightness=led_brightness, available=True)
 
@@ -553,7 +548,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return self._handle_connector_state(conn, payload)
 
         if "/property/" in topic and self._property_name_from_topic(topic) == "chargingstate":
-            return self._handle_connector_property_chargingstate(conn, payload)
+            changed = self._handle_connector_property_chargingstate(conn, payload)
+            changed |= self._sync_station_availability_from_chargingstate(payload)
+            return changed
 
         return False
 
@@ -640,6 +637,18 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             changed |= self._set_if_changed(conn, "available", bool(avail))
 
         return changed
+
+    def _sync_station_availability_from_chargingstate(self, payload: dict) -> bool:
+        """Mirror MQTT chargingstate.available to the station-level availability switch."""
+        data = self.data
+        if not data:
+            return False
+
+        avail = self._get_any(payload, "available")
+        if avail is None:
+            return False
+
+        return self._set_if_changed(data.station, "available", bool(avail))
 
     def _merge_cs_modes(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False

@@ -34,23 +34,6 @@
             "auth_failed": "Authenticatie mislukt"
         }
     },
-    "options": {
-        "step": {
-            "init": {
-                "description": "Werk je inloggegevens en polling-interval bij",
-                "data": {
-                    "client_id": "Je API client-id",
-                    "client_secret": "Je client secret",
-                    "username": "Je gebruikersnaam op het Smappee-dashboard",
-                    "password": "Je wachtwoord op het Smappee-dashboard",
-                    "serial": "Het serienummer van je laadpunt"
-                }
-            }
-        },
-        "error": {
-            "already_configured": "Er bestaat al een instantie met dit serienummer"
-        }
-    },
     "services": {
         "start_charging": {
             "name": "Start laden",

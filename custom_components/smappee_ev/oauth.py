@@ -129,6 +129,7 @@ class OAuth2Client:
         }
 
         for attempt in range(self.max_refresh_attempts):
+            last_attempt = attempt == self.max_refresh_attempts - 1
             try:
                 async with self._session.post(
                     OAUTH_TOKEN_URL, data=payload, timeout=self._timeout
@@ -171,7 +172,8 @@ class OAuth2Client:
                     attempt + 1,
                     err,
                 )
-            await asyncio.sleep(OAUTH_REFRESH_RETRY_BASE_DELAY * (attempt + 1))
+            if not last_attempt:
+                await asyncio.sleep(OAUTH_REFRESH_RETRY_BASE_DELAY * (attempt + 1))
 
         # Generic message without dynamic values to avoid CodeQL clear-text alert on variables
         _LOGGER.error("Failed to refresh access token after maximum attempts")

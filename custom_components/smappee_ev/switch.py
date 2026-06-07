@@ -16,7 +16,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData, RuntimeData, StationState
+from .data import IntegrationData, RuntimeData, StationState
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
@@ -97,14 +97,6 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         self.api_client = api_client
         self._is_on = False
 
-    # ---------- Helpers ----------
-
-    def _conn_state(self) -> ConnectorState | None:
-        data: IntegrationData | None = self.coordinator.data
-        if not data:
-            return None
-        return (data.connectors or {}).get(self._uuid)
-
     # ---------- HA hooks ----------
 
     @property
@@ -130,7 +122,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         try:
             _LOGGER.debug("Charging switch ON → STANDARD (sid=%s, uuid=%s)", self._sid, self._uuid)
             await self.api_client.set_charging_mode("STANDARD")
-            st = self._conn_state()
+            st = self._conn_state
             if st:
                 st.selected_mode = "STANDARD"
                 data = self.coordinator.data

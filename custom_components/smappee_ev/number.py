@@ -201,6 +201,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             restored = round(float(last.native_value), 1)
         except (TypeError, ValueError):
             return
+        updated_data = False
         st = self._state()
         if st:
             # Only set if not yet populated so we don't fight real data
@@ -214,7 +215,9 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
                 data = self.coordinator.data
                 if data:
                     self.coordinator.async_set_updated_data(data)
-        self.async_write_ha_state()
+                    updated_data = True
+        if not updated_data:
+            self.async_write_ha_state()
 
 
 class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):

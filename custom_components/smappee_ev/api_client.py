@@ -128,6 +128,12 @@ class SmappeeApiClient:
                 return await resp.json()
             return None
 
+    async def async_get_smartdevices(self) -> list[dict[str, Any]] | None:
+        """Fetch all smartdevices for this service location."""
+        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
+        data = await self._request("GET", url, expected=(200,), return_json=True)
+        return data if isinstance(data, list) else None
+
     # ------------------------------------------------------------------
     # COMMANDS (write actions)
     # ------------------------------------------------------------------

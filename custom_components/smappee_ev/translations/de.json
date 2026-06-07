@@ -34,23 +34,6 @@
       "auth_failed": "Autorisierung fehlgeschlagen"
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "description": "Aktualisieren Sie Ihre Zugangsdaten und das Abfrageintervall",
-        "data": {
-          "client_id": "Ihre API-Client-ID",
-          "client_secret": "Ihr Client-Secret",
-          "username": "Ihr Benutzername im Smappee-Dashboard",
-          "password": "Ihr Passwort im Smappee-Dashboard",
-          "serial": "Die Seriennummer Ihrer Ladestation"
-        }
-      }
-    },
-    "error": {
-      "already_configured": "Eine Instanz mit dieser Seriennummer existiert bereits"
-    }
-  },
   "services": {
     "start_charging": {
       "name": "Laden starten",
