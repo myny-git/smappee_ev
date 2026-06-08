@@ -82,6 +82,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self.station_client = station_client
         self.connector_clients = connector_clients
         self._power_index_map: dict[str, Any] | None = None
+        self._last_session_api_update = 0.0
 
     async def _async_update_data(self) -> IntegrationData:
         try:
@@ -90,6 +91,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             # ---- Station snapshot (LED brightness) ----
             station_state = await self._fetch_station_state(self.station_client)
+
+            # ---- Recent sessions ----
+            recent_sessions = self.data.recent_sessions if self.data else []
 
             # ---- Connectors in parallel ----
             pairs = list(self.connector_clients.items())  # [(uuid, client), ...]
@@ -120,7 +124,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             await self._ensure_power_index_map()
 
-            return IntegrationData(station=station_state, connectors=connectors_state)
+            return IntegrationData(station=station_state, connectors=connectors_state, recent_sessions=recent_sessions)
 
         except asyncio.CancelledError:
             raise
@@ -551,14 +555,43 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         return changed
 
     def _handle_connector_property_chargingstate(self, conn: ConnectorState, payload: dict) -> bool:
+        old_state = getattr(conn, "session_state", None)
+
         changed = False
         changed |= self._merge_cs_primary(conn, payload)
         changed |= self._merge_cs_context(conn, payload)
         changed |= self._merge_cs_modes(conn, payload)
         changed |= self._merge_cs_limits_availability(conn, payload)
-
         changed |= self._update_evcc(conn)
+
+        status_dict = payload.get("status") or {}
+        mqtt_state = status_dict.get("current") if isinstance(status_dict, dict) else None
+
+        if not mqtt_state:
+            mqtt_state = payload.get("chargingState")
+
+        if mqtt_state and old_state != mqtt_state:
+            _LOGGER.debug(
+                "Charging state changed from %s to %s (via MQTT). Triggering background session refresh.",
+                old_state,
+                mqtt_state,
+            )
+            self.hass.async_create_task(self.async_background_refresh_recent_sessions())
+
         return changed
+
+    async def async_background_refresh_recent_sessions(self, *_) -> None:
+        """Fetch recent sessions from the cloud API in the background."""
+        _LOGGER.critical("Refreshing recent sessions from Smappee API...")
+        try:
+            recent_sessions = await self.station_client.get_recent_sessions()
+            if self.data:
+                self.data.recent_sessions = recent_sessions
+                # Update de entiteiten in Home Assistant
+                self.async_set_updated_data(self.data)
+                _LOGGER.debug("Recent sessions successfully refreshed.")
+        except Exception as sess_err:
+            _LOGGER.warning("Could not refresh recent sessions in background: %s", sess_err)
 
     # ---------- split sub-helpers ----------
     def _set_if_changed(self, obj: object, attr: str, value) -> bool:

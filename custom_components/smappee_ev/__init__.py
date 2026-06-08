@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 import logging
 from typing import cast
 
@@ -9,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
 from .api_client import SmappeeApiClient
@@ -300,6 +302,14 @@ async def _create_coordinators(hass, stations, update_interval, config_entry=Non
         await coord.async_config_entry_first_refresh()
         bucket["coordinator"] = coord
 
+        hass.async_create_task(coord.async_background_refresh_recent_sessions())
+        session_timer_unsub = async_track_time_interval(
+            hass,
+            coord.async_background_refresh_recent_sessions,
+            timedelta(minutes=5),
+        )
+        if config_entry:
+            config_entry.async_on_unload(session_timer_unsub)
 
 def _setup_mqtt(
     hass, suuid, serial_str, sid, stations, client_id_prefix: str

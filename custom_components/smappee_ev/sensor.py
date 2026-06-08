@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import contextlib
 from datetime import UTC, datetime
+import logging
+from typing import Any
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -25,6 +27,7 @@ from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
 from .helpers import build_connector_label, safe_sum, update_total_increasing
 
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -78,7 +81,7 @@ async def async_setup_entry(
                 entities.append(ConnCurrentL1(coord, client, sid, st_uuid, cuuid))
                 entities.append(ConnCurrentL2(coord, client, sid, st_uuid, cuuid))
                 entities.append(ConnCurrentL3(coord, client, sid, st_uuid, cuuid))
-
+                entities.append(ConnectorSessionEnergySensor(coord, client, sid, st_uuid, cuuid))
     async_add_entities(entities, True)
 
 
@@ -873,3 +876,71 @@ class SmappeeMqttLastSeenSensor(SmappeeStationEntity, SensorEntity):
             return datetime.fromtimestamp(float(ts), tz=UTC)
         except (TypeError, ValueError):
             return None
+
+class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
+    """Sensor tracking total energy of the current/last session with all metadata in attributes."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(
+        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+    ) -> None:
+        """Initialize the unified session sensor."""
+        name = f"{build_connector_label(api, uuid)} Session energy"
+        super().__init__(
+            c, sid, station_uuid, uuid, unique_suffix="sensor:session_energy", name=name
+        )
+        self.api_client = api
+
+    @property
+    def _active_session_data(self) -> dict:
+        """Helper to safely extract the most recent v3 session (Index 0)."""
+        if not self.coordinator.data:
+            return {}
+        sessions = getattr(self.coordinator.data, "recent_sessions", [])
+        if sessions and isinstance(sessions, list) and len(sessions) > 0:
+            return sessions[0]
+        return {}
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the native value of the session energy in kWh."""
+        energy_kwh = self._active_session_data.get("energy")
+        if energy_kwh is None:
+            return 0.0
+        return round(float(energy_kwh), 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose all session metadata as attributes, excluding the state value itself."""
+        session = self._active_session_data
+        if not session:
+            return {}
+
+        # Create a shallow copy so we do not mutate the original coordinator data
+        attrs = dict(session)
+
+        # Remove the energy value since it is already exposed as the primary sensor state
+        attrs.pop("energy", None)
+
+        # Calculate and inject calculated duration details for convenience
+        start_ts = session.get("from")
+        if start_ts:
+            try:
+                start_time = datetime.fromtimestamp(float(start_ts), tz=UTC)
+                end_ts = session.get("to")
+
+                if end_ts and session.get("status") == "STOPPED":
+                    end_time = datetime.fromtimestamp(float(end_ts), tz=UTC)
+                else:
+                    end_time = datetime.now(UTC)
+
+                duration = end_time - start_time
+                attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
+
+            except Exception as err:
+                _LOGGER.error("Error calculating duration attribute for session: %s", err)
+
+        return attrs

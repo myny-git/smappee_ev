@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+import time
 from typing import Any, Literal
 
 import aiohttp
@@ -356,3 +357,11 @@ class SmappeeApiClient:
             _LOGGER.warning("Metering configuration fetch failed: %s", exc)
             return None
         return data if isinstance(data, dict) else None
+
+    async def get_recent_sessions(self) -> list:
+        """Get recent charging sessions."""
+        now_ms = int(time.time() * 1000)
+        from_ms = now_ms - (7 * 24 * 60 * 60 * 1000)
+
+        url = f"{BASE_URL}/chargingstations/{self.smart_device_uuid}/sessions?range={from_ms},{now_ms}"
+        return await self._request("GET", url, expected=(200,), return_json=True)
