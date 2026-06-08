@@ -9,22 +9,14 @@ import logging
 from time import time as _now
 from typing import Any, cast
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
-from homeassistant.config_entries import ConfigEntry
+from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api_client import SmappeeApiClient
-from .const import (
-    BASE_URL,
-    DEFAULT_MAX_CURRENT,
-    DEFAULT_MIN_CURRENT,
-    DEFAULT_MIN_SURPLUS_PERCENT,
-    HTTP_CONNECT_TIMEOUT,
-    HTTP_TOTAL_TIMEOUT,
-)
-from .data import ConnectorState, IntegrationData, StationState
+from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
+from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .oauth import SmappeeAuthError
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,7 +70,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         station_client: SmappeeApiClient,
         connector_clients: dict[str, SmappeeApiClient],  # keyed by UUID
         update_interval: int,
-        config_entry: ConfigEntry | None = None,
+        config_entry: SmappeeEvConfigEntry | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -89,9 +81,6 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         )
         self.station_client = station_client
         self.connector_clients = connector_clients
-        # reuse HA's client session via any existing client
-        self._session: ClientSession = station_client.get_http_session()
-        self._timeout = ClientTimeout(connect=HTTP_CONNECT_TIMEOUT, total=HTTP_TOTAL_TIMEOUT)
         self._power_index_map: dict[str, Any] | None = None
 
     async def _async_update_data(self) -> IntegrationData:
@@ -121,10 +110,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         session_state="Initialize",
                         selected_current_limit=None,
                         selected_percentage_limit=None,
-                        selected_mode="STANDARD",
+                        selected_mode=None,
                         min_current=DEFAULT_MIN_CURRENT,
                         max_current=DEFAULT_MAX_CURRENT,
-                        min_surpluspct=DEFAULT_MIN_SURPLUS_PERCENT,
+                        min_surpluspct=None,
                     )
                 else:
                     connectors_state[uuid] = cast(ConnectorState, res)
@@ -148,7 +137,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return
 
         cfg = await self.station_client.async_get_metering_configuration()
-        self._power_index_map = self._build_power_index_map(cfg or {})
+        if cfg is None:
+            return
+
+        self._power_index_map = self._build_power_index_map(cfg)
 
     def _build_power_index_map(self, cfg: dict) -> dict:
         """
@@ -263,30 +255,19 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
     async def _fetch_connector_state(self, client: SmappeeApiClient) -> ConnectorState:
         """Read one connector's properties/config from its smartdevice."""
-        await client.ensure_auth()
-        headers = client.auth_headers()
-        url_dev = f"{BASE_URL}/servicelocation/{client.service_location_id}/smartdevices/{client.smart_device_id}"
-
         # Defaults, will be overwritten by API values when present
         session_state = "Initialize"
         selected_percentage: int | None = None
         selected_current: int | None = None
-        selected_mode = "STANDARD"
+        selected_mode: str | None = None
         min_current = DEFAULT_MIN_CURRENT
         max_current = DEFAULT_MAX_CURRENT
         min_surpluspct: int | None = None
         support_grid: int | None = None
 
-        resp = await self._session.get(url_dev, headers=headers, timeout=self._timeout)
-        if resp.status != 200:
-            txt = await resp.text()
-            if resp.status in (401, 403):
-                raise ConfigEntryAuthFailed(
-                    f"Smappee authentication failed while fetching connector state: {txt}"
-                )
-            raise RuntimeError(f"smartdevice fetch {client.smart_device_id} failed: {txt}")
-
-        data = await resp.json()
+        data = await client.async_get_smartdevice(client.smart_device_id)
+        if data is None:
+            raise RuntimeError(f"smartdevice fetch {client.smart_device_id} returned no data")
 
         # properties: chargingState, percentageLimit
         for prop in data.get("properties", []):
@@ -442,14 +423,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return
 
         changed = False
-        heartbeat_touch = False
 
         st = getattr(data, "station", None)
         if st is not None:
             st.last_mqtt_rx = _now()
+            changed = True
             if not getattr(st, "mqtt_connected", False):
                 st.mqtt_connected = True
-                changed = True
 
         # devices/updated (connector)
         if "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith("/devices/updated"):
@@ -471,7 +451,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         elif "/etc/led/acledcontroller/" in topic and topic.endswith("/devices/updated"):
             changed |= self._handle_led_updated(payload)
 
-        if changed or heartbeat_touch:
+        if changed:
             self.async_set_updated_data(data)
 
     # ---------- split helpers to reduce complexity ----------

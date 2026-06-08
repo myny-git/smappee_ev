@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
@@ -10,7 +11,7 @@ import voluptuous as vol
 
 from .api_client import SmappeeApiClient
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
-from .data import ConnectorState, RuntimeData
+from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,18 +20,17 @@ _LOGGER = logging.getLogger(__name__)
 # ----------------------------
 
 
-def _iter_loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
+def _iter_loaded_entries(hass: HomeAssistant) -> list[SmappeeEvConfigEntry]:
     return [
-        e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED
+        cast(SmappeeEvConfigEntry, entry)
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.state is ConfigEntryState.LOADED
     ]
 
 
 def _first_runtime(hass: HomeAssistant) -> RuntimeData | None:
     for entry in _iter_loaded_entries(hass):
-        try:
-            return entry.runtime_data  # type: ignore[attr-defined]
-        except AttributeError:  # pragma: no cover - defensive
-            continue
+        return entry.runtime_data
     return None
 
 
@@ -40,19 +40,13 @@ def _runtime_by_entry_id(hass: HomeAssistant, entry_id: str | None) -> RuntimeDa
     entry = hass.config_entries.async_get_entry(entry_id)
     if not entry or entry.state is not ConfigEntryState.LOADED:
         return None
-    try:
-        return entry.runtime_data  # type: ignore[attr-defined]
-    except AttributeError:  # pragma: no cover
-        return None
+    return cast(SmappeeEvConfigEntry, entry).runtime_data
 
 
 def _find_runtime_for_sid(hass: HomeAssistant, sid: int) -> RuntimeData | None:
     """Return the runtime_data whose sites contains sid (first match)."""
     for entry in _iter_loaded_entries(hass):
-        try:
-            rd: RuntimeData = entry.runtime_data  # type: ignore[attr-defined]
-        except AttributeError:  # pragma: no cover
-            continue
+        rd = entry.runtime_data
         if sid in rd.sites:
             return rd
     return None
@@ -157,10 +151,7 @@ def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> Smappee
     else:
         runtimes = []
         for entry in _iter_loaded_entries(hass):
-            try:
-                runtimes.append(entry.runtime_data)  # type: ignore[attr-defined]
-            except AttributeError:  # pragma: no cover - defensive
-                continue
+            runtimes.append(entry.runtime_data)
 
     matches: list[SmappeeApiClient] = []
     seen: set[int] = set()

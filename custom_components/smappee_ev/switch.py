@@ -6,7 +6,6 @@ from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -16,7 +15,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import IntegrationData, RuntimeData, StationState
+from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,10 +25,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    config_entry: SmappeeEvConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV switches (multi-station)."""
-    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    runtime = config_entry.runtime_data
     sites = runtime.sites
 
     entities: list[SwitchEntity] = []

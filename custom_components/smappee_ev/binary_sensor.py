@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -9,7 +8,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import RuntimeData
+from .data import SmappeeEvConfigEntry
 from .helpers import station_serial
 
 
@@ -19,10 +18,10 @@ def _station_serial(coord: SmappeeCoordinator) -> str:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: SmappeeEvConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    runtime = config_entry.runtime_data
     sites = runtime.sites
 
     entities: list[SmappeeMqttConnectivity] = []
@@ -70,9 +69,7 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
-        # st = self.coordinator.data.station if self.coordinator.data else None
         return {
-            #            "last_mqtt_rx": getattr(st, "last_mqtt_rx", None),
             "service_location_id": self._sid,
             "station_serial": self._serial,
             "station_uuid": self._station_uuid,

@@ -14,7 +14,7 @@ from homeassistant.helpers.typing import ConfigType
 from .api_client import SmappeeApiClient
 from .const import BASE_URL, CONF_PASSWORD, DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import SmappeeCoordinator
-from .data import RuntimeData
+from .data import RuntimeData, SmappeeEvConfigEntry
 from .mqtt_gateway import SmappeeMqtt
 from .oauth import OAuth2Client, SmappeeAuthError
 from .services import register_services, unregister_services
@@ -345,7 +345,7 @@ async def _prepare_site(
     sl: dict,
     update_interval: int,
     client_id_prefix: str,
-    config_entry: ConfigEntry | None = None,
+    config_entry: SmappeeEvConfigEntry | None = None,
 ) -> tuple[dict[str, dict] | None, SmappeeMqtt | None]:
     """Build coordinators, station/connector clients and MQTT for one service location."""
 
@@ -424,7 +424,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Set up a Smappee EV account entry that discovers all service locations with a charger."""
     _LOGGER.debug("Setting up Smappee EV account entry: %s", entry.title)
 
@@ -506,7 +506,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sites=sites,
         mqtt=cast(dict[int, object], mqtt_clients),
     )
-    entry.runtime_data = runtime  # type: ignore[attr-defined]
+    entry.runtime_data = runtime
 
     # Platforms start
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -524,43 +524,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
-    # Retrieve runtime data once
-    rd: RuntimeData | None = getattr(entry, "runtime_data", None)  # type: ignore[attr-defined]
-    if isinstance(rd, RuntimeData):
-        # Stop all MQTT clients referenced in runtime_data
-        for sid, mqtt in (rd.mqtt or {}).items():
-            stop_fn = getattr(mqtt, "stop", None)
-            if not callable(stop_fn):  # pragma: no cover - defensive
-                continue
-            try:
-                result = stop_fn()
-                if asyncio.iscoroutine(result):
-                    await result
-            except asyncio.CancelledError:
-                raise
-            except (RuntimeError, OSError) as err:
-                _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
-
-        # Allow coordinators to shutdown any background tasks
-        for site in (rd.sites or {}).values():
-            for bucket in site.get("stations", {}).values():
-                coord = bucket.get("coordinator")
-                if coord and hasattr(coord, "async_shutdown"):
-                    try:
-                        await coord.async_shutdown()
-                    except asyncio.CancelledError:
-                        raise
-                    except (RuntimeError, OSError, ValueError) as exc:
-                        _LOGGER.debug("Coordinator shutdown issue: %s", exc)
-
-    else:
+    try:
+        rd = entry.runtime_data
+    except AttributeError:
         _LOGGER.debug(
             "Unload requested for %s but no runtime_data present (may have failed early)",
             entry.entry_id,
         )
+    else:
+        if isinstance(rd, RuntimeData):
+            # Stop all MQTT clients referenced in runtime_data
+            for sid, mqtt in (rd.mqtt or {}).items():
+                stop_fn = getattr(mqtt, "stop", None)
+                if not callable(stop_fn):  # pragma: no cover - defensive
+                    continue
+                try:
+                    result = stop_fn()
+                    if asyncio.iscoroutine(result):
+                        await result
+                except asyncio.CancelledError:
+                    raise
+                except (RuntimeError, OSError) as err:
+                    _LOGGER.warning(
+                        "Failed to stop MQTT client for service location %s: %s", sid, err
+                    )
+
+            # Allow coordinators to shutdown any background tasks
+            for site in (rd.sites or {}).values():
+                for bucket in site.get("stations", {}).values():
+                    coord = bucket.get("coordinator")
+                    if coord and hasattr(coord, "async_shutdown"):
+                        try:
+                            await coord.async_shutdown()
+                        except asyncio.CancelledError:
+                            raise
+                        except (RuntimeError, OSError, ValueError) as exc:
+                            _LOGGER.debug("Coordinator shutdown issue: %s", exc)
+        else:
+            _LOGGER.debug(
+                "Unload requested for %s but runtime_data is invalid (may have failed early)",
+                entry.entry_id,
+            )
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
@@ -576,9 +583,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-def _current_station_device_identifiers(entry: ConfigEntry) -> set[str]:
+def _current_station_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]:
     """Return Smappee EV device identifiers currently known for this entry."""
-    rd: RuntimeData | None = getattr(entry, "runtime_data", None)  # type: ignore[attr-defined]
+    try:
+        rd = entry.runtime_data
+    except AttributeError:
+        return set()
     if not isinstance(rd, RuntimeData):
         return set()
 
@@ -598,7 +608,7 @@ def _current_station_device_identifiers(entry: ConfigEntry) -> set[str]:
 
 async def async_remove_config_entry_device(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: SmappeeEvConfigEntry,
     device_entry: dr.DeviceEntry,
 ) -> bool:
     """Allow users to remove stale Smappee EV devices from the registry."""

@@ -9,7 +9,6 @@ from homeassistant.components.number import (
     NumberMode,
     RestoreNumber,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
@@ -18,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData, RuntimeData
+from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,11 +25,11 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: SmappeeEvConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV number entities (multi-station)."""
-    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    runtime = config_entry.runtime_data
     sites = runtime.sites
 
     entities: list[NumberEntity] = []
@@ -165,6 +164,9 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         )
         st.selected_current_limit = cur_float
         st.selected_percentage_limit = pct_int
+        data = self.coordinator.data
+        if data:
+            self.coordinator.async_set_updated_data(data)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -204,8 +206,8 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         updated_data = False
         st = self._state()
         if st:
-            # Only set if not yet populated so we don't fight real data
-            if st.selected_current_limit is None:
+            # Only restore when the API has not provided either representation.
+            if st.selected_current_limit is None and st.selected_percentage_limit is None:
                 st.selected_current_limit = restored
                 # Derive percentage if range known
                 if st.max_current > st.min_current:

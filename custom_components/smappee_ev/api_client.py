@@ -36,8 +36,6 @@ class SmappeeApiClient:
         self.smart_device_id = smart_device_id
         self.service_location_id = service_location_id
         self.connector_number = connector_number
-        self.led_device_id: str | None = None
-        self.led_device_uuid: str | None = None
 
         self.is_station = is_station
         self._session: ClientSession = session
@@ -73,28 +71,6 @@ class SmappeeApiClient:
     def serial_id(self) -> str:
         return self.serial
 
-    async def _ensure_led_device(self) -> None:
-        if self.led_device_id and self.led_device_uuid:
-            return
-        await self.ensure_auth()
-        url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
-        resp = await self._session.get(url, headers=self.auth_headers(), timeout=self._timeout)
-        if resp.status != 200:
-            txt = await resp.text()
-            if resp.status in (401, 403):
-                raise SmappeeAuthError(f"LED discovery authentication failed: {txt}")
-            raise RuntimeError(f"LED discovery failed: {txt}")
-        devices = await resp.json()
-        for dev in devices or []:
-            for prop in dev.get("configurationProperties", []) or []:
-                spec = prop.get("spec") or {}
-                if spec.get("name") == "etc.smart.device.type.car.charger.led.config.brightness":
-                    self.led_device_id = str(dev.get("id"))
-                    self.led_device_uuid = str(dev.get("uuid"))
-                    return
-
-        raise RuntimeError("LED controller smartdevice not found on this service location")
-
     # ------------------------------------------------------------------
     # Generic request helper (auth + error handling)
     # ------------------------------------------------------------------
@@ -125,7 +101,11 @@ class SmappeeApiClient:
             if return_json:
                 if resp.content_length == 0:
                     return None
-                return await resp.json()
+                try:
+                    return await resp.json()
+                except (aiohttp.ContentTypeError, ValueError) as err:
+                    _LOGGER.debug("Empty or invalid JSON response for %s %s: %s", method, url, err)
+                    return None
             return None
 
     async def async_get_smartdevices(self) -> list[dict[str, Any]] | None:
@@ -133,6 +113,14 @@ class SmappeeApiClient:
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices"
         data = await self._request("GET", url, expected=(200,), return_json=True)
         return data if isinstance(data, list) else None
+
+    async def async_get_smartdevice(self, smart_device_id: str) -> dict[str, Any] | None:
+        """Fetch a single smartdevice by its numeric/string ID."""
+        url = (
+            f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{smart_device_id}"
+        )
+        data = await self._request("GET", url, expected=(200,), return_json=True)
+        return data if isinstance(data, dict) else None
 
     # ------------------------------------------------------------------
     # COMMANDS (write actions)
@@ -210,8 +198,8 @@ class SmappeeApiClient:
         return True
 
     async def start_charging(
-        self, current: int, *, min_current: int = 6, max_current: int = 32
-    ) -> tuple[int, int]:
+        self, current: float, *, min_current: int = 6, max_current: int = 32
+    ) -> tuple[float, int]:
         """Start charging at (clamped) amperage.
 
         Returns (current_amps, percentage_limit) so caller can update ConnectorState.
@@ -220,13 +208,18 @@ class SmappeeApiClient:
         if max_current < min_current:
             min_current, max_current = max_current, min_current
 
-        if max_current == min_current:
-            target = int(min_current)
+        min_current_f = float(min_current)
+        max_current_f = float(max_current)
+        current_f = round(float(current), 1)
+
+        if max_current_f == min_current_f:
+            target = round(min_current_f, 1)
             percentage = 100
         else:
-            target = max(min_current, min(int(current), max_current))
-            rng = max_current - min_current
-            percentage = int(max(0, min(100, round(((target - min_current) * 100.0) / rng))))
+            requested = max(min_current_f, min(current_f, max_current_f))
+            rng = max_current_f - min_current_f
+            percentage = int(max(0, min(100, round(((requested - min_current_f) * 100.0) / rng))))
+            target = round(min_current_f + (percentage / 100.0) * rng, 1)
 
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/smartdevices/{self.smart_device_uuid}/actions/startCharging"
         payload = [{"spec": {"name": "percentageLimit", "species": "Integer"}, "value": percentage}]
@@ -354,25 +347,12 @@ class SmappeeApiClient:
 
     async def async_get_metering_configuration(self) -> dict | None:
         """Fetch metering configuration for this service location."""
-        await self.ensure_auth()
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/meteringconfiguration"
         try:
-            async with self._session.get(
-                url, headers=self.auth_headers(), timeout=self._timeout
-            ) as resp:
-                if resp.status != 200:
-                    text = await resp.text()
-                    if resp.status in (401, 403):
-                        raise SmappeeAuthError(
-                            f"Metering configuration authentication failed: {text}"
-                        )
-                    _LOGGER.warning(
-                        "Metering configuration fetch failed (status %s): %s",
-                        resp.status,
-                        text,
-                    )
-                    return None
-                return await resp.json()
-        except (TimeoutError, aiohttp.ClientError) as exc:
+            data = await self._request("GET", url, expected=(200,), return_json=True)
+        except SmappeeAuthError:
+            raise
+        except (RuntimeError, TimeoutError, aiohttp.ClientError) as exc:
             _LOGGER.warning("Metering configuration fetch failed: %s", exc)
             return None
+        return data if isinstance(data, dict) else None

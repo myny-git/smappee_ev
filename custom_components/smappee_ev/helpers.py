@@ -11,12 +11,11 @@ def make_device_info(
     sid: int,
     serial: str,
     station_uuid: str,
-    name: str | None = None,
 ) -> dict:
     """Return a Home Assistant device_info dict for a given station."""
     return {
         "identifiers": {(DOMAIN, f"{sid}:{serial}:{station_uuid}")},
-        "name": name or f"Smappee EV {serial}",
+        "name": f"Smappee EV {serial}",
         "manufacturer": "Smappee",
     }
 
@@ -51,13 +50,6 @@ def make_unique_id(
 def station_serial(coord) -> str:
     """Return the station serial from a coordinator (fallback 'unknown')."""
     return getattr(getattr(coord, "station_client", None), "serial_id", "unknown")
-
-
-def station_name(coord) -> str | None:
-    """Return the station's display name if available."""
-    data = getattr(coord, "data", None)
-    st = getattr(data, "station", None) if data else None
-    return getattr(st, "name", None)
 
 
 def connector_state(coordinator, connector_uuid: str) -> Any | None:
@@ -110,7 +102,6 @@ __all__ = [
     "make_device_info",
     "make_unique_id",
     "station_serial",
-    "station_name",
     "connector_state",
     "build_connector_label",
     "update_total_increasing",

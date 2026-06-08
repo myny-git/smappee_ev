@@ -3,24 +3,25 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity
 from .coordinator import SmappeeCoordinator
-from .data import RuntimeData
+from .data import SmappeeEvConfigEntry
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    config_entry: SmappeeEvConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV buttons (multi-station)."""
-    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    runtime = config_entry.runtime_data
     sites = runtime.sites
 
     entities: list[ButtonEntity] = []
@@ -107,20 +108,26 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         """Execute the action on press."""
         if self._action == "start_charging":
             data = self.coordinator.data if self.coordinator else None
-            target_a = 6
+            target_a: float = 6.0
             conn = None
             if data and self.connector_uuid in (data.connectors or {}):
                 conn = data.connectors[self.connector_uuid]
                 sel = getattr(conn, "selected_current_limit", None)
                 mn = getattr(conn, "min_current", None)
-                if isinstance(sel, int) and sel > 0:
+                if isinstance(sel, int | float) and sel > 0:
                     target_a = sel
                 elif isinstance(mn, int) and mn > 0:
                     target_a = mn
+            min_current = getattr(conn, "min_current", 6) if conn else 6
+            max_current = getattr(conn, "max_current", 32) if conn else 32
+            if not isinstance(min_current, int | float) or min_current <= 0:
+                min_current = 6
+            if not isinstance(max_current, int | float) or max_current <= 0:
+                max_current = 32
             cur, pct = await self.api_client.start_charging(
                 current=target_a,
-                min_current=getattr(conn, "min_current", 6) if conn else 6,
-                max_current=getattr(conn, "max_current", 32) if conn else 32,
+                min_current=int(min_current),
+                max_current=int(max_current),
             )
             if data and conn is not None:
                 conn.selected_current_limit = cur

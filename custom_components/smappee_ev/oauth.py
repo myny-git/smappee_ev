@@ -23,6 +23,13 @@ OAUTH_TOKEN_URL = f"{BASE_URL.replace('/v3', '/v1')}/oauth2/token"
 _LOGGER = logging.getLogger(__name__)
 
 
+def _response_shape(data: object) -> list[str] | str:
+    """Return safe response metadata for logs without exposing token values."""
+    if isinstance(data, Mapping):
+        return sorted(str(key) for key in data)
+    return type(data).__name__
+
+
 class SmappeeAuthError(HomeAssistantError):
     """Raised when Smappee authentication or token refresh fails."""
 
@@ -98,7 +105,10 @@ class OAuth2Client:
                     return None
                 tokens = await response.json()
                 if "access_token" not in tokens:
-                    _LOGGER.error("No access token in response: %s", tokens)
+                    _LOGGER.error(
+                        "Authentication response did not include an access token; response keys: %s",
+                        _response_shape(tokens),
+                    )
                     return None
                 self._apply_tokens(tokens, replace_refresh=True)
                 _LOGGER.debug("Authentication succeeded; token validity window established")
@@ -137,7 +147,10 @@ class OAuth2Client:
                     if response.status == 200:
                         tokens = await response.json()
                         if "access_token" not in tokens:
-                            _LOGGER.error("No access token in refresh response: %s", tokens)
+                            _LOGGER.error(
+                                "Token refresh response did not include an access token; response keys: %s",
+                                _response_shape(tokens),
+                            )
                             break
                         self._apply_tokens(tokens, replace_refresh=False)
                         _LOGGER.debug("Access token refreshed; new validity window established")

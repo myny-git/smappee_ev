@@ -27,8 +27,7 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
 
     @property
     def device_info(self) -> dict[str, Any]:  # type: ignore[override]
-        station_name = getattr(getattr(self.coordinator.data, "station", None), "name", None)
-        return make_device_info(self._sid, self._serial, self._station_uuid, station_name)
+        return make_device_info(self._sid, self._serial, self._station_uuid)
 
 
 class SmappeeStationEntity(SmappeeBaseEntity):

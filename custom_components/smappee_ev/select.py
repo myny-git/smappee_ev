@@ -1,5 +1,4 @@
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -7,7 +6,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData, RuntimeData
+from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .helpers import build_connector_label
 
 MODES = ["STANDARD", "SMART", "SOLAR"]
@@ -15,10 +14,10 @@ MODES = ["STANDARD", "SMART", "SOLAR"]
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: SmappeeEvConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    runtime: RuntimeData = config_entry.runtime_data  # type: ignore[attr-defined]
+    runtime = config_entry.runtime_data
     sites = runtime.sites
 
     entities: list[SelectEntity] = []
