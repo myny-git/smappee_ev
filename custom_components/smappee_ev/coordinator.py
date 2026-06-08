@@ -590,9 +590,15 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 # Update de entiteiten in Home Assistant
                 self.async_set_updated_data(self.data)
                 _LOGGER.debug("Recent sessions successfully refreshed.")
-        except Exception as sess_err:
-            _LOGGER.warning("Could not refresh recent sessions in background: %s", sess_err)
+        except (TimeoutError, ClientError) as err:
+            # Dit zijn verwachte netwerk-fouten
+            _LOGGER.warning("Network error while refreshing recent sessions: %s", err)
 
+        except Exception as err:
+            # Vang alleen onverwachte fouten hier, maar log ze met stacktrace
+            _LOGGER.exception("Unexpected error while refreshing recent sessions: %s", err)
+            # Optioneel: raise, als je wilt dat HA de integratie als 'failing' markeert
+            # raise
     # ---------- split sub-helpers ----------
     def _set_if_changed(self, obj: object, attr: str, value) -> bool:
         """Set attr if value is not None and different; return True if changed."""

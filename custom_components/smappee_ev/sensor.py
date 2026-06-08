@@ -919,15 +919,15 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         if not session:
             return {}
 
-        # Create a shallow copy so we do not mutate the original coordinator data
+        # Create a shallow copy to prevent mutation of coordinator data
         attrs = dict(session)
 
-        # Remove the energy value since it is already exposed as the primary sensor state
+        # Remove primary state value
         attrs.pop("energy", None)
 
-        # Calculate and inject calculated duration details for convenience
+        # Calculate duration attributes
         start_ts = session.get("from")
-        if start_ts:
+        if start_ts is not None:
             try:
                 start_time = datetime.fromtimestamp(float(start_ts), tz=UTC)
                 end_ts = session.get("to")
@@ -940,7 +940,9 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
                 duration = end_time - start_time
                 attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
 
+            except (ValueError, TypeError, OverflowError) as err:
+                _LOGGER.warning("Could not calculate session duration for %s: %s", start_ts, err)
             except Exception as err:
-                _LOGGER.error("Error calculating duration attribute for session: %s", err)
+                _LOGGER.exception("Unexpected error calculating session duration: %s", err)
 
         return attrs
