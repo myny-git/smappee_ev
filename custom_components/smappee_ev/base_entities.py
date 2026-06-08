@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import SmappeeCoordinator
@@ -26,7 +27,7 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
         self._serial = station_serial(coordinator)
 
     @property
-    def device_info(self) -> dict[str, Any]:  # type: ignore[override]
+    def device_info(self) -> DeviceInfo:
         return make_device_info(self._sid, self._serial, self._station_uuid)
 
 

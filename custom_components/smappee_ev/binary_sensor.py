@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api_client import SmappeeApiClient
-from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
+from .base_entities import SmappeeBaseEntity, SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .helpers import build_connector_label, station_serial
@@ -27,7 +26,7 @@ async def async_setup_entry(
     runtime = config_entry.runtime_data
     sites = runtime.sites
 
-    entities: list[SmappeeMqttConnectivity] = []
+    entities: list[SmappeeBaseEntity] = []
     for sid, site in (sites or {}).items():
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
@@ -65,7 +64,7 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
         self.api_client = api_client
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         return super().device_info
 
     @property
@@ -125,7 +124,7 @@ class ConnectorCarConnectedBinarySensor(SmappeeConnectorEntity, BinarySensorEnti
     # ---------- Home Assistant Hooks ----------
 
     @property
-    def device_info(self) -> dict[str, Any] | None:
+    def device_info(self) -> DeviceInfo:
         """Return device information linkage from base entity implementation."""
         return super().device_info
 

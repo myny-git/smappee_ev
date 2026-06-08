@@ -8,6 +8,7 @@ from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -101,7 +102,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     # ---------- HA hooks ----------
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         return super().device_info
 
     @property
@@ -182,7 +183,7 @@ class SmappeeAvailabilitySwitch(SmappeeStationEntity, SwitchEntity):
         self.api_client = api_client
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         return super().device_info
 
     def _station_state(self) -> StationState | None:
