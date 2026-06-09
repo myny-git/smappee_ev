@@ -35,7 +35,9 @@ async def async_setup_entry(
             conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
             entities.append(SmappeeMqttConnectivity(coord, st_client, sid, st_uuid))
             for cuuid, client in (conns or {}).items():
-                entities.append(ConnectorCarConnectedBinarySensor(coord, client, sid, st_uuid, cuuid))
+                entities.append(
+                    ConnectorCarConnectedBinarySensor(coord, client, sid, st_uuid, cuuid)
+                )
 
     async_add_entities(entities, True)
 
@@ -79,6 +81,7 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
             "station_serial": self._serial,
             "station_uuid": self._station_uuid,
         }
+
 
 class ConnectorCarConnectedBinarySensor(SmappeeConnectorEntity, BinarySensorEntity, RestoreEntity):
     """Binary sensor indicating whether the car is physically connected to the charging station."""
