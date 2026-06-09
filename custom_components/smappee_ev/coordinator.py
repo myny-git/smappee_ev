@@ -124,7 +124,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             await self._ensure_power_index_map()
 
-            return IntegrationData(station=station_state, connectors=connectors_state, recent_sessions=recent_sessions)
+            return IntegrationData(
+                station=station_state, connectors=connectors_state, recent_sessions=recent_sessions
+            )
 
         except asyncio.CancelledError:
             raise
@@ -587,18 +589,14 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             recent_sessions = await self.station_client.get_recent_sessions()
             if self.data:
                 self.data.recent_sessions = recent_sessions
-                # Update de entiteiten in Home Assistant
                 self.async_set_updated_data(self.data)
                 _LOGGER.debug("Recent sessions successfully refreshed.")
         except (TimeoutError, ClientError) as err:
-            # Dit zijn verwachte netwerk-fouten
             _LOGGER.warning("Network error while refreshing recent sessions: %s", err)
 
         except Exception as err:
-            # Vang alleen onverwachte fouten hier, maar log ze met stacktrace
             _LOGGER.exception("Unexpected error while refreshing recent sessions: %s", err)
-            # Optioneel: raise, als je wilt dat HA de integratie als 'failing' markeert
-            # raise
+
     # ---------- split sub-helpers ----------
     def _set_if_changed(self, obj: object, attr: str, value) -> bool:
         """Set attr if value is not None and different; return True if changed."""

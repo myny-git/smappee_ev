@@ -29,6 +29,7 @@ from .helpers import build_connector_label, safe_sum, update_total_increasing
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
@@ -876,6 +877,7 @@ class SmappeeMqttLastSeenSensor(SmappeeStationEntity, SensorEntity):
             return datetime.fromtimestamp(float(ts), tz=UTC)
         except (TypeError, ValueError):
             return None
+
 
 class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     """Sensor tracking total energy of the current/last session with all metadata in attributes."""

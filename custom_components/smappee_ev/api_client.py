@@ -358,7 +358,7 @@ class SmappeeApiClient:
             return None
         return data if isinstance(data, dict) else None
 
-    async def get_recent_sessions(self) -> list:
+    async def get_recent_sessions(self) -> list | None:
         """Get recent charging sessions."""
         now_ms = int(time.time() * 1000)
         from_ms = now_ms - (7 * 24 * 60 * 60 * 1000)

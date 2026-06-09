@@ -311,6 +311,7 @@ async def _create_coordinators(hass, stations, update_interval, config_entry=Non
         if config_entry:
             config_entry.async_on_unload(session_timer_unsub)
 
+
 def _setup_mqtt(
     hass, suuid, serial_str, sid, stations, client_id_prefix: str
 ) -> SmappeeMqtt | None:

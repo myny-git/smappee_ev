@@ -83,6 +83,7 @@ class IntegrationData:
     connectors: dict[str, ConnectorState]  # keyed by UUID
     recent_sessions: list = field(default_factory=list)
 
+
 @dataclass
 class RuntimeData:
     """Runtime storage placed on ConfigEntry.runtime_data.
