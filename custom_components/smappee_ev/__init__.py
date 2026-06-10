@@ -375,6 +375,18 @@ async def _prepare_site(
         oauth_client, session, sid, serial_str, station_devs
     )
 
+    # Check if this service location actually has connector mappings.
+    # Some Smappee monitor-only service locations return an empty mapping.
+    has_connector_mapping = any(
+        (m.get("connectors") or {}) for m in station_serial_to_connectors.values()
+    )
+
+    if not has_connector_mapping:
+        _LOGGER.debug(
+            "No connector mapping found at %s; assuming monitor-only service location",
+            sid,
+        )
+
     # filter smartdevices who only belong in mappings to stations/connectors
     allowed_station_serials = set(station_serial_to_connectors.keys())
     if allowed_station_serials:
@@ -394,24 +406,11 @@ async def _prepare_site(
     # build station map with station_client + empty connector buckets
     stations = _make_station_clients(oauth_client, serial_str, sid, session, station_devs)
 
-    # Some Smappee monitor-only service locations return an empty connector mapping.
-    has_connector_mapping = any(
-        (mapping.get("connectors") or {}) for mapping in station_serial_to_connectors.values()
-    )
-
-    if not has_connector_mapping:
-        _LOGGER.debug(
-            "No connector mapping found at %s; skipping connector assignment",
-            sid,
-        )
-
+    # fill connector buckets / fallback only when connector mapping exists
     if has_connector_mapping:
-        # fill connector buckets / fallback only when connector mapping exists
         _assign_connectors(
             stations, car_devs, station_serial_to_connectors, oauth_client, serial_str, sid, session
         )
-
-        # fallback if no assignment worked
         _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
 
     # create coordinators per station
