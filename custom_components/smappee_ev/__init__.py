@@ -394,13 +394,25 @@ async def _prepare_site(
     # build station map with station_client + empty connector buckets
     stations = _make_station_clients(oauth_client, serial_str, sid, session, station_devs)
 
-    # fill connector buckets
-    _assign_connectors(
-        stations, car_devs, station_serial_to_connectors, oauth_client, serial_str, sid, session
+    # Some Smappee monitor-only service locations return an empty connector mapping.
+    has_connector_mapping = any(
+        (mapping.get("connectors") or {}) for mapping in station_serial_to_connectors.values()
     )
 
-    # fallback if no assignment worked
-    _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
+    if not has_connector_mapping:
+        _LOGGER.debug(
+            "No connector mapping found at %s; skipping connector assignment",
+            sid,
+        )
+
+    if has_connector_mapping:
+        # fill connector buckets / fallback only when connector mapping exists
+        _assign_connectors(
+            stations, car_devs, station_serial_to_connectors, oauth_client, serial_str, sid, session
+        )
+
+        # fallback if no assignment worked
+        _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
 
     # create coordinators per station
     await _create_coordinators(hass, stations, update_interval, config_entry=config_entry)
