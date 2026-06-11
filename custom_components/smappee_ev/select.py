@@ -115,7 +115,3 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
                 updated_data = True
         if not updated_data:
             self.async_write_ha_state()
-
-    @property
-    def device_info(self):
-        return super().device_info

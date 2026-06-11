@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.helpers.entity import DeviceInfo
+
 from .const import DOMAIN
 
 
@@ -11,7 +13,7 @@ def make_device_info(
     sid: int,
     serial: str,
     station_uuid: str,
-) -> dict:
+) -> DeviceInfo:
     """Return a Home Assistant device_info dict for a given station."""
     return {
         "identifiers": {(DOMAIN, f"{sid}:{serial}:{station_uuid}")},

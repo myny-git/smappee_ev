@@ -59,10 +59,6 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
         self.api_client = api_client
 
     @property
-    def device_info(self):
-        return super().device_info
-
-    @property
     def is_on(self) -> bool:
         st = self.coordinator.data.station if self.coordinator.data else None
         return bool(getattr(st, "mqtt_connected", False))

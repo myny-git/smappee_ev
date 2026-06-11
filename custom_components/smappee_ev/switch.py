@@ -101,10 +101,6 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     # ---------- HA hooks ----------
 
     @property
-    def device_info(self):
-        return super().device_info
-
-    @property
     def is_on(self) -> bool:
         """Show last EVCC intent only (not physical session state)."""
         return self._is_on
@@ -180,10 +176,6 @@ class SmappeeAvailabilitySwitch(SmappeeStationEntity, SwitchEntity):
             name="Station available",
         )
         self.api_client = api_client
-
-    @property
-    def device_info(self):
-        return super().device_info
 
     def _station_state(self) -> StationState | None:
         data: IntegrationData | None = self.coordinator.data
