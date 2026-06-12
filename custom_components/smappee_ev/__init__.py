@@ -135,6 +135,8 @@ async def _discover_service_locations(
     resp = await session.get(f"{BASE_URL}/servicelocation", headers=headers)
     if resp.status != 200:
         text = await resp.text()
+        if resp.status in (401, 403):
+            raise SmappeeAuthError(f"/servicelocation auth failed: {resp.status} - {text}")
         raise RuntimeError(f"/servicelocation failed: {resp.status} - {text}")
     data = await resp.json()
     locations = data.get("serviceLocations", []) if isinstance(data, dict) else (data or [])
@@ -152,9 +154,10 @@ async def _fetch_devices(
     }
     resp = await session.get(f"{BASE_URL}/servicelocation/{sid}/smartdevices", headers=headers)
     if resp.status != 200:
-        _LOGGER.warning(
-            "GET smartdevices for %s failed: %s - %s", sid, resp.status, await resp.text()
-        )
+        text = await resp.text()
+        if resp.status in (401, 403):
+            raise SmappeeAuthError(f"/smartdevices auth failed for {sid}: {resp.status} - {text}")
+        _LOGGER.warning("GET smartdevices for %s failed: %s - %s", sid, resp.status, text)
         return None
     return await resp.json()
 
@@ -313,6 +316,26 @@ def _setup_mqtt(
             if coord:
                 coord.apply_mqtt_properties(topic, payload)
 
+    refresh_tasks: dict[int, asyncio.Task] = {}
+
+    def _schedule_refresh(coord) -> None:
+        task_key = id(coord)
+        existing = refresh_tasks.get(task_key)
+        if existing is not None and not existing.done():
+            return
+
+        refresh = getattr(coord, "async_request_refresh", None)
+        if not callable(refresh):
+            return
+
+        refresh_result = refresh()
+        if not isawaitable(refresh_result):
+            return
+
+        task = hass.async_create_task(refresh_result)
+        refresh_tasks[task_key] = task
+        task.add_done_callback(lambda _task, key=task_key: refresh_tasks.pop(key, None))
+
     def _on_conn(up: bool) -> None:
         for bucket in stations.values():
             coord = bucket.get("coordinator")
@@ -321,11 +344,7 @@ def _setup_mqtt(
                     coord.update_interval = None
                 elif coord.update_interval is None:
                     coord.update_interval = timedelta(seconds=update_interval)
-                    refresh = getattr(coord, "async_request_refresh", None)
-                    if callable(refresh):
-                        refresh_result = refresh()
-                        if isawaitable(refresh_result):
-                            hass.async_create_task(refresh_result)
+                    _schedule_refresh(coord)
                 coord.apply_mqtt_connection_change(up)
 
     mqtt = SmappeeMqtt(
@@ -491,6 +510,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     for sl, res in zip(with_serial, results, strict=True):
         if isinstance(res, asyncio.CancelledError):
             raise res
+        if isinstance(res, ConfigEntryAuthFailed):
+            raise res
+        if isinstance(res, SmappeeAuthError):
+            raise ConfigEntryAuthFailed(f"Smappee authentication failed: {res}") from res
         if isinstance(res, BaseException):
             _LOGGER.warning("Site %s preparation failed: %s", sl.get("serviceLocationId"), res)
             continue

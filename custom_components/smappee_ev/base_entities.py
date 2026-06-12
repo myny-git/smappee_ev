@@ -11,6 +11,7 @@ from .helpers import make_device_info, make_unique_id, station_serial
 __all__ = [
     "SmappeeBaseEntity",
     "SmappeeStationEntity",
+    "SmappeeStationRestEntity",
     "SmappeeConnectorEntity",
 ]
 
@@ -47,6 +48,23 @@ class SmappeeStationEntity(SmappeeBaseEntity):
         self._attr_name = name
 
 
+class SmappeeStationRestEntity(SmappeeStationEntity):
+    """Base for station-scope entities that depend on REST reachability."""
+
+    @property
+    def available(self) -> bool:
+        """Return True when coordinator and station REST reachability are available."""
+        if not super().available:
+            return False
+        data = getattr(self.coordinator, "data", None)
+        if data is None:
+            return False
+        station = getattr(data, "station", None)
+        if station is None:
+            return False
+        return bool(getattr(station, "api_available", True))
+
+
 class SmappeeConnectorEntity(SmappeeBaseEntity):
     """Base for connector-scope entities."""
 
@@ -61,8 +79,6 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
     ) -> None:
         super().__init__(coordinator, sid, station_uuid)
         self._connector_uuid = connector_uuid
-        # legacy compatibility attribute (existing code referenced _uuid)
-        self._uuid = connector_uuid
         self._attr_unique_id = make_unique_id(
             sid, self._serial, station_uuid, connector_uuid, unique_suffix
         )

@@ -18,6 +18,7 @@ TOKEN_DEFAULT_EXPIRES_IN: Final = 3600
 
 # Charging percentages
 FULL_PERCENTAGE: Final = 100
+CHARGING_MODES: Final = ("STANDARD", "SMART", "SOLAR")
 
 # MQTT reconnect/backoff timings
 MQTT_RECONNECT_INITIAL_BACKOFF: Final = 1.0

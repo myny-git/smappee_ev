@@ -15,7 +15,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api_client import SmappeeApiClient
-from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
+from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .helpers import build_connector_label
@@ -116,12 +116,11 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             name=f"Max charging speed {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
         self.api_client = api_client
-        self._uuid = connector_uuid
         self._post_init(UnitOfElectricCurrent.AMPERE, float(min_current), float(max_current), 0.1)
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
-        return data.connectors.get(self._uuid) if data else None
+        return data.connectors.get(self.connector_uuid) if data else None
 
     @property
     def native_value(self) -> float | None:
@@ -223,7 +222,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             self.async_write_ha_state()
 
 
-class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):
+class SmappeeBrightnessNumber(SmappeeStationRestEntity, _BaseNumber):
     """LED brightness setting for Smappee EV (station-level)."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -236,7 +235,7 @@ class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeStationRestEntity.__init__(
             self,
             coordinator,
             sid,
@@ -285,6 +284,8 @@ class SmappeeBrightnessNumber(SmappeeStationEntity, _BaseNumber):
 class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     """Min Surplus Percentage (connector-level)."""
 
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(
         self,
         coordinator: SmappeeCoordinator,
@@ -303,12 +304,11 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
             name=f"Min Surplus Percentage {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
         self.api_client = api_client
-        self._uuid = connector_uuid
         self._post_init(PERCENTAGE, 0, 100, 1)
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
-        return data.connectors.get(self._uuid) if data else None
+        return data.connectors.get(self.connector_uuid) if data else None
 
     @property
     def native_value(self) -> int | None:

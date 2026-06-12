@@ -26,6 +26,11 @@ REDACT_KEYS = {
 }
 
 
+def _mask(value: object) -> str | None:
+    """Mask stable identifiers in diagnostics."""
+    return "**REDACTED**" if value is not None else None
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: SmappeeEvConfigEntry
 ) -> dict[str, Any]:
@@ -90,9 +95,6 @@ async def async_get_config_entry_diagnostics(
         # derive mqtt_connected aggregate (any station shows connected)
         mqtt_connected_any = any(_station_connected(b) for b in (stations or {}).values())
 
-        def _mask(v):
-            return "**REDACTED**" if v is not None else None
-
         sites_detail.append(
             {
                 "service_location_id": site_id,
@@ -119,6 +121,7 @@ async def async_get_config_entry_diagnostics(
                     "serial": getattr(st_client, "serial_id", None)
                     or getattr(st_client, "serial", None),
                     "available": getattr(st, "available", None) if st else None,
+                    "api_available": getattr(st, "api_available", None) if st else None,
                     "led_brightness": getattr(st, "led_brightness", None) if st else None,
                     "grid_power_total": getattr(st, "grid_power_total", None) if st else None,
                     "pv_power_total": getattr(st, "pv_power_total", None) if st else None,
@@ -137,6 +140,7 @@ async def async_get_config_entry_diagnostics(
                         "station_uuid": st_uuid,
                         "connector_number": getattr(cstate, "connector_number", None),
                         "available": getattr(cstate, "available", None),
+                        "api_available": getattr(cstate, "api_available", None),
                         "session_state": getattr(cstate, "session_state", None),
                         "session_cause": getattr(cstate, "session_cause", None),
                         "stopped_by_cloud": getattr(cstate, "stopped_by_cloud", None),

@@ -13,7 +13,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .api_client import SmappeeApiClient
-from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
+from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .helpers import build_connector_label
@@ -118,7 +118,11 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Set charging mode to STANDARD via the smartdevices endpoint."""
         try:
-            _LOGGER.debug("Charging switch ON → STANDARD (sid=%s, uuid=%s)", self._sid, self._uuid)
+            _LOGGER.debug(
+                "Charging switch ON → STANDARD (sid=%s, uuid=%s)",
+                self._sid,
+                self.connector_uuid,
+            )
             await self.api_client.set_charging_mode("STANDARD")
             st = self._conn_state
             if st:
@@ -131,21 +135,25 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         except asyncio.CancelledError:
             raise
         except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed) as err:
-            _LOGGER.warning("Failed to start charging on %s: %s", self._uuid, err)
+            _LOGGER.warning("Failed to start charging on %s: %s", self.connector_uuid, err)
             self.async_write_ha_state()
             raise
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Pause charging via the smartdevices endpoint."""
         try:
-            _LOGGER.debug("Charging switch OFF → pause (sid=%s, uuid=%s)", self._sid, self._uuid)
+            _LOGGER.debug(
+                "Charging switch OFF → pause (sid=%s, uuid=%s)",
+                self._sid,
+                self.connector_uuid,
+            )
             await self.api_client.pause_charging()
             self._is_on = False
             self.async_write_ha_state()
         except asyncio.CancelledError:
             raise
         except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed) as err:
-            _LOGGER.warning("Failed to pause charging on %s: %s", self._uuid, err)
+            _LOGGER.warning("Failed to pause charging on %s: %s", self.connector_uuid, err)
             self.async_write_ha_state()
             raise
 
@@ -155,7 +163,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
 # ====================================================================================
 
 
-class SmappeeAvailabilitySwitch(SmappeeStationEntity, SwitchEntity):
+class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
     """Switch to toggle station availability (acchargingstation action)."""
 
     _attr_has_entity_name = True
@@ -168,7 +176,7 @@ class SmappeeAvailabilitySwitch(SmappeeStationEntity, SwitchEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeStationRestEntity.__init__(
             self,
             coordinator,
             sid,

@@ -5,11 +5,12 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity
+from .const import CHARGING_MODES
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .helpers import build_connector_label
 
-MODES = ["STANDARD", "SMART", "SOLAR"]
+MODES = list(CHARGING_MODES)
 PARALLEL_UPDATES = 1
 
 

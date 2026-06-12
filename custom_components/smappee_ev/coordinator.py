@@ -83,6 +83,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self.station_client = station_client
         self.connector_clients = connector_clients
         self._power_index_map: dict[str, Any] | None = None
+        self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
 
     async def _async_update_data(self) -> IntegrationData:
@@ -91,7 +92,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             await self.station_client.ensure_auth()
 
             # ---- Station snapshot (LED brightness) ----
-            station_state = await self._fetch_station_state(self.station_client)
+            prev_data = self.data
+            station_state = self._merge_station_rest_state(
+                prev_data.station if prev_data else None,
+                await self._fetch_station_state(self.station_client),
+            )
 
             # ---- Connectors in parallel ----
             pairs = list(self.connector_clients.items())  # [(uuid, client), ...]
@@ -118,7 +123,9 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                         )
                 else:
                     self._log_connector_api_transition(uuid, True)
-                    connectors_state[uuid] = cast(ConnectorState, res)
+                    rest_state = cast(ConnectorState, res)
+                    prev = (prev_data.connectors or {}).get(uuid) if prev_data else None
+                    connectors_state[uuid] = self._merge_connector_rest_state(prev, rest_state)
 
             await self._ensure_power_index_map()
 
@@ -151,6 +158,61 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         if err is not None:
             _LOGGER.warning("Connector %s update failed; marking unavailable: %s", uuid, err)
+
+    def _log_station_api_transition(self, available: bool, err: Exception | None = None) -> None:
+        """Log station REST reachability only when it changes."""
+        previous = self._station_api_available
+        if previous is available:
+            if not available and err is not None:
+                _LOGGER.debug("Station update still failing: %s", err)
+            return
+
+        self._station_api_available = available
+        if available:
+            if previous is False:
+                _LOGGER.info("Station update recovered")
+            return
+
+        if err is not None:
+            _LOGGER.warning("Station update failed; marking unavailable: %s", err)
+
+    @staticmethod
+    def _merge_station_rest_state(prev: StationState | None, rest: StationState) -> StationState:
+        """Merge REST station fields into the previous MQTT-rich station state."""
+        if prev is None:
+            return rest
+        return replace(
+            prev,
+            led_brightness=rest.led_brightness
+            if rest.led_brightness is not None
+            else prev.led_brightness,
+            api_available=rest.api_available,
+        )
+
+    @staticmethod
+    def _merge_connector_rest_state(
+        prev: ConnectorState | None, rest: ConnectorState
+    ) -> ConnectorState:
+        """Merge REST connector fields into the previous MQTT-rich connector state."""
+        if prev is None:
+            return rest
+        return replace(
+            prev,
+            connector_number=rest.connector_number,
+            session_state=rest.session_state,
+            selected_current_limit=rest.selected_current_limit
+            if rest.selected_current_limit is not None
+            else prev.selected_current_limit,
+            selected_percentage_limit=rest.selected_percentage_limit,
+            selected_mode=rest.selected_mode
+            if rest.selected_mode is not None
+            else prev.selected_mode,
+            min_current=rest.min_current,
+            max_current=rest.max_current,
+            min_surpluspct=rest.min_surpluspct,
+            support_grid=rest.support_grid,
+            api_available=rest.api_available,
+        )
 
     async def _ensure_power_index_map(self) -> None:
         """Load and cache metering index mapping once."""
@@ -261,18 +323,18 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                             with suppress(TypeError, ValueError):
                                 led_brightness = int(val)
                         break
+            self._log_station_api_transition(True)
         except asyncio.CancelledError:
             raise
         except SmappeeAuthError as err:
             raise ConfigEntryAuthFailed(
                 f"Smappee authentication failed while fetching station state: {err}"
             ) from err
-        except (TimeoutError, ClientError) as err:
-            _LOGGER.debug("Station brightness fetch exception: %s", err)
-        except RuntimeError as err:
-            _LOGGER.debug("Station brightness fetch failed: %s", err)
+        except (TimeoutError, ClientError, RuntimeError) as err:
+            self._log_station_api_transition(False, err)
+            return StationState(led_brightness=led_brightness, available=True, api_available=False)
 
-        return StationState(led_brightness=led_brightness, available=True)
+        return StationState(led_brightness=led_brightness, available=True, api_available=True)
 
     async def _fetch_connector_state(self, client: SmappeeApiClient) -> ConnectorState:
         """Read one connector's properties/config from its smartdevice."""

@@ -10,7 +10,7 @@ from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
 from .api_client import SmappeeApiClient
-from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
+from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -512,7 +512,7 @@ SET_MODE_SCHEMA = vol.Schema(
         vol.Required("mode"): vol.All(
             str,
             str.upper,  # normalize to uppercase
-            vol.In({"STANDARD", "SMART", "SOLAR"}),
+            vol.In(CHARGING_MODES),
         ),
     }
 )
