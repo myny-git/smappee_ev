@@ -108,11 +108,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                     self._log_connector_api_transition(uuid, False, res)
                     # Preserve last-known values, but mark this connector unreachable
                     # for Home Assistant availability.
-                    prev = (
-                        (self.data.connectors or {}).get(uuid)
-                        if self.data
-                        else None
-                    )
+                    prev = (self.data.connectors or {}).get(uuid) if self.data else None
                     if prev is not None:
                         connectors_state[uuid] = replace(prev, api_available=False)
                     else:
