@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable, Sequence
 from contextlib import suppress
+from dataclasses import replace
 from datetime import timedelta
 import logging
 from time import time as _now
@@ -82,6 +83,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self.station_client = station_client
         self.connector_clients = connector_clients
         self._power_index_map: dict[str, Any] | None = None
+        self._connector_api_available: dict[str, bool] = {}
 
     async def _async_update_data(self) -> IntegrationData:
         try:
@@ -103,19 +105,23 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 if isinstance(res, SmappeeAuthError):
                     raise ConfigEntryAuthFailed(f"Smappee authentication failed: {res}") from res
                 if isinstance(res, Exception):
-                    _LOGGER.warning("Connector %s update failed: %s", uuid, res)
-                    # Fall back to safe defaults
-                    connectors_state[uuid] = ConnectorState(
-                        connector_number=getattr(client, "connector_number", 1),
-                        session_state="Initialize",
-                        selected_current_limit=None,
-                        selected_percentage_limit=None,
-                        selected_mode=None,
-                        min_current=DEFAULT_MIN_CURRENT,
-                        max_current=DEFAULT_MAX_CURRENT,
-                        min_surpluspct=None,
+                    self._log_connector_api_transition(uuid, False, res)
+                    # Preserve last-known values, but mark this connector unreachable
+                    # for Home Assistant availability.
+                    prev = (
+                        (self.data.connectors or {}).get(uuid)
+                        if self.data
+                        else None
                     )
+                    if prev is not None:
+                        connectors_state[uuid] = replace(prev, api_available=False)
+                    else:
+                        connectors_state[uuid] = ConnectorState(
+                            connector_number=getattr(client, "connector_number", 1),
+                            api_available=False,
+                        )
                 else:
+                    self._log_connector_api_transition(uuid, True)
                     connectors_state[uuid] = cast(ConnectorState, res)
 
             await self._ensure_power_index_map()
@@ -130,6 +136,25 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             raise ConfigEntryAuthFailed(f"Smappee authentication failed: {err}") from err
         except (ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
+
+    def _log_connector_api_transition(
+        self, uuid: str, available: bool, err: Exception | None = None
+    ) -> None:
+        """Log connector REST reachability only when it changes."""
+        previous = self._connector_api_available.get(uuid)
+        if previous is available:
+            if not available and err is not None:
+                _LOGGER.debug("Connector %s update still failing: %s", uuid, err)
+            return
+
+        self._connector_api_available[uuid] = available
+        if available:
+            if previous is False:
+                _LOGGER.info("Connector %s update recovered", uuid)
+            return
+
+        if err is not None:
+            _LOGGER.warning("Connector %s update failed; marking unavailable: %s", uuid, err)
 
     async def _ensure_power_index_map(self) -> None:
         """Load and cache metering index mapping once."""
@@ -312,6 +337,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             max_current=max_current,
             min_surpluspct=min_surpluspct,
             support_grid=support_grid,
+            api_available=True,
         )
 
     # =====================================================================

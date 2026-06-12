@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import logging
 from typing import Any
 
 from homeassistant import config_entries
@@ -10,6 +11,8 @@ import voluptuous as vol
 
 from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from .oauth import OAuth2Client
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _required_with_optional_default(key: str, defaults: Mapping[str, Any]) -> vol.Required:
@@ -79,7 +82,12 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(step_id=step_id, data_schema=data_schema)
 
         oauth_client = OAuth2Client(user_input, session=session)
-        tokens = await oauth_client.authenticate()
+        try:
+            tokens = await oauth_client.authenticate()
+        except Exception:
+            _LOGGER.exception("Unexpected error during authentication")
+            errors["base"] = "cannot_connect"
+            return self.async_show_form(step_id=step_id, data_schema=data_schema, errors=errors)
         if not tokens:
             errors["base"] = "auth_failed"
             return self.async_show_form(step_id=step_id, data_schema=data_schema, errors=errors)

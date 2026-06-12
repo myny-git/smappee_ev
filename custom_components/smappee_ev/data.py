@@ -26,7 +26,8 @@ class ConnectorState:
     configuration_errors: list[str] | None = None
 
     iec_status: str | None = None  # "A1" / "B1" / "C1"
-    available: bool = True  # connector-level availability
+    available: bool = True  # Smappee domain status: connector available for charging
+    api_available: bool = True  # HA reachability: last connector REST fetch succeeded
     session_cause: str | None = None
     stopped_by_cloud: bool | None = None
 

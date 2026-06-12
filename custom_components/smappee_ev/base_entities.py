@@ -74,6 +74,16 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
         return self._connector_uuid
 
     @property
+    def available(self) -> bool:
+        """Return True when coordinator and connector REST reachability are available."""
+        if not super().available:
+            return False
+        conn = self._conn_state
+        if conn is None:
+            return False
+        return bool(getattr(conn, "api_available", True))
+
+    @property
     def _conn_state(self) -> Any | None:
         data = getattr(self.coordinator, "data", None)
         if not data:

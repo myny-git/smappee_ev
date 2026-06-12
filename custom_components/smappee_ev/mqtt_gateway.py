@@ -47,8 +47,10 @@ class SmappeeMqtt:
 
         self._client: Client | None = None
         self._stop = asyncio.Event()
+        self._start_task: asyncio.Task | None = None
         self._runner_task: asyncio.Task | None = None
         self._track_task: asyncio.Task | None = None
+        self._mqtt_was_connected: bool | None = None
 
     # ---------- helpers ----------
 
@@ -96,6 +98,49 @@ class SmappeeMqtt:
         except (RuntimeError, ValueError, TypeError, KeyError, AttributeError) as err:
             _LOGGER.debug("on_connection_change callback error: %s", err)
 
+    def _log_mqtt_connection_transition(
+        self, up: bool, err: BaseException | None = None, backoff: float | None = None
+    ) -> None:
+        """Log MQTT availability only when it changes."""
+        if self._mqtt_was_connected is up:
+            if not up and err is not None and backoff is not None:
+                _LOGGER.debug("MQTT reconnect attempt failed: %s (retry in %.0fs)", err, backoff)
+            return
+
+        self._mqtt_was_connected = up
+        if up:
+            _LOGGER.info("MQTT connected to %s:%s", MQTT_HOST, MQTT_PORT_TLS)
+        elif err is not None and backoff is not None:
+            _LOGGER.info("MQTT disconnected/error: %s; will retry in %.0fs", err, backoff)
+        else:
+            _LOGGER.info("MQTT disconnected")
+
+    def track_start_task(self, task: asyncio.Task) -> None:
+        """Track the HA-created startup task so stop() can cancel it during unload."""
+        self._start_task = task
+        task.add_done_callback(self._startup_done)
+
+    def _startup_done(self, task: asyncio.Task) -> None:
+        if self._start_task is task:
+            self._start_task = None
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("MQTT startup failed: %s", err)
+
+    def _runner_done(self, task: asyncio.Task) -> None:
+        if self._runner_task is task:
+            self._runner_task = None
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("MQTT runner stopped unexpectedly: %s", err)
+            self._notify_conn(False)
+
     async def _runner_main(self, ssl_ctx: ssl.SSLContext) -> None:
         """Maintain connection with auto-reconnect."""
         backoff = MQTT_RECONNECT_INITIAL_BACKOFF
@@ -115,7 +160,7 @@ class SmappeeMqtt:
                         keepalive=MQTT_TRACK_INTERVAL_SEC,
                     ) as client:
                         self._client = client
-                        _LOGGER.info("MQTT connected to %s:%s", MQTT_HOST, MQTT_PORT_TLS)
+                        self._log_mqtt_connection_transition(True)
                         self._notify_conn(True)
 
                         # Success → reset backoff
@@ -185,7 +230,7 @@ class SmappeeMqtt:
                 except asyncio.CancelledError:
                     break
                 except (MqttError, OSError, TimeoutError) as err:
-                    _LOGGER.warning("MQTT disconnected/error: %s (retry in %.0fs)", err, backoff)
+                    self._log_mqtt_connection_transition(False, err, backoff)
                     self._notify_conn(False)
 
                     if self._track_task:
@@ -206,9 +251,11 @@ class SmappeeMqtt:
                             await self._track_task
                         self._track_task = None
                     self._client = None
-                    _LOGGER.info("MQTT stopped (looping=%s)", not self._stop.is_set())
                     if self._stop.is_set():
+                        _LOGGER.info("MQTT stopped")
                         self._notify_conn(False)
+                    else:
+                        _LOGGER.debug("MQTT connection loop ended; reconnecting")
         finally:
             self._client = None
 
@@ -229,20 +276,42 @@ class SmappeeMqtt:
 
             return await asyncio.to_thread(_mk)
 
-        ssl_ctx = await _build_ssl_ctx()
+        try:
+            ssl_ctx = await _build_ssl_ctx()
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("MQTT startup failed: %s", err)
+            self._notify_conn(False)
+            return
+
+        # stop() may have been called while the SSL context was being built.
+        if self._stop.is_set():
+            _LOGGER.debug("MQTT start aborted: stop() was called during SSL context build")
+            return
 
         self._runner_task = asyncio.create_task(
             self._runner_main(ssl_ctx), name="smappee-mqtt-runner"
         )
+        self._runner_task.add_done_callback(self._runner_done)
 
     async def stop(self) -> None:
         """Stop loops and disconnect."""
         self._stop.set()
-        if self._runner_task:
-            self._runner_task.cancel()
+        start_task = self._start_task
+        if start_task is not None:
+            start_task.cancel()
             with suppress(asyncio.CancelledError):
-                await self._runner_task
-            self._runner_task = None
+                await start_task
+            if self._start_task is start_task:
+                self._start_task = None
+        runner_task = self._runner_task
+        if runner_task is not None:
+            runner_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await runner_task
+            if self._runner_task is runner_task:
+                self._runner_task = None
 
     async def _tracking_loop(self) -> None:
         """Publish RT_VALUES tracking ping every minute."""

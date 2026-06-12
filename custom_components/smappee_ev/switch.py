@@ -19,6 +19,7 @@ from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 
 # station_serial no longer needed; provided by base entity
@@ -63,7 +64,7 @@ async def async_setup_entry(
                     )
                 )
 
-    async_add_entities(entities, True)
+    async_add_entities(entities, False)
 
 
 # ====================================================================================

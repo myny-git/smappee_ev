@@ -25,6 +25,8 @@ from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
 from .helpers import build_connector_label, safe_sum, update_total_increasing
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -79,7 +81,7 @@ async def async_setup_entry(
                 entities.append(ConnCurrentL2(coord, client, sid, st_uuid, cuuid))
                 entities.append(ConnCurrentL3(coord, client, sid, st_uuid, cuuid))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities, False)
 
 
 # --------------- Bases ---------------

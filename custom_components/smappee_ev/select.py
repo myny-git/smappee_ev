@@ -10,6 +10,7 @@ from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .helpers import build_connector_label
 
 MODES = ["STANDARD", "SMART", "SOLAR"]
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -38,7 +39,7 @@ async def async_setup_entry(
                     )
                 )
 
-    async_add_entities(entities, True)
+    async_add_entities(entities, False)
 
 
 class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):

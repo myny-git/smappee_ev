@@ -30,7 +30,43 @@
             }
         },
         "error": {
-            "auth_failed": "Authenticatie mislukt"
+            "auth_failed": "Authenticatie mislukt",
+            "cannot_connect": "Kan geen verbinding maken"
+        }
+    },
+    "exceptions": {
+        "service_location_not_in_entry": {
+            "message": "Service location {service_location_id} hoort niet bij config entry {config_entry_id}"
+        },
+        "multiple_service_locations": {
+            "message": "Meerdere service locations gevonden. Geef service_location_id op."
+        },
+        "no_station_client": {
+            "message": "Geen station client gevonden voor config entry {config_entry_id} en service location {service_location_id}."
+        },
+        "station_method_not_found": {
+            "message": "Stationmethode {method_name} niet gevonden."
+        },
+        "station_service_failed": {
+            "message": "Stationservice {method_name} mislukt: {error}"
+        },
+        "no_connector_client": {
+            "message": "Geen overeenkomende connector client gevonden voor config entry {config_entry_id}, service location {service_location_id}, connector {connector_id}."
+        },
+        "connector_method_not_found": {
+            "message": "Connectormethode {method_name} niet gevonden."
+        },
+        "connector_service_failed": {
+            "message": "Connectorservice {method_name} mislukt: {error}"
+        },
+        "no_api2_connector_client": {
+            "message": "Geen overeenkomende API 2 connector client gevonden voor config entry {config_entry_id}, laadstationserienummer {charging_station_serial}, connector {connector_id}. Geef charging_station_serial op als meerdere laadstations dezelfde connectorpositie delen."
+        },
+        "cannot_resolve_connector_client": {
+            "message": "Kan connector client niet bepalen. Geef connector_id op als dit dubbelzinnig is."
+        },
+        "current_out_of_range": {
+            "message": "Stroom {current} A valt buiten het bereik {min_current}-{max_current} A voor deze connector."
         }
     },
     "services": {

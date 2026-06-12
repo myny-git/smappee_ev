@@ -30,7 +30,43 @@
       }
     },
     "error": {
-      "auth_failed": "Authorization failed"
+      "auth_failed": "Authorization failed",
+      "cannot_connect": "Could not connect"
+    }
+  },
+  "exceptions": {
+    "service_location_not_in_entry": {
+      "message": "Service location {service_location_id} does not belong to config entry {config_entry_id}"
+    },
+    "multiple_service_locations": {
+      "message": "Multiple service locations detected. Provide service_location_id."
+    },
+    "no_station_client": {
+      "message": "No station client found for config entry {config_entry_id} and service location {service_location_id}."
+    },
+    "station_method_not_found": {
+      "message": "Station method {method_name} not found."
+    },
+    "station_service_failed": {
+      "message": "Station service {method_name} failed: {error}"
+    },
+    "no_connector_client": {
+      "message": "No matching connector client found for config entry {config_entry_id}, service location {service_location_id}, connector {connector_id}."
+    },
+    "connector_method_not_found": {
+      "message": "Connector method {method_name} not found."
+    },
+    "connector_service_failed": {
+      "message": "Connector service {method_name} failed: {error}"
+    },
+    "no_api2_connector_client": {
+      "message": "No matching API 2 connector client found for config entry {config_entry_id}, charging station serial {charging_station_serial}, connector {connector_id}. Provide charging_station_serial if multiple charging stations share the same connector position."
+    },
+    "cannot_resolve_connector_client": {
+      "message": "Cannot resolve connector client. Provide connector_id if ambiguous."
+    },
+    "current_out_of_range": {
+      "message": "Current {current} A is out of range {min_current}-{max_current} A for this connector."
     }
   },
   "services": {

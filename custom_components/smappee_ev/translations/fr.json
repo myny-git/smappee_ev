@@ -30,7 +30,43 @@
       }
     },
     "error": {
-      "auth_failed": "Autorisation échouée"
+      "auth_failed": "Autorisation échouée",
+      "cannot_connect": "Connexion impossible"
+    }
+  },
+  "exceptions": {
+    "service_location_not_in_entry": {
+      "message": "La service location {service_location_id} n'appartient pas à la config entry {config_entry_id}"
+    },
+    "multiple_service_locations": {
+      "message": "Plusieurs service locations détectées. Indiquez service_location_id."
+    },
+    "no_station_client": {
+      "message": "Aucun station client trouvé pour la config entry {config_entry_id} et la service location {service_location_id}."
+    },
+    "station_method_not_found": {
+      "message": "Méthode station {method_name} introuvable."
+    },
+    "station_service_failed": {
+      "message": "Service station {method_name} échoué : {error}"
+    },
+    "no_connector_client": {
+      "message": "Aucun connector client correspondant trouvé pour la config entry {config_entry_id}, la service location {service_location_id}, le connector {connector_id}."
+    },
+    "connector_method_not_found": {
+      "message": "Méthode connector {method_name} introuvable."
+    },
+    "connector_service_failed": {
+      "message": "Service connector {method_name} échoué : {error}"
+    },
+    "no_api2_connector_client": {
+      "message": "Aucun API 2 connector client correspondant trouvé pour la config entry {config_entry_id}, le numéro de série de station {charging_station_serial}, le connector {connector_id}. Indiquez charging_station_serial si plusieurs stations partagent la même position de connector."
+    },
+    "cannot_resolve_connector_client": {
+      "message": "Impossible de déterminer le connector client. Indiquez connector_id si le choix est ambigu."
+    },
+    "current_out_of_range": {
+      "message": "Le courant {current} A est hors de la plage {min_current}-{max_current} A pour ce connector."
     }
   },
   "services": {

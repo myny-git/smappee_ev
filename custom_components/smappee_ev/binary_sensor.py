@@ -11,6 +11,8 @@ from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
 from .helpers import station_serial
 
+PARALLEL_UPDATES = 0
+
 
 def _station_serial(coord: SmappeeCoordinator) -> str:
     return station_serial(coord)
@@ -32,7 +34,7 @@ async def async_setup_entry(
             st_client: SmappeeApiClient = bucket["station_client"]
             entities.append(SmappeeMqttConnectivity(coord, st_client, sid, st_uuid))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities, False)
 
 
 class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):

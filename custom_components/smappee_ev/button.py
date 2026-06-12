@@ -13,6 +13,7 @@ from .data import SmappeeEvConfigEntry
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -74,7 +75,7 @@ async def async_setup_entry(
                     ]
                 )
 
-    async_add_entities(entities, True)
+    async_add_entities(entities, False)
 
 
 class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):

@@ -1,4 +1,6 @@
 import asyncio
+from datetime import timedelta
+from inspect import isawaitable
 import logging
 from typing import cast
 
@@ -29,9 +31,6 @@ PLATFORMS = [
     Platform.SWITCH,
     Platform.BINARY_SENSOR,
 ]
-
-# Allow multiple parallel updates per platform (entities rely on single coordinator)
-PARALLEL_UPDATES = 0
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
@@ -302,7 +301,7 @@ async def _create_coordinators(hass, stations, update_interval, config_entry=Non
 
 
 def _setup_mqtt(
-    hass, suuid, serial_str, sid, stations, client_id_prefix: str
+    hass, suuid, serial_str, sid, stations, client_id_prefix: str, update_interval: int
 ) -> SmappeeMqtt | None:
     if not suuid:
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
@@ -318,6 +317,15 @@ def _setup_mqtt(
         for bucket in stations.values():
             coord = bucket.get("coordinator")
             if coord:
+                if up:
+                    coord.update_interval = None
+                elif coord.update_interval is None:
+                    coord.update_interval = timedelta(seconds=update_interval)
+                    refresh = getattr(coord, "async_request_refresh", None)
+                    if callable(refresh):
+                        refresh_result = refresh()
+                        if isawaitable(refresh_result):
+                            hass.async_create_task(refresh_result)
                 coord.apply_mqtt_connection_change(up)
 
     mqtt = SmappeeMqtt(
@@ -328,13 +336,8 @@ def _setup_mqtt(
         service_location_id=sid,
         on_connection_change=_on_conn,
     )
-    hass.async_create_task(mqtt.start())
+    mqtt.track_start_task(hass.async_create_task(mqtt.start()))
 
-    # disable polling if MQTT is active
-    for b in stations.values():
-        coord = b.get("coordinator")
-        if coord:
-            coord.update_interval = None
     return mqtt
 
 
@@ -417,7 +420,7 @@ async def _prepare_site(
     await _create_coordinators(hass, stations, update_interval, config_entry=config_entry)
 
     # MQTT (shared per site, but updates all station coordinators)
-    mqtt = _setup_mqtt(hass, suuid, serial_str, sid, stations, client_id_prefix)
+    mqtt = _setup_mqtt(hass, suuid, serial_str, sid, stations, client_id_prefix, update_interval)
 
     # put mqtt ref in each bucket
     for b in stations.values():
@@ -428,7 +431,6 @@ async def _prepare_site(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Smappee EV component."""
-    hass.data.setdefault(DOMAIN, {})
     # Register services once domain-wide (multi-entry safe)
     if not hass.services.has_service(DOMAIN, _SERVICE_REGISTRATION_SENTINEL):
         await register_services(hass)
@@ -438,8 +440,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Set up a Smappee EV account entry that discovers all service locations with a charger."""
     _LOGGER.debug("Setting up Smappee EV account entry: %s", entry.title)
-
-    hass.data.setdefault(DOMAIN, {})
 
     # Use HA's aiohttp session
     session: ClientSession = async_get_clientsession(hass)
@@ -590,7 +590,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         ]
         if not active_entries and hass.services.has_service(DOMAIN, _SERVICE_REGISTRATION_SENTINEL):
             await unregister_services(hass)
-            hass.data.pop(DOMAIN, None)
     return unload_ok
 
 

@@ -16,6 +16,41 @@ from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry
 _LOGGER = logging.getLogger(__name__)
 
 # ----------------------------
+# Exception helpers
+# ----------------------------
+
+
+def _placeholder(value: object) -> str:
+    return "" if value is None else str(value)
+
+
+def _translation_placeholders(**values: object) -> dict[str, str]:
+    return {key: _placeholder(value) for key, value in values.items()}
+
+
+def _service_validation_error(
+    message: str, translation_key: str, **placeholders: object
+) -> ServiceValidationError:
+    return ServiceValidationError(
+        message,
+        translation_domain=DOMAIN,
+        translation_key=translation_key,
+        translation_placeholders=_translation_placeholders(**placeholders),
+    )
+
+
+def _home_assistant_error(
+    message: str, translation_key: str, **placeholders: object
+) -> HomeAssistantError:
+    return HomeAssistantError(
+        message,
+        translation_domain=DOMAIN,
+        translation_key=translation_key,
+        translation_placeholders=_translation_placeholders(**placeholders),
+    )
+
+
+# ----------------------------
 # Helpers to find the right clients
 # ----------------------------
 
@@ -71,8 +106,11 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
     if explicit_rt:
         if isinstance(sid, int):
             if sid not in explicit_rt.sites:
-                raise ServiceValidationError(
-                    f"service_location_id {sid} does not belong to config_entry_id {entry_id}"
+                raise _service_validation_error(
+                    f"service_location_id {sid} does not belong to config_entry_id {entry_id}",
+                    "service_location_not_in_entry",
+                    service_location_id=sid,
+                    config_entry_id=entry_id,
                 )
             return explicit_rt, sid
         return explicit_rt, _only_or_single_sid(explicit_rt.sites)
@@ -223,22 +261,35 @@ async def async_handle_station_service(
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
     if rt and sid is None and len(rt.sites) > 1:
-        raise ServiceValidationError(
-            "Multiple service locations detected. Provide 'service_location_id'."
+        raise _service_validation_error(
+            "Multiple service locations detected. Provide 'service_location_id'.",
+            "multiple_service_locations",
         )
     client = get_station_client(rt, sid)
     if not client:
-        raise ServiceValidationError(
-            f"No station client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')})"
+        raise _service_validation_error(
+            f"No station client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')})",
+            "no_station_client",
+            config_entry_id=call.data.get("config_entry_id"),
+            service_location_id=call.data.get("service_location_id"),
         )
 
     method = getattr(client, method_name, None)
     if not method:
-        raise ServiceValidationError(f"Station method '{method_name}' not found")
+        raise _service_validation_error(
+            f"Station method '{method_name}' not found",
+            "station_method_not_found",
+            method_name=method_name,
+        )
     try:
         await method(**(extra_args or {}))
     except Exception as err:
-        raise HomeAssistantError(f"Station service '{method_name}' failed: {err}") from err
+        raise _home_assistant_error(
+            f"Station service '{method_name}' failed: {err}",
+            "station_service_failed",
+            method_name=method_name,
+            error=err,
+        ) from err
 
 
 async def async_handle_connector_service(
@@ -249,23 +300,37 @@ async def async_handle_connector_service(
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
     if rt and sid is None and len(rt.sites) > 1:
-        raise ServiceValidationError(
-            "Multiple service locations detected. Provide 'service_location_id'."
+        raise _service_validation_error(
+            "Multiple service locations detected. Provide 'service_location_id'.",
+            "multiple_service_locations",
         )
     connector_id = call.data.get("connector_id")
     client = get_connector_client(rt, sid, connector_id)
     if not client:
-        raise ServiceValidationError(
-            f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')}, connector_id={connector_id})"
+        raise _service_validation_error(
+            f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')}, connector_id={connector_id})",
+            "no_connector_client",
+            config_entry_id=call.data.get("config_entry_id"),
+            service_location_id=call.data.get("service_location_id"),
+            connector_id=connector_id,
         )
 
     method = getattr(client, method_name, None)
     if not method:
-        raise ServiceValidationError(f"Connector method '{method_name}' not found")
+        raise _service_validation_error(
+            f"Connector method '{method_name}' not found",
+            "connector_method_not_found",
+            method_name=method_name,
+        )
     try:
         await method(**(extra_args or {}))
     except Exception as err:
-        raise HomeAssistantError(f"Connector service '{method_name}' failed: {err}") from err
+        raise _home_assistant_error(
+            f"Connector service '{method_name}' failed: {err}",
+            "connector_service_failed",
+            method_name=method_name,
+            error=err,
+        ) from err
 
     # Mode reset handled by coordinator state logic; client is stateless now.
 
@@ -278,21 +343,37 @@ async def async_handle_connector_service_api2(
 ) -> None:
     client = get_api2_connector_client(hass, call)
     if not client:
-        raise ServiceValidationError(
+        message = (
             "No matching API 2 connector client "
             f"(config_entry_id={call.data.get('config_entry_id')}, "
             f"charging_station_serial={call.data.get('charging_station_serial')}, "
             f"connector_id={call.data.get('connector_id')}). "
             "Provide 'charging_station_serial' if multiple charging stations share the same connector position."
         )
+        raise _service_validation_error(
+            message,
+            "no_api2_connector_client",
+            config_entry_id=call.data.get("config_entry_id"),
+            charging_station_serial=call.data.get("charging_station_serial"),
+            connector_id=call.data.get("connector_id"),
+        )
 
     method = getattr(client, method_name, None)
     if not method:
-        raise ServiceValidationError(f"Connector method '{method_name}' not found")
+        raise _service_validation_error(
+            f"Connector method '{method_name}' not found",
+            "connector_method_not_found",
+            method_name=method_name,
+        )
     try:
         await method(**(extra_args or {}))
     except Exception as err:
-        raise HomeAssistantError(f"Connector service '{method_name}' failed: {err}") from err
+        raise _home_assistant_error(
+            f"Connector service '{method_name}' failed: {err}",
+            "connector_service_failed",
+            method_name=method_name,
+            error=err,
+        ) from err
 
 
 # ----------------------------
@@ -307,8 +388,9 @@ async def handle_start_charging(call: ServiceCall) -> None:
     client = get_connector_client(rt, sid, connector_id)
 
     if not client:
-        raise ServiceValidationError(
-            "Cannot resolve connector client (provide connector_id if ambiguous)"
+        raise _service_validation_error(
+            "Cannot resolve connector client (provide connector_id if ambiguous)",
+            "cannot_resolve_connector_client",
         )
 
     min_c, max_c = _connector_current_range(rt, client)
@@ -317,8 +399,12 @@ async def handle_start_charging(call: ServiceCall) -> None:
         # Default to the connector's configured minimum
         current = min_c
     elif current < min_c or current > max_c:
-        raise ServiceValidationError(
-            f"current {current} A out of range {min_c}-{max_c} A for this connector"
+        raise _service_validation_error(
+            f"current {current} A out of range {min_c}-{max_c} A for this connector",
+            "current_out_of_range",
+            current=current,
+            min_current=min_c,
+            max_current=max_c,
         )
 
     await async_handle_connector_service(
@@ -370,14 +456,22 @@ async def handle_set_current(call: ServiceCall) -> None:
     rt, sid = _resolve_sid(call.hass, call)
     client = get_connector_client(rt, sid, connector_id)
     if not client:
-        raise ServiceValidationError(
+        raise _service_validation_error(
             f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, "
-            f"sid={call.data.get('service_location_id')}, connector_id={connector_id})"
+            f"sid={call.data.get('service_location_id')}, connector_id={connector_id})",
+            "no_connector_client",
+            config_entry_id=call.data.get("config_entry_id"),
+            service_location_id=call.data.get("service_location_id"),
+            connector_id=connector_id,
         )
     min_c, max_c = _connector_current_range(rt, client)
     if current < float(min_c) or current > float(max_c):
-        raise ServiceValidationError(
-            f"current {current} A out of range {min_c}-{max_c} A for this connector"
+        raise _service_validation_error(
+            f"current {current} A out of range {min_c}-{max_c} A for this connector",
+            "current_out_of_range",
+            current=current,
+            min_current=min_c,
+            max_current=max_c,
         )
     await async_handle_connector_service(
         call.hass,

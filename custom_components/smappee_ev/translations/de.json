@@ -30,7 +30,43 @@
       }
     },
     "error": {
-      "auth_failed": "Autorisierung fehlgeschlagen"
+      "auth_failed": "Autorisierung fehlgeschlagen",
+      "cannot_connect": "Verbindung fehlgeschlagen"
+    }
+  },
+  "exceptions": {
+    "service_location_not_in_entry": {
+      "message": "Service location {service_location_id} gehört nicht zu config entry {config_entry_id}"
+    },
+    "multiple_service_locations": {
+      "message": "Mehrere service locations gefunden. Geben Sie service_location_id an."
+    },
+    "no_station_client": {
+      "message": "Kein station client für config entry {config_entry_id} und service location {service_location_id} gefunden."
+    },
+    "station_method_not_found": {
+      "message": "Station-Methode {method_name} nicht gefunden."
+    },
+    "station_service_failed": {
+      "message": "Station-Service {method_name} fehlgeschlagen: {error}"
+    },
+    "no_connector_client": {
+      "message": "Kein passender connector client für config entry {config_entry_id}, service location {service_location_id}, connector {connector_id} gefunden."
+    },
+    "connector_method_not_found": {
+      "message": "Connector-Methode {method_name} nicht gefunden."
+    },
+    "connector_service_failed": {
+      "message": "Connector-Service {method_name} fehlgeschlagen: {error}"
+    },
+    "no_api2_connector_client": {
+      "message": "Kein passender API 2 connector client für config entry {config_entry_id}, Ladestationsseriennummer {charging_station_serial}, connector {connector_id} gefunden. Geben Sie charging_station_serial an, wenn mehrere Ladestationen dieselbe Connector-Position verwenden."
+    },
+    "cannot_resolve_connector_client": {
+      "message": "Connector client kann nicht ermittelt werden. Geben Sie connector_id an, wenn die Auswahl mehrdeutig ist."
+    },
+    "current_out_of_range": {
+      "message": "Strom {current} A liegt außerhalb des Bereichs {min_current}-{max_current} A für diesen Connector."
     }
   },
   "services": {
