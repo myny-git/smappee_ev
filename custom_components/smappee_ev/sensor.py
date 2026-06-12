@@ -910,7 +910,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     """Energy reported for the current or most recent cloud charging session."""
 
     _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(

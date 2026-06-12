@@ -362,6 +362,7 @@ class SmappeeApiClient:
         """Fetch recent charging sessions for this charging station."""
         now_ms = int(time.time() * 1000)
         from_ms = now_ms - (7 * 24 * 60 * 60 * 1000)
-        url = f"{BASE_URL}/chargingstations/{self.smart_device_uuid}/sessions?range={from_ms},{now_ms}"
+        station_serial = self.charging_station_serial or self.serial
+        url = f"{BASE_URL}/chargingstations/{station_serial}/sessions?range={from_ms},{now_ms}"
         data = await self._request("GET", url, expected=(200, 204), return_json=True)
         return data if isinstance(data, list) else []
