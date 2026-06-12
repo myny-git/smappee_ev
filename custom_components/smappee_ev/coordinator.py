@@ -95,6 +95,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._power_index_map: dict[str, Any] | None = None
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
+        self._last_session_api_attempt = 0.0
         self._last_session_api_update = 0.0
         self._session_refresh_task: asyncio.Task | None = None
         self._session_active_loop_task: asyncio.Task | None = None
@@ -836,6 +837,37 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             self._async_delayed_session_refresh(reason, delay, force=force)
         )
 
+    async def _async_get_recent_sessions(self) -> list[dict[str, Any]]:
+        """Fetch recent charging sessions from the connector endpoints."""
+        pairs = list(self.connector_clients.items())
+        if not pairs:
+            return await self.station_client.async_get_recent_sessions()
+
+        results = await asyncio.gather(
+            *(client.async_get_recent_sessions() for _, client in pairs),
+            return_exceptions=True,
+        )
+        sessions: list[dict[str, Any]] = []
+        errors: list[tuple[str, Exception]] = []
+
+        for (connector_uuid, _client), result in zip(pairs, results, strict=True):
+            if isinstance(result, asyncio.CancelledError):
+                raise result
+            if isinstance(result, Exception):
+                errors.append((connector_uuid, result))
+                continue
+            sessions.extend(session for session in result if isinstance(session, dict))
+
+        if errors and len(errors) == len(pairs):
+            raise errors[0][1]
+        for connector_uuid, err in errors:
+            _LOGGER.warning(
+                "Recent session fetch failed for connector %s: %s",
+                connector_uuid,
+                err,
+            )
+        return sessions
+
     async def _async_delayed_session_refresh(self, reason: str, delay: int, *, force: bool) -> None:
         try:
             if delay > 0:
@@ -854,20 +886,20 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         async with self._session_refresh_lock:
             now = _now()
-            if not force and now - self._last_session_api_update < SESSION_MIN_REFRESH_INTERVAL:
+            if not force and now - self._last_session_api_attempt < SESSION_MIN_REFRESH_INTERVAL:
                 _LOGGER.debug("Skipping recent session refresh for %s; throttled", reason)
                 return
+            self._last_session_api_attempt = now
 
             try:
-                recent_sessions = await self.station_client.async_get_recent_sessions()
+                recent_sessions = await self._async_get_recent_sessions()
             except (TimeoutError, ClientError, RuntimeError, SmappeeAuthError) as err:
                 _LOGGER.warning("Recent session refresh failed for %s: %s", reason, err)
                 return
 
             self._last_session_api_update = now
             if self.data:
-                self.data.recent_sessions = recent_sessions
-                self.async_set_updated_data(self.data)
+                self.async_set_updated_data(replace(self.data, recent_sessions=recent_sessions))
             _LOGGER.debug("Recent sessions refreshed for %s", reason)
 
     # ---------- split sub-helpers ----------

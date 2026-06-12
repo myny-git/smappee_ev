@@ -910,6 +910,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     """Energy reported for the current or most recent cloud charging session."""
 
     _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(
@@ -925,7 +926,8 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         connector_uuid = str(self.connector_uuid)
         smart_device_id = str(self.api_client.smart_device_id)
         connector_number = str(self.api_client.connector_number or "")
-        station_serial = str(self.api_client.charging_station_serial or self.api_client.serial)
+        raw_station_serial = self.api_client.charging_station_serial or self.api_client.serial
+        station_serial = str(raw_station_serial) if raw_station_serial else ""
 
         uuid_value = _nested_value(
             session,
@@ -976,7 +978,10 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             number_value is not None
             and bool(connector_number)
             and str(number_value) == connector_number
-            and (serial_value is None or str(serial_value) == station_serial)
+            and (
+                serial_value is None
+                or (bool(station_serial) and str(serial_value) == station_serial)
+            )
         )
 
     @property
@@ -993,6 +998,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             len(self.coordinator.connector_clients) == 1
             and sessions
             and isinstance(sessions[0], dict)
+            and "energy" in sessions[0]
         ):
             return sessions[0]
         return {}
