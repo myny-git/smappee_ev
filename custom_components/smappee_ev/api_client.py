@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+import time
 from typing import Any, Literal
 
 import aiohttp
@@ -349,10 +350,18 @@ class SmappeeApiClient:
         """Fetch metering configuration for this service location."""
         url = f"{BASE_URL}/servicelocation/{self.service_location_id}/meteringconfiguration"
         try:
-            data = await self._request("GET", url, expected=(200,), return_json=True)
+            data = await self._request("GET", url, expected=(200, 204), return_json=True)
         except SmappeeAuthError:
             raise
         except (RuntimeError, TimeoutError, aiohttp.ClientError) as exc:
             _LOGGER.warning("Metering configuration fetch failed: %s", exc)
             return None
         return data if isinstance(data, dict) else None
+
+    async def async_get_recent_sessions(self) -> list[dict[str, Any]]:
+        """Fetch recent charging sessions for this charging station."""
+        now_ms = int(time.time() * 1000)
+        from_ms = now_ms - (7 * 24 * 60 * 60 * 1000)
+        url = f"{BASE_URL}/chargingstations/{self.smart_device_uuid}/sessions?range={from_ms},{now_ms}"
+        data = await self._request("GET", url, expected=(200, 204), return_json=True)
+        return data if isinstance(data, list) else []

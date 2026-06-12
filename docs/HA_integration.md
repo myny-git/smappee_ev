@@ -151,6 +151,30 @@ Displays the EVCC (Electric Vehicle Communication Controller) state of the Wallb
 **`sensor.smappee_ev_YOURSERIAL_connector_1_evse_status`**  
 Displays the state of the Wallbox, per connector ID, similar as on the dashboard
 
+**`sensor.smappee_ev_YOURSERIAL_connector_1_session_energy`**  
+Shows the energy of the current or most recent Smappee cloud charging session for this connector, in kWh.
+The sensor is populated from the `chargingstations/{station_uuid}/sessions` API endpoint and is refreshed around charging session state changes.
+
+The sensor state is the session energy. The extra attributes contain the remaining session metadata returned by Smappee:
+
+| **attribute** | **explanation** |
+|:-------------:|:----------------|
+| `id` | Unique Smappee charging session ID. Home Assistant may display this as `ID`. |
+| `serialNumber` | Charging station serial number reported by Smappee. |
+| `connector` | Connector position used by the session. |
+| `from` | Session start time, converted to an ISO timestamp. |
+| `to` | Session end time, converted to an ISO timestamp when available. |
+| `status` | Smappee session status, for example `STARTED` or `STOPPED`. |
+| `suspendedByUser` | Whether the session was paused by the user. |
+| `externalControl` | Whether the session was controlled externally. |
+| `smartMode` | Smappee smart charging mode for the session. |
+| `priority` | Session priority reported by Smappee. |
+| `minimumExcessPercentage` | Minimum excess solar percentage used for smart charging. |
+| `maxAmperes` | Maximum configured current values for the session. |
+| `startReading` | Meter reading at the start of the session. |
+| `stopReading` | Meter reading at the end of the session. |
+| `duration_minutes` | Calculated session duration in minutes. |
+
 **`binary_sensor.smappee_ev_YOURSERIAL_mqtt_connected`**  
 Displays the state of the MQTT connection, per connector ID
 
@@ -174,6 +198,7 @@ We display here all data from the MQTT session. Depending on your installation, 
 |  `connector_current` |   Live currents of your specific connector  |
 |      `connector_current` per phase     |      Live phase currents of your specific connector     |
 |     `connector_energy`        |    The energy in kWh of your connector             |
+|     `connector_session_energy`        |    The energy in kWh of the current or most recent Smappee cloud charging session. Session details are available as attributes.             |
 |     `connector_power`        |    The power in W towards your connector             |
 |     `support_grid`        |    Maximum grid assistance current (A) for this connector. Read from the charger configuration (`max.gridassistanceamps`). Will be unavailable if the charger does not report this property.             |
 |     `grid_current`        |    The total current of your grid. Each phase current can be found in the attributes             |

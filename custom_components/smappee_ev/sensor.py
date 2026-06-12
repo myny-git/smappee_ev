@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from datetime import UTC, datetime
+from typing import Any
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -80,6 +81,7 @@ async def async_setup_entry(
                 entities.append(ConnCurrentL1(coord, client, sid, st_uuid, cuuid))
                 entities.append(ConnCurrentL2(coord, client, sid, st_uuid, cuuid))
                 entities.append(ConnCurrentL3(coord, client, sid, st_uuid, cuuid))
+                entities.append(ConnectorSessionEnergySensor(coord, client, sid, st_uuid, cuuid))
 
     async_add_entities(entities, False)
 
@@ -875,3 +877,156 @@ class SmappeeMqttLastSeenSensor(SmappeeStationEntity, SensorEntity):
             return datetime.fromtimestamp(float(ts), tz=UTC)
         except (TypeError, ValueError):
             return None
+
+
+def _session_ts_to_datetime(value: object) -> datetime | None:
+    """Convert session timestamps that may be seconds or milliseconds."""
+    try:
+        ts = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if abs(ts) > 10_000_000_000:
+        ts /= 1000
+    try:
+        return datetime.fromtimestamp(ts, tz=UTC)
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def _nested_value(data: dict[str, Any], *paths: tuple[str, ...]) -> object:
+    for path in paths:
+        cur: object = data
+        for key in path:
+            if not isinstance(cur, dict) or key not in cur:
+                cur = None
+                break
+            cur = cur[key]
+        if cur not in (None, ""):
+            return cur
+    return None
+
+
+class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
+    """Energy reported for the current or most recent cloud charging session."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(
+        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+    ) -> None:
+        name = f"{build_connector_label(api, uuid)} Session energy"
+        SmappeeConnectorEntity.__init__(
+            self, c, sid, station_uuid, uuid, unique_suffix="sensor:session_energy", name=name
+        )
+        self.api_client = api
+
+    def _session_matches_connector(self, session: dict[str, Any]) -> bool:
+        connector_uuid = str(self.connector_uuid)
+        smart_device_id = str(self.api_client.smart_device_id)
+        connector_number = str(self.api_client.connector_number or "")
+        station_serial = str(self.api_client.charging_station_serial or self.api_client.serial)
+
+        uuid_value = _nested_value(
+            session,
+            ("connectorUuid",),
+            ("connectorUUID",),
+            ("smartDeviceUuid",),
+            ("smartDeviceUUID",),
+            ("deviceUuid",),
+            ("deviceUUID",),
+            ("connector", "uuid"),
+            ("smartDevice", "uuid"),
+            ("device", "uuid"),
+        )
+        if uuid_value is not None and str(uuid_value) == connector_uuid:
+            return True
+
+        id_value = _nested_value(
+            session,
+            ("connectorId",),
+            ("connectorID",),
+            ("smartDeviceId",),
+            ("smartDeviceID",),
+            ("deviceId",),
+            ("deviceID",),
+            ("connector", "id"),
+            ("smartDevice", "id"),
+            ("device", "id"),
+        )
+        if id_value is not None and str(id_value) == smart_device_id:
+            return True
+
+        number_value = _nested_value(
+            session,
+            ("connectorNumber",),
+            ("connector", "number"),
+            ("connector", "position"),
+            ("position",),
+        )
+        serial_value = _nested_value(
+            session,
+            ("chargingStationSerial",),
+            ("stationSerial",),
+            ("serialNumber",),
+            ("chargingStation", "serialNumber"),
+            ("chargingStation", "serial"),
+        )
+        return (
+            number_value is not None
+            and bool(connector_number)
+            and str(number_value) == connector_number
+            and (serial_value is None or str(serial_value) == station_serial)
+        )
+
+    @property
+    def _active_session_data(self) -> dict[str, Any]:
+        if not self.coordinator.data:
+            return {}
+        sessions = self.coordinator.data.recent_sessions
+        if not isinstance(sessions, list):
+            return {}
+        for session in sessions:
+            if isinstance(session, dict) and self._session_matches_connector(session):
+                return session
+        if (
+            len(self.coordinator.connector_clients) == 1
+            and sessions
+            and isinstance(sessions[0], dict)
+        ):
+            return sessions[0]
+        return {}
+
+    @property
+    def native_value(self) -> float | None:
+        energy_kwh = self._active_session_data.get("energy")
+        if energy_kwh is None:
+            return None
+        try:
+            return round(float(energy_kwh), 2)
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        session = self._active_session_data
+        if not session:
+            return {}
+
+        attrs = dict(session)
+        attrs.pop("energy", None)
+
+        start_time = _session_ts_to_datetime(session.get("from"))
+        if start_time is not None:
+            attrs["from"] = start_time.isoformat()
+
+        end_time = _session_ts_to_datetime(session.get("to"))
+        if end_time is not None:
+            attrs["to"] = end_time.isoformat()
+
+        if start_time is not None:
+            if end_time is None:
+                end_time = datetime.now(UTC)
+            duration = end_time - start_time
+            attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
+        return attrs

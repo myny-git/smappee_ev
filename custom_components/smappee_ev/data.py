@@ -1,7 +1,7 @@
 # custom_components/smappee_ev/data.py
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from homeassistant.config_entries import ConfigEntry
 
@@ -83,6 +83,7 @@ class IntegrationData:
 
     station: StationState
     connectors: dict[str, ConnectorState]  # keyed by UUID
+    recent_sessions: list[dict] = field(default_factory=list)
 
 
 @dataclass

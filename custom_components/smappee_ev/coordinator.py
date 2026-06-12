@@ -22,6 +22,16 @@ from .oauth import SmappeeAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
+SESSION_START_REFRESH_DELAY = 20
+SESSION_ACTIVE_REFRESH_INTERVAL = 5 * 60
+SESSION_PAUSED_REFRESH_INTERVAL = 15 * 60
+SESSION_MIN_REFRESH_INTERVAL = 2 * 60
+SESSION_FINAL_REFRESH_DELAYS = (30, 2 * 60, 5 * 60)
+
+_SESSION_ACTIVE_STATES = {"STARTED", "CHARGING", "CHARGING_STARTED", "RUNNING"}
+_SESSION_PAUSED_STATES = {"PAUSED", "SUSPENDED"}
+_SESSION_STOPPED_STATES = {"STOPPED", "CHARGING_FINISHED", "FINISHED", "COMPLETED", "IDLE"}
+
 
 def _to_int(value: Any, default: int = 0) -> int:
     """Convert a value to int safely, fallback to default on error."""
@@ -85,6 +95,12 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._power_index_map: dict[str, Any] | None = None
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
+        self._last_session_api_update = 0.0
+        self._session_refresh_task: asyncio.Task | None = None
+        self._session_active_loop_task: asyncio.Task | None = None
+        self._session_final_refresh_task: asyncio.Task | None = None
+        self._session_refresh_lock = asyncio.Lock()
+        self._session_tracking_started = False
 
     async def _async_update_data(self) -> IntegrationData:
         try:
@@ -129,7 +145,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             await self._ensure_power_index_map()
 
-            return IntegrationData(station=station_state, connectors=connectors_state)
+            return IntegrationData(
+                station=station_state,
+                connectors=connectors_state,
+                recent_sessions=prev_data.recent_sessions if prev_data else [],
+            )
 
         except asyncio.CancelledError:
             raise
@@ -613,7 +633,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return self._handle_connector_state(conn, payload)
 
         if "/property/" in topic and self._property_name_from_topic(topic) == "chargingstate":
-            changed = self._handle_connector_property_chargingstate(conn, payload)
+            changed = self._handle_connector_property_chargingstate(conn, payload, dev_uuid)
             changed |= self._sync_station_availability_from_chargingstate(payload)
             return changed
 
@@ -634,7 +654,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 changed = True
         return changed
 
-    def _handle_connector_property_chargingstate(self, conn: ConnectorState, payload: dict) -> bool:
+    def _handle_connector_property_chargingstate(
+        self, conn: ConnectorState, payload: dict, connector_uuid: str | None = None
+    ) -> bool:
+        was_active = self._is_session_active(conn)
         changed = False
         changed |= self._merge_cs_primary(conn, payload)
         changed |= self._merge_cs_context(conn, payload)
@@ -642,7 +665,210 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         changed |= self._merge_cs_limits_availability(conn, payload)
 
         changed |= self._update_evcc(conn)
+        self._handle_session_tracking_transition(conn, was_active, connector_uuid)
         return changed
+
+    async def async_start_session_tracking(self) -> None:
+        """Start the state-driven recent-session refresh manager."""
+        if self._session_tracking_started:
+            return
+        self._session_tracking_started = True
+        self._schedule_session_refresh("startup", delay=0, force=True)
+        self._sync_session_tracking_from_current_state()
+
+    async def async_shutdown(self) -> None:
+        """Cancel session refresh background tasks."""
+        for task in (
+            self._session_refresh_task,
+            self._session_active_loop_task,
+            self._session_final_refresh_task,
+        ):
+            if task is not None and not task.done():
+                task.cancel()
+        tasks = [
+            task
+            for task in (
+                self._session_refresh_task,
+                self._session_active_loop_task,
+                self._session_final_refresh_task,
+            )
+            if task is not None
+        ]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    @staticmethod
+    def _normalized_session_value(value: object) -> str:
+        return str(value or "").strip().upper()
+
+    def _is_session_active(self, conn: ConnectorState) -> bool:
+        state = self._normalized_session_value(conn.session_state)
+        mode = self._normalized_session_value(conn.raw_charging_mode)
+        cause = self._normalized_session_value(conn.session_cause)
+        status = self._normalized_session_value(conn.status_current)
+        return (
+            state in _SESSION_ACTIVE_STATES
+            or state in _SESSION_PAUSED_STATES
+            or mode == "PAUSED"
+            or cause in _SESSION_ACTIVE_STATES
+            or cause in _SESSION_PAUSED_STATES
+            or status in _SESSION_ACTIVE_STATES
+            or status in _SESSION_PAUSED_STATES
+            or bool(conn.paused)
+        )
+
+    def _is_session_paused(self, conn: ConnectorState) -> bool:
+        state = self._normalized_session_value(conn.session_state)
+        mode = self._normalized_session_value(conn.raw_charging_mode)
+        cause = self._normalized_session_value(conn.session_cause)
+        status = self._normalized_session_value(conn.status_current)
+        return (
+            state in _SESSION_PAUSED_STATES
+            or mode == "PAUSED"
+            or cause in _SESSION_PAUSED_STATES
+            or status in _SESSION_PAUSED_STATES
+            or bool(conn.paused)
+        )
+
+    def _is_session_finished(self, conn: ConnectorState) -> bool:
+        state = self._normalized_session_value(conn.session_state)
+        cause = self._normalized_session_value(conn.session_cause)
+        status = self._normalized_session_value(conn.status_current)
+        return (
+            state in _SESSION_STOPPED_STATES
+            or cause in _SESSION_STOPPED_STATES
+            or status in _SESSION_STOPPED_STATES
+        )
+
+    def _active_session_connectors(self) -> list[ConnectorState]:
+        data = self.data
+        if not data:
+            return []
+        return [conn for conn in data.connectors.values() if self._is_session_active(conn)]
+
+    def _session_loop_interval(self) -> int:
+        active = self._active_session_connectors()
+        if active and all(self._is_session_paused(conn) for conn in active):
+            return SESSION_PAUSED_REFRESH_INTERVAL
+        return SESSION_ACTIVE_REFRESH_INTERVAL
+
+    def _sync_session_tracking_from_current_state(self) -> None:
+        if self._active_session_connectors():
+            self._ensure_active_session_loop()
+
+    def _handle_session_tracking_transition(
+        self, conn: ConnectorState, was_active: bool, connector_uuid: str | None
+    ) -> None:
+        if not self._session_tracking_started:
+            return
+
+        is_active = self._is_session_active(conn)
+        if is_active:
+            if self._session_final_refresh_task is not None:
+                self._session_final_refresh_task.cancel()
+                self._session_final_refresh_task = None
+            self._ensure_active_session_loop()
+            self._schedule_session_refresh(
+                f"connector {connector_uuid or '?'} active",
+                delay=SESSION_START_REFRESH_DELAY,
+            )
+            return
+
+        if was_active or self._is_session_finished(conn):
+            if not self._active_session_connectors():
+                self._cancel_active_session_loop()
+            self._schedule_final_session_refreshes(connector_uuid)
+
+    def _ensure_active_session_loop(self) -> None:
+        task = self._session_active_loop_task
+        if task is not None and not task.done():
+            return
+        self._session_active_loop_task = self.hass.async_create_task(
+            self._async_active_session_loop()
+        )
+
+    def _cancel_active_session_loop(self) -> None:
+        task = self._session_active_loop_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._session_active_loop_task = None
+
+    async def _async_active_session_loop(self) -> None:
+        try:
+            while self._active_session_connectors():
+                await asyncio.sleep(self._session_loop_interval())
+                if not self._active_session_connectors():
+                    break
+                await self._async_refresh_recent_sessions("active session loop")
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if self._session_active_loop_task is asyncio.current_task():
+                self._session_active_loop_task = None
+
+    def _schedule_final_session_refreshes(self, connector_uuid: str | None) -> None:
+        task = self._session_final_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._session_final_refresh_task = self.hass.async_create_task(
+            self._async_final_session_refreshes(connector_uuid)
+        )
+
+    async def _async_final_session_refreshes(self, connector_uuid: str | None) -> None:
+        try:
+            for delay in SESSION_FINAL_REFRESH_DELAYS:
+                await asyncio.sleep(delay)
+                await self._async_refresh_recent_sessions(
+                    f"connector {connector_uuid or '?'} finalizing",
+                    force=True,
+                )
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if self._session_final_refresh_task is asyncio.current_task():
+                self._session_final_refresh_task = None
+
+    def _schedule_session_refresh(self, reason: str, *, delay: int, force: bool = False) -> None:
+        task = self._session_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._session_refresh_task = self.hass.async_create_task(
+            self._async_delayed_session_refresh(reason, delay, force=force)
+        )
+
+    async def _async_delayed_session_refresh(self, reason: str, delay: int, *, force: bool) -> None:
+        try:
+            if delay > 0:
+                await asyncio.sleep(delay)
+            await self._async_refresh_recent_sessions(reason, force=force)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if self._session_refresh_task is asyncio.current_task():
+                self._session_refresh_task = None
+
+    async def _async_refresh_recent_sessions(self, reason: str, *, force: bool = False) -> None:
+        if self._session_refresh_lock.locked():
+            _LOGGER.debug("Skipping recent session refresh; previous refresh still running")
+            return
+
+        async with self._session_refresh_lock:
+            now = _now()
+            if not force and now - self._last_session_api_update < SESSION_MIN_REFRESH_INTERVAL:
+                _LOGGER.debug("Skipping recent session refresh for %s; throttled", reason)
+                return
+
+            try:
+                recent_sessions = await self.station_client.async_get_recent_sessions()
+            except (TimeoutError, ClientError, RuntimeError, SmappeeAuthError) as err:
+                _LOGGER.warning("Recent session refresh failed for %s: %s", reason, err)
+                return
+
+            self._last_session_api_update = now
+            if self.data:
+                self.data.recent_sessions = recent_sessions
+                self.async_set_updated_data(self.data)
+            _LOGGER.debug("Recent sessions refreshed for %s", reason)
 
     # ---------- split sub-helpers ----------
     def _set_if_changed(self, obj: object, attr: str, value) -> bool:
