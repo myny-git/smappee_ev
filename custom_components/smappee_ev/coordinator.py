@@ -95,6 +95,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._power_index_map: dict[str, Any] | None = None
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
+        self._connector_session_available: dict[str, bool] = {}
         self._last_session_api_attempt = 0.0
         self._last_session_api_update = 0.0
         self._session_refresh_task: asyncio.Task | None = None
@@ -179,6 +180,25 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         if err is not None:
             _LOGGER.warning("Connector %s update failed; marking unavailable: %s", uuid, err)
+
+    def _log_connector_session_transition(
+        self, uuid: str, available: bool, err: Exception | None = None
+    ) -> None:
+        """Log connector session endpoint reachability only when it changes."""
+        previous = self._connector_session_available.get(uuid)
+        if previous is available:
+            if not available and err is not None:
+                _LOGGER.debug("Connector %s session fetch still failing: %s", uuid, err)
+            return
+
+        self._connector_session_available[uuid] = available
+        if available:
+            if previous is False:
+                _LOGGER.info("Connector %s session fetch recovered", uuid)
+            return
+
+        if err is not None:
+            _LOGGER.warning("Connector %s session fetch failed: %s", uuid, err)
 
     def _log_station_api_transition(self, available: bool, err: Exception | None = None) -> None:
         """Log station REST reachability only when it changes."""
@@ -669,7 +689,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._handle_session_tracking_transition(conn, was_active, connector_uuid)
         return changed
 
-    async def async_start_session_tracking(self) -> None:
+    def async_start_session_tracking(self) -> None:
         """Start the state-driven recent-session refresh manager."""
         if self._session_tracking_started:
             return
@@ -769,10 +789,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 self._session_final_refresh_task.cancel()
                 self._session_final_refresh_task = None
             self._ensure_active_session_loop()
-            self._schedule_session_refresh(
-                f"connector {connector_uuid or '?'} active",
-                delay=SESSION_START_REFRESH_DELAY,
-            )
+            if not was_active:
+                self._schedule_session_refresh(
+                    f"connector {connector_uuid or '?'} active",
+                    delay=SESSION_START_REFRESH_DELAY,
+                )
             return
 
         if was_active or self._is_session_finished(conn):
@@ -841,7 +862,8 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         """Fetch recent charging sessions from the connector endpoints."""
         pairs = list(self.connector_clients.items())
         if not pairs:
-            return await self.station_client.async_get_recent_sessions()
+            _LOGGER.warning("Skipping recent session refresh: no connector clients available")
+            return []
 
         results = await asyncio.gather(
             *(client.async_get_recent_sessions() for _, client in pairs),
@@ -851,21 +873,19 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         errors: list[tuple[str, Exception]] = []
 
         for (connector_uuid, _client), result in zip(pairs, results, strict=True):
-            if isinstance(result, asyncio.CancelledError):
+            if isinstance(result, BaseException):
+                if isinstance(result, asyncio.CancelledError):
+                    raise result
+                if isinstance(result, Exception):
+                    errors.append((connector_uuid, result))
+                    self._log_connector_session_transition(connector_uuid, False, result)
+                    continue
                 raise result
-            if isinstance(result, Exception):
-                errors.append((connector_uuid, result))
-                continue
+            self._log_connector_session_transition(connector_uuid, True)
             sessions.extend(session for session in result if isinstance(session, dict))
 
         if errors and len(errors) == len(pairs):
             raise errors[0][1]
-        for connector_uuid, err in errors:
-            _LOGGER.warning(
-                "Recent session fetch failed for connector %s: %s",
-                connector_uuid,
-                err,
-            )
         return sessions
 
     async def _async_delayed_session_refresh(self, reason: str, delay: int, *, force: bool) -> None:

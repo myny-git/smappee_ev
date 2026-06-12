@@ -263,7 +263,7 @@ async def _create_coordinators(hass, stations, update_interval, config_entry=Non
         )
         await coord.async_config_entry_first_refresh()
         bucket["coordinator"] = coord
-        await coord.async_start_session_tracking()
+        coord.async_start_session_tracking()
 
 
 def _setup_mqtt(
