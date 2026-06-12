@@ -13,8 +13,9 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
+from . import discovery
 from .api_client import SmappeeApiClient
-from .const import BASE_URL, CONF_PASSWORD, DOMAIN, UPDATE_INTERVAL_DEFAULT
+from .const import CONF_PASSWORD, DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import SmappeeCoordinator
 from .data import RuntimeData, SmappeeEvConfigEntry
 from .mqtt_gateway import SmappeeMqtt
@@ -121,45 +122,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "Smappee EV config entry %s already at latest version %s", entry.entry_id, version
         )
     return True
-
-
-async def _discover_service_locations(
-    session: ClientSession, oauth_client: OAuth2Client
-) -> list[dict]:
-    """Return all service locations that have a deviceSerialNumber."""
-    await oauth_client.ensure_token_valid()
-    headers = {
-        "Authorization": f"Bearer {oauth_client.access_token}",
-        "Content-Type": "application/json",
-    }
-    resp = await session.get(f"{BASE_URL}/servicelocation", headers=headers)
-    if resp.status != 200:
-        text = await resp.text()
-        if resp.status in (401, 403):
-            raise SmappeeAuthError(f"/servicelocation auth failed: {resp.status} - {text}")
-        raise RuntimeError(f"/servicelocation failed: {resp.status} - {text}")
-    data = await resp.json()
-    locations = data.get("serviceLocations", []) if isinstance(data, dict) else (data or [])
-    return [sl for sl in locations if sl.get("deviceSerialNumber")]
-
-
-# prepare site helpers
-async def _fetch_devices(
-    session: ClientSession, oauth_client: OAuth2Client, sid: int
-) -> list[dict] | None:
-    await oauth_client.ensure_token_valid()
-    headers = {
-        "Authorization": f"Bearer {oauth_client.access_token}",
-        "Content-Type": "application/json",
-    }
-    resp = await session.get(f"{BASE_URL}/servicelocation/{sid}/smartdevices", headers=headers)
-    if resp.status != 200:
-        text = await resp.text()
-        if resp.status in (401, 403):
-            raise SmappeeAuthError(f"/smartdevices auth failed for {sid}: {resp.status} - {text}")
-        _LOGGER.warning("GET smartdevices for %s failed: %s - %s", sid, resp.status, text)
-        return None
-    return await resp.json()
 
 
 def _split_devices(devices: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -378,7 +340,7 @@ async def _prepare_site(
         _LOGGER.warning("Service location %s has no valid deviceSerialNumber; skipping", sid)
         return None, None
 
-    devices = await _fetch_devices(session, oauth_client, sid)
+    devices = await discovery.async_fetch_devices(session, oauth_client, sid)
     if devices is None:
         return None, None
 
@@ -433,7 +395,15 @@ async def _prepare_site(
         _assign_connectors(
             stations, car_devs, station_serial_to_connectors, oauth_client, serial_str, sid, session
         )
-        _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
+        total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
+        if total_assigned == 0 and len(stations) == 1:
+            _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
+        elif total_assigned == 0:
+            _LOGGER.warning(
+                "Connector mapping exists at %s, but no connectors could be assigned; "
+                "not using fallback because multiple stations exist",
+                sid,
+            )
 
     # create coordinators per station
     await _create_coordinators(hass, stations, update_interval, config_entry=config_entry)
@@ -476,7 +446,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     # 1) Discover sites
     try:
-        with_serial = await _discover_service_locations(session, oauth_client)
+        with_serial = await discovery.async_discover_service_locations(session, oauth_client)
     except SmappeeAuthError as err:
         raise ConfigEntryAuthFailed(f"Auth failed: {err}") from err
     except (ClientError, RuntimeError, ValueError) as err:
