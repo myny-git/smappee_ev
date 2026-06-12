@@ -76,6 +76,13 @@ class SmappeeMqtt:
 
         return str(raw)
 
+    @staticmethod
+    async def _cancel_and_wait(task: asyncio.Task) -> None:
+        """Cancel a task and wait until cancellation has propagated."""
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await asyncio.gather(task)
+
     async def _subscribe_all(self, client: Client) -> None:
         """(Re)subscribe all topics after connect/reconnect."""
         topics = [
@@ -234,9 +241,7 @@ class SmappeeMqtt:
                     self._notify_conn(False)
 
                     if self._track_task:
-                        self._track_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await self._track_task
+                        await self._cancel_and_wait(self._track_task)
                         self._track_task = None
                     self._client = None
 
@@ -246,9 +251,7 @@ class SmappeeMqtt:
 
                 finally:
                     if self._track_task:
-                        self._track_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await self._track_task
+                        await self._cancel_and_wait(self._track_task)
                         self._track_task = None
                     self._client = None
                     if self._stop.is_set():
@@ -300,16 +303,12 @@ class SmappeeMqtt:
         self._stop.set()
         start_task = self._start_task
         if start_task is not None:
-            start_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await start_task
+            await self._cancel_and_wait(start_task)
             if self._start_task is start_task:
                 self._start_task = None
         runner_task = self._runner_task
         if runner_task is not None:
-            runner_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await runner_task
+            await self._cancel_and_wait(runner_task)
             if self._runner_task is runner_task:
                 self._runner_task = None
 
