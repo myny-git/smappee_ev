@@ -42,27 +42,28 @@ async def async_setup_entry(
             st_client: SmappeeApiClient = bucket["station_client"]
             conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
 
-            # Station-level switch
-            entities.append(
-                SmappeeAvailabilitySwitch(
-                    coordinator=coord,
-                    api_client=st_client,
-                    sid=sid,
-                    station_uuid=st_uuid,
-                )
-            )
-
-            # Connector-level switches
-            for cuuid, client in (conns or {}).items():
+            if conns:
+                # Station-level switch
                 entities.append(
-                    SmappeeChargingSwitch(
+                    SmappeeAvailabilitySwitch(
                         coordinator=coord,
-                        api_client=client,
+                        api_client=st_client,
                         sid=sid,
                         station_uuid=st_uuid,
-                        connector_uuid=cuuid,
                     )
                 )
+
+                # Connector-level switches
+                for cuuid, client in (conns or {}).items():
+                    entities.append(
+                        SmappeeChargingSwitch(
+                            coordinator=coord,
+                            api_client=client,
+                            sid=sid,
+                            station_uuid=st_uuid,
+                            connector_uuid=cuuid,
+                        )
+                    )
 
     async_add_entities(entities, False)
 

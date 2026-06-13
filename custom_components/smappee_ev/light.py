@@ -28,14 +28,15 @@ async def async_setup_entry(
     for sid, site in (sites or {}).items():
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
-            entities.append(
-                SmappeeLedLight(
-                    coordinator=bucket["coordinator"],
-                    api_client=bucket["station_client"],
-                    sid=sid,
-                    station_uuid=st_uuid,
+            if bucket.get("connector_clients"):
+                entities.append(
+                    SmappeeLedLight(
+                        coordinator=bucket["coordinator"],
+                        api_client=bucket["station_client"],
+                        sid=sid,
+                        station_uuid=st_uuid,
+                    )
                 )
-            )
 
     async_add_entities(entities, False)
 
