@@ -110,7 +110,7 @@ All UI controls (select, buttons, number slider, EVCC switch) route through the 
 
 This is the current version of the entities (for my EV Wall Home single connector)
 
-![Smappee EV entities overview](images/Sensors_sinceversion2025.8.12b6.png)
+![Smappee EV entities overview](images/Sensors_sinceversion2026.6.5.png)
 
 > ⚠️ **Note**  
 > The Smappee APP is sometimes not correct or responsive. Better to use the online Smappee Dashboard to check functionality.
@@ -179,4 +179,14 @@ If this integration is useful to you, feel free to support its development:
 
 [discord-shield]: https://img.shields.io/badge/Discord-Chat-blue?style=flat-square&logo=discord&logoColor=white
 [discord-url]: https://discord.gg/43uydPgaNf
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=myny-git%2FSmappee_EV&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=myny-git/Smappee_EV&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=myny-git/Smappee_EV&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=myny-git/Smappee_EV&type=date&legend=top-left" />
+ </picture>
+</a>
 
