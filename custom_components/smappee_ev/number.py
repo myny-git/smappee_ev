@@ -237,7 +237,6 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
             unique_suffix="number:min_surpluspct",
             name=f"Min Surplus Percentage {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
-        _LOGGER.critical(getattr(coordinator, "station_client", None))
         self.api_client = api_client
         self._post_init(PERCENTAGE, 0, 100, 1)
 
