@@ -90,6 +90,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         SmappeeConnectorEntity.__init__(
             self,
             coordinator,
+            api_client,
             sid,
             station_uuid,
             connector_uuid,

@@ -295,7 +295,7 @@ class ConnCurrentL1(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current L1"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:current_l1", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:current_l1", name=name
         )
         self.api_client = api
 
@@ -316,7 +316,7 @@ class ConnCurrentL2(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current L2"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:current_l2", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:current_l2", name=name
         )
         self.api_client = api
 
@@ -337,7 +337,7 @@ class ConnCurrentL3(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current L3"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:current_l3", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:current_l3", name=name
         )
         self.api_client = api
 
@@ -358,7 +358,7 @@ class ConnectorPowerSensor(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Power"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:power_total", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:power_total", name=name
         )
         self.api_client = api
 
@@ -379,7 +379,7 @@ class ConnectorCurrentASensor(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:current_total", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:current_total", name=name
         )
         self.api_client = api
 
@@ -406,7 +406,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Support Grid"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:support_grid", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:support_grid", name=name
         )
         self.api_client = api
 
@@ -423,7 +423,7 @@ class ConnEnergyImport(RestoredEnergyConnectorSensor):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Energy import"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:energy_import_kwh", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:energy_import_kwh", name=name
         )
         self.api_client = api
 
@@ -728,7 +728,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Charging state"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:charging_state", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:charging_state", name=name
         )
         self.api_client = api
 
@@ -748,7 +748,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} EVCC state"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:evcc_state", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:evcc_state", name=name
         )
         self.api_client = api
         self._restored_value: str | None = None
@@ -816,7 +816,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} EVSE status"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:status_current", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:status_current", name=name
         )
         self.api_client = api
         self._restored_value: str | None = None
@@ -922,7 +922,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Session energy"
         SmappeeConnectorEntity.__init__(
-            self, c, sid, station_uuid, uuid, unique_suffix="sensor:session_energy", name=name
+            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:session_energy", name=name
         )
         self.api_client = api
 

@@ -99,6 +99,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         SmappeeConnectorEntity.__init__(
             self,
             coordinator,
+            api_client,
             sid,
             station_uuid,
             connector_uuid,
@@ -229,12 +230,14 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
         SmappeeConnectorEntity.__init__(
             self,
             coordinator,
+            api_client,
             sid,
             station_uuid,
             connector_uuid,
             unique_suffix="number:min_surpluspct",
             name=f"Min Surplus Percentage {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
+        _LOGGER.critical(getattr(coordinator, "station_client", None))
         self.api_client = api_client
         self._post_init(PERCENTAGE, 0, 100, 1)
 

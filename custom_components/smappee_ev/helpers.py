@@ -6,21 +6,36 @@ from typing import Any
 
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN
+from .const import DOMAIN, MANUFACTURER
 
 
 def make_device_info(
     sid: int,
     serial: str,
     station_uuid: str,
+    connector_label: str | None = None,
 ) -> DeviceInfo:
-    """Return a Home Assistant device_info dict for a given station."""
-    return {
-        "identifiers": {(DOMAIN, f"{sid}:{serial}:{station_uuid}")},
+    """Return a Home Assistant device_info dict for a station or connector."""
+    
+    # The station is the main device (parent)
+    station_identifier = (DOMAIN, f"{sid}:{serial}:{station_uuid}")
+    
+    device_info = {
+        "identifiers": {station_identifier},
         "name": f"Smappee EV {serial}",
-        "manufacturer": "Smappee",
+        "manufacturer": MANUFACTURER,
+        "model": "EV Wall",
     }
 
+    # If a connector label is provided, treat it as a child device
+    if connector_label:
+        device_info.update({
+            "identifiers": {(DOMAIN, f"{sid}:{serial}:{station_uuid}:{connector_label}")},
+            "name": f"Smappee EV {serial} | Connector {connector_label}",
+            "via_device": station_identifier,
+        })
+
+    return device_info
 
 def make_unique_id(
     sid: int,
@@ -66,6 +81,11 @@ def build_connector_label(api_client, connector_uuid: str) -> str:
     """Return a human friendly connector label (prefers numeric connector number)."""
     num = getattr(api_client, "connector_number", None)
     return f"Connector {num}" if num is not None else f"Connector {connector_uuid[-4:]}"
+
+def build_connector_id(api_client, connector_uuid: str) -> str:
+    """Return a human friendly connector label (prefers numeric connector number)."""
+    num = getattr(api_client, "connector_number", None)
+    return str(num) if num is not None else str(connector_uuid[-4:])
 
 
 def update_total_increasing(last: float | None, candidate: float | None) -> float | None:
