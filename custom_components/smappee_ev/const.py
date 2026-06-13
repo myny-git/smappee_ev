@@ -32,9 +32,9 @@ MQTT_HEARTBEAT_TOPIC_SUFFIX: Final = "/homeassistant/heartbeat"
 
 # Config keys
 CONF_CLIENT_ID: str = "client_id"
-CONF_CLIENT_SECRET: str = "client_secret"  # noqa: S105 - config field name, not a secret
+CONF_CLIENT_SECRET: str = "client_secret"  # - config field name, not a secret
 CONF_USERNAME: str = "username"
-CONF_PASSWORD: str = "password"  # noqa: S105 - config field name, not a secret
+CONF_PASSWORD: str = "password"  # - config field name, not a secret
 CONF_SERVICE_LOCATION_ID: str = "service_location_id"
 CONF_SERVICE_LOCATION_UUID: str = "service_location_uuid"
 CONF_SMART_DEVICE_UUID: str = "smart_device_uuid"

@@ -423,7 +423,14 @@ class ConnEnergyImport(RestoredEnergyConnectorSensor):
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Energy import"
         SmappeeConnectorEntity.__init__(
-            self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:energy_import_kwh", name=name
+            self,
+            c,
+            api,
+            sid,
+            station_uuid,
+            uuid,
+            unique_suffix="sensor:energy_import_kwh",
+            name=name,
         )
         self.api_client = api
 

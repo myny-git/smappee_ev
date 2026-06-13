@@ -22,7 +22,13 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: SmappeeCoordinator, sid: int, station_uuid: str, connector_label: str | None = None) -> None:
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        sid: int,
+        station_uuid: str,
+        connector_label: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self._sid = sid
         self._station_uuid = station_uuid
@@ -31,7 +37,9 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
 
     @property
     def device_info(self) -> DeviceInfo:
-        return make_device_info(self._sid, self._serial, self._station_uuid, connector_label=self._connector_label)
+        return make_device_info(
+            self._sid, self._serial, self._station_uuid, connector_label=self._connector_label
+        )
 
 
 class SmappeeStationEntity(SmappeeBaseEntity):
