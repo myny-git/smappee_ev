@@ -7,7 +7,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api_client import SmappeeApiClient
 from .coordinator import SmappeeCoordinator
-from .helpers import make_device_info, make_unique_id, station_serial, build_connector_id
+from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
 __all__ = [
     "SmappeeBaseEntity",

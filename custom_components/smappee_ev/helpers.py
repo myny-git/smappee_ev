@@ -16,10 +16,10 @@ def make_device_info(
     connector_label: str | None = None,
 ) -> DeviceInfo:
     """Return a Home Assistant device_info dict for a station or connector."""
-    
+
     # The station is the main device (parent)
     station_identifier = (DOMAIN, f"{sid}:{serial}:{station_uuid}")
-    
+
     device_info = {
         "identifiers": {station_identifier},
         "name": f"Smappee EV {serial}",
