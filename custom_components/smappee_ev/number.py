@@ -99,6 +99,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         SmappeeConnectorEntity.__init__(
             self,
             coordinator,
+            api_client,
             sid,
             station_uuid,
             connector_uuid,
@@ -229,6 +230,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
         SmappeeConnectorEntity.__init__(
             self,
             coordinator,
+            api_client,
             sid,
             station_uuid,
             connector_uuid,

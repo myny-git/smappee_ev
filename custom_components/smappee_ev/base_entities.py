@@ -5,8 +5,9 @@ from typing import Any
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api_client import SmappeeApiClient
 from .coordinator import SmappeeCoordinator
-from .helpers import make_device_info, make_unique_id, station_serial
+from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
 __all__ = [
     "SmappeeBaseEntity",
@@ -21,15 +22,24 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: SmappeeCoordinator, sid: int, station_uuid: str) -> None:
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        sid: int,
+        station_uuid: str,
+        connector_label: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self._sid = sid
         self._station_uuid = station_uuid
         self._serial = station_serial(coordinator)
+        self._connector_label = connector_label
 
     @property
     def device_info(self) -> DeviceInfo:
-        return make_device_info(self._sid, self._serial, self._station_uuid)
+        return make_device_info(
+            self._sid, self._serial, self._station_uuid, connector_label=self._connector_label
+        )
 
 
 class SmappeeStationEntity(SmappeeBaseEntity):
@@ -71,13 +81,15 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
     def __init__(
         self,
         coordinator: SmappeeCoordinator,
+        api: SmappeeApiClient,
         sid: int,
         station_uuid: str,
         connector_uuid: str,
         unique_suffix: str,
         name: str,
     ) -> None:
-        super().__init__(coordinator, sid, station_uuid)
+        connector_label = build_connector_id(api, connector_uuid)
+        super().__init__(coordinator, sid, station_uuid, connector_label=connector_label)
         self._connector_uuid = connector_uuid
         self._attr_unique_id = make_unique_id(
             sid, self._serial, station_uuid, connector_uuid, unique_suffix
