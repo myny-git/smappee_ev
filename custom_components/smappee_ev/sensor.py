@@ -399,6 +399,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_icon = "mdi:transmission-tower-export"
 
     def __init__(
         self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
@@ -720,6 +721,7 @@ class StationGridVoltageL3(SmappeeStationEntity, SensorEntity):
 
 class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:ev-station"
 
     def __init__(
         self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
@@ -739,6 +741,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
 
 class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:connection"
 
     def __init__(
         self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
@@ -806,6 +809,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
 
 class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:ev-plug-type2"
 
     def __init__(
         self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str

@@ -15,6 +15,13 @@ from .helpers import build_connector_label
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
 
+ACTION_ICONS = {
+    "start_charging": "mdi:play-circle",
+    "pause_charging": "mdi:pause-circle",
+    "stop_charging": "mdi:stop-circle",
+    "set_charging_mode": "mdi:tune-variant",
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -104,6 +111,7 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         )
         self.api_client = api_client
         self._action = action
+        self._attr_icon = ACTION_ICONS.get(action)
 
     async def async_press(self) -> None:
         """Execute the action on press."""

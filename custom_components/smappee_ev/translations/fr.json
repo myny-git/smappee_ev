@@ -166,7 +166,8 @@
           "description": "Courant de charge en ampères (1 décimale, ex. 11,4). Limité à la plage min–max configurée du connecteur."
         }
       }
-    },    "set_charging_mode": {
+    },
+    "set_charging_mode": {
       "name": "Définir le mode de charge",
       "description": "Définit le mode de charge d’un connecteur.",
       "fields": {

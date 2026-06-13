@@ -15,7 +15,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api_client import SmappeeApiClient
-from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
+from .base_entities import SmappeeConnectorEntity
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .helpers import build_connector_label
@@ -38,7 +38,6 @@ async def async_setup_entry(
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
-            st_client: SmappeeApiClient = bucket["station_client"]
             conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
 
             # Per connector
@@ -62,16 +61,6 @@ async def async_setup_entry(
                     )
                 )
 
-            # Station-level (LED Brightness)
-            entities.append(
-                SmappeeBrightnessNumber(
-                    coordinator=coord,
-                    api_client=st_client,
-                    sid=sid,
-                    station_uuid=st_uuid,
-                )
-            )
-
     async_add_entities(entities, False)
 
 
@@ -90,6 +79,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
     """Combined slider showing current (A), with percentage in attributes."""
 
     _attr_device_class = NumberDeviceClass.CURRENT
+    _attr_icon = "mdi:current-ac"
 
     def __init__(
         self,
@@ -222,69 +212,11 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             self.async_write_ha_state()
 
 
-class SmappeeBrightnessNumber(SmappeeStationRestEntity, _BaseNumber):
-    """LED brightness setting for Smappee EV (station-level)."""
-
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_native_unit_of_measurement = PERCENTAGE
-
-    def __init__(
-        self,
-        coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
-        sid: int,
-        station_uuid: str,
-    ) -> None:
-        SmappeeStationRestEntity.__init__(
-            self,
-            coordinator,
-            sid,
-            station_uuid,
-            unique_suffix="number:led_brightness",
-            name="LED Brightness",
-        )
-        self.api_client = api_client
-        self._post_init(PERCENTAGE, 0, 100, 1)
-
-    @property
-    def native_value(self) -> int | None:
-        data: IntegrationData | None = self.coordinator.data
-        if not data or not data.station or data.station.led_brightness is None:
-            return None
-        return int(data.station.led_brightness)
-
-    async def async_set_native_value(self, value: float) -> None:
-        val = max(0, min(100, int(value)))
-        await self.api_client.set_brightness(val)
-        # Optimistic update for immediate UI feedback
-        data: IntegrationData | None = self.coordinator.data
-        if data and data.station:
-            data.station.led_brightness = val
-            self.coordinator.async_set_updated_data(data)
-
-    async def async_added_to_hass(self) -> None:  # RestoreEntity
-        await super().async_added_to_hass()
-        last = await self.async_get_last_number_data()
-        if not last or last.native_value is None:
-            return
-        try:
-            restored = int(float(last.native_value))
-        except (TypeError, ValueError):
-            return
-        data: IntegrationData | None = self.coordinator.data
-        updated_data = False
-        if data and data.station and getattr(data.station, "led_brightness", None) is None:
-            data.station.led_brightness = restored
-            self.coordinator.async_set_updated_data(data)
-            updated_data = True
-        if not updated_data:
-            self.async_write_ha_state()
-
-
 class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     """Min Surplus Percentage (connector-level)."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:solar-power"
 
     def __init__(
         self,

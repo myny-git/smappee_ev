@@ -31,6 +31,7 @@ PLATFORMS = [
     Platform.BUTTON,
     Platform.SWITCH,
     Platform.BINARY_SENSOR,
+    Platform.LIGHT,
 ]
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
@@ -518,7 +519,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     # Services already registered domain-wide in async_setup
 
-    for _svc in ("set_available", "set_unavailable", "set_brightness", "set_min_surpluspct"):
+    for _svc in ("set_available", "set_unavailable", "set_min_surpluspct"):
         try:
             if hass.services.has_service(DOMAIN, _svc):
                 hass.services.async_remove(DOMAIN, _svc)

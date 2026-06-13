@@ -106,6 +106,10 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         """Show last EVCC intent only (not physical session state)."""
         return self._is_on
 
+    @property
+    def icon(self) -> str:
+        return "mdi:ev-station" if self.is_on else "mdi:ev-station-disabled"
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         # Restore last EVCC intent across restarts
@@ -194,6 +198,10 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
     def is_on(self) -> bool:
         st = self._station_state()
         return bool(getattr(st, "available", True)) if st else True
+
+    @property
+    def icon(self) -> str:
+        return "mdi:ev-station" if self.is_on else "mdi:ev-station-disabled"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_available(True)

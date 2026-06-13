@@ -47,6 +47,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
     """Home Assistant select entity for Smappee charging mode."""
 
     _attr_has_entity_name = True
+    _attr_icon = "mdi:tune-variant"
     _attr_options = MODES
 
     def __init__(
