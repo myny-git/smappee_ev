@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Final
 
 DOMAIN = "smappee_ev"
@@ -11,11 +12,6 @@ DEFAULT_MIN_CURRENT: Final = 6
 DEFAULT_MAX_CURRENT: Final = 32
 DEFAULT_LED_BRIGHTNESS: Final = 70
 DEFAULT_MIN_SURPLUS_PERCENT: Final = 100
-
-# OAuth / auth related constants
-OAUTH_EARLY_RENEW_SKEW: Final = 60  # seconds before expiry to refresh
-OAUTH_MAX_REFRESH_ATTEMPTS: Final = 3
-TOKEN_DEFAULT_EXPIRES_IN: Final = 3600
 
 # Charging percentages
 FULL_PERCENTAGE: Final = 100
@@ -31,14 +27,14 @@ MQTT_TRACKING_TYPE_RT_VALUES: Final = "RT_VALUES"
 MQTT_HEARTBEAT_TOPIC_SUFFIX: Final = "/homeassistant/heartbeat"
 
 # Config keys
-CONF_CLIENT_ID: str = "client_id"
-CONF_CLIENT_SECRET: str = "client_secret"  # noqa: S105 - config field name, not a secret
 CONF_USERNAME: str = "username"
 CONF_PASSWORD: str = "password"  # noqa: S105 - config field name, not a secret
 CONF_SERVICE_LOCATION_ID: str = "service_location_id"
 CONF_SERVICE_LOCATION_UUID: str = "service_location_uuid"
 CONF_SMART_DEVICE_UUID: str = "smart_device_uuid"
 CONF_SMART_DEVICE_ID: str = "smart_device_id"
+CONF_DASHBOARD_REFRESH_TOKEN: str = "dashboard_refresh_token"  # noqa: S105
+CONF_DASHBOARD_TOKEN_EXPIRES_AT: str = "dashboard_token_expires_at"  # noqa: S105
 
 # Service names
 SERVICE_SET_CHARGING_MODE = "set_charging_mode"
@@ -49,8 +45,11 @@ SERVICE_SET_AVAILABLE = "set_available"
 SERVICE_SET_UNAVAILABLE = "set_unavailable"
 SERVICE_RELOAD = "reload"
 
-# Base URL of the API
-BASE_URL = "https://app1pub.smappee.net/dev/v3"
+# Base URLs
+DASHAPI_URL = "https://dashboard.smappee.net/dashapi"
+DASHBOARD_API_URL = "https://dashboard.smappee.net/api"
+DASHBOARD_REFRESH_INTERVAL: Final = timedelta(minutes=30)
+DASHBOARD_REFRESH_AFTER_WRITE_DELAY: Final = 2 * 60
 
 # MQTT for connect
 MQTT_HOST = "mqtt.smappee.net"
@@ -60,8 +59,3 @@ MQTT_TRACK_INTERVAL_SEC = 60
 # Shared HTTP timeout (aiohttp.ClientTimeout) parameters
 HTTP_CONNECT_TIMEOUT: Final = 5
 HTTP_TOTAL_TIMEOUT: Final = 15
-
-# OAuth timeouts / retry constants
-OAUTH_CONNECT_TIMEOUT: Final = 5
-OAUTH_TOTAL_TIMEOUT: Final = 10
-OAUTH_REFRESH_RETRY_BASE_DELAY: Final = 2  # seconds base (multiplied by attempt)

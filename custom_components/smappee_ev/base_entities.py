@@ -1,12 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api_client import SmappeeApiClient
 from .coordinator import SmappeeCoordinator
+from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
 __all__ = [
@@ -37,6 +37,8 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
 
     @property
     def device_info(self) -> DeviceInfo:
+        if self._connector_label is None:
+            return make_device_info(self._sid, self._serial, self._station_uuid)
         return make_device_info(
             self._sid, self._serial, self._station_uuid, connector_label=self._connector_label
         )
@@ -81,20 +83,42 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
     def __init__(
         self,
         coordinator: SmappeeCoordinator,
-        api: SmappeeApiClient,
-        sid: int,
+        api: SmappeeDeviceHandle | int,
+        sid: int | str,
         station_uuid: str,
         connector_uuid: str,
         unique_suffix: str,
-        name: str,
+        name: str | None = None,
     ) -> None:
-        connector_label = build_connector_id(api, connector_uuid)
-        super().__init__(coordinator, sid, station_uuid, connector_label=connector_label)
-        self._connector_uuid = connector_uuid
+        if name is None:
+            real_api = None
+            real_sid = int(cast(int, api))
+            real_station_uuid = str(sid)
+            real_connector_uuid = station_uuid
+            real_unique_suffix = connector_uuid
+            real_name = unique_suffix
+            connector_label = real_connector_uuid
+        else:
+            real_api = cast(SmappeeDeviceHandle, api)
+            real_sid = int(sid)
+            real_station_uuid = station_uuid
+            real_connector_uuid = connector_uuid
+            real_unique_suffix = unique_suffix
+            real_name = name
+            connector_label = build_connector_id(
+                cast(SmappeeDeviceHandle, real_api), real_connector_uuid
+            )
+
+        super().__init__(coordinator, real_sid, real_station_uuid, connector_label=connector_label)
+        self._connector_uuid = real_connector_uuid
         self._attr_unique_id = make_unique_id(
-            sid, self._serial, station_uuid, connector_uuid, unique_suffix
+            real_sid,
+            self._serial,
+            real_station_uuid,
+            real_connector_uuid,
+            real_unique_suffix,
         )
-        self._attr_name = name
+        self._attr_name = real_name
 
     # Convenience accessors
     @property
@@ -117,3 +141,4 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
         if not data:
             return None
         return (getattr(data, "connectors", None) or {}).get(self._connector_uuid)
+

@@ -20,10 +20,10 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
+from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_label, safe_sum, update_total_increasing
 
 PARALLEL_UPDATES = 0
@@ -46,8 +46,8 @@ async def async_setup_entry(
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
-            st_client: SmappeeApiClient = bucket["station_client"]
-            conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
+            st_client: SmappeeDeviceHandle = bucket["station_client"]
+            conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
 
             # ---- Station sensors ----
             entities.append(SmappeeMqttLastSeenSensor(coord, st_client, sid, st_uuid))
@@ -103,7 +103,7 @@ class StationGridPower(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -127,7 +127,7 @@ class StationHouseConsumptionPower(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -151,7 +151,7 @@ class StationPvPower(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -222,7 +222,7 @@ class RestoredEnergyConnectorSensor(SmappeeConnectorEntity, RestoreSensor):
 
 class StationGridEnergyImport(RestoredEnergyStationSensor):
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -241,7 +241,7 @@ class StationGridEnergyImport(RestoredEnergyStationSensor):
 
 class StationGridEnergyExport(RestoredEnergyStationSensor):
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -260,7 +260,7 @@ class StationGridEnergyExport(RestoredEnergyStationSensor):
 
 class StationPvEnergyImport(RestoredEnergyStationSensor):
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -291,7 +291,7 @@ class ConnCurrentL1(SmappeeConnectorEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current L1"
         SmappeeConnectorEntity.__init__(
@@ -312,7 +312,7 @@ class ConnCurrentL2(SmappeeConnectorEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current L2"
         SmappeeConnectorEntity.__init__(
@@ -333,7 +333,7 @@ class ConnCurrentL3(SmappeeConnectorEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current L3"
         SmappeeConnectorEntity.__init__(
@@ -354,7 +354,7 @@ class ConnectorPowerSensor(SmappeeConnectorEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Power"
         SmappeeConnectorEntity.__init__(
@@ -375,7 +375,7 @@ class ConnectorCurrentASensor(SmappeeConnectorEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Current"
         SmappeeConnectorEntity.__init__(
@@ -402,7 +402,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
     _attr_icon = "mdi:transmission-tower-export"
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Support Grid"
         SmappeeConnectorEntity.__init__(
@@ -419,7 +419,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
 
 class ConnEnergyImport(RestoredEnergyConnectorSensor):
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Energy import"
         SmappeeConnectorEntity.__init__(
@@ -446,7 +446,7 @@ class StationGridCurrents(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -454,7 +454,7 @@ class StationGridCurrents(SmappeeStationEntity, SensorEntity):
             sid,
             station_uuid,
             unique_suffix="sensor:grid_currents",
-            name="Grid current (L1–L3)",
+            name="Grid current (L1-L3)",
         )
 
     @property
@@ -481,7 +481,7 @@ class StationPvCurrents(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -489,7 +489,7 @@ class StationPvCurrents(SmappeeStationEntity, SensorEntity):
             sid,
             station_uuid,
             unique_suffix="sensor:pv_currents",
-            name="PV current (L1–L3)",
+            name="PV current (L1-L3)",
         )
 
     @property
@@ -516,7 +516,7 @@ class StationGridCurrentL1(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -540,7 +540,7 @@ class StationGridCurrentL2(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -564,7 +564,7 @@ class StationGridCurrentL3(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -588,7 +588,7 @@ class StationPvCurrentL1(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -612,7 +612,7 @@ class StationPvCurrentL2(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -636,7 +636,7 @@ class StationPvCurrentL3(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -660,7 +660,7 @@ class StationGridVoltageL1(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -684,7 +684,7 @@ class StationGridVoltageL2(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -708,7 +708,7 @@ class StationGridVoltageL3(SmappeeStationEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str
+        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -731,7 +731,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
     _attr_icon = "mdi:ev-station"
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Charging state"
         SmappeeConnectorEntity.__init__(
@@ -751,7 +751,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
     _attr_icon = "mdi:connection"
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} EVCC state"
         SmappeeConnectorEntity.__init__(
@@ -819,7 +819,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
     _attr_icon = "mdi:ev-plug-type2"
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} EVSE status"
         SmappeeConnectorEntity.__init__(
@@ -863,7 +863,7 @@ class SmappeeMqttLastSeenSensor(SmappeeStationEntity, SensorEntity):
     def __init__(
         self,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
     ) -> None:
@@ -925,7 +925,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(
-        self, c: SmappeeCoordinator, api: SmappeeApiClient, sid: int, station_uuid: str, uuid: str
+        self, c: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str, uuid: str
     ) -> None:
         name = f"{build_connector_label(api, uuid)} Session energy"
         SmappeeConnectorEntity.__init__(

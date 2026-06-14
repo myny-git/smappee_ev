@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
@@ -6,11 +6,11 @@ from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEnti
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api_client import SmappeeApiClient
 from .base_entities import SmappeeStationRestEntity
 from .const import DEFAULT_LED_BRIGHTNESS
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry
+from .device_handle import SmappeeDeviceHandle
 
 PARALLEL_UPDATES = 1
 
@@ -52,7 +52,7 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
         self,
         *,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
     ) -> None:
@@ -103,3 +103,5 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
         if data and data.station:
             data.station.led_brightness = brightness
             self.coordinator.async_set_updated_data(data)
+        self.coordinator.async_schedule_dashboard_refresh()
+

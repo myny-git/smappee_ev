@@ -6,7 +6,9 @@ from collections.abc import Iterable, Sequence
 from contextlib import suppress
 from dataclasses import replace
 from datetime import timedelta
+from inspect import iscoroutinefunction
 import logging
+import re
 from time import time as _now
 from typing import Any, cast
 
@@ -15,10 +17,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api_client import SmappeeApiClient
-from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
+from .const import (
+    DASHBOARD_REFRESH_AFTER_WRITE_DELAY,
+    DASHBOARD_REFRESH_INTERVAL,
+    DEFAULT_MAX_CURRENT,
+    DEFAULT_MIN_CURRENT,
+)
+from .dashboard_client import SmappeeDashboardClient
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
-from .oauth import SmappeeAuthError
+from .device_handle import SmappeeDeviceHandle
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +38,7 @@ SESSION_FINAL_REFRESH_DELAYS = (30, 2 * 60, 5 * 60)
 _SESSION_ACTIVE_STATES = {"STARTED", "CHARGING", "CHARGING_STARTED", "RUNNING"}
 _SESSION_PAUSED_STATES = {"PAUSED", "SUSPENDED"}
 _SESSION_STOPPED_STATES = {"STOPPED", "CHARGING_FINISHED", "FINISHED", "COMPLETED", "IDLE"}
+_MQTT_PATH_RE = re.compile(r"\$\.([A-Za-z0-9_]+)\[(\d+)\]")
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -60,6 +68,58 @@ def _volts_from_dv(dv: list[int]) -> list[int]:
     return [round(x / 10) for x in dv] if dv else []
 
 
+def _indexes_from_aspect_paths(channel: dict[str, Any] | None, field: str) -> list[int]:
+    """Extract MQTT array indexes from Dashboard aspect paths."""
+    if not isinstance(channel, dict):
+        return []
+    indexes: list[int] = []
+    for aspect in channel.get("aspectPaths") or []:
+        if not isinstance(aspect, dict):
+            continue
+        match = _MQTT_PATH_RE.fullmatch(str(aspect.get("path") or ""))
+        if match and match.group(1) == field:
+            indexes.append(int(match.group(2)))
+    return indexes
+
+
+def _indexes_and_field_from_aspect_paths(
+    channel: dict[str, Any] | None, *fields: str
+) -> tuple[list[int], str | None]:
+    """Extract MQTT array indexes and remember which array field they belong to."""
+    if not isinstance(channel, dict):
+        return [], None
+
+    selected_field: str | None = None
+    indexes: list[int] = []
+    allowed = set(fields)
+    for aspect in channel.get("aspectPaths") or []:
+        if not isinstance(aspect, dict):
+            continue
+        match = _MQTT_PATH_RE.fullmatch(str(aspect.get("path") or ""))
+        if not match:
+            continue
+        field = match.group(1)
+        if field not in allowed:
+            continue
+        if selected_field is None:
+            selected_field = field
+        if field == selected_field:
+            indexes.append(int(match.group(2)))
+
+    return indexes, selected_field
+
+
+def _active_power_values(payload: dict, field: str | None = None) -> list:
+    """Return active power values from the Dashboard-indicated MQTT array field."""
+    if field and isinstance(payload.get(field), list):
+        return payload[field]
+    for fallback in ("activePowerData", "channelData"):
+        values = payload.get(fallback)
+        if isinstance(values, list):
+            return values
+    return []
+
+
 class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     """Single source of truth: fetch station + all connector state here."""
 
@@ -78,10 +138,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     def __init__(
         self,
         hass: HomeAssistant,
-        station_client: SmappeeApiClient,
-        connector_clients: dict[str, SmappeeApiClient],  # keyed by UUID
+        station_client: SmappeeDeviceHandle,
+        connector_clients: dict[str, SmappeeDeviceHandle],  # keyed by UUID
         update_interval: int,
         config_entry: SmappeeEvConfigEntry | None = None,
+        dashboard_client: SmappeeDashboardClient | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -92,6 +153,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         )
         self.station_client = station_client
         self.connector_clients = connector_clients
+        self.dashboard_client = dashboard_client
+        self.station_client.dashboard_client = dashboard_client
+        for client in self.connector_clients.values():
+            client.dashboard_client = dashboard_client
         self._power_index_map: dict[str, Any] | None = None
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
@@ -103,12 +168,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._session_final_refresh_task: asyncio.Task | None = None
         self._session_refresh_lock = asyncio.Lock()
         self._session_tracking_started = False
+        self._last_dashboard_refresh = 0.0
+        self._last_dashboard_warning = 0.0
+        self._dashboard_refresh_lock = asyncio.Lock()
+        self._dashboard_refresh_task: asyncio.Task | None = None
 
     async def _async_update_data(self) -> IntegrationData:
         try:
-            # refresh auth once; commands will refresh again when needed
-            await self.station_client.ensure_auth()
-
             # ---- Station snapshot (LED brightness) ----
             prev_data = self.data
             station_state = self._merge_station_rest_state(
@@ -125,8 +191,6 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             for (uuid, client), res in zip(pairs, results, strict=True):
                 if isinstance(res, ConfigEntryAuthFailed):
                     raise res
-                if isinstance(res, SmappeeAuthError):
-                    raise ConfigEntryAuthFailed(f"Smappee authentication failed: {res}") from res
                 if isinstance(res, Exception):
                     self._log_connector_api_transition(uuid, False, res)
                     # Preserve last-known values, but mark this connector unreachable
@@ -147,18 +211,18 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             await self._ensure_power_index_map()
 
-            return IntegrationData(
+            data = IntegrationData(
                 station=station_state,
                 connectors=connectors_state,
                 recent_sessions=prev_data.recent_sessions if prev_data else [],
             )
+            await self._maybe_refresh_dashboard_data(data)
+            return data
 
         except asyncio.CancelledError:
             raise
         except ConfigEntryAuthFailed:
             raise
-        except SmappeeAuthError as err:
-            raise ConfigEntryAuthFailed(f"Smappee authentication failed: {err}") from err
         except (ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
 
@@ -227,6 +291,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             led_brightness=rest.led_brightness
             if rest.led_brightness is not None
             else prev.led_brightness,
+            dashboard_led_device_id=prev.dashboard_led_device_id,
             api_available=rest.api_available,
         )
 
@@ -256,97 +321,136 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         )
 
     async def _ensure_power_index_map(self) -> None:
-        """Load and cache metering index mapping once."""
+        """Load and cache MQTT power index mapping from Dashboard v10."""
         if self._power_index_map is not None:
             return
+        if self.dashboard_client is None:
+            return
 
-        cfg = await self.station_client.async_get_metering_configuration()
+        cfg = await self.dashboard_client.async_get_highlevel_configuration(
+            self.station_client.service_location_id
+        )
         if cfg is None:
             return
 
-        self._power_index_map = self._build_power_index_map(cfg)
+        mapping = self._build_measurement_index_map_from_highlevel(cfg)
+        if mapping:
+            self._power_index_map = mapping
 
-    def _build_power_index_map(self, cfg: dict) -> dict:
-        """
-        Build mapping from /meteringconfiguration.
-
-        Returns:
-        {
-            "grid": {"power":[...], "cons":[...], "energy":[...]},
-            "pv":   {"power":[...], "cons":[...], "energy":[...]},
-            "cars": { "<uuid>": {"power":[...], "cons":[...], "energy":[...], "position": int|None, "serial": str|None } }
-        }
-
-        ``power`` indices are used for activePowerData/currentData (sparse,
-        indexed by physical CT input number).
-
-        ``energy`` indices are used for importActiveEnergyData/
-        exportActiveEnergyData which use a dense sequential layout
-        (rank among all configured consumptionIndex values).
-        """
+    def _build_measurement_index_map_from_highlevel(
+        self, cfg: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Build MQTT index mapping from Dashboard v10 highlevelconfiguration."""
         mapping: dict[str, Any] = {
-            "grid": {"power": [], "cons": [], "energy": []},
-            "pv": {"power": [], "cons": [], "energy": []},
+            "grid": {"power": [], "current": [], "cons": [], "energy": []},
+            "pv": {"power": [], "current": [], "cons": [], "energy": []},
             "cars": {},
         }
 
-        # First pass: collect every consumptionIndex so we can rank them.
-        all_cons: list[int] = []
-        all_cons.extend(
-            int(ch["consumptionIndex"])
-            for meas in cfg.get("measurements") or []
-            for ch in meas.get("channels") or []
-            if "consumptionIndex" in ch
-        )
-        all_cons.extend(
-            int(ch["consumptionIndex"])
-            for cs in cfg.get("chargingStations") or []
-            for chg in cs.get("chargers") or []
-            for ch in chg.get("channels") or []
-            if "consumptionIndex" in ch
-        )
-
-        # Build rank lookup: consumptionIndex → 0-based position in sorted order.
-        sorted_cons = sorted(set(all_cons))
-        cons_to_rank = {ci: rank for rank, ci in enumerate(sorted_cons)}
-
-        # measurements → GRID / PRODUCTION(PV)
         for meas in cfg.get("measurements") or []:
-            mtype = (meas.get("type") or "").upper()
-            chans = meas.get("channels") or []
-            pidx = [int(ch["powerTopicIndex"]) for ch in chans if "powerTopicIndex" in ch]
-            cidx = [int(ch["consumptionIndex"]) for ch in chans if "consumptionIndex" in ch]
-            eidx = [cons_to_rank[ci] for ci in cidx if ci in cons_to_rank]
-            if mtype == "GRID":
-                mapping["grid"]["power"], mapping["grid"]["cons"] = pidx, cidx
-                mapping["grid"]["energy"] = eidx
-            elif mtype == "PRODUCTION":
-                mapping["pv"]["power"], mapping["pv"]["cons"] = pidx, cidx
-                mapping["pv"]["energy"] = eidx
+            if not isinstance(meas, dict):
+                continue
+            channels = meas.get("updateChannels") or {}
+            if not isinstance(channels, dict):
+                continue
 
-        # chargingStations[].chargers[] → per-connector
-        for cs in cfg.get("chargingStations") or []:
-            for chg in cs.get("chargers") or []:
-                uuid = chg.get("uuid")
+            power_idx, power_field = _indexes_and_field_from_aspect_paths(
+                channels.get("activePower"), "activePowerData", "channelData"
+            )
+            current_idx = _indexes_from_aspect_paths(channels.get("current"), "currentData")
+            energy_idx = _indexes_from_aspect_paths(
+                channels.get("meterReadings"), "importActiveEnergyData"
+            )
+
+            mtype = str(meas.get("type") or "").upper()
+            appliance_raw = meas.get("appliance")
+            appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
+            category = str(meas.get("category") or appliance.get("type") or "").upper()
+
+            if mtype == "GRID":
+                mapping["grid"]["power"] = power_idx
+                mapping["grid"]["power_field"] = power_field
+                mapping["grid"]["current"] = current_idx
+                mapping["grid"]["energy"] = energy_idx
+                continue
+
+            if mtype == "PRODUCTION":
+                mapping["pv"]["power"] = power_idx
+                mapping["pv"]["power_field"] = power_field
+                mapping["pv"]["current"] = current_idx
+                mapping["pv"]["energy"] = energy_idx
+                continue
+
+            if mtype == "APPLIANCE" and category == "CAR_CHARGER":
+                uuid = self._connector_uuid_for_highlevel_measurement(meas)
                 if not uuid:
                     continue
-                chans = chg.get("channels") or []
-                pidx = [int(ch["powerTopicIndex"]) for ch in chans if "powerTopicIndex" in ch]
-                cidx = [int(ch["consumptionIndex"]) for ch in chans if "consumptionIndex" in ch]
-                eidx = [cons_to_rank[ci] for ci in cidx if ci in cons_to_rank]
                 mapping["cars"][uuid] = {
-                    "power": pidx,
-                    "cons": cidx,
-                    "energy": eidx,
-                    "position": chg.get("position"),
-                    "serial": chg.get("serialNumber"),
+                    "power": power_idx,
+                    "power_field": power_field,
+                    "current": current_idx,
+                    "energy": energy_idx,
+                    "position": self._connector_position_from_measurement(meas),
+                    "serial": None,
                 }
-        return mapping
+
+        if (
+            mapping["grid"]["power"]
+            or mapping["pv"]["power"]
+            or any(car.get("power") for car in mapping["cars"].values())
+        ):
+            return mapping
+        return None
+
+    def _connector_uuid_for_highlevel_measurement(self, meas: dict[str, Any]) -> str | None:
+        """Match a Dashboard highlevel APPLIANCE measurement to a connector UUID."""
+        direct_values = [
+            meas.get("uuid"),
+            meas.get("smartDeviceUuid"),
+            meas.get("deviceUuid"),
+        ]
+        appliance = meas.get("appliance")
+        if isinstance(appliance, dict):
+            direct_values.extend(
+                [
+                    appliance.get("uuid"),
+                    appliance.get("smartDeviceUuid"),
+                    appliance.get("deviceUuid"),
+                ]
+            )
+        for value in direct_values:
+            text = str(value).strip() if value is not None else ""
+            if text and text in self.connector_clients:
+                return text
+
+        position = self._connector_position_from_measurement(meas)
+        if position is not None:
+            for uuid, client in self.connector_clients.items():
+                if getattr(client, "connector_number", None) == position:
+                    return uuid
+
+        if len(self.connector_clients) == 1:
+            return next(iter(self.connector_clients))
+        return None
+
+    @staticmethod
+    def _connector_position_from_measurement(meas: dict[str, Any]) -> int | None:
+        for key in ("position", "connectorNumber"):
+            value = meas.get(key)
+            if value is not None:
+                with suppress(TypeError, ValueError):
+                    return int(value)
+        name = str(meas.get("name") or "")
+        match = re.search(r"(?:^|\s-\s|\s)(\d+)\s*$", name)
+        if match:
+            with suppress(TypeError, ValueError):
+                return int(match.group(1))
+        return None
 
     # -----------------------------
     # Helpers (pure HTTP + parsing)
     # -----------------------------
-    async def _fetch_station_state(self, client: SmappeeApiClient) -> StationState:
+    async def _fetch_station_state(self, client: SmappeeDeviceHandle) -> StationState:
         """Read LED brightness by scanning all smartdevices for the station."""
         led_brightness: int | None = None
         try:
@@ -367,17 +471,13 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             self._log_station_api_transition(True)
         except asyncio.CancelledError:
             raise
-        except SmappeeAuthError as err:
-            raise ConfigEntryAuthFailed(
-                f"Smappee authentication failed while fetching station state: {err}"
-            ) from err
         except (TimeoutError, ClientError, RuntimeError) as err:
             self._log_station_api_transition(False, err)
             return StationState(led_brightness=led_brightness, available=True, api_available=False)
 
         return StationState(led_brightness=led_brightness, available=True, api_available=True)
 
-    async def _fetch_connector_state(self, client: SmappeeApiClient) -> ConnectorState:
+    async def _fetch_connector_state(self, client: SmappeeDeviceHandle) -> ConnectorState:
         """Read one connector's properties/config from its smartdevice."""
         # Defaults, will be overwritten by API values when present
         session_state = "Initialize"
@@ -438,6 +538,417 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             support_grid=support_grid,
             api_available=True,
         )
+
+    async def _maybe_refresh_dashboard_data(
+        self, data: IntegrationData, force: bool = False
+    ) -> bool:
+        """Refresh slow Dashboard REST config/cache data when due."""
+        if self.dashboard_client is None:
+            return False
+        if self._dashboard_refresh_lock.locked():
+            return False
+
+        now = _now()
+        if (
+            not force
+            and self._last_dashboard_refresh
+            and now - self._last_dashboard_refresh < DASHBOARD_REFRESH_INTERVAL.total_seconds()
+        ):
+            return False
+
+        async with self._dashboard_refresh_lock:
+            now = _now()
+            if (
+                not force
+                and self._last_dashboard_refresh
+                and now - self._last_dashboard_refresh < DASHBOARD_REFRESH_INTERVAL.total_seconds()
+            ):
+                return False
+
+            service_location_id = self.station_client.service_location_id
+            station_serial = (
+                self.station_client.charging_station_serial or self.station_client.serial
+            )
+            calls = {
+                "charging station details": self.dashboard_client.async_get_charging_station_details(
+                    station_serial
+                ),
+                "capacity protection": self.dashboard_client.async_get_capacity_protection(
+                    service_location_id
+                ),
+                "overload protection": self.dashboard_client.async_get_overload_protection(
+                    service_location_id
+                ),
+                "high-level configuration": self.dashboard_client.async_get_highlevel_configuration(
+                    service_location_id
+                ),
+                "appliances": self.dashboard_client.async_get_appliances(service_location_id),
+            }
+            results = await asyncio.gather(*calls.values(), return_exceptions=True)
+            self._last_dashboard_refresh = now
+
+            changed = False
+            errors: list[str] = []
+            responses = dict(zip(calls.keys(), results, strict=True))
+            for label, result in responses.items():
+                if isinstance(result, BaseException):
+                    if isinstance(result, asyncio.CancelledError):
+                        raise result
+                    errors.append(f"{label}: {result}")
+
+            details = responses.get("charging station details")
+            if isinstance(details, dict):
+                changed |= self._merge_dashboard_station_details(data, details)
+
+            capacity = responses.get("capacity protection")
+            if isinstance(capacity, dict):
+                changed |= self._merge_dashboard_capacity(data.station, capacity)
+
+            overload = responses.get("overload protection")
+            if isinstance(overload, dict):
+                changed |= self._merge_dashboard_overload(data.station, overload)
+
+            highlevel = responses.get("high-level configuration")
+            if isinstance(highlevel, dict):
+                mapping = self._build_measurement_index_map_from_highlevel(highlevel)
+                if mapping is not None:
+                    self._power_index_map = mapping
+
+            if errors:
+                self._log_dashboard_refresh_errors(errors)
+
+            self._sync_dashboard_client_metadata(data)
+            changed |= await self._refresh_dashboard_load_management(data)
+            return changed
+
+    async def _refresh_dashboard_load_management(self, data: IntegrationData) -> bool:
+        """Refresh per-connector Dashboard load-management state."""
+        if self.dashboard_client is None:
+            return False
+        method = getattr(self.dashboard_client, "async_get_load_management", None)
+        if method is None or not iscoroutinefunction(method):
+            return False
+        calls = {
+            uuid: method(self.station_client.service_location_id, conn.dashboard_device_id)
+            for uuid, conn in data.connectors.items()
+            if conn.dashboard_device_id
+        }
+        if not calls:
+            return False
+
+        results = await asyncio.gather(*calls.values(), return_exceptions=True)
+        changed = False
+        errors: list[str] = []
+        for uuid, result in zip(calls.keys(), results, strict=True):
+            if isinstance(result, BaseException):
+                if isinstance(result, asyncio.CancelledError):
+                    raise result
+                errors.append(f"load management {uuid}: {result}")
+                continue
+            if isinstance(result, dict):
+                changed |= self._merge_dashboard_load_management(data.connectors[uuid], result)
+
+        if errors:
+            self._log_dashboard_refresh_errors(errors)
+        return changed
+
+    def _merge_dashboard_load_management(
+        self, conn: ConnectorState, payload: dict[str, Any]
+    ) -> bool:
+        changed = False
+        strategy = self._as_str(payload.get("optimizationStrategy"))
+        if strategy:
+            changed |= self._set_if_changed(conn, "optimization_strategy", strategy)
+            base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
+            changed |= self._set_if_changed(conn, "ui_mode_base", base)
+            changed |= self._set_if_changed(conn, "selected_mode", base)
+        return changed
+
+    def _sync_dashboard_client_metadata(self, data: IntegrationData) -> None:
+        """Copy Dashboard identifiers from state onto command clients."""
+        self.station_client.dashboard_client = self.dashboard_client
+        self.station_client.dashboard_device_id = data.station.dashboard_led_device_id
+        for connector_uuid, conn in data.connectors.items():
+            client = self.connector_clients.get(connector_uuid)
+            if client is None:
+                continue
+            client.dashboard_client = self.dashboard_client
+            client.dashboard_device_id = conn.dashboard_device_id
+
+    def _log_dashboard_refresh_errors(self, errors: list[str]) -> None:
+        now = _now()
+        if now - self._last_dashboard_warning < DASHBOARD_REFRESH_INTERVAL.total_seconds():
+            _LOGGER.debug("Dashboard refresh still failing: %s", "; ".join(errors))
+            return
+        self._last_dashboard_warning = now
+        _LOGGER.warning(
+            "Dashboard refresh failed; keeping existing MQTT/API data: %s", "; ".join(errors)
+        )
+
+    def async_schedule_dashboard_refresh(
+        self, delay: float = DASHBOARD_REFRESH_AFTER_WRITE_DELAY
+    ) -> None:
+        """Schedule a forced dashboard refresh after a write."""
+        task = self._dashboard_refresh_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._dashboard_refresh_task = self.hass.async_create_task(
+            self._async_delayed_dashboard_refresh(delay)
+        )
+
+    async def _async_delayed_dashboard_refresh(self, delay: float) -> None:
+        try:
+            if delay > 0:
+                await asyncio.sleep(delay)
+            data = self.data
+            if data and await self._maybe_refresh_dashboard_data(data, force=True):
+                self.async_set_updated_data(data)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if self._dashboard_refresh_task is asyncio.current_task():
+                self._dashboard_refresh_task = None
+
+    def _merge_dashboard_station_details(
+        self, data: IntegrationData, details: dict[str, Any]
+    ) -> bool:
+        station = data.station
+        changed = False
+
+        changed |= self._set_if_changed(
+            station, "dashboard_available", self._as_bool(details.get("available"))
+        )
+        changed |= self._set_if_changed(
+            station, "station_features", [str(item) for item in details.get("features") or []]
+        )
+        changed |= self._set_if_changed(
+            station, "maximum_capacity_a", self._as_int(details.get("maximumCapacity"))
+        )
+        changed |= self._set_if_changed(station, "dashboard_charging_station_details", details)
+
+        offline = details.get("offlineCharging")
+        if isinstance(offline, dict):
+            changed |= self._set_if_changed(
+                station, "offline_charging_enabled", self._as_bool(offline.get("enabled"))
+            )
+            changed |= self._set_if_changed(
+                station,
+                "offline_failsafe_current_a",
+                self._as_int(offline.get("failSafe")),
+            )
+
+        for module in details.get("modules") or []:
+            if not isinstance(module, dict):
+                continue
+            changed |= self._merge_dashboard_module(data, module)
+
+        return changed
+
+    def _merge_dashboard_module(self, data: IntegrationData, module: dict[str, Any]) -> bool:
+        smart_device = module.get("smartDevice")
+        if not isinstance(smart_device, dict):
+            return False
+        device_type = smart_device.get("type")
+        category = device_type.get("category") if isinstance(device_type, dict) else device_type
+        if str(category or "").upper() == "LED":
+            return self._merge_dashboard_led(data.station, smart_device)
+        if str(category or "").upper() != "CARCHARGER":
+            return False
+
+        conn = self._dashboard_connector_for_module(data, module, smart_device)
+        if conn is None:
+            return False
+
+        changed = False
+        changed |= self._set_if_changed(
+            conn, "dashboard_device_id", self._as_str(smart_device.get("id"))
+        )
+        changed |= self._set_if_changed(
+            conn,
+            "dashboard_device_uuid",
+            self._as_str(smart_device.get("uuid"))
+            or self._device_uuid_from_dashboard_channel(smart_device),
+        )
+        changed |= self._set_if_changed(
+            conn, "dashboard_device_name", self._as_str(smart_device.get("name"))
+        )
+
+        props = smart_device.get("configurationProperties") or []
+        changed |= self._set_dashboard_int_prop(
+            conn, props, "max_current", "etc.smart.device.type.car.charger.config.max.current"
+        )
+        changed |= self._set_dashboard_int_prop(
+            conn, props, "min_current", "etc.smart.device.type.car.charger.config.min.current"
+        )
+        changed |= self._set_dashboard_int_prop(
+            conn, props, "min_surpluspct", "etc.smart.device.type.car.charger.config.min.excesspct"
+        )
+        changed |= self._set_dashboard_int_prop(
+            conn,
+            props,
+            "support_grid",
+            "etc.smart.device.type.car.charger.config.max.gridassistanceamps",
+        )
+
+        car_charger = smart_device.get("carCharger")
+        if isinstance(car_charger, dict):
+            changed |= self._merge_dashboard_car_charger_fallback(conn, car_charger)
+
+        return changed
+
+    def _merge_dashboard_led(self, station: StationState, smart_device: dict[str, Any]) -> bool:
+        changed = self._set_if_changed(
+            station, "dashboard_led_device_id", self._as_str(smart_device.get("id"))
+        )
+        props = smart_device.get("configurationProperties") or []
+        value = self._dashboard_prop_int(
+            props, "etc.smart.device.type.car.charger.led.config.brightness"
+        )
+        changed |= self._set_if_changed(station, "led_brightness", value)
+        return changed
+
+    def _dashboard_connector_for_module(
+        self,
+        data: IntegrationData,
+        module: dict[str, Any],
+        smart_device: dict[str, Any],
+    ) -> ConnectorState | None:
+        candidates = {
+            self._as_str(smart_device.get("uuid")),
+            self._device_uuid_from_dashboard_channel(smart_device),
+        }
+        for candidate in candidates:
+            if candidate and candidate in data.connectors:
+                return data.connectors[candidate]
+
+        position = self._as_int(module.get("position"))
+        if position is None:
+            return None
+        for conn in data.connectors.values():
+            if conn.connector_number == position:
+                return conn
+        return None
+
+    def _merge_dashboard_car_charger_fallback(
+        self, conn: ConnectorState, car_charger: dict[str, Any]
+    ) -> bool:
+        changed = False
+        changed |= self._set_if_empty(
+            conn, "connection_status", car_charger.get("connectionStatus")
+        )
+        changed |= self._set_if_empty(conn, "iec_status", car_charger.get("iecStatus"))
+        changed |= self._set_if_empty(conn, "raw_charging_mode", car_charger.get("chargingMode"))
+        changed |= self._set_if_empty(
+            conn, "optimization_strategy", car_charger.get("optimizationStrategy")
+        )
+
+        status = car_charger.get("status")
+        if isinstance(status, dict):
+            changed |= self._set_if_empty(conn, "status_current", status.get("current"))
+            changed |= self._set_if_empty(conn, "session_cause", status.get("current"))
+            if conn.stopped_by_cloud is None and status.get("stoppedByCloud") is not None:
+                changed |= self._set_if_changed(
+                    conn, "stopped_by_cloud", bool(status.get("stoppedByCloud"))
+                )
+
+        if conn.selected_mode is None or conn.ui_mode_base is None:
+            base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
+            changed |= self._set_if_empty(conn, "ui_mode_base", base)
+            changed |= self._set_if_empty(conn, "selected_mode", base)
+
+        changed |= self._update_evcc(conn)
+        return changed
+
+    @staticmethod
+    def _as_bool(value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        return None
+
+    @staticmethod
+    def _as_str(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    def _set_if_empty(self, obj: object, attr: str, value: Any) -> bool:
+        if value is None:
+            return False
+        cur = getattr(obj, attr, None)
+        if cur not in (None, "", "Initialize"):
+            return False
+        return self._set_if_changed(obj, attr, str(value))
+
+    def _set_dashboard_int_prop(
+        self, obj: object, props: list[Any], attr: str, spec_name: str
+    ) -> bool:
+        return self._set_if_changed(obj, attr, self._dashboard_prop_int(props, spec_name))
+
+    def _dashboard_prop_int(self, props: list[Any], spec_name: str) -> int | None:
+        raw = self._dashboard_prop_value(props, spec_name)
+        if isinstance(raw, dict):
+            if "Quantity" in raw and isinstance(raw["Quantity"], dict):
+                raw = raw["Quantity"].get("value")
+            elif "Integer" in raw:
+                raw = raw["Integer"]
+            elif "value" in raw:
+                raw = raw["value"]
+        return self._as_int(raw)
+
+    @staticmethod
+    def _dashboard_prop_value(props: list[Any], spec_name: str) -> Any:
+        for prop in props:
+            if not isinstance(prop, dict):
+                continue
+            spec = prop.get("spec") or {}
+            if not isinstance(spec, dict) or spec.get("name") != spec_name:
+                continue
+            if "value" in prop:
+                return prop.get("value")
+            values = prop.get("values")
+            if isinstance(values, list) and values:
+                return values[0]
+        return None
+
+    @staticmethod
+    def _device_uuid_from_dashboard_channel(smart_device: dict[str, Any]) -> str | None:
+        car_charger = smart_device.get("carCharger")
+        if not isinstance(car_charger, dict):
+            return None
+        channel = car_charger.get("chargingStateUpdateChannel")
+        if not isinstance(channel, dict):
+            return None
+        name = channel.get("name")
+        if not isinstance(name, str):
+            return None
+        marker = "/devices/"
+        if marker not in name:
+            return None
+        return name.split(marker, 1)[1].split("/", 1)[0] or None
+
+    def _merge_dashboard_capacity(self, station: StationState, payload: dict[str, Any]) -> bool:
+        changed = False
+        changed |= self._set_if_changed(
+            station, "capacity_protection_active", self._as_bool(payload.get("active"))
+        )
+        value = payload.get("capacityMaximumPower")
+        if value is not None:
+            with suppress(TypeError, ValueError):
+                changed |= self._set_if_changed(
+                    station, "capacity_maximum_power_kw", round(float(value), 1)
+                )
+        return changed
+
+    def _merge_dashboard_overload(self, station: StationState, payload: dict[str, Any]) -> bool:
+        changed = False
+        changed |= self._set_if_changed(
+            station, "overload_protection_active", self._as_bool(payload.get("active"))
+        )
+        changed |= self._set_if_changed(
+            station, "overload_maximum_load_a", self._as_int(payload.get("maximumLoad"))
+        )
+        return changed
 
     # =====================================================================
     # MQTT helpers + merge logic (call via mqtt_gateway callback)
@@ -507,7 +1018,6 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         ):
             return True
         return False
-
     @staticmethod
     def _derive_evcc_letter(iec: str | None, _charging_state: str | None = None) -> str | None:
         if not iec:
@@ -703,6 +1213,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             self._session_refresh_task,
             self._session_active_loop_task,
             self._session_final_refresh_task,
+            self._dashboard_refresh_task,
         ):
             if task is not None and not task.done():
                 task.cancel()
@@ -712,6 +1223,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 self._session_refresh_task,
                 self._session_active_loop_task,
                 self._session_final_refresh_task,
+                self._dashboard_refresh_task,
             )
             if task is not None
         ]
@@ -913,7 +1425,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             try:
                 recent_sessions = await self._async_get_recent_sessions()
-            except (TimeoutError, ClientError, RuntimeError, SmappeeAuthError) as err:
+            except (TimeoutError, ClientError, RuntimeError) as err:
                 _LOGGER.warning("Recent session refresh failed for %s: %s", reason, err)
                 return
 
@@ -1028,11 +1540,17 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         st,  # StationState
         payload: dict,
         power_idxs: list[int],
-        energy_idxs: list[int],
-        power_key_prefix: str,  # "grid" or "pv"
+        current_idxs: list[int],
+        energy_idxs: list[int] | str,
+        power_key_prefix: str | None = None,  # "grid" or "pv"
+        power_field: str | None = None,
     ) -> bool:
+        if power_key_prefix is None:
+            power_key_prefix = str(energy_idxs)
+            energy_idxs = current_idxs
+            current_idxs = []
         changed = False
-        active = payload.get("activePowerData") or []
+        active = _active_power_values(payload, power_field)
         currents_ma = payload.get("currentData") or []
         voltage_dv = payload.get("phaseVoltageData") or []
         imp_wh = payload.get("importActiveEnergyData") or []
@@ -1042,7 +1560,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         if p_ph:
             changed |= self._set_if_changed(st, f"{power_key_prefix}_power_phases", p_ph)
             changed |= self._set_if_changed(st, f"{power_key_prefix}_power_total", sum(p_ph))
-            i_ph = _amps_from_ma(_pick(currents_ma, power_idxs))
+            i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
             if i_ph:
                 changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
 
@@ -1053,17 +1571,24 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if v_ph:
                 changed |= self._set_if_changed(st, "grid_voltage_phases", v_ph)
 
-        if energy_idxs:
+        energy_idx_list = cast(list[int], energy_idxs)
+        if energy_idx_list:
             if power_key_prefix == "grid":
                 changed |= self._set_if_changed(
-                    st, "grid_energy_import_kwh", round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3)
+                    st,
+                    "grid_energy_import_kwh",
+                    round(sum(_pick(imp_wh, energy_idx_list)) / 1000.0, 3),
                 )
                 changed |= self._set_if_changed(
-                    st, "grid_energy_export_kwh", round(sum(_pick(exp_wh, energy_idxs)) / 1000.0, 3)
+                    st,
+                    "grid_energy_export_kwh",
+                    round(sum(_pick(exp_wh, energy_idx_list)) / 1000.0, 3),
                 )
             else:  # pv
                 changed |= self._set_if_changed(
-                    st, "pv_energy_import_kwh", round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3)
+                    st,
+                    "pv_energy_import_kwh",
+                    round(sum(_pick(imp_wh, energy_idx_list)) / 1000.0, 3),
                 )
         return changed
 
@@ -1072,15 +1597,20 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         conn,  # ConnectorState
         payload: dict,
         power_idxs: list[int],
-        energy_idxs: list[int],
+        current_idxs: list[int],
+        energy_idxs: list[int] | None = None,
+        power_field: str | None = None,
     ) -> bool:
+        if energy_idxs is None:
+            energy_idxs = current_idxs
+            current_idxs = []
         changed = False
-        active = payload.get("activePowerData") or []
+        active = _active_power_values(payload, power_field)
         currents_ma = payload.get("currentData") or []
         imp_wh = payload.get("importActiveEnergyData") or []
 
         p_ph = _pick(active, power_idxs)
-        i_ma = _pick(currents_ma, power_idxs)
+        i_ma = _pick(currents_ma, current_idxs or power_idxs)
         if energy_idxs:
             energy_values = _pick(imp_wh, energy_idxs)
             if energy_values and len(set(energy_values)) == 1:
@@ -1114,10 +1644,22 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         # Station groups
         changed |= self._apply_station_group(
-            st, payload, grid.get("power", []), grid.get("energy", []), "grid"
+            st,
+            payload,
+            grid.get("power", []),
+            grid.get("current", []),
+            grid.get("energy", []),
+            "grid",
+            grid.get("power_field"),
         )
         changed |= self._apply_station_group(
-            st, payload, pv.get("power", []), pv.get("energy", []), "pv"
+            st,
+            payload,
+            pv.get("power", []),
+            pv.get("current", []),
+            pv.get("energy", []),
+            "pv",
+            pv.get("power_field"),
         )
 
         # Connectors
@@ -1126,7 +1668,12 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             if not conn:
                 continue
             changed |= self._apply_connector_values(
-                conn, payload, m.get("power", []), m.get("energy", [])
+                conn,
+                payload,
+                m.get("power", []),
+                m.get("current", []),
+                m.get("energy", []),
+                m.get("power_field"),
             )
 
         # Aggregate house consumption (positive load behind meter). Allow real zero.

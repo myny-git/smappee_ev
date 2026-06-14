@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 from typing import cast
@@ -9,9 +9,9 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
-from .api_client import SmappeeApiClient
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry
+from .device_handle import SmappeeDeviceHandle
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
     return rt, _only_or_single_sid(rt.sites)
 
 
-def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeApiClient | None:
+def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeDeviceHandle | None:
     if not rt or sid is None:
         return None
     site = rt.sites.get(sid) or {}
@@ -140,8 +140,8 @@ def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeApiCli
     return first.get("station_client") if first else None
 
 
-def _connector_clients_for_site(site: dict) -> list[SmappeeApiClient]:
-    conns: list[SmappeeApiClient] = []
+def _connector_clients_for_site(site: dict) -> list[SmappeeDeviceHandle]:
+    conns: list[SmappeeDeviceHandle] = []
     for bucket in (site.get("stations") or {}).values():
         conns.extend(list((bucket.get("connector_clients") or {}).values()))
     return conns
@@ -149,7 +149,7 @@ def _connector_clients_for_site(site: dict) -> list[SmappeeApiClient]:
 
 def get_connector_client(
     rt: RuntimeData | None, sid: int | None, connector_id: int | None
-) -> SmappeeApiClient | None:
+) -> SmappeeDeviceHandle | None:
     if not rt or sid is None:
         return None
     site = rt.sites.get(sid) or {}
@@ -164,13 +164,13 @@ def get_connector_client(
     return None
 
 
-def _client_station_serial(client: SmappeeApiClient) -> str:
+def _client_station_serial(client: SmappeeDeviceHandle) -> str:
     return str(
         getattr(client, "charging_station_serial", None) or getattr(client, "serial", "") or ""
     ).strip()
 
 
-def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> SmappeeApiClient | None:
+def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> SmappeeDeviceHandle | None:
     """Resolve an API 2 connector using charging station serial and connector position.
 
     API 2 uses /chargingstations/{serial}/connectors/{position}/mode, so service
@@ -191,7 +191,7 @@ def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> Smappee
         for entry in _iter_loaded_entries(hass):
             runtimes.append(entry.runtime_data)
 
-    matches: list[SmappeeApiClient] = []
+    matches: list[SmappeeDeviceHandle] = []
     seen: set[int] = set()
     for rt in runtimes:
         if not rt:
@@ -218,7 +218,7 @@ def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> Smappee
     return None
 
 
-def _get_connector_state(rt: RuntimeData | None, client: SmappeeApiClient) -> ConnectorState | None:
+def _get_connector_state(rt: RuntimeData | None, client: SmappeeDeviceHandle) -> ConnectorState | None:
     """Return the live ConnectorState for *client* from its coordinator, or None."""
     if not rt:
         return None
@@ -235,9 +235,31 @@ def _get_connector_state(rt: RuntimeData | None, client: SmappeeApiClient) -> Co
     return None
 
 
+def _schedule_dashboard_refresh_for_client(
+    hass: HomeAssistant, client: SmappeeDeviceHandle
+) -> None:
+    """Schedule the owning coordinator to refresh slow Dashboard data after a write."""
+    client_uuid = getattr(client, "smart_device_uuid", None)
+    for entry in _iter_loaded_entries(hass):
+        for site in entry.runtime_data.sites.values():
+            for bucket in (site.get("stations") or {}).values():
+                coord = bucket.get("coordinator")
+                if coord is None:
+                    continue
+                if bucket.get("station_client") is client:
+                    coord.async_schedule_dashboard_refresh()
+                    return
+                if client in (bucket.get("connector_clients") or {}).values():
+                    coord.async_schedule_dashboard_refresh()
+                    return
+                if client_uuid and client_uuid in getattr(coord.data, "connectors", {}):
+                    coord.async_schedule_dashboard_refresh()
+                    return
+
+
 def _connector_current_range(
     rt: RuntimeData | None,
-    client: SmappeeApiClient,
+    client: SmappeeDeviceHandle,
 ) -> tuple[int, int]:
     """Return (min_current, max_current) from live ConnectorState, or defaults."""
     conn_state = _get_connector_state(rt, client)
@@ -290,6 +312,7 @@ async def async_handle_station_service(
             method_name=method_name,
             error=err,
         ) from err
+    _schedule_dashboard_refresh_for_client(hass, client)
 
 
 async def async_handle_connector_service(
@@ -331,6 +354,7 @@ async def async_handle_connector_service(
             method_name=method_name,
             error=err,
         ) from err
+    _schedule_dashboard_refresh_for_client(hass, client)
 
     # Mode reset handled by coordinator state logic; client is stateless now.
 
@@ -374,6 +398,7 @@ async def async_handle_connector_service_api2(
             method_name=method_name,
             error=err,
         ) from err
+    _schedule_dashboard_refresh_for_client(hass, client)
 
 
 # ----------------------------
@@ -585,3 +610,4 @@ async def unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, "set_charging_mode")
     hass.services.async_remove(DOMAIN, "set_charging_mode_chargingstations")
     hass.services.async_remove(DOMAIN, "set_current")
+

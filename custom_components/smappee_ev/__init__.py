@@ -2,7 +2,7 @@ import asyncio
 from datetime import timedelta
 from inspect import isawaitable
 import logging
-from typing import cast
+from typing import Any, cast
 
 from aiohttp import ClientError, ClientSession
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
@@ -13,13 +13,18 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
-from . import discovery
-from .api_client import SmappeeApiClient
-from .const import CONF_PASSWORD, DOMAIN, UPDATE_INTERVAL_DEFAULT
+from .const import (
+    CONF_DASHBOARD_REFRESH_TOKEN,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    DOMAIN,
+    UPDATE_INTERVAL_DEFAULT,
+)
 from .coordinator import SmappeeCoordinator
+from .dashboard_client import SmappeeDashboardClient
 from .data import RuntimeData, SmappeeEvConfigEntry
+from .device_handle import SmappeeDeviceHandle
 from .mqtt_gateway import SmappeeMqtt
-from .oauth import OAuth2Client, SmappeeAuthError
 from .services import register_services, unregister_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +56,8 @@ def _is_station(dev: dict) -> bool:
 
 def _is_connector(dev: dict) -> bool:
     """True if device is a CARCHARGER smartdevice."""
+    if isinstance(dev.get("carCharger"), dict):
+        return True
     t = dev.get("type")
     if isinstance(t, dict):
         return (t.get("category") or "").upper() == "CARCHARGER"
@@ -59,11 +66,16 @@ def _is_connector(dev: dict) -> bool:
 
 def _safe_str(val) -> str | None:
     """Convert to stripped string or None if not possible."""
+    if val is None:
+        return None
     try:
         s = str(val)
     except (TypeError, ValueError):
         return None
-    return s.strip() or None
+    s = s.strip()
+    if s.lower() in {"none", "null"}:
+        return None
+    return s or None
 
 
 def _find_in(dev: dict, *keys: str) -> str | None:
@@ -84,6 +96,39 @@ def _find_in(dev: dict, *keys: str) -> str | None:
                 if _safe_str(v):
                     return _safe_str(v)
     return None
+
+
+def _uuid_from_dashboard_channel(smart_device: dict[str, Any]) -> str | None:
+    car_charger = smart_device.get("carCharger")
+    if not isinstance(car_charger, dict):
+        return None
+    channel = car_charger.get("chargingStateUpdateChannel")
+    if isinstance(channel, dict):
+        channel_name = _safe_str(channel.get("name"))
+    else:
+        channel_name = _safe_str(channel)
+    if not channel_name:
+        return None
+    marker = "/devices/"
+    if marker not in channel_name:
+        return None
+    return channel_name.split(marker, 1)[1].split("/", 1)[0] or None
+
+
+def _device_uuid(dev: dict[str, Any]) -> str | None:
+    return (
+        _safe_str(dev.get("uuid"))
+        or _safe_str(dev.get("smartDeviceUuid"))
+        or _uuid_from_dashboard_channel(dev)
+    )
+
+
+def _connector_uuid(dev: dict[str, Any]) -> str | None:
+    return _uuid_from_dashboard_channel(dev) or _device_uuid(dev)
+
+
+def _station_serial(dev: dict[str, Any]) -> str | None:
+    return _find_in(dev, "serialNumber", "serial") or _device_uuid(dev)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -111,9 +156,20 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             updated = True
         version = 5
 
-    if data.get("refresh_token") and CONF_PASSWORD in data:
+    if data.get(CONF_DASHBOARD_REFRESH_TOKEN) and CONF_PASSWORD in data:
         data.pop(CONF_PASSWORD)
         updated = True
+
+    for old_key in (
+        "client_id",
+        "client_secret",
+        "access_token",
+        "refresh_token",
+        "token_expires_at",
+    ):
+        if old_key in data:
+            data.pop(old_key)
+            updated = True
 
     if updated or version != entry.version:
         hass.config_entries.async_update_entry(entry, data=data, options=options, version=version)
@@ -131,62 +187,270 @@ def _split_devices(devices: list[dict]) -> tuple[list[dict], list[dict]]:
     return stations, cars
 
 
-async def _fetch_metering_cfg(
-    oauth_client, session, sid, serial_str, station_devs
-) -> dict[str, dict]:
-    """Return {station_serial: {connectors{uuid:{id,position}}}}"""
-    try:
-        tmp_client = SmappeeApiClient(
-            oauth_client,
-            serial_str,
-            _safe_str(station_devs[0].get("uuid")) or "station",
-            _safe_str(station_devs[0].get("id")) or "0",
-            sid,
-            session=session,
-            is_station=True,
+def _dashboard_client_configured(dashboard_client: SmappeeDashboardClient | None) -> bool:
+    if dashboard_client is None:
+        return False
+    return bool(
+        getattr(dashboard_client, "_token", None)
+        or getattr(dashboard_client, "refresh_token", None)
+        or (
+            getattr(dashboard_client, "username", None)
+            and getattr(dashboard_client, "password", None)
         )
-        cfg = await tmp_client.async_get_metering_configuration()
-    except (ClientError, ValueError, KeyError, TimeoutError) as err:
-        _LOGGER.warning("Failed to parse meteringconfiguration for %s: %s", sid, err)
-        return {}
+    )
+
+
+def _charging_station_from_service_location(item: dict[str, Any]) -> dict[str, Any]:
+    charging_station = item.get("chargingStation")
+    if not isinstance(charging_station, dict):
+        charging_station = item.get("chargingstation")
+    if isinstance(charging_station, dict):
+        return charging_station
+
+    charging_stations = item.get("chargingStations") or item.get("chargingstations")
+    if isinstance(charging_stations, list):
+        return next((station for station in charging_stations if isinstance(station, dict)), {})
+    return {}
+
+
+def _normalize_dashboard_service_location(
+    item: dict[str, Any], *, allow_non_charging_function_type: bool = False
+) -> dict[str, Any] | None:
+    function_type = _safe_str(item.get("functionType"))
+    charging_station = _charging_station_from_service_location(item)
+    if (
+        function_type
+        and function_type.upper() != "CHARGINGSTATION"
+        and not allow_non_charging_function_type
+        and not charging_station
+    ):
+        return None
+
+    sid = item.get("serviceLocationId") or item.get("id") or item.get("locationId")
+    serial = (
+        _safe_str(charging_station.get("serialNumber"))
+        or _safe_str(charging_station.get("serial"))
+        or _safe_str(item.get("deviceSerialNumber"))
+        or _safe_str(item.get("serialNumber"))
+    )
+    if sid is None:
+        return None
+
+    suuid = item.get("serviceLocationUuid") or item.get("uuid")
+    return {
+        "serviceLocationId": sid,
+        "serviceLocationUuid": suuid,
+        "deviceSerialNumber": serial,
+        "chargingStation": charging_station,
+        "functionType": function_type,
+        "name": item.get("name"),
+    }
+
+
+async def _dashboard_discover_service_locations(
+    dashboard_client: SmappeeDashboardClient | None,
+) -> list[dict[str, Any]] | None:
+    if not _dashboard_client_configured(dashboard_client):
+        return None
+    if dashboard_client is None:
+        return None
+    try:
+        locations = await dashboard_client.async_get_service_locations_full_details()
+    except asyncio.CancelledError:
+        raise
+    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        _LOGGER.warning("Dashboard service location discovery failed: %s", err)
+        raise
+
+    normalized = [
+        loc
+        for item in locations or []
+        if isinstance(item, dict)
+        for loc in [_normalize_dashboard_service_location(item)]
+        if loc is not None
+    ]
+    if normalized:
+        return normalized
+
+    fallback = [
+        loc
+        for item in locations or []
+        if isinstance(item, dict)
+        for loc in [
+            _normalize_dashboard_service_location(item, allow_non_charging_function_type=True)
+        ]
+        if loc is not None
+    ]
+    if fallback:
+        _LOGGER.debug(
+            "Dashboard discovery found no CHARGINGSTATION functionType entries; "
+            "trying %d service locations without functionType filtering",
+            len(fallback),
+        )
+    return fallback
+
+
+async def _dashboard_fetch_devices(
+    dashboard_client: SmappeeDashboardClient | None, sid: int | str
+) -> list[dict[str, Any]] | None:
+    if not _dashboard_client_configured(dashboard_client):
+        return None
+    if dashboard_client is None:
+        return None
+    try:
+        devices = await dashboard_client.async_get_smart_devices(sid)
+    except asyncio.CancelledError:
+        raise
+    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        _LOGGER.warning("Dashboard smart device discovery failed for %s: %s", sid, err)
+        return []
+    return devices if isinstance(devices, list) else []
+
+
+async def _fetch_dashboard_connector_mapping(
+    dashboard_client: SmappeeDashboardClient | None, station_devs: list[dict]
+) -> dict[str, dict] | None:
+    if not _dashboard_client_configured(dashboard_client):
+        return None
+    if dashboard_client is None:
+        return None
 
     out: dict[str, dict] = {}
-    for st in (cfg or {}).get("chargingStations", []) or []:
-        st_serial = _safe_str(st.get("serialNumber")) or _safe_str(st.get("serial"))
-        if not st_serial:
+    for station in station_devs:
+        station_serial = _station_serial(station)
+        if not station_serial:
             continue
-        # Only stations at this site
-        # -id == sid
-        # or connecSerialNumber == deviceserialNumber
-        st_id = _safe_str(st.get("id"))
-        connect_sn = _safe_str(st.get("connectSerialNumber"))
-        if not (st_id == _safe_str(sid) or connect_sn == serial_str):
+        try:
+            details = await dashboard_client.async_get_charging_station_details(station_serial)
+        except asyncio.CancelledError:
+            raise
+        except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+            _LOGGER.warning(
+                "Dashboard charging station details failed for %s: %s", station_serial, err
+            )
             continue
-        bucket = out.setdefault(st_serial, {"connectors": {}})
-        for chg in st.get("chargers", []) or []:
-            cuuid = _safe_str(chg.get("uuid"))
-            if not cuuid:
+        if not isinstance(details, dict):
+            continue
+        bucket = out.setdefault(station_serial, {"connectors": {}})
+        for module in details.get("modules") or []:
+            if not isinstance(module, dict):
                 continue
-            bucket["connectors"][cuuid] = {
-                "id": _safe_str(chg.get("id")) or _safe_str(chg.get("smartDeviceId")),
-                "position": chg.get("position"),
+            smart_device = module.get("smartDevice")
+            if not isinstance(smart_device, dict) or not _is_connector(smart_device):
+                continue
+            connector_uuid = _connector_uuid(smart_device)
+            if not connector_uuid:
+                continue
+            bucket["connectors"][connector_uuid] = {
+                "id": _safe_str(smart_device.get("id"))
+                or _safe_str(smart_device.get("smartDeviceId")),
+                "position": module.get("position"),
+                "smart_device": smart_device,
             }
     return out
 
 
-def _make_station_clients(
-    oauth_client, serial_str, sid, session, station_devs: list[dict]
+def _fallback_dashboard_connector_mapping(
+    station_devs: list[dict], car_devs: list[dict]
 ) -> dict[str, dict]:
+    if len(station_devs) != 1:
+        return {}
+    station_serial = _station_serial(station_devs[0])
+    if not station_serial:
+        return {}
+
+    connectors: dict[str, dict] = {}
+    for index, car in enumerate(car_devs, start=1):
+        connector_uuid = _connector_uuid(car)
+        if not connector_uuid:
+            continue
+        connectors[connector_uuid] = {
+            "id": _safe_str(car.get("id")) or _safe_str(car.get("smartDeviceId")),
+            "position": car.get("connectorNumber") or car.get("position") or index,
+        }
+    return {station_serial: {"connectors": connectors}} if connectors else {}
+
+
+def _normalize_connector_mapping_station_keys(
+    mapping: dict[Any, dict], fallback_station_serial: str | None
+) -> dict[str, dict]:
+    """Move connector buckets with missing station keys under a usable station serial."""
+    normalized: dict[str, dict] = {}
+    orphan_connectors: dict[str, dict] = {}
+
+    for station_serial, bucket in mapping.items():
+        if not isinstance(bucket, dict):
+            continue
+        connectors = bucket.get("connectors") or {}
+        key = _safe_str(station_serial)
+        if not key:
+            orphan_connectors.update(connectors)
+            continue
+        target = normalized.setdefault(key, {"connectors": {}})
+        target["connectors"].update(connectors)
+
+    if orphan_connectors:
+        fallback_key = _safe_str(fallback_station_serial) or next(iter(normalized), None)
+        if fallback_key:
+            target = normalized.setdefault(fallback_key, {"connectors": {}})
+            target["connectors"].update(orphan_connectors)
+
+    return normalized
+
+
+def _station_devices_from_connector_mapping(mapping: dict[str, dict]) -> list[dict[str, Any]]:
+    return [
+        {
+            "uuid": station_serial,
+            "id": station_serial,
+            "serialNumber": station_serial,
+            "type": "CHARGINGSTATION",
+        }
+        for station_serial, bucket in mapping.items()
+        if _safe_str(station_serial) and (bucket.get("connectors") or {})
+    ]
+
+
+def _derive_service_serial(sl: dict[str, Any], station_devs: list[dict]) -> str | None:
+    """Return the best serial to use for site-level handles and MQTT."""
+    serial = _safe_str(sl.get("deviceSerialNumber")) or _safe_str(sl.get("serialNumber"))
+    if serial:
+        return serial
+
+    charging_station = sl.get("chargingStation")
+    if isinstance(charging_station, dict):
+        serial = _safe_str(charging_station.get("serialNumber")) or _safe_str(
+            charging_station.get("serial")
+        )
+        if serial:
+            return serial
+
+    for station in station_devs:
+        serial = _find_in(station, "serialNumber", "serial", "deviceSerialNumber")
+        if serial:
+            return serial
+
+    if len(station_devs) == 1:
+        return _device_uuid(station_devs[0])
+    return None
+
+
+def _make_station_clients(serial_str, sid, station_devs: list[dict]) -> dict[str, dict]:
     stations: dict[str, dict] = {}
     for sd in station_devs:
-        st_uuid = _safe_str(sd.get("uuid"))
-        st_id = _safe_str(sd.get("id"))
+        st_uuid = _device_uuid(sd)
+        st_id = _safe_str(sd.get("id")) or st_uuid
         if not st_uuid or not st_id:
             continue
 
-        st_serial = _find_in(sd, "serialNumber", "serial") or st_uuid
-        st_client = SmappeeApiClient(
-            oauth_client, serial_str, st_uuid, st_id, sid, session=session, is_station=True
+        st_serial = _station_serial(sd) or st_uuid
+        st_client = SmappeeDeviceHandle(
+            serial_str,
+            st_uuid,
+            st_id,
+            sid,
+            is_station=True,
+            charging_station_serial=st_serial,
         )
         stations[st_uuid] = {
             "station_client": st_client,
@@ -198,23 +462,49 @@ def _make_station_clients(
     return stations
 
 
-def _assign_connectors(stations, car_devs, mapping, oauth_client, serial_str, sid, session):
+def _make_station_clients_with_mapping_fallback(
+    serial_str: str,
+    sid: int | str,
+    station_devs: list[dict],
+    station_serial_to_connectors: dict[str, dict],
+    has_connector_mapping: bool,
+) -> dict[str, dict]:
+    stations = _make_station_clients(serial_str, sid, station_devs)
+    if stations or not has_connector_mapping:
+        return stations
+
+    mapping_station_devs = _station_devices_from_connector_mapping(station_serial_to_connectors)
+    if not mapping_station_devs:
+        return stations
+
+    _LOGGER.debug(
+        "Connector mapping at %s yielded no usable station smartdevices; "
+        "using %d station serials from Dashboard mapping",
+        sid,
+        len(mapping_station_devs),
+    )
+    return _make_station_clients(serial_str, sid, mapping_station_devs)
+
+
+def _assign_connectors(stations, car_devs, mapping, serial_str, sid):
     for bucket in stations.values():
         st_serial = bucket.get("serial")
         if not st_serial or st_serial not in mapping:
             continue
         for cuuid, info in mapping[st_serial]["connectors"].items():
-            src = next((d for d in car_devs if _safe_str(d.get("uuid")) == cuuid), None)
+            src = next((d for d in car_devs if _connector_uuid(d) == cuuid), None)
+            if src is None and isinstance(info, dict):
+                module_device = info.get("smart_device")
+                if isinstance(module_device, dict):
+                    src = module_device
             if not src:
                 continue
-            cid = _safe_str(src.get("id")) or info.get("id") or "0"
-            bucket["connector_clients"][cuuid] = SmappeeApiClient(
-                oauth_client,
+            cid = _safe_str(src.get("id")) or info.get("id") or cuuid
+            bucket["connector_clients"][cuuid] = SmappeeDeviceHandle(
                 serial_str,
                 cuuid,
                 cid,
                 sid,
-                session=session,
                 connector_number=info.get("position")
                 or src.get("connectorNumber")
                 or src.get("position")
@@ -223,7 +513,7 @@ def _assign_connectors(stations, car_devs, mapping, oauth_client, serial_str, si
             )
 
 
-def _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session):
+def _fallback_assign(stations, car_devs, serial_str, sid):
     total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
     if total_assigned > 0:
         return
@@ -236,32 +526,34 @@ def _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
     )
     subset = {}
     for d in car_devs:
-        cuuid = _safe_str(d.get("uuid"))
-        cid = _safe_str(d.get("id"))
+        cuuid = _connector_uuid(d)
+        cid = _safe_str(d.get("id")) or cuuid
         if not cuuid or not cid:
             continue
-        subset[cuuid] = SmappeeApiClient(
-            oauth_client,
+        subset[cuuid] = SmappeeDeviceHandle(
             serial_str,
             cuuid,
             cid,
             sid,
-            session=session,
             connector_number=d.get("connectorNumber") or d.get("position") or 1,
             charging_station_serial=st_serial,
         )
     stations[first_uuid]["connector_clients"] = subset
 
 
-async def _create_coordinators(hass, stations, update_interval, config_entry=None):
+async def _create_coordinators(
+    hass, stations, update_interval, config_entry=None, dashboard_client=None
+):
     for bucket in stations.values():
-        coord = SmappeeCoordinator(
-            hass,
-            station_client=bucket["station_client"],
-            connector_clients=bucket["connector_clients"],
-            update_interval=update_interval,
-            config_entry=config_entry,
-        )
+        kwargs = {
+            "station_client": bucket["station_client"],
+            "connector_clients": bucket["connector_clients"],
+            "update_interval": update_interval,
+            "config_entry": config_entry,
+        }
+        if dashboard_client is not None:
+            kwargs["dashboard_client"] = dashboard_client
+        coord = SmappeeCoordinator(hass, **kwargs)
         await coord.async_config_entry_first_refresh()
         bucket["coordinator"] = coord
         coord.async_start_session_tracking()
@@ -327,39 +619,67 @@ def _setup_mqtt(
 async def _prepare_site(
     hass: HomeAssistant,
     session: ClientSession,
-    oauth_client: OAuth2Client,
     sl: dict,
     update_interval: int,
     client_id_prefix: str,
     config_entry: SmappeeEvConfigEntry | None = None,
+    dashboard_client: SmappeeDashboardClient | None = None,
 ) -> tuple[dict[str, dict] | None, SmappeeMqtt | None]:
     """Build coordinators, station/connector clients and MQTT for one service location."""
 
     sid = sl["serviceLocationId"]
     suuid = sl.get("serviceLocationUuid")
-    serial_str = (sl.get("deviceSerialNumber") or "").strip()
-    if not serial_str:
-        _LOGGER.warning("Service location %s has no valid deviceSerialNumber; skipping", sid)
-        return None, None
 
-    devices = await discovery.async_fetch_devices(session, oauth_client, sid)
+    devices = await _dashboard_fetch_devices(dashboard_client, sid)
     if devices is None:
         return None, None
 
     station_devs, car_devs = _split_devices(devices)
-    if not station_devs and not car_devs:
-        _LOGGER.info("No chargers at %s (%s); skipping", sl.get("name") or f"Smappee {sid}", sid)
+
+    serial_str = _derive_service_serial(sl, station_devs)
+    if not station_devs and _dashboard_client_configured(dashboard_client):
+        if not serial_str:
+            _LOGGER.warning("Service location %s has no discoverable station serial; skipping", sid)
+            return None, None
+        station_devs = [
+            {
+                "uuid": serial_str,
+                "id": serial_str,
+                "serialNumber": serial_str,
+                "type": "CHARGINGSTATION",
+            }
+        ]
+        _LOGGER.debug(
+            "No CHARGINGSTATION smartdevice at %s (%s); using service-location serial %s",
+            sl.get("name"),
+            sid,
+            serial_str,
+        )
+    if not serial_str:
+        _LOGGER.warning("Service location %s has no discoverable station serial; skipping", sid)
         return None, None
     if not station_devs:
         _LOGGER.warning(
             "No CHARGINGSTATION smartdevice at %s (%s); skipping site", sl.get("name"), sid
         )
         return None, None
+    if not station_devs and not car_devs:
+        _LOGGER.info("No chargers at %s (%s); skipping", sl.get("name") or f"Smappee {sid}", sid)
+        return None, None
 
     # station_serial -> {connectors}
-    station_serial_to_connectors = await _fetch_metering_cfg(
-        oauth_client, session, sid, serial_str, station_devs
+    station_serial_to_connectors = await _fetch_dashboard_connector_mapping(
+        dashboard_client, station_devs
     )
+    if station_serial_to_connectors == {} and _dashboard_client_configured(dashboard_client):
+        station_serial_to_connectors = _fallback_dashboard_connector_mapping(station_devs, car_devs)
+    if station_serial_to_connectors is None:
+        station_serial_to_connectors = {}
+    else:
+        station_serial_to_connectors = _normalize_connector_mapping_station_keys(
+            station_serial_to_connectors,
+            serial_str,
+        )
 
     # Check if this service location actually has connector mappings.
     # Some Smappee monitor-only service locations return an empty mapping.
@@ -376,39 +696,60 @@ async def _prepare_site(
     # filter smartdevices who only belong in mappings to stations/connectors
     allowed_station_serials = set(station_serial_to_connectors.keys())
     if allowed_station_serials:
-        station_devs = [
+        filtered_station_devs = [
             sd
             for sd in station_devs
-            if (_find_in(sd, "serialNumber", "serial") or _safe_str(sd.get("uuid")))
-            in allowed_station_serials
+            if (_station_serial(sd) or _safe_str(sd.get("uuid"))) in allowed_station_serials
         ]
+        if filtered_station_devs:
+            station_devs = filtered_station_devs
+        elif has_connector_mapping:
+            station_devs = _station_devices_from_connector_mapping(station_serial_to_connectors)
+            _LOGGER.debug(
+                "Connector mapping at %s did not match discovered station identifiers; "
+                "using %d station serials from Dashboard mapping",
+                sid,
+                len(station_devs),
+            )
 
     allowed_connector_uuids = {
         cu for m in station_serial_to_connectors.values() for cu in (m.get("connectors") or {})
     }
     if allowed_connector_uuids:
-        car_devs = [cd for cd in car_devs if _safe_str(cd.get("uuid")) in allowed_connector_uuids]
+        car_devs = [cd for cd in car_devs if _connector_uuid(cd) in allowed_connector_uuids]
 
     # build station map with station_client + empty connector buckets
-    stations = _make_station_clients(oauth_client, serial_str, sid, session, station_devs)
+    stations = _make_station_clients_with_mapping_fallback(
+        serial_str,
+        sid,
+        station_devs,
+        station_serial_to_connectors,
+        has_connector_mapping,
+    )
 
     # fill connector buckets / fallback only when connector mapping exists
     if has_connector_mapping:
-        _assign_connectors(
-            stations, car_devs, station_serial_to_connectors, oauth_client, serial_str, sid, session
-        )
+        _assign_connectors(stations, car_devs, station_serial_to_connectors, serial_str, sid)
         total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
         if total_assigned == 0 and len(stations) == 1:
-            _fallback_assign(stations, car_devs, oauth_client, serial_str, sid, session)
+            _fallback_assign(stations, car_devs, serial_str, sid)
+            total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
         elif total_assigned == 0:
             _LOGGER.warning(
-                "Connector mapping exists at %s, but no connectors could be assigned; "
-                "not using fallback because multiple stations exist",
+                "Connector mapping exists at %s, but no connectors could be assigned "
+                "across %d station buckets",
                 sid,
+                len(stations),
             )
 
     # create coordinators per station
-    await _create_coordinators(hass, stations, update_interval, config_entry=config_entry)
+    await _create_coordinators(
+        hass,
+        stations,
+        update_interval,
+        config_entry=config_entry,
+        dashboard_client=dashboard_client,
+    )
 
     # MQTT (shared per site, but updates all station coordinators)
     mqtt = _setup_mqtt(hass, suuid, serial_str, sid, stations, client_id_prefix, update_interval)
@@ -418,6 +759,45 @@ async def _prepare_site(
         b["mqtt"] = mqtt
 
     return stations, mqtt
+
+
+def _create_dashboard_client(
+    hass: HomeAssistant, entry: SmappeeEvConfigEntry, session: ClientSession
+) -> SmappeeDashboardClient:
+    """Create the optional Dashboard API client for one config entry."""
+
+    def _store_dashboard_tokens(tokens: dict[str, object]) -> None:
+        data = dict(entry.data)
+        data.update(tokens)
+        if data.get(CONF_DASHBOARD_REFRESH_TOKEN):
+            data.pop(CONF_PASSWORD, None)
+        hass.config_entries.async_update_entry(entry, data=data)
+
+    return SmappeeDashboardClient(
+        username=entry.data.get(CONF_USERNAME),
+        password=entry.data.get(CONF_PASSWORD),
+        refresh_token=entry.data.get(CONF_DASHBOARD_REFRESH_TOKEN),
+        session=session,
+        token_update_callback=_store_dashboard_tokens,
+    )
+
+
+async def _load_dashboard_service_locations(
+    dashboard_client: SmappeeDashboardClient,
+) -> list[dict[str, Any]]:
+    try:
+        locations = await _dashboard_discover_service_locations(dashboard_client)
+    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        _LOGGER.debug("Transient error loading dashboard service locations: %s", err)
+        raise ConfigEntryNotReady(f"Loading service locations failed: {err}") from err
+
+    if locations is None:
+        _LOGGER.debug("Dashboard discovery is not configured yet (retry later)")
+        raise ConfigEntryNotReady("Dashboard API is not configured")
+    if not locations:
+        _LOGGER.debug("No candidate charging service locations found (retry later)")
+        raise ConfigEntryNotReady("No candidate charging service locations found")
+    return locations
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -437,29 +817,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     update_interval = UPDATE_INTERVAL_DEFAULT
 
-    def _store_tokens(tokens: dict[str, object]) -> None:
-        data = dict(entry.data)
-        data.update(tokens)
-        if data.get("refresh_token"):
-            data.pop(CONF_PASSWORD, None)
-        hass.config_entries.async_update_entry(entry, data=data)
-
-    oauth_client = OAuth2Client(entry.data, session=session, token_update_callback=_store_tokens)
+    dashboard_client = _create_dashboard_client(hass, entry, session)
 
     # 1) Discover sites
-    try:
-        with_serial = await discovery.async_discover_service_locations(session, oauth_client)
-    except SmappeeAuthError as err:
-        raise ConfigEntryAuthFailed(f"Auth failed: {err}") from err
-    except (ClientError, RuntimeError, ValueError) as err:
-        # Authentication / authorization problems should trigger reauth
-        if getattr(oauth_client, "access_token", None) is None:
-            raise ConfigEntryAuthFailed(f"Auth failed: {err}") from err
-        _LOGGER.debug("Transient error loading service locations: %s", err)
-        raise ConfigEntryNotReady(f"Loading service locations failed: {err}") from err
-    if not with_serial:
-        _LOGGER.debug("No service locations with deviceSerialNumber found (retry later)")
-        raise ConfigEntryNotReady("No service locations with deviceSerialNumber found")
+    with_serial = await _load_dashboard_service_locations(dashboard_client)
 
     sites: dict[int, dict] = {}
     mqtt_clients: dict[int, SmappeeMqtt] = {}
@@ -470,11 +831,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         _prepare_site(
             hass,
             session,
-            oauth_client,
             sl,
             update_interval,
             client_id_prefix,
             config_entry=entry,
+            dashboard_client=dashboard_client,
         )
         for sl in with_serial
     ]
@@ -484,8 +845,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             raise res
         if isinstance(res, ConfigEntryAuthFailed):
             raise res
-        if isinstance(res, SmappeeAuthError):
-            raise ConfigEntryAuthFailed(f"Smappee authentication failed: {res}") from res
         if isinstance(res, BaseException):
             _LOGGER.warning("Site %s preparation failed: %s", sl.get("serviceLocationId"), res)
             continue
@@ -508,9 +867,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     # Store runtime data only on the entry (preferred pattern); avoid duplicating in hass.data
     runtime = RuntimeData(
-        api=oauth_client,
+        api=dashboard_client,
         sites=sites,
         mqtt=cast(dict[int, object], mqtt_clients),
+        dashboard=dashboard_client,
     )
     entry.runtime_data = runtime
 

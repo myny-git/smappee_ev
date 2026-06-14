@@ -31,7 +31,7 @@ set_current:
           unit_of_measurement: "A"
 
 set_charging_mode:
-  description: "Set the charging mode (STANDARD, SMART, SOLAR) via the smartdevices endpoint."
+  description: "Set the charging mode (STANDARD, SMART, SOLAR) via the Dashboard v10 device action when available."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -62,7 +62,7 @@ set_charging_mode:
             - SOLAR
 
 set_charging_mode_chargingstations:
-  description: "Set the charging mode using the chargingstations endpoint (NORMAL, SMART, PAUSED)."
+  description: "Compatibility service: map NORMAL, SMART and PAUSED to Dashboard v10 charging actions."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -75,14 +75,14 @@ set_charging_mode_chargingstations:
       selector:
         text:
     connector_id:
-      description: "Connector number (position in the chargingstations endpoint)."
+      description: "Connector number."
       required: true
       example: 1
       selector:
         number:
           min: 1
     mode:
-      description: "Charging mode to apply (chargingstations endpoint)."
+      description: "Charging mode to apply."
       required: true
       selector:
         select:
@@ -108,7 +108,7 @@ set_charging_mode_chargingstations:
             - PERCENTAGE
 
 pause_charging:
-  description: "Pause charging on a connector (via smartdevices endpoint — recommended, matches Smappee app behaviour)."
+  description: "Pause charging on a connector via the Dashboard v10 device action when available."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -130,7 +130,7 @@ pause_charging:
           min: 1
 
 pause_charging_chargingstations:
-  description: "Pause charging via the chargingstations endpoint (legacy fallback — use pause_charging for normal operation)."
+  description: "Compatibility service: pause charging via the Dashboard v10 action."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."

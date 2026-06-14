@@ -14,10 +14,7 @@ from homeassistant.loader import async_get_integration
 from .data import RuntimeData, SmappeeEvConfigEntry
 
 REDACT_KEYS = {
-    "access_token",
-    "refresh_token",
-    "client_secret",
-    "client_id",
+    "dashboard_refresh_token",
     "password",
     "username",
     "token_type",

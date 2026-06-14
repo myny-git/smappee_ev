@@ -2,28 +2,22 @@
     "config": {
         "step": {
             "user": {
-                "description": "Voeg je Smappee Platform API-sleutel toe",
+                "description": "Voeg je Smappee Dashboard-inloggegevens toe",
                 "data": {
-                    "client_id": "Je API client-id",
-                    "client_secret": "Je client secret",
                     "username": "Je gebruikersnaam op het Smappee-dashboard",
                     "password": "Je wachtwoord op het Smappee-dashboard"
                 }
             },
             "reauth_confirm": {
-                "description": "Werk je Smappee API-inloggegevens bij om opnieuw te verbinden",
+                "description": "Werk je Smappee Dashboard-inloggegevens bij om opnieuw te verbinden",
                 "data": {
-                    "client_id": "Je API client-id",
-                    "client_secret": "Je client secret",
                     "username": "Je gebruikersnaam op het Smappee-dashboard",
                     "password": "Je wachtwoord op het Smappee-dashboard"
                 }
             },
             "reconfigure": {
-                "description": "Werk je Smappee API-inloggegevens bij",
+                "description": "Werk je Smappee Dashboard-inloggegevens bij",
                 "data": {
-                    "client_id": "Je API client-id",
-                    "client_secret": "Je client secret",
                     "username": "Je gebruikersnaam op het Smappee-dashboard",
                     "password": "Je wachtwoord op het Smappee-dashboard"
                 }
@@ -94,7 +88,7 @@
         },
         "pause_charging": {
             "name": "Pauzeer laden",
-            "description": "Pauzeer het laden voor de geselecteerde connector. Gebruikt het smartdevices API-eindpunt (aanbevolen — komt overeen met het app-gedrag).",
+            "description": "Pauzeer het laden voor de geselecteerde connector via de Dashboard v10 apparaat-actie wanneer beschikbaar.",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",
@@ -112,7 +106,7 @@
         },
         "pause_charging_chargingstations": {
             "name": "Pauzeer laden (chargingstations)",
-            "description": "Pauzeer het laden via het chargingstations API-eindpunt. Verouderde fallback — gebruik pause_charging voor normaal gebruik.",
+            "description": "Compatibiliteitsservice: pauzeer laden via de Dashboard v10-actie.",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",
@@ -192,7 +186,7 @@
         },
         "set_charging_mode_chargingstations": {
             "name": "Stel laadmodus in (chargingstations)",
-            "description": "Stel de laadmodus in via de chargingstations endpoint.",
+            "description": "Compatibiliteitsservice: zet NORMAL, SMART en PAUSED om naar Dashboard v10-laadacties.",
             "fields": {
                 "config_entry_id": {
                     "name": "Config entry ID",
@@ -204,7 +198,7 @@
                 },
                 "connector_id": {
                     "name": "Connector",
-                    "description": "Verplicht: connectorpositie die in de chargingstations-endpoint wordt gebruikt (bijvoorbeeld 1 of 2)."
+                    "description": "Verplicht: connectorpositie (bijvoorbeeld 1 of 2)."
                 },
                 "mode": {
                     "name": "Modus",

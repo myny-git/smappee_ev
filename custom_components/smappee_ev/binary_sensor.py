@@ -1,14 +1,14 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api_client import SmappeeApiClient
 from .base_entities import SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
+from .device_handle import SmappeeDeviceHandle
 from .helpers import station_serial
 
 PARALLEL_UPDATES = 0
@@ -31,7 +31,7 @@ async def async_setup_entry(
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
-            st_client: SmappeeApiClient = bucket["station_client"]
+            st_client: SmappeeDeviceHandle = bucket["station_client"]
             entities.append(SmappeeMqttConnectivity(coord, st_client, sid, st_uuid))
 
     async_add_entities(entities, False)
@@ -46,7 +46,7 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
     def __init__(
         self,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
     ) -> None:
@@ -72,3 +72,4 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
             "station_serial": self._serial,
             "station_uuid": self._station_uuid,
         }
+

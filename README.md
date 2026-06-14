@@ -31,21 +31,28 @@ This custom integration unlocks **more control over your Smappee** charger and c
 
 The main ambition is to have independent control of the Smappee EV charger via Home Assistant and eventually add those sensors in other energy management systems.
 
+### API architecture
+- MQTT remains the live data source for power, current, energy and fast charger state.
+- Smappee Dashboard REST API v10/v11 is used for discovery, station details, charger configuration, capacity protection, overload protection, recent sessions and charger availability.
+- Confirmed Dashboard v10/v11 calls are used for charging mode, start, pause, stop, percentage/current limit, LED brightness, min surplus percentage and availability when a Dashboard token is available.
+- The existing `app1pub.smappee.net/dev/v3` API is kept only for legacy entries without a Dashboard refresh token, and for the explicitly legacy `set_charging_mode_chargingstations` service.
+- Dashboard configuration data refreshes at most every 30 minutes, with a forced refresh shortly after supported dashboard writes.
+
 ### ✅ Charging Mode Control
-- UI controls (select, number slider, **Set Charging Mode** button) use the **`smartdevices` endpoint**, which matches the Smappee app buttons exactly and avoids the cloud-side session timeout issue (issue #103).
-- The EVCC switch uses the **`smartdevices` endpoint** for enable (`STANDARD`) and disable (`PAUSED`).
-- `smappee_ev.set_charging_mode` sets mode via the smartdevices endpoint: `STANDARD`, `SMART`, or `SOLAR`.
+- UI controls (select, number slider, **Set Charging Mode** button) use Dashboard v10 actions when a Dashboard token is available.
+- The EVCC switch uses Dashboard v10 actions for enable (`STANDARD`) and disable (`PAUSED`) when a Dashboard token is available.
+- `smappee_ev.set_charging_mode` sets mode via the same dashboard-first path: `STANDARD`, `SMART`, or `SOLAR`.
 - `smappee_ev.set_charging_mode_chargingstations` provides direct chargingstations control: `NORMAL`, `SMART`, or `PAUSED`, with an optional limit in `AMPERE` or `PERCENTAGE`.
 
 ### ✅ Direct Charger Control
-- Pause charging via **`smappee_ev.pause_charging`** (smartdevices endpoint — matches Smappee app, recommended) or **`smappee_ev.pause_charging_chargingstations`** (chargingstations endpoint, legacy fallback)
+- Pause charging via **`smappee_ev.pause_charging`** (Dashboard v10 action) or **`smappee_ev.pause_charging_chargingstations`** (explicit legacy chargingstations endpoint)
 - Stop charging sessions from Home Assistant
 - Set fixed charging **currents** (in Amps)
 - Change Wallbox availability (set available/unavailable)
 - Target a specific connector directly through the `chargingstations` endpoint when needed, which is especially useful in multi-station setups
 
 ### ✅ LED Brightness Control
-- Adjust LED ring brightness (%)
+- Adjust LED ring brightness (%) via Dashboard v10 config writes when a Dashboard token is available.
 
 ### ✅ Charger State Feedback
 - Real-time **Session State**:
@@ -106,7 +113,7 @@ During setup, you will be prompted to enter:
 ### 🧩 Entities
 More information on the specifics of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). Take care: names are subject to change as users can rename their Smappee device.
 
-All UI controls (select, buttons, number slider, EVCC switch) route through the `smartdevices` endpoint, which matches the Smappee app behaviour and avoids the cloud-side session timeout issue (#103). The `smappee_ev.set_charging_mode` service uses this same endpoint. The `smappee_ev.set_charging_mode_chargingstations` service provides direct access to the `chargingstations` endpoint when needed.
+All main UI controls (select, buttons, number slider, EVCC switch and LED light) now use Dashboard v10/v11 calls when Dashboard authentication and device ids are available. For entries with a stored Dashboard refresh token, the integration no longer silently falls back to app1pub v3 for those controls. The `smappee_ev.set_charging_mode_chargingstations` service still provides direct access to the legacy `chargingstations` endpoint when needed.
 
 This is the current version of the entities (for my EV Wall Home single connector)
 

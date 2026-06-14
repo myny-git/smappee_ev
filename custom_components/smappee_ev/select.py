@@ -1,13 +1,13 @@
-from homeassistant.components.select import SelectEntity
+﻿from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity
 from .const import CHARGING_MODES
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
+from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_label
 
 MODES = list(CHARGING_MODES)
@@ -27,7 +27,7 @@ async def async_setup_entry(
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
-            conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
+            conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
 
             for cuuid, client in (conns or {}).items():
                 entities.append(
@@ -54,7 +54,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         self,
         *,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
         connector_uuid: str,
@@ -99,6 +99,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
                 if data:
                     self.coordinator.async_set_updated_data(data)
             raise
+        self.coordinator.async_schedule_dashboard_refresh()
         self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:  # RestoreEntity
@@ -119,3 +120,4 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
                 updated_data = True
         if not updated_data:
             self.async_write_ha_state()
+

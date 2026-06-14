@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import logging
@@ -12,10 +12,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .api_client import SmappeeApiClient
 from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry, StationState
+from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,8 +39,8 @@ async def async_setup_entry(
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
-            st_client: SmappeeApiClient = bucket["station_client"]
-            conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
+            st_client: SmappeeDeviceHandle = bucket["station_client"]
+            conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
 
             if conns:
                 # Station-level switch
@@ -82,7 +82,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         self,
         *,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
         connector_uuid: str,
@@ -122,10 +122,10 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     # ---------- Actions ----------
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Set charging mode to STANDARD via the smartdevices endpoint."""
+        """Set charging mode to STANDARD via the configured API path."""
         try:
             _LOGGER.debug(
-                "Charging switch ON → STANDARD (sid=%s, uuid=%s)",
+                "Charging switch ON â†’ STANDARD (sid=%s, uuid=%s)",
                 self._sid,
                 self.connector_uuid,
             )
@@ -136,6 +136,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
                 data = self.coordinator.data
                 if data:
                     self.coordinator.async_set_updated_data(data)
+            self.coordinator.async_schedule_dashboard_refresh()
             self._is_on = True
             self.async_write_ha_state()
         except asyncio.CancelledError:
@@ -146,14 +147,15 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             raise
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Pause charging via the smartdevices endpoint."""
+        """Pause charging via the configured API path."""
         try:
             _LOGGER.debug(
-                "Charging switch OFF → pause (sid=%s, uuid=%s)",
+                "Charging switch OFF â†’ pause (sid=%s, uuid=%s)",
                 self._sid,
                 self.connector_uuid,
             )
             await self.api_client.pause_charging()
+            self.coordinator.async_schedule_dashboard_refresh()
             self._is_on = False
             self.async_write_ha_state()
         except asyncio.CancelledError:
@@ -178,7 +180,7 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
         self,
         *,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,  # <-- station client
+        api_client: SmappeeDeviceHandle,  # <-- station client
         sid: int,
         station_uuid: str,
     ) -> None:
@@ -225,6 +227,7 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
                 await self.api_client.set_available()
             else:
                 await self.api_client.set_unavailable()
+            self.coordinator.async_schedule_dashboard_refresh()
         except Exception as err:
             _LOGGER.warning("Set station availability failed (sid=%s): %s", self._sid, err)
             # revert optimistic update
@@ -232,3 +235,4 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
                 st.available = prev
                 self.coordinator.async_set_updated_data(data)
             raise
+

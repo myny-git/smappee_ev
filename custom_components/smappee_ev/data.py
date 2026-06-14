@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 
@@ -21,6 +22,9 @@ class ConnectorState:
     max_current: int = DEFAULT_MAX_CURRENT
     min_surpluspct: int | None = None
     support_grid: int | None = None
+    dashboard_device_id: str | None = None
+    dashboard_device_uuid: str | None = None
+    dashboard_device_name: str | None = None
 
     connection_status: str | None = None  # CONNECTED / DISCONNECTED
     configuration_errors: list[str] | None = None
@@ -54,8 +58,19 @@ class StationState:
     """Holds state for the station (applies to all connectors)."""
 
     led_brightness: int | None = None
+    dashboard_led_device_id: str | None = None
     available: bool = True
     api_available: bool = True
+    dashboard_available: bool | None = None
+    station_features: list[str] = field(default_factory=list)
+    maximum_capacity_a: int | None = None
+    offline_charging_enabled: bool | None = None
+    offline_failsafe_current_a: int | None = None
+    capacity_protection_active: bool | None = None
+    capacity_maximum_power_kw: float | None = None
+    overload_protection_active: bool | None = None
+    overload_maximum_load_a: int | None = None
+    dashboard_charging_station_details: dict[str, Any] | None = None
 
     mqtt_connected: bool | None = None
     last_mqtt_rx: float | None = None
@@ -93,9 +108,10 @@ class RuntimeData:
     Keeps the public objects platforms need without depending on hass.data.
     """
 
-    api: object  # OAuth2Client (kept generic to avoid circular import in type checking)
+    api: object  # Dashboard client (kept generic to avoid circular import in type checking)
     sites: dict[int, dict]
     mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt
+    dashboard: object | None = None
 
 
 type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]

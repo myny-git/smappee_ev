@@ -4,13 +4,14 @@ from collections.abc import Mapping
 import logging
 from typing import Any
 
+import aiohttp
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
-from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_PASSWORD, CONF_USERNAME, DOMAIN
-from .oauth import OAuth2Client
+from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME, DOMAIN
+from .dashboard_client import SmappeeDashboardClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,35 +28,36 @@ def _credentials_schema(defaults: Mapping[str, Any] | None = None) -> vol.Schema
     defaults = defaults or {}
     return vol.Schema(
         {
-            _required_with_optional_default(CONF_CLIENT_ID, defaults): str,
-            _required_with_optional_default(CONF_CLIENT_SECRET, defaults): str,
             _required_with_optional_default(CONF_USERNAME, defaults): str,
             vol.Required(CONF_PASSWORD): str,
         }
     )
 
 
-def _auth_entry_data(
-    user_input: dict[str, Any],
-    tokens: dict[str, Any],
-    token_expires_at: float | None,
-) -> dict[str, Any]:
-    """Return config-entry data for authenticated credentials."""
-    data = {
-        CONF_CLIENT_ID: user_input[CONF_CLIENT_ID],
-        CONF_CLIENT_SECRET: user_input[CONF_CLIENT_SECRET],
-        CONF_USERNAME: user_input[CONF_USERNAME],
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens.get("refresh_token"),
-    }
-    if token_expires_at is not None:
-        data["token_expires_at"] = token_expires_at
+async def _async_dashboard_auth_data(
+    user_input: dict[str, Any], session: Any
+) -> dict[str, Any] | None:
+    """Authenticate against Dashboard and return config-entry data."""
+    dashboard_tokens: dict[str, object] = {}
+    dashboard_client = SmappeeDashboardClient(
+        username=user_input.get(CONF_USERNAME),
+        password=user_input.get(CONF_PASSWORD),
+        refresh_token=None,
+        session=session,
+        token_update_callback=dashboard_tokens.update,
+    )
 
-    # Once a refresh token is available, avoid persisting the account password.
-    if not data["refresh_token"]:
-        data[CONF_PASSWORD] = user_input[CONF_PASSWORD]
-
-    return data
+    try:
+        if await dashboard_client.async_login():
+            refresh_token = dashboard_tokens.get(CONF_DASHBOARD_REFRESH_TOKEN)
+            if refresh_token:
+                return {
+                    CONF_USERNAME: user_input[CONF_USERNAME],
+                    CONF_DASHBOARD_REFRESH_TOKEN: refresh_token,
+                }
+    except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        _LOGGER.debug("Dashboard authentication unavailable during setup: %s", err)
+    return None
 
 
 class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -81,18 +83,15 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(step_id=step_id, data_schema=data_schema)
 
-        oauth_client = OAuth2Client(user_input, session=session)
         try:
-            tokens = await oauth_client.authenticate()
+            data = await _async_dashboard_auth_data(user_input, session)
         except Exception:
             _LOGGER.exception("Unexpected error during authentication")
             errors["base"] = "cannot_connect"
             return self.async_show_form(step_id=step_id, data_schema=data_schema, errors=errors)
-        if not tokens:
+        if data is None:
             errors["base"] = "auth_failed"
             return self.async_show_form(step_id=step_id, data_schema=data_schema, errors=errors)
-
-        data = _auth_entry_data(user_input, tokens, oauth_client.token_expires_at)
 
         unique = f"smappee_ev:{user_input[CONF_USERNAME]}"
         await self.async_set_unique_id(unique)

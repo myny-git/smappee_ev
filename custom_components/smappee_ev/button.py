@@ -6,10 +6,10 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api_client import SmappeeApiClient
-from .base_entities import SmappeeConnectorEntity
+from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
+from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ ACTION_ICONS = {
     "pause_charging": "mdi:pause-circle",
     "stop_charging": "mdi:stop-circle",
     "set_charging_mode": "mdi:tune-variant",
+    "restart_charging_station": "mdi:restart",
 }
 
 
@@ -37,7 +38,22 @@ async def async_setup_entry(
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
-            conns: dict[str, SmappeeApiClient] = bucket.get("connector_clients", {})
+            st_client: SmappeeDeviceHandle | None = bucket.get("station_client") or getattr(
+                coord, "station_client", None
+            )
+            conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
+
+            if st_client is not None:
+                entities.append(
+                    SmappeeStationActionButton(
+                        coordinator=coord,
+                        api_client=st_client,
+                        sid=sid,
+                        station_uuid=st_uuid,
+                        name="Restart charging station",
+                        action="restart_charging_station",
+                    )
+                )
 
             for cuuid, client in (conns or {}).items():
                 lbl = build_connector_label(client, cuuid).split(" ", 1)[1]  # get number / tail
@@ -85,6 +101,40 @@ async def async_setup_entry(
     async_add_entities(entities, False)
 
 
+class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
+    """Generic action button for a station using shared base entity."""
+
+    def __init__(
+        self,
+        *,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeDeviceHandle,
+        sid: int,
+        station_uuid: str,
+        name: str,
+        action: str,
+    ) -> None:
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix=f"button:{action}",
+            name=name,
+        )
+        self.api_client = api_client
+        self._action = action
+        self._attr_icon = ACTION_ICONS.get(action)
+
+    async def async_press(self) -> None:
+        """Execute the action on press."""
+        if self._action == "restart_charging_station":
+            await self.api_client.restart_charging_station()
+            self.coordinator.async_schedule_dashboard_refresh()
+        else:
+            _LOGGER.debug("Unknown station action for button: %s", self._action)
+
+
 class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
     """Generic action button for a connector using shared base entity."""
 
@@ -92,7 +142,7 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         self,
         *,
         coordinator: SmappeeCoordinator,
-        api_client: SmappeeApiClient,
+        api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
         connector_uuid: str,
@@ -143,10 +193,13 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
                 conn.selected_current_limit = cur
                 conn.selected_percentage_limit = pct
                 self.coordinator.async_set_updated_data(data)
+            self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "pause_charging":
             await self.api_client.pause_charging()
+            self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "stop_charging":
             await self.api_client.stop_charging()
+            self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "set_charging_mode":
             data = self.coordinator.data if self.coordinator else None
             mode = "STANDARD"
@@ -158,5 +211,6 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
                     or "STANDARD"
                 )
             await self.api_client.set_charging_mode(mode)
+            self.coordinator.async_schedule_dashboard_refresh()
         else:
             _LOGGER.debug("Unknown action for button: %s", self._action)
