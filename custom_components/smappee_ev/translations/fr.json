@@ -1,218 +1,218 @@
-﻿{
-    "config": {
-        "step": {
-            "user": {
-                "description": "Veuillez ajouter vos identifiants Smappee Dashboard",
-                "data": {
-                    "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
-                    "password": "Votre mot de passe sur le tableau de bord Smappee"
-                }
-            },
-            "reauth_confirm": {
-                "description": "Mettez a jour vos identifiants Smappee Dashboard pour vous reconnecter",
-                "data": {
-                    "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
-                    "password": "Votre mot de passe sur le tableau de bord Smappee"
-                }
-            },
-            "reconfigure": {
-                "description": "Mettez a jour vos identifiants Smappee Dashboard",
-                "data": {
-                    "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
-                    "password": "Votre mot de passe sur le tableau de bord Smappee"
-                }
-            }
-        },
-        "error": {
-            "auth_failed": "Autorisation Ã©chouÃ©e",
-            "cannot_connect": "Connexion impossible"
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Veuillez ajouter vos identifiants Smappee Dashboard",
+        "data": {
+          "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
+          "password": "Votre mot de passe sur le tableau de bord Smappee"
         }
+      },
+      "reauth_confirm": {
+        "description": "Mettez a jour vos identifiants Smappee Dashboard pour vous reconnecter",
+        "data": {
+          "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
+          "password": "Votre mot de passe sur le tableau de bord Smappee"
+        }
+      },
+      "reconfigure": {
+        "description": "Mettez a jour vos identifiants Smappee Dashboard",
+        "data": {
+          "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
+          "password": "Votre mot de passe sur le tableau de bord Smappee"
+        }
+      }
     },
-    "exceptions": {
-        "service_location_not_in_entry": {
-            "message": "La service location {service_location_id} n'appartient pas Ã  la config entry {config_entry_id}"
-        },
-        "multiple_service_locations": {
-            "message": "Plusieurs service locations dÃ©tectÃ©es. Indiquez service_location_id."
-        },
-        "no_station_client": {
-            "message": "Aucun station client trouvÃ© pour la config entry {config_entry_id} et la service location {service_location_id}."
-        },
-        "station_method_not_found": {
-            "message": "MÃ©thode station {method_name} introuvable."
-        },
-        "station_service_failed": {
-            "message": "Service station {method_name} Ã©chouÃ© : {error}"
-        },
-        "no_connector_client": {
-            "message": "Aucun connector client correspondant trouvÃ© pour la config entry {config_entry_id}, la service location {service_location_id}, le connector {connector_id}."
-        },
-        "connector_method_not_found": {
-            "message": "MÃ©thode connector {method_name} introuvable."
-        },
-        "connector_service_failed": {
-            "message": "Service connector {method_name} Ã©chouÃ© : {error}"
-        },
-        "no_api2_connector_client": {
-            "message": "Aucun API 2 connector client correspondant trouvÃ© pour la config entry {config_entry_id}, le numÃ©ro de sÃ©rie de station {charging_station_serial}, le connector {connector_id}. Indiquez charging_station_serial si plusieurs stations partagent la mÃªme position de connector."
-        },
-        "cannot_resolve_connector_client": {
-            "message": "Impossible de dÃ©terminer le connector client. Indiquez connector_id si le choix est ambigu."
-        },
-        "current_out_of_range": {
-            "message": "Le courant {current} A est hors de la plage {min_current}-{max_current} A pour ce connector."
-        }
-    },
-    "services": {
-        "start_charging": {
-            "name": "DÃ©marrer la charge",
-            "description": "DÃ©marre la charge. Si â€˜currentâ€™ nâ€™est pas fourni, le courant configurÃ© ou minimal sera utilisÃ©.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "ID de lâ€™entrÃ©e de configuration",
-                    "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-                },
-                "service_location_id": {
-                    "name": "ID du site (Service Location)",
-                    "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
-                },
-                "connector_id": {
-                    "name": "ID du connecteur",
-                    "description": "Optionnel : numÃ©ro de connecteur (1 ou 2, laisser vide sâ€™il nâ€™y en a quâ€™un)."
-                },
-                "current": {
-                    "name": "Courant (A)",
-                    "description": "Optionnel : courant de charge Ã  utiliser (en ampÃ¨res)."
-                }
-            }
-        },
-        "pause_charging": {
-            "name": "Mettre en pause la charge",
-            "description": "Met en pause la charge pour le connecteur sÃ©lectionnÃ© via l'action Dashboard v10 si disponible.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "ID de l'entrÃ©e de configuration",
-                    "description": "Optionnel : ID d'entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-                },
-                "service_location_id": {
-                    "name": "ID du site (Service Location)",
-                    "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
-                },
-                "connector_id": {
-                    "name": "ID du connecteur",
-                    "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
-                }
-            }
-        },
-        "pause_charging_chargingstations": {
-            "name": "Mettre en pause la charge (chargingstations)",
-            "description": "Met en pause la charge via le point de terminaison API chargingstations. Solution de repli hÃ©ritÃ©e â€” utilisez pause_charging pour un fonctionnement normal.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "ID de lâ€™entrÃ©e de configuration",
-                    "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-                },
-                "service_location_id": {
-                    "name": "ID du site (Service Location)",
-                    "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
-                },
-                "connector_id": {
-                    "name": "ID du connecteur",
-                    "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
-                }
-            }
-        },
-        "stop_charging": {
-            "name": "ArrÃªter la charge",
-            "description": "ArrÃªte la charge pour le connecteur sÃ©lectionnÃ©.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "ID de lâ€™entrÃ©e de configuration",
-                    "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-                },
-                "service_location_id": {
-                    "name": "ID du site (Service Location)",
-                    "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
-                },
-                "connector_id": {
-                    "name": "ID du connecteur",
-                    "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
-                }
-            }
-        },
-        "set_current": {
-            "name": "DÃ©finir le courant",
-            "description": "DÃ©finit le courant de charge en ampÃ¨res (1 dÃ©cimale). Converti en pourcentage entier le plus proche et envoyÃ© via setPercentageLimit. Le curseur et les entitÃ©s numÃ©riques se mettent Ã  jour immÃ©diatement.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "ID de l'entrÃ©e de configuration",
-                    "description": "Optionnel : ID d'entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-                },
-                "service_location_id": {
-                    "name": "ID du site (Service Location)",
-                    "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
-                },
-                "connector_id": {
-                    "name": "ID du connecteur",
-                    "description": "Optionnel : numÃ©ro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
-                },
-                "current": {
-                    "name": "Courant (A)",
-                    "description": "Courant de charge en ampÃ¨res (1 dÃ©cimale, ex. 11,4). LimitÃ© Ã  la plage minâ€“max configurÃ©e du connecteur."
-                }
-            }
-        },
-        "set_charging_mode": {
-            "name": "DÃ©finir le mode de charge",
-            "description": "DÃ©finit le mode de charge dâ€™un connecteur.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "ID de lâ€™entrÃ©e de configuration",
-                    "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-                },
-                "service_location_id": {
-                    "name": "ID du site (Service Location)",
-                    "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
-                },
-                "connector_id": {
-                    "name": "ID du connecteur",
-                    "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
-                },
-                "mode": {
-                    "name": "Mode",
-                    "description": "Mode de charge (STANDARD, SMART, SOLAR)."
-                }
-            }
-        },
-        "set_charging_mode_chargingstations": {
-            "name": "DÃ©finir le mode de charge (chargingstations)",
-            "description": "DÃ©finit le mode de charge via lâ€™endpoint chargingstations.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "ID de lâ€™entrÃ©e de configuration",
-                    "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-                },
-                "charging_station_serial": {
-                    "name": "NumÃ©ro de sÃ©rie de la borne",
-                    "description": "Optionnel : numÃ©ro de sÃ©rie de la borne de recharge. Ã€ fournir si plusieurs bornes partagent la mÃªme position de connecteur."
-                },
-                "connector_id": {
-                    "name": "ID du connecteur",
-                    "description": "Obligatoire : position du connecteur utilisÃ©e par lâ€™endpoint chargingstations (par exemple 1 ou 2)."
-                },
-                "mode": {
-                    "name": "Mode",
-                    "description": "Mode de charge (NORMAL, SMART, PAUSED)."
-                },
-                "limit": {
-                    "name": "Limite",
-                    "description": "Optionnel : valeur limite (utilisÃ©e uniquement lorsque le mode est NORMAL)."
-                },
-                "limit_unit": {
-                    "name": "UnitÃ© de la limite",
-                    "description": "Optionnel : unitÃ© de la limite lorsque le mode est NORMAL (AMPERE ou PERCENTAGE)."
-                }
-            }
-        }
+    "error": {
+      "auth_failed": "Autorisation Ã©chouÃ©e",
+      "cannot_connect": "Connexion impossible"
     }
+  },
+  "exceptions": {
+    "service_location_not_in_entry": {
+      "message": "La service location {service_location_id} n'appartient pas Ã  la config entry {config_entry_id}"
+    },
+    "multiple_service_locations": {
+      "message": "Plusieurs service locations dÃ©tectÃ©es. Indiquez service_location_id."
+    },
+    "no_station_client": {
+      "message": "Aucun station client trouvÃ© pour la config entry {config_entry_id} et la service location {service_location_id}."
+    },
+    "station_method_not_found": {
+      "message": "MÃ©thode station {method_name} introuvable."
+    },
+    "station_service_failed": {
+      "message": "Service station {method_name} Ã©chouÃ© : {error}"
+    },
+    "no_connector_client": {
+      "message": "Aucun connector client correspondant trouvÃ© pour la config entry {config_entry_id}, la service location {service_location_id}, le connector {connector_id}."
+    },
+    "connector_method_not_found": {
+      "message": "MÃ©thode connector {method_name} introuvable."
+    },
+    "connector_service_failed": {
+      "message": "Service connector {method_name} Ã©chouÃ© : {error}"
+    },
+    "no_api2_connector_client": {
+      "message": "Aucun API 2 connector client correspondant trouvÃ© pour la config entry {config_entry_id}, le numÃ©ro de sÃ©rie de station {charging_station_serial}, le connector {connector_id}. Indiquez charging_station_serial si plusieurs stations partagent la mÃªme position de connector."
+    },
+    "cannot_resolve_connector_client": {
+      "message": "Impossible de dÃ©terminer le connector client. Indiquez connector_id si le choix est ambigu."
+    },
+    "current_out_of_range": {
+      "message": "Le courant {current} A est hors de la plage {min_current}-{max_current} A pour ce connector."
+    }
+  },
+  "services": {
+    "start_charging": {
+      "name": "DÃ©marrer la charge",
+      "description": "DÃ©marre la charge. Si â€˜currentâ€™ nâ€™est pas fourni, le courant configurÃ© ou minimal sera utilisÃ©.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de lâ€™entrÃ©e de configuration",
+          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2, laisser vide sâ€™il nâ€™y en a quâ€™un)."
+        },
+        "current": {
+          "name": "Courant (A)",
+          "description": "Optionnel : courant de charge Ã  utiliser (en ampÃ¨res)."
+        }
+      }
+    },
+    "pause_charging": {
+      "name": "Mettre en pause la charge",
+      "description": "Met en pause la charge pour le connecteur sÃ©lectionnÃ© via l'action Dashboard v10 si disponible.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l'entrÃ©e de configuration",
+          "description": "Optionnel : ID d'entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "pause_charging_chargingstations": {
+      "name": "Mettre en pause la charge (chargingstations)",
+      "description": "Met en pause la charge via le point de terminaison API chargingstations. Solution de repli hÃ©ritÃ©e â€” utilisez pause_charging pour un fonctionnement normal.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de lâ€™entrÃ©e de configuration",
+          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "stop_charging": {
+      "name": "ArrÃªter la charge",
+      "description": "ArrÃªte la charge pour le connecteur sÃ©lectionnÃ©.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de lâ€™entrÃ©e de configuration",
+          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "set_current": {
+      "name": "DÃ©finir le courant",
+      "description": "DÃ©finit le courant de charge en ampÃ¨res (1 dÃ©cimale). Converti en pourcentage entier le plus proche et envoyÃ© via setPercentageLimit. Le curseur et les entitÃ©s numÃ©riques se mettent Ã  jour immÃ©diatement.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l'entrÃ©e de configuration",
+          "description": "Optionnel : ID d'entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
+        },
+        "current": {
+          "name": "Courant (A)",
+          "description": "Courant de charge en ampÃ¨res (1 dÃ©cimale, ex. 11,4). LimitÃ© Ã  la plage minâ€“max configurÃ©e du connecteur."
+        }
+      }
+    },
+    "set_charging_mode": {
+      "name": "DÃ©finir le mode de charge",
+      "description": "DÃ©finit le mode de charge dâ€™un connecteur.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de lâ€™entrÃ©e de configuration",
+          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Mode de charge (STANDARD, SMART, SOLAR)."
+        }
+      }
+    },
+    "set_charging_mode_chargingstations": {
+      "name": "DÃ©finir le mode de charge (chargingstations)",
+      "description": "DÃ©finit le mode de charge via lâ€™endpoint chargingstations.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de lâ€™entrÃ©e de configuration",
+          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+        },
+        "charging_station_serial": {
+          "name": "NumÃ©ro de sÃ©rie de la borne",
+          "description": "Optionnel : numÃ©ro de sÃ©rie de la borne de recharge. Ã€ fournir si plusieurs bornes partagent la mÃªme position de connecteur."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Obligatoire : position du connecteur utilisÃ©e par lâ€™endpoint chargingstations (par exemple 1 ou 2)."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Mode de charge (NORMAL, SMART, PAUSED)."
+        },
+        "limit": {
+          "name": "Limite",
+          "description": "Optionnel : valeur limite (utilisÃ©e uniquement lorsque le mode est NORMAL)."
+        },
+        "limit_unit": {
+          "name": "UnitÃ© de la limite",
+          "description": "Optionnel : unitÃ© de la limite lorsque le mode est NORMAL (AMPERE ou PERCENTAGE)."
+        }
+      }
+    }
+  }
 }
