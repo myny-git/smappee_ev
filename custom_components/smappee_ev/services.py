@@ -513,59 +513,69 @@ async def handle_set_current(call: ServiceCall) -> None:
 # ----------------------------
 
 
-START_CHARGING_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("service_location_id"): cv.positive_int,
-    vol.Optional("connector_id"): cv.positive_int,
-    # Only enforce a sane minimum; device specific max validated dynamically in handler
-    vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
-})
+START_CHARGING_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+        # Only enforce a sane minimum; device specific max validated dynamically in handler
+        vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
+    }
+)
 
-PAUSE_STOP_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("service_location_id"): cv.positive_int,
-    vol.Optional("connector_id"): cv.positive_int,
-})
+PAUSE_STOP_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+    }
+)
 
-SET_MODE_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("service_location_id"): cv.positive_int,
-    vol.Optional("connector_id"): cv.positive_int,
-    vol.Required("mode"): vol.All(
-        str,
-        str.upper,  # normalize to uppercase
-        vol.In(CHARGING_MODES),
-    ),
-})
+SET_MODE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+        vol.Required("mode"): vol.All(
+            str,
+            str.upper,  # normalize to uppercase
+            vol.In(CHARGING_MODES),
+        ),
+    }
+)
 
 
-SET_CURRENT_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("service_location_id"): cv.positive_int,
-    vol.Optional("connector_id"): cv.positive_int,
-    # Sane lower bound; upper bound validated dynamically against connector limits
-    vol.Required("current"): vol.All(vol.Coerce(float), vol.Range(min=1.0)),
-})
+SET_CURRENT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("service_location_id"): cv.positive_int,
+        vol.Optional("connector_id"): cv.positive_int,
+        # Sane lower bound; upper bound validated dynamically against connector limits
+        vol.Required("current"): vol.All(vol.Coerce(float), vol.Range(min=1.0)),
+    }
+)
 
-SET_MODE_API2_SCHEMA = vol.Schema({
-    vol.Optional("config_entry_id"): cv.string,
-    vol.Optional("charging_station_serial"): vol.Any(
-        vol.All(str, str.strip),
-        vol.All(vol.Coerce(int), vol.Coerce(str)),
-    ),
-    vol.Required("connector_id"): cv.positive_int,
-    vol.Required("mode"): vol.All(
-        str,
-        str.upper,
-        vol.In({"NORMAL", "SMART", "PAUSED"}),
-    ),
-    vol.Optional("limit"): vol.Coerce(int),
-    vol.Optional("limit_unit", default="AMPERE"): vol.All(
-        str,
-        str.upper,
-        vol.In({"AMPERE", "PERCENTAGE"}),
-    ),
-})
+SET_MODE_API2_SCHEMA = vol.Schema(
+    {
+        vol.Optional("config_entry_id"): cv.string,
+        vol.Optional("charging_station_serial"): vol.Any(
+            vol.All(str, str.strip),
+            vol.All(vol.Coerce(int), vol.Coerce(str)),
+        ),
+        vol.Required("connector_id"): cv.positive_int,
+        vol.Required("mode"): vol.All(
+            str,
+            str.upper,
+            vol.In({"NORMAL", "SMART", "PAUSED"}),
+        ),
+        vol.Optional("limit"): vol.Coerce(int),
+        vol.Optional("limit_unit", default="AMPERE"): vol.All(
+            str,
+            str.upper,
+            vol.In({"AMPERE", "PERCENTAGE"}),
+        ),
+    }
+)
 
 
 async def register_services(hass: HomeAssistant) -> None:
