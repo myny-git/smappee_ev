@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, cast
 
@@ -141,4 +141,3 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
         if not data:
             return None
         return (getattr(data, "connectors", None) or {}).get(self._connector_uuid)
-

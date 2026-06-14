@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from typing import cast
@@ -218,7 +218,9 @@ def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> Smappee
     return None
 
 
-def _get_connector_state(rt: RuntimeData | None, client: SmappeeDeviceHandle) -> ConnectorState | None:
+def _get_connector_state(
+    rt: RuntimeData | None, client: SmappeeDeviceHandle
+) -> ConnectorState | None:
     """Return the live ConnectorState for *client* from its coordinator, or None."""
     if not rt:
         return None
@@ -610,4 +612,3 @@ async def unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, "set_charging_mode")
     hass.services.async_remove(DOMAIN, "set_charging_mode_chargingstations")
     hass.services.async_remove(DOMAIN, "set_current")
-

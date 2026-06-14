@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -235,4 +235,3 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
                 st.available = prev
                 self.coordinator.async_set_updated_data(data)
             raise
-

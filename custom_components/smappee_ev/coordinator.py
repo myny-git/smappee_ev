@@ -1018,6 +1018,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         ):
             return True
         return False
+
     @staticmethod
     def _derive_evcc_letter(iec: str | None, _charging_state: str | None = None) -> str | None:
         if not iec:

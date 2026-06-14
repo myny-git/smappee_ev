@@ -1,4 +1,4 @@
-﻿from homeassistant.components.select import SelectEntity
+from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -120,4 +120,3 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
                 updated_data = True
         if not updated_data:
             self.async_write_ha_state()
-

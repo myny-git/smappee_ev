@@ -56,10 +56,7 @@ class SmappeeDeviceHandle:
             return False
         if not hasattr(dashboard, "refresh_token"):
             return True
-        return bool(
-            getattr(dashboard, "_token", None)
-            or getattr(dashboard, "refresh_token", None)
-        )
+        return bool(getattr(dashboard, "_token", None) or getattr(dashboard, "refresh_token", None))
 
     async def _try_dashboard_action(
         self, method_name: str, *args: Any, **kwargs: Any
@@ -79,14 +76,14 @@ class SmappeeDeviceHandle:
         except asyncio.CancelledError:
             raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
-            raise RuntimeError(f"Dashboard action {method_name} failed for device {device_id}") from err
+            raise RuntimeError(
+                f"Dashboard action {method_name} failed for device {device_id}"
+            ) from err
         if not success:
             raise RuntimeError(f"Dashboard action {method_name} returned no success")
         return True
 
-    async def _require_dashboard_action(
-        self, method_name: str, *args: Any, **kwargs: Any
-    ) -> bool:
+    async def _require_dashboard_action(self, method_name: str, *args: Any, **kwargs: Any) -> bool:
         """Run a Dashboard action and fail clearly when Dashboard metadata is missing."""
         if await self._try_dashboard_action(method_name, *args, **kwargs):
             return True

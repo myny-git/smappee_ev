@@ -417,4 +417,3 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeStationEntity, _BaseNumber):
         st.overload_maximum_load_a = maximum_load_a
         self.coordinator.async_set_updated_data(data)
         self.coordinator.async_schedule_dashboard_refresh()
-

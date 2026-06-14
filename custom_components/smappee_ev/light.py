@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
 
@@ -104,4 +104,3 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
             data.station.led_brightness = brightness
             self.coordinator.async_set_updated_data(data)
         self.coordinator.async_schedule_dashboard_refresh()
-

@@ -327,9 +327,7 @@ class SmappeeDashboardClient:
         value_dict: dict[str, Any],
     ) -> bool:
         payload = {
-            "configurationProperties": [
-                {"spec": {"name": property_name}, "values": [value_dict]}
-            ]
+            "configurationProperties": [{"spec": {"name": property_name}, "values": [value_dict]}]
         }
         return bool(
             await self._request(

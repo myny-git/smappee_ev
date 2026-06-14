@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
@@ -72,4 +72,3 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
             "station_serial": self._serial,
             "station_uuid": self._station_uuid,
         }
-
