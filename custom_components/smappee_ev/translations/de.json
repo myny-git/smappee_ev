@@ -1,218 +1,218 @@
-﻿{
-    "config": {
-        "step": {
-            "user": {
-                "description": "Bitte geben Sie Ihre Smappee-Dashboard-Zugangsdaten ein",
-                "data": {
-                    "username": "Ihr Benutzername im Smappee-Dashboard",
-                    "password": "Ihr Passwort im Smappee-Dashboard"
-                }
-            },
-            "reauth_confirm": {
-                "description": "Aktualisieren Sie Ihre Smappee-Dashboard-Zugangsdaten, um die Verbindung wiederherzustellen",
-                "data": {
-                    "username": "Ihr Benutzername im Smappee-Dashboard",
-                    "password": "Ihr Passwort im Smappee-Dashboard"
-                }
-            },
-            "reconfigure": {
-                "description": "Aktualisieren Sie Ihre Smappee-Dashboard-Zugangsdaten",
-                "data": {
-                    "username": "Ihr Benutzername im Smappee-Dashboard",
-                    "password": "Ihr Passwort im Smappee-Dashboard"
-                }
-            }
-        },
-        "error": {
-            "auth_failed": "Autorisierung fehlgeschlagen",
-            "cannot_connect": "Verbindung fehlgeschlagen"
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Bitte geben Sie Ihre Smappee-Dashboard-Zugangsdaten ein",
+        "data": {
+          "username": "Ihr Benutzername im Smappee-Dashboard",
+          "password": "Ihr Passwort im Smappee-Dashboard"
         }
+      },
+      "reauth_confirm": {
+        "description": "Aktualisieren Sie Ihre Smappee-Dashboard-Zugangsdaten, um die Verbindung wiederherzustellen",
+        "data": {
+          "username": "Ihr Benutzername im Smappee-Dashboard",
+          "password": "Ihr Passwort im Smappee-Dashboard"
+        }
+      },
+      "reconfigure": {
+        "description": "Aktualisieren Sie Ihre Smappee-Dashboard-Zugangsdaten",
+        "data": {
+          "username": "Ihr Benutzername im Smappee-Dashboard",
+          "password": "Ihr Passwort im Smappee-Dashboard"
+        }
+      }
     },
-    "exceptions": {
-        "service_location_not_in_entry": {
-            "message": "Service location {service_location_id} gehÃ¶rt nicht zu config entry {config_entry_id}"
-        },
-        "multiple_service_locations": {
-            "message": "Mehrere service locations gefunden. Geben Sie service_location_id an."
-        },
-        "no_station_client": {
-            "message": "Kein station client fÃ¼r config entry {config_entry_id} und service location {service_location_id} gefunden."
-        },
-        "station_method_not_found": {
-            "message": "Station-Methode {method_name} nicht gefunden."
-        },
-        "station_service_failed": {
-            "message": "Station-Service {method_name} fehlgeschlagen: {error}"
-        },
-        "no_connector_client": {
-            "message": "Kein passender connector client fÃ¼r config entry {config_entry_id}, service location {service_location_id}, connector {connector_id} gefunden."
-        },
-        "connector_method_not_found": {
-            "message": "Connector-Methode {method_name} nicht gefunden."
-        },
-        "connector_service_failed": {
-            "message": "Connector-Service {method_name} fehlgeschlagen: {error}"
-        },
-        "no_api2_connector_client": {
-            "message": "Kein passender API 2 connector client fÃ¼r config entry {config_entry_id}, Ladestationsseriennummer {charging_station_serial}, connector {connector_id} gefunden. Geben Sie charging_station_serial an, wenn mehrere Ladestationen dieselbe Connector-Position verwenden."
-        },
-        "cannot_resolve_connector_client": {
-            "message": "Connector client kann nicht ermittelt werden. Geben Sie connector_id an, wenn die Auswahl mehrdeutig ist."
-        },
-        "current_out_of_range": {
-            "message": "Strom {current} A liegt auÃŸerhalb des Bereichs {min_current}-{max_current} A fÃ¼r diesen Connector."
-        }
-    },
-    "services": {
-        "start_charging": {
-            "name": "Laden starten",
-            "description": "Startet den Ladevorgang. Wenn â€˜currentâ€™ nicht angegeben ist, wird der konfigurierte oder minimale Strom verwendet.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "Konfigurations-Eintrags-ID",
-                    "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-                },
-                "service_location_id": {
-                    "name": "Service-Location-ID",
-                    "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
-                },
-                "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Optional: Connector-Nummer (1 oder 2; leer lassen, wenn nur einer vorhanden ist)."
-                },
-                "current": {
-                    "name": "Strom (A)",
-                    "description": "Optional: zu verwendender Ladestrom (in Ampere)."
-                }
-            }
-        },
-        "pause_charging": {
-            "name": "Laden pausieren",
-            "description": "Pausiert den Ladevorgang fÃ¼r den ausgewÃ¤hlten Connector Ã¼ber die Dashboard v10 GerÃ¤teaktion, wenn verfÃ¼gbar.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "Konfigurations-Eintrags-ID",
-                    "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-                },
-                "service_location_id": {
-                    "name": "Service-Location-ID",
-                    "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
-                },
-                "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Optional: Connector-Nummer (1 oder 2)."
-                }
-            }
-        },
-        "pause_charging_chargingstations": {
-            "name": "Laden pausieren (chargingstations)",
-            "description": "Pausiert den Ladevorgang Ã¼ber den chargingstations-API-Endpunkt. Veralteter Fallback â€” fÃ¼r den normalen Betrieb bitte pause_charging verwenden.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "Konfigurations-Eintrags-ID",
-                    "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-                },
-                "service_location_id": {
-                    "name": "Service-Location-ID",
-                    "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
-                },
-                "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Optional: Connector-Nummer (1 oder 2)."
-                }
-            }
-        },
-        "stop_charging": {
-            "name": "Laden stoppen",
-            "description": "Stoppt den Ladevorgang fÃ¼r den ausgewÃ¤hlten Connector.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "Konfigurations-Eintrags-ID",
-                    "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-                },
-                "service_location_id": {
-                    "name": "Service-Location-ID",
-                    "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
-                },
-                "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Optional: Connector-Nummer (1 oder 2)."
-                }
-            }
-        },
-        "set_current": {
-            "name": "Strom setzen",
-            "description": "Setzt den Ladestrom in Ampere (1 Dezimalstelle). Wird in den nächsten ganzzahligen Prozentwert umgerechnet und über setPercentageLimit gesendet. Schieberegler und Zahlen-Entitäten werden sofort aktualisiert.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "Konfigurations-Eintrags-ID",
-                    "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
-                },
-                "service_location_id": {
-                    "name": "Service-Location-ID",
-                    "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
-                },
-                "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Optional: Connector-Nummer (1 oder 2; leer lassen, wenn nur einer vorhanden ist)."
-                },
-                "current": {
-                    "name": "Strom (A)",
-                    "description": "Ladestrom in Ampere (1 Dezimalstelle, z. B. 11,4). Wird auf den konfigurierten Min–Max-Bereich des Connectors begrenzt."
-                }
-            }
-        },
-        "set_charging_mode": {
-            "name": "Lademodus setzen",
-            "description": "Setzt den Lademodus eines Connectors.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "Konfigurations-Eintrags-ID",
-                    "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-                },
-                "service_location_id": {
-                    "name": "Service-Location-ID",
-                    "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
-                },
-                "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Optional: Connector-Nummer (1 oder 2)."
-                },
-                "mode": {
-                    "name": "Modus",
-                    "description": "Lademodus (STANDARD, SMART, SOLAR)."
-                }
-            }
-        },
-        "set_charging_mode_chargingstations": {
-            "name": "Lademodus setzen (chargingstations)",
-            "description": "Setzt den Lademodus Ã¼ber den chargingstations-Endpunkt.",
-            "fields": {
-                "config_entry_id": {
-                    "name": "Konfigurations-Eintrags-ID",
-                    "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-                },
-                "charging_station_serial": {
-                    "name": "Seriennummer der Ladestation",
-                    "description": "Optional: Seriennummer der Ladestation. Angeben, wenn mehrere Stationen dieselbe Connector-Position verwenden."
-                },
-                "connector_id": {
-                    "name": "Connector-ID",
-                    "description": "Erforderlich: Connector-Position, die im API-2-Endpunkt verwendet wird (z. B. 1 oder 2)."
-                },
-                "mode": {
-                    "name": "Modus",
-                    "description": "Lademodus (NORMAL, SMART, PAUSED)."
-                },
-                "limit": {
-                    "name": "Limit",
-                    "description": "Optional: Limit-Wert (wird nur verwendet, wenn der Modus NORMAL ist)."
-                },
-                "limit_unit": {
-                    "name": "Limit-Einheit",
-                    "description": "Optional: Einheit fÃ¼r Limit, wenn der Modus NORMAL ist (AMPERE oder PERCENTAGE)."
-                }
-            }
-        }
+    "error": {
+      "auth_failed": "Autorisierung fehlgeschlagen",
+      "cannot_connect": "Verbindung fehlgeschlagen"
     }
+  },
+  "exceptions": {
+    "service_location_not_in_entry": {
+      "message": "Service location {service_location_id} gehÃ¶rt nicht zu config entry {config_entry_id}"
+    },
+    "multiple_service_locations": {
+      "message": "Mehrere service locations gefunden. Geben Sie service_location_id an."
+    },
+    "no_station_client": {
+      "message": "Kein station client fÃ¼r config entry {config_entry_id} und service location {service_location_id} gefunden."
+    },
+    "station_method_not_found": {
+      "message": "Station-Methode {method_name} nicht gefunden."
+    },
+    "station_service_failed": {
+      "message": "Station-Service {method_name} fehlgeschlagen: {error}"
+    },
+    "no_connector_client": {
+      "message": "Kein passender connector client fÃ¼r config entry {config_entry_id}, service location {service_location_id}, connector {connector_id} gefunden."
+    },
+    "connector_method_not_found": {
+      "message": "Connector-Methode {method_name} nicht gefunden."
+    },
+    "connector_service_failed": {
+      "message": "Connector-Service {method_name} fehlgeschlagen: {error}"
+    },
+    "no_api2_connector_client": {
+      "message": "Kein passender API 2 connector client fÃ¼r config entry {config_entry_id}, Ladestationsseriennummer {charging_station_serial}, connector {connector_id} gefunden. Geben Sie charging_station_serial an, wenn mehrere Ladestationen dieselbe Connector-Position verwenden."
+    },
+    "cannot_resolve_connector_client": {
+      "message": "Connector client kann nicht ermittelt werden. Geben Sie connector_id an, wenn die Auswahl mehrdeutig ist."
+    },
+    "current_out_of_range": {
+      "message": "Strom {current} A liegt auÃŸerhalb des Bereichs {min_current}-{max_current} A fÃ¼r diesen Connector."
+    }
+  },
+  "services": {
+    "start_charging": {
+      "name": "Laden starten",
+      "description": "Startet den Ladevorgang. Wenn â€˜currentâ€™ nicht angegeben ist, wird der konfigurierte oder minimale Strom verwendet.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2; leer lassen, wenn nur einer vorhanden ist)."
+        },
+        "current": {
+          "name": "Strom (A)",
+          "description": "Optional: zu verwendender Ladestrom (in Ampere)."
+        }
+      }
+    },
+    "pause_charging": {
+      "name": "Laden pausieren",
+      "description": "Pausiert den Ladevorgang fÃ¼r den ausgewÃ¤hlten Connector Ã¼ber die Dashboard v10 GerÃ¤teaktion, wenn verfÃ¼gbar.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2)."
+        }
+      }
+    },
+    "pause_charging_chargingstations": {
+      "name": "Laden pausieren (chargingstations)",
+      "description": "Pausiert den Ladevorgang Ã¼ber den chargingstations-API-Endpunkt. Veralteter Fallback â€” fÃ¼r den normalen Betrieb bitte pause_charging verwenden.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2)."
+        }
+      }
+    },
+    "stop_charging": {
+      "name": "Laden stoppen",
+      "description": "Stoppt den Ladevorgang fÃ¼r den ausgewÃ¤hlten Connector.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2)."
+        }
+      }
+    },
+    "set_current": {
+      "name": "Strom setzen",
+      "description": "Setzt den Ladestrom in Ampere (1 Dezimalstelle). Wird in den nächsten ganzzahligen Prozentwert umgerechnet und über setPercentageLimit gesendet. Schieberegler und Zahlen-Entitäten werden sofort aktualisiert.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2; leer lassen, wenn nur einer vorhanden ist)."
+        },
+        "current": {
+          "name": "Strom (A)",
+          "description": "Ladestrom in Ampere (1 Dezimalstelle, z. B. 11,4). Wird auf den konfigurierten Min–Max-Bereich des Connectors begrenzt."
+        }
+      }
+    },
+    "set_charging_mode": {
+      "name": "Lademodus setzen",
+      "description": "Setzt den Lademodus eines Connectors.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2)."
+        },
+        "mode": {
+          "name": "Modus",
+          "description": "Lademodus (STANDARD, SMART, SOLAR)."
+        }
+      }
+    },
+    "set_charging_mode_chargingstations": {
+      "name": "Lademodus setzen (chargingstations)",
+      "description": "Setzt den Lademodus Ã¼ber den chargingstations-Endpunkt.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+        },
+        "charging_station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "Optional: Seriennummer der Ladestation. Angeben, wenn mehrere Stationen dieselbe Connector-Position verwenden."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Erforderlich: Connector-Position, die im API-2-Endpunkt verwendet wird (z. B. 1 oder 2)."
+        },
+        "mode": {
+          "name": "Modus",
+          "description": "Lademodus (NORMAL, SMART, PAUSED)."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Optional: Limit-Wert (wird nur verwendet, wenn der Modus NORMAL ist)."
+        },
+        "limit_unit": {
+          "name": "Limit-Einheit",
+          "description": "Optional: Einheit fÃ¼r Limit, wenn der Modus NORMAL ist (AMPERE oder PERCENTAGE)."
+        }
+      }
+    }
+  }
 }
