@@ -57,6 +57,11 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
             self._sid, self._serial, self._station_uuid, connector_label=self._connector_label
         )
 
+    @property
+    def _coordinator_available(self) -> bool:
+        """Return the base CoordinatorEntity availability state."""
+        return super().available
+
 
 class SmappeeStationEntity(SmappeeBaseEntity):
     """Base for station-scope entities (no connector)."""
@@ -102,14 +107,17 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
     ) -> None:
         self._connector_uuid = connector_uuid
         self._api = cast(SmappeeDeviceHandle, api)
-        self._sid = int(sid)
-        self._station_uuid = station_uuid
-        self._connector_uuid = connector_uuid
         self._unique_suffix = unique_suffix
-        connector_label = build_connector_id(
-            cast(SmappeeDeviceHandle, api), connector_uuid
+        sid_int = int(sid)
+        connector_label = build_connector_id(self._api, connector_uuid)
+        super().__init__(
+            coordinator,
+            sid_int,
+            station_uuid,
+            unique_suffix=unique_suffix,
+            connector_uuid=connector_uuid,
+            connector_label=connector_label,
         )
-        super().__init__(coordinator, self._sid, station_uuid, unique_suffix=unique_suffix, connector_uuid=connector_uuid, connector_label=connector_label)
 
     # Convenience accessors
     @property
@@ -144,7 +152,7 @@ class SmappeeConnectorMqttEntity(SmappeeConnectorEntity):
     @property
     def available(self) -> bool:
         """Return True when coordinator data exists and MQTT is not known down."""
-        if not SmappeeBaseEntity.available.fget(self):
+        if not self._coordinator_available:
             return False
         conn = self._conn_state
         if conn is None:

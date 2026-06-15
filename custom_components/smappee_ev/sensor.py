@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 from datetime import UTC, datetime
-import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -28,7 +27,6 @@ from .device_handle import SmappeeDeviceHandle
 from .helpers import safe_sum, update_total_increasing
 
 PARALLEL_UPDATES = 0
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(

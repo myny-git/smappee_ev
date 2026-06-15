@@ -272,12 +272,12 @@ def parse_mqtt_channel_specs_from_highlevel(
     update_specs = config.get("updateSpecs")
     if isinstance(update_specs, dict):
         for key, role in update_spec_roles.items():
-            spec = update_specs.get(key)
-            if not isinstance(spec, dict):
+            update_spec = update_specs.get(key)
+            if not isinstance(update_spec, dict):
                 continue
-            channel = spec.get("channel")
-            if isinstance(channel, dict):
-                add_spec(role, key, channel)
+            update_channel = update_spec.get("channel")
+            if isinstance(update_channel, dict):
+                add_spec(role, key, update_channel)
 
     return specs
 

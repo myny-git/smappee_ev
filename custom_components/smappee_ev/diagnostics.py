@@ -51,7 +51,12 @@ def _safe_sorted(values: object) -> list[Any]:
     """Return stable sorted list for JSON diagnostics."""
     if not isinstance(values, list | tuple | set):
         return []
-    return sorted(values, key=lambda item: str(item))
+    return sorted(values, key=_sort_as_text)
+
+
+def _sort_as_text(item: object) -> str:
+    """Return a stable text key for mixed JSON-ish values."""
+    return str(item)
 
 
 def _handle_info(client: object | None) -> dict[str, Any]:
@@ -127,7 +132,7 @@ async def async_get_config_entry_diagnostics(
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
     sites = getattr(rt, "sites", {}) if rt else {}
     # Stable ordering for diffs / logs
-    out["sites"] = sorted(sites.keys(), key=lambda item: str(item))
+    out["sites"] = sorted(sites.keys(), key=_sort_as_text)
 
     out["config_entry_data"] = async_redact_data(dict(entry.data), REDACT_KEYS)
     out["options"] = async_redact_data(dict(entry.options), REDACT_KEYS)
@@ -319,7 +324,7 @@ async def async_get_config_entry_diagnostics(
     )
     out["summary"] = {
         "service_location_ids_count": len(sites or {}),
-        "service_location_ids": sorted(sites.keys(), key=lambda item: str(item))
+        "service_location_ids": sorted(sites.keys(), key=_sort_as_text)
         if isinstance(sites, dict)
         else [],
         "station_buckets_count": len(stations_out),

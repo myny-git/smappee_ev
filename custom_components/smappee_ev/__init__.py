@@ -842,9 +842,6 @@ async def _prepare_site(
             "No CHARGINGSTATION smartdevice at %s (%s); skipping site", sl.get("name"), sid
         )
         return None, None
-    if not station_devs and not car_devs:
-        _LOGGER.info("No chargers at %s (%s); skipping", sl.get("name") or f"Smappee {sid}", sid)
-        return None, None
 
     # station_serial -> {connectors}
     station_serial_to_connectors = await _fetch_dashboard_connector_mapping(
@@ -912,7 +909,6 @@ async def _prepare_site(
         total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
         if total_assigned == 0 and len(stations) == 1:
             _fallback_assign(stations, car_devs, serial_str, sid)
-            total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
         elif total_assigned == 0:
             _LOGGER.warning(
                 "Connector mapping exists at %s, but no connectors could be assigned "
