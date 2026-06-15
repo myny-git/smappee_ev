@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
+from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
 
 _LOGGER = logging.getLogger(__name__)
@@ -328,7 +328,8 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeStationEntity, _BaseNumber):
         )
         self._post_init(UnitOfPower.KILO_WATT, 0, 10, 0.1)
 
-    def _station_state(self):
+    def _station_state(self) -> StationState | None:
+        """Return the current station state."""
         data: IntegrationData | None = self.coordinator.data
         return data.station if data else None
 
@@ -385,7 +386,8 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeStationEntity, _BaseNumber):
         )
         self._post_init(UnitOfElectricCurrent.AMPERE, 0, 32, 1)
 
-    def _station_state(self):
+    def _station_state(self) -> StationState | None:
+        """Return the current station state."""
         data: IntegrationData | None = self.coordinator.data
         return data.station if data else None
 

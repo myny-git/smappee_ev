@@ -78,8 +78,8 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
     def current_option(self) -> str | None:
         st = self._state()
         if st:
-            # Prefer explicit selected_mode; fall back to ui_mode_base; default STANDARD
-            return st.selected_mode.lower() or st.ui_mode_base or "standard"
+            mode = st.selected_mode or st.ui_mode_base or "standard"
+            return mode.lower() if mode else "standard"
         return "standard"
 
     async def async_select_option(self, option: str) -> None:

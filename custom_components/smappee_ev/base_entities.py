@@ -101,15 +101,15 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
         unique_suffix: str,
     ) -> None:
         self._connector_uuid = connector_uuid
-        self.api = cast(SmappeeDeviceHandle, api)
-        self.sid = int(sid)
-        self.station_uuid = station_uuid
-        self.connector_uuid = connector_uuid
-        self.unique_suffix = unique_suffix
+        self._api = cast(SmappeeDeviceHandle, api)
+        self._sid = int(sid)
+        self._station_uuid = station_uuid
+        self._connector_uuid = connector_uuid
+        self._unique_suffix = unique_suffix
         connector_label = build_connector_id(
             cast(SmappeeDeviceHandle, api), connector_uuid
         )
-        super().__init__(coordinator, sid, station_uuid, unique_suffix=unique_suffix, connector_uuid=connector_uuid, connector_label=connector_label)
+        super().__init__(coordinator, self._sid, station_uuid, unique_suffix=unique_suffix, connector_uuid=connector_uuid, connector_label=connector_label)
 
     # Convenience accessors
     @property
