@@ -217,5 +217,168 @@
         }
       }
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "mqtt_connected": {
+        "name": "MQTT verbunden"
+      }
+    },
+    "button": {
+      "start_charging": {
+        "name": "Ladevorgang starten"
+      },
+      "pause_charging": {
+        "name": "Ladevorgang pausieren"
+      },
+      "set_charging_mode": {
+        "name": "Lademodus festlegen"
+      },
+      "stop_charging": {
+        "name": "Ladevorgang stoppen"
+      },
+      "restart_charging_station": {
+        "name": "Ladestation neu starten"
+      }
+    },
+    "number": {
+      "min_surpluspct": {
+        "name": "Mindest-Überschuss-Prozentsatz"
+      },
+      "max_charging_speed": {
+        "name": "Maximale Ladegeschwindigkeit"
+      },
+      "capacity_maximum_power": {
+        "name": "Maximale Leistungskapazität"
+      },
+      "overload_maximum_load": {
+        "name": "Maximale Überlast"
+      }
+    },
+    "select": {
+      "charging_mode": {
+        "name": "Lademodus",
+        "state": {
+          "smart": "Intelligentes Laden",
+          "solar": "Solarladen",
+          "standard": "Standardladen"
+        }
+      }
+    },
+    "switch": {
+      "station_available": {
+        "name": "Station verfügbar"
+      },
+      "evcc_charging": {
+        "name": "EVCC Laden"
+      }
+    },
+    "light": {
+      "led": {
+        "name": "LED"
+      }
+    },
+    "sensor": {
+      "mqtt_last_seen": {
+        "name": "MQTT zuletzt gesehen"
+      },
+      "grid_power": {
+        "name": "Netzleistung"
+      },
+      "house_consumption_power": {
+        "name": "Hausverbrauchsleistung"
+      },
+      "pv_power": {
+        "name": "PV-Leistung"
+      },
+      "grid_energy_import": {
+        "name": "Netzenergieimport"
+      },
+      "grid_energy_export": {
+        "name": "Netzenergieexport"
+      },
+      "pv_energy_import": {
+        "name": "PV-Energieimport"
+      },
+      "current_l1": {
+        "name": "Strom L1"
+      },
+      "current_l2": {
+        "name": "Strom L2"
+      },
+      "current_l3": {
+        "name": "Strom L3"
+      },
+      "power": {
+        "name": "Leistung"
+      },
+      "current": {
+        "name": "Strom"
+      },
+      "support_grid": {
+        "name": "Netzunterstützung"
+      },
+      "energy_import": {
+        "name": "Energieimport"
+      },
+      "grid_currents": {
+        "name": "Netzströme (L1–L3)"
+      },
+      "pv_currents": {
+        "name": "PV-Ströme (L1–L3)"
+      },
+      "grid_current_l1": {
+        "name": "Netzstrom L1"
+      },
+      "grid_current_l2": {
+        "name": "Netzstrom L2"
+      },
+      "grid_current_l3": {
+        "name": "Netzstrom L3"
+      },
+      "pv_current_l1": {
+        "name": "PV-Strom L1"
+      },
+      "pv_current_l2": {
+        "name": "PV-Strom L2"
+      },
+      "pv_current_l3": {
+        "name": "PV-Strom L3"
+      },
+      "grid_voltage_l1": {
+        "name": "Netzspannung L1"
+      },
+      "grid_voltage_l2": {
+        "name": "Netzspannung L2"
+      },
+      "grid_voltage_l3": {
+        "name": "Netzspannung L3"
+      },
+      "charging_state": {
+        "name": "Ladestatus",
+        "state": {
+          "started": "Gestartet",
+          "suspended": "Pausiert",
+          "stopped": "Gestoppt"
+        }
+      },
+      "evcc_state": {
+        "name": "EVCC-Status"
+      },
+      "evse_status": {
+        "name": "EVSE-Status",
+        "state": {
+          "available": "Verfügbar",
+          "cable_connected": "Kabel angeschlossen",
+          "charging": "Lädt",
+          "charging_finished": "Ladevorgang abgeschlossen",
+          "error": "Fehler",
+          "suspended_evse": "Vom Ladegerät pausiert"
+        }
+      },
+      "session_energy": {
+        "name": "Sitzungsenergie"
+      }
+    }
   }
 }

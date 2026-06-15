@@ -15,7 +15,7 @@ DEFAULT_MIN_SURPLUS_PERCENT: Final = 100
 
 # Charging percentages
 FULL_PERCENTAGE: Final = 100
-CHARGING_MODES: Final = ("STANDARD", "SMART", "SOLAR")
+CHARGING_MODES: Final = ("standard", "smart", "solar")
 
 # MQTT reconnect/backoff timings
 MQTT_RECONNECT_INITIAL_BACKOFF: Final = 1.0

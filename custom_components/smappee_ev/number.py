@@ -18,7 +18,6 @@ from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -101,6 +100,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
 
     _attr_device_class = NumberDeviceClass.CURRENT
     _attr_icon = "mdi:current-ac"
+    _attr_translation_key = "max_charging_speed"
 
     def __init__(
         self,
@@ -125,7 +125,6 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             station_uuid,
             connector_uuid,
             unique_suffix="number:current",
-            name=f"Max charging speed {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
         self.api_client = api_client
         self._post_init(UnitOfElectricCurrent.AMPERE, float(min_current), float(max_current), 0.1)
@@ -240,6 +239,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:solar-power"
+    _attr_translation_key = "min_surpluspct"
 
     def __init__(
         self,
@@ -257,7 +257,6 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
             station_uuid,
             connector_uuid,
             unique_suffix="number:min_surpluspct",
-            name=f"Min Surplus Percentage {build_connector_label(api_client, connector_uuid).split(' ', 1)[1]}",
         )
         self.api_client = api_client
         self._post_init(PERCENTAGE, 0, 100, 1)
@@ -311,6 +310,7 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeStationEntity, _BaseNumber):
     _attr_device_class = NumberDeviceClass.POWER
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:transmission-tower"
+    _attr_translation_key = "capacity_maximum_power"
 
     def __init__(
         self,
@@ -325,7 +325,6 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeStationEntity, _BaseNumber):
             sid,
             station_uuid,
             unique_suffix="number:capacity_maximum_power",
-            name="Capacity maximum power",
         )
         self._post_init(UnitOfPower.KILO_WATT, 0, 10, 0.1)
 
@@ -368,6 +367,7 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeStationEntity, _BaseNumber):
     _attr_device_class = NumberDeviceClass.CURRENT
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:current-ac"
+    _attr_translation_key = "overload_maximum_load"
 
     def __init__(
         self,
@@ -382,7 +382,6 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeStationEntity, _BaseNumber):
             sid,
             station_uuid,
             unique_suffix="number:overload_maximum_load",
-            name="Overload maximum load",
         )
         self._post_init(UnitOfElectricCurrent.AMPERE, 0, 32, 1)
 
