@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import logging
-from typing import Any, Literal
+from typing import Any
 
 import aiohttp
 
@@ -192,42 +192,6 @@ class SmappeeDeviceHandle:
         _LOGGER.debug("Charging mode set successfully (%s via Dashboard v10)", mode_up)
         return True
 
-    async def set_charging_mode_chargingstations(
-        self,
-        mode: str,
-        *,
-        limit: int | None = None,
-        limit_unit: Literal["AMPERE", "PERCENTAGE"] = "AMPERE",
-        connector: int | None = None,
-    ) -> bool:
-        """Map the chargingstations compatibility service shape to Dashboard v10 actions."""
-        _ = connector
-        mode_up = (mode or "").upper()
-        if mode_up not in ("NORMAL", "SMART", "PAUSED"):
-            _LOGGER.warning(
-                "Unsupported charging mode: %s. Use NORMAL, SMART or PAUSED.",
-                mode,
-            )
-            return False
-
-        if mode_up == "PAUSED":
-            await self.pause_charging()
-            return True
-        if mode_up == "SMART":
-            return await self.set_charging_mode("SMART")
-
-        await self.set_charging_mode("STANDARD")
-        if limit is not None:
-            limit_unit_up = (str(limit_unit or "")).upper()
-            if limit_unit_up not in ("AMPERE", "PERCENTAGE"):
-                _LOGGER.warning("Unsupported limit unit: %s", limit_unit)
-                return False
-            if limit_unit_up == "PERCENTAGE":
-                await self.set_percentage_limit(int(limit))
-            else:
-                await self.set_current(float(limit))
-        return True
-
     async def start_charging(
         self, current: float, *, min_current: int = 6, max_current: int = 32
     ) -> tuple[float, int]:
@@ -269,10 +233,6 @@ class SmappeeDeviceHandle:
         """
         await self._require_dashboard_action("async_pause_charging")
         _LOGGER.debug("Paused charging successfully via Dashboard v10")
-
-    async def pause_charging_chargingstations(self) -> None:
-        """Compatibility wrapper for the old service name."""
-        await self.set_charging_mode_chargingstations("PAUSED")
 
     async def stop_charging(self) -> None:
         await self._require_dashboard_action("async_stop_charging")
@@ -347,6 +307,30 @@ class SmappeeDeviceHandle:
             _LOGGER.debug("Restarted charging station successfully via Dashboard v11")
             return
         raise RuntimeError("Dashboard API is not configured for charging station restart")
+
+    async def set_offline_charging_config(self, enabled: bool, failsafe_amps: int) -> None:
+        dashboard = self.dashboard_client
+        if not self._dashboard_configured() or dashboard is None:
+            raise RuntimeError("Dashboard API is not configured for offline charging")
+        station_serial = self.charging_station_serial or self.serial
+        method = getattr(dashboard, "async_set_offline_charging", None)
+        if method is None:
+            raise RuntimeError("Dashboard offline charging action is not available")
+        try:
+            success = bool(await method(station_serial, bool(enabled), int(failsafe_amps)))
+        except asyncio.CancelledError:
+            raise
+        except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+            raise RuntimeError(
+                f"Dashboard offline charging failed for station {station_serial}"
+            ) from err
+        if not success:
+            raise RuntimeError("Dashboard offline charging returned no success")
+        _LOGGER.debug(
+            "Set offline charging successfully via Dashboard v11 (enabled=%s, failSafe=%s A)",
+            enabled,
+            failsafe_amps,
+        )
 
     async def async_get_recent_sessions(self) -> list[dict[str, Any]]:
         """Fetch recent charging sessions for this charging station."""

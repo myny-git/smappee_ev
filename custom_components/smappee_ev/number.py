@@ -45,6 +45,9 @@ async def async_setup_entry(
             conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
 
             if getattr(coord, "dashboard_client", None) is not None:
+                st_client: SmappeeDeviceHandle | None = bucket.get("station_client") or getattr(
+                    coord, "station_client", None
+                )
                 entities.append(
                     SmappeeCapacityMaximumPowerNumber(
                         coordinator=coord,
@@ -59,6 +62,15 @@ async def async_setup_entry(
                         station_uuid=st_uuid,
                     )
                 )
+                if st_client is not None:
+                    entities.append(
+                        SmappeeOfflineFailsafeCurrentNumber(
+                            coordinator=coord,
+                            api_client=st_client,
+                            sid=sid,
+                            station_uuid=st_uuid,
+                        )
+                    )
 
             # Per connector
             for cuuid, client in (conns or {}).items():
@@ -416,5 +428,67 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeStationEntity, _BaseNumber):
         active = _active_or_true(st.overload_protection_active)
         await dashboard.async_set_overload_protection(self._sid, active, maximum_load_a)
         st.overload_maximum_load_a = maximum_load_a
+        self.coordinator.async_set_updated_data(data)
+        self.coordinator.async_schedule_dashboard_refresh()
+
+
+class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
+    """Station-level offline charging failsafe current."""
+
+    _attr_device_class = NumberDeviceClass.CURRENT
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:cloud-alert"
+    _attr_translation_key = "offline_failsafe_current"
+
+    def __init__(
+        self,
+        *,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeDeviceHandle,
+        sid: int,
+        station_uuid: str,
+    ) -> None:
+        SmappeeStationEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="number:offline_failsafe_current",
+        )
+        self.api_client = api_client
+        self._post_init(UnitOfElectricCurrent.AMPERE, 0, 32, 1)
+
+    def _station_state(self) -> StationState | None:
+        data: IntegrationData | None = self.coordinator.data
+        return data.station if data else None
+
+    @property
+    def available(self) -> bool:
+        st = self._station_state()
+        return bool(
+            super().available
+            and getattr(self.coordinator, "dashboard_client", None)
+            and st is not None
+            and st.offline_charging_enabled is True
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        st = self._station_state()
+        value = getattr(st, "offline_failsafe_current_a", None) if st else None
+        return int(value) if value is not None else None
+
+    async def async_set_native_value(self, value: float) -> None:
+        data = self.coordinator.data
+        st = self._station_state()
+        if data is None or st is None:
+            return
+        failsafe = max(0, int(round(value)))
+        enabled = (
+            bool(st.offline_charging_enabled) if st.offline_charging_enabled is not None else True
+        )
+        await self.api_client.set_offline_charging_config(enabled, failsafe)
+        st.offline_charging_enabled = enabled
+        st.offline_failsafe_current_a = failsafe
         self.coordinator.async_set_updated_data(data)
         self.coordinator.async_schedule_dashboard_refresh()

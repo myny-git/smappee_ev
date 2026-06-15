@@ -1332,7 +1332,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     # Services already registered domain-wide in async_setup
 
-    for _svc in ("set_available", "set_unavailable", "set_min_surpluspct"):
+    for _svc in (
+        "set_available",
+        "set_unavailable",
+        "set_min_surpluspct",
+        "pause_charging_chargingstations",
+        "set_charging_mode_chargingstations",
+    ):
         try:
             if hass.services.has_service(DOMAIN, _svc):
                 hass.services.async_remove(DOMAIN, _svc)

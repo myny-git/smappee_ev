@@ -8,6 +8,7 @@ from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -45,6 +46,14 @@ async def async_setup_entry(
                 # Station-level switch
                 entities.append(
                     SmappeeAvailabilitySwitch(
+                        coordinator=coord,
+                        api_client=st_client,
+                        sid=sid,
+                        station_uuid=st_uuid,
+                    )
+                )
+                entities.append(
+                    SmappeeOfflineChargingSwitch(
                         coordinator=coord,
                         api_client=st_client,
                         sid=sid,
@@ -228,5 +237,74 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
             # revert optimistic update
             if data and st is not None and prev is not None:
                 st.available = prev
+                self.coordinator.async_set_updated_data(data)
+            raise
+
+
+class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
+    """Switch to toggle station-level offline charging/failsafe mode."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "offline_charging"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        *,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeDeviceHandle,
+        sid: int,
+        station_uuid: str,
+    ) -> None:
+        SmappeeStationRestEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix="switch:offline_charging",
+        )
+        self.api_client = api_client
+
+    def _station_state(self) -> StationState | None:
+        data: IntegrationData | None = self.coordinator.data
+        return data.station if data else None
+
+    @property
+    def is_on(self) -> bool:
+        st = self._station_state()
+        return bool(getattr(st, "offline_charging_enabled", False)) if st else False
+
+    @property
+    def icon(self) -> str:
+        return "mdi:cloud-outline" if self.is_on else "mdi:cloud-off-outline"
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._set_offline_charging(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set_offline_charging(False)
+
+    async def _set_offline_charging(self, enabled: bool) -> None:
+        data: IntegrationData | None = self.coordinator.data
+        st = self._station_state()
+        if st is None:
+            return
+
+        prev_enabled = st.offline_charging_enabled
+        failsafe = st.offline_failsafe_current_a
+        if failsafe is None:
+            failsafe = 3
+
+        if data and prev_enabled != enabled:
+            st.offline_charging_enabled = enabled
+            self.coordinator.async_set_updated_data(data)
+
+        try:
+            await self.api_client.set_offline_charging_config(enabled, failsafe)
+            self.coordinator.async_schedule_dashboard_refresh()
+        except Exception as err:
+            _LOGGER.warning("Set offline charging failed (sid=%s): %s", self._sid, err)
+            if data and prev_enabled is not None:
+                st.offline_charging_enabled = prev_enabled
                 self.coordinator.async_set_updated_data(data)
             raise

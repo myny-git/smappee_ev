@@ -65,12 +65,16 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
             unique_suffix="light:led",
         )
         self.api_client = api_client
+        self._last_nonzero_brightness: int | None = None
 
     def _station_brightness(self) -> int | None:
         data: IntegrationData | None = self.coordinator.data
         if not data or not data.station or data.station.led_brightness is None:
             return None
-        return max(0, min(100, int(data.station.led_brightness)))
+        brightness = max(0, min(100, int(data.station.led_brightness)))
+        if brightness > 0:
+            self._last_nonzero_brightness = brightness
+        return brightness
 
     @property
     def is_on(self) -> bool | None:
@@ -90,15 +94,25 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
         if ATTR_BRIGHTNESS in kwargs:
             brightness = int(round((int(kwargs[ATTR_BRIGHTNESS]) / 255) * 100))
         else:
-            brightness = self._station_brightness() or DEFAULT_LED_BRIGHTNESS
+            current = self._station_brightness()
+            brightness = (
+                current
+                if current and current > 0
+                else self._last_nonzero_brightness or DEFAULT_LED_BRIGHTNESS
+            )
 
         await self._set_brightness(max(1, min(100, brightness)))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        brightness = self._station_brightness()
+        if brightness and brightness > 0:
+            self._last_nonzero_brightness = brightness
         await self._set_brightness(0)
 
     async def _set_brightness(self, brightness: int) -> None:
         await self.api_client.set_brightness(brightness)
+        if brightness > 0:
+            self._last_nonzero_brightness = brightness
         data: IntegrationData | None = self.coordinator.data
         if data and data.station:
             data.station.led_brightness = brightness

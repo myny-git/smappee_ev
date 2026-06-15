@@ -56,9 +56,6 @@
     "connector_service_failed": {
       "message": "Connector-Service {method_name} fehlgeschlagen: {error}"
     },
-    "no_api2_connector_client": {
-      "message": "Kein passender API 2 connector client fÃ¼r config entry {config_entry_id}, Ladestationsseriennummer {charging_station_serial}, connector {connector_id} gefunden. Geben Sie charging_station_serial an, wenn mehrere Ladestationen dieselbe Connector-Position verwenden."
-    },
     "cannot_resolve_connector_client": {
       "message": "Connector client kann nicht ermittelt werden. Geben Sie connector_id an, wenn die Auswahl mehrdeutig ist."
     },
@@ -92,24 +89,6 @@
     "pause_charging": {
       "name": "Laden pausieren",
       "description": "Pausiert den Ladevorgang fÃ¼r den ausgewÃ¤hlten Connector Ã¼ber die Dashboard v10 GerÃ¤teaktion, wenn verfÃ¼gbar.",
-      "fields": {
-        "config_entry_id": {
-          "name": "Konfigurations-Eintrags-ID",
-          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-        },
-        "service_location_id": {
-          "name": "Service-Location-ID",
-          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
-        },
-        "connector_id": {
-          "name": "Connector-ID",
-          "description": "Optional: Connector-Nummer (1 oder 2)."
-        }
-      }
-    },
-    "pause_charging_chargingstations": {
-      "name": "Laden pausieren (chargingstations)",
-      "description": "Pausiert den Ladevorgang Ã¼ber den chargingstations-API-Endpunkt. Veralteter Fallback â€” fÃ¼r den normalen Betrieb bitte pause_charging verwenden.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
@@ -183,37 +162,7 @@
         },
         "mode": {
           "name": "Modus",
-          "description": "Lademodus (STANDARD, SMART, SOLAR)."
-        }
-      }
-    },
-    "set_charging_mode_chargingstations": {
-      "name": "Lademodus setzen (chargingstations)",
-      "description": "Setzt den Lademodus Ã¼ber den chargingstations-Endpunkt.",
-      "fields": {
-        "config_entry_id": {
-          "name": "Konfigurations-Eintrags-ID",
-          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
-        },
-        "charging_station_serial": {
-          "name": "Seriennummer der Ladestation",
-          "description": "Optional: Seriennummer der Ladestation. Angeben, wenn mehrere Stationen dieselbe Connector-Position verwenden."
-        },
-        "connector_id": {
-          "name": "Connector-ID",
-          "description": "Erforderlich: Connector-Position, die im API-2-Endpunkt verwendet wird (z. B. 1 oder 2)."
-        },
-        "mode": {
-          "name": "Modus",
-          "description": "Lademodus (NORMAL, SMART, PAUSED)."
-        },
-        "limit": {
-          "name": "Limit",
-          "description": "Optional: Limit-Wert (wird nur verwendet, wenn der Modus NORMAL ist)."
-        },
-        "limit_unit": {
-          "name": "Limit-Einheit",
-          "description": "Optional: Einheit fÃ¼r Limit, wenn der Modus NORMAL ist (AMPERE oder PERCENTAGE)."
+          "description": "Lademodus: Standard, Smart oder Solar."
         }
       }
     }
@@ -231,14 +180,14 @@
       "pause_charging": {
         "name": "Ladevorgang pausieren"
       },
-      "set_charging_mode": {
-        "name": "Lademodus festlegen"
-      },
       "stop_charging": {
         "name": "Ladevorgang stoppen"
       },
       "restart_charging_station": {
         "name": "Ladestation neu starten"
+      },
+      "resume_charging": {
+        "name": "Laden fortsetzen"
       }
     },
     "number": {
@@ -253,6 +202,9 @@
       },
       "overload_maximum_load": {
         "name": "Maximale Überlast"
+      },
+      "offline_failsafe_current": {
+        "name": "Offline-Failsafe-Strom"
       }
     },
     "select": {
@@ -271,6 +223,9 @@
       },
       "evcc_charging": {
         "name": "EVCC Laden"
+      },
+      "offline_charging": {
+        "name": "Offline-Laden"
       }
     },
     "light": {

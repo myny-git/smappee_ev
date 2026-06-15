@@ -14,6 +14,7 @@ from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
 
 _LOGGER = logging.getLogger(__name__)
+DASHBOARD_CHARGING_MODES = {mode.upper() for mode in CHARGING_MODES}
 
 # ----------------------------
 # Exception helpers
@@ -170,60 +171,6 @@ def get_connector_client(
     return None
 
 
-def _client_station_serial(client: SmappeeDeviceHandle) -> str:
-    return str(
-        getattr(client, "charging_station_serial", None) or getattr(client, "serial", "") or ""
-    ).strip()
-
-
-def get_api2_connector_client(hass: HomeAssistant, call: ServiceCall) -> SmappeeDeviceHandle | None:
-    """Resolve an API 2 connector using charging station serial and connector position.
-
-    API 2 uses /chargingstations/{serial}/connectors/{position}/mode, so service
-    location id is not used for target selection.
-    """
-
-    entry_id = call.data.get("config_entry_id")
-    connector_id = call.data.get("connector_id")
-    station_serial = str(call.data.get("charging_station_serial") or "").strip().casefold()
-    if connector_id is None:
-        return None
-
-    explicit_rt = _runtime_by_entry_id(hass, entry_id)
-    if explicit_rt:
-        runtimes = [explicit_rt]
-    else:
-        runtimes = []
-        for entry in _iter_loaded_entries(hass):
-            runtimes.append(entry.runtime_data)
-
-    matches: list[SmappeeDeviceHandle] = []
-    seen: set[int] = set()
-    for rt in runtimes:
-        if not rt:
-            continue
-        for site in rt.sites.values():
-            if not site:
-                continue
-            for client in _connector_clients_for_site(site):
-                if station_serial and _client_station_serial(client).casefold() != station_serial:
-                    continue
-                if (
-                    connector_id is not None
-                    and getattr(client, "connector_number", None) != connector_id
-                ):
-                    continue
-                marker = id(client)
-                if marker in seen:
-                    continue
-                seen.add(marker)
-                matches.append(client)
-
-    if len(matches) == 1:
-        return matches[0]
-    return None
-
-
 def _get_connector_state(
     rt: RuntimeData | None, client: SmappeeDeviceHandle
 ) -> ConnectorState | None:
@@ -367,48 +314,6 @@ async def async_handle_connector_service(
     # Mode reset handled by coordinator state logic; client is stateless now.
 
 
-async def async_handle_connector_service_api2(
-    hass: HomeAssistant,
-    call: ServiceCall,
-    method_name: str,
-    extra_args: dict | None = None,
-) -> None:
-    client = get_api2_connector_client(hass, call)
-    if not client:
-        message = (
-            "No matching API 2 connector client "
-            f"(config_entry_id={call.data.get('config_entry_id')}, "
-            f"charging_station_serial={call.data.get('charging_station_serial')}, "
-            f"connector_id={call.data.get('connector_id')}). "
-            "Provide 'charging_station_serial' if multiple charging stations share the same connector position."
-        )
-        raise _service_validation_error(
-            message,
-            "no_api2_connector_client",
-            config_entry_id=call.data.get("config_entry_id"),
-            charging_station_serial=call.data.get("charging_station_serial"),
-            connector_id=call.data.get("connector_id"),
-        )
-
-    method = getattr(client, method_name, None)
-    if not method:
-        raise _service_validation_error(
-            f"Connector method '{method_name}' not found",
-            "connector_method_not_found",
-            method_name=method_name,
-        )
-    try:
-        await method(**(extra_args or {}))
-    except Exception as err:
-        raise _home_assistant_error(
-            f"Connector service '{method_name}' failed: {err}",
-            "connector_service_failed",
-            method_name=method_name,
-            error=err,
-        ) from err
-    _schedule_dashboard_refresh_for_client(hass, client)
-
-
 # ----------------------------
 # Service function wrappers
 # ----------------------------
@@ -452,10 +357,6 @@ async def handle_pause_charging(call: ServiceCall) -> None:
     await async_handle_connector_service(call.hass, call, "pause_charging")
 
 
-async def handle_pause_charging_chargingstations(call: ServiceCall) -> None:
-    await async_handle_connector_service(call.hass, call, "pause_charging_chargingstations")
-
-
 async def handle_stop_charging(call: ServiceCall) -> None:
     await async_handle_connector_service(call.hass, call, "stop_charging")
 
@@ -466,20 +367,6 @@ async def handle_set_charging_mode(call: ServiceCall) -> None:
         call,
         "set_charging_mode",
         {"mode": call.data.get("mode")},
-    )
-
-
-async def handle_set_charging_mode_chargingstations(call: ServiceCall) -> None:
-    await async_handle_connector_service_api2(
-        call.hass,
-        call,
-        "set_charging_mode_chargingstations",
-        {
-            "mode": call.data.get("mode"),
-            "limit": call.data.get("limit"),
-            "limit_unit": call.data.get("limit_unit"),
-            "connector": call.data.get("connector_id"),
-        },
     )
 
 
@@ -545,7 +432,7 @@ SET_MODE_SCHEMA = vol.Schema(
         vol.Required("mode"): vol.All(
             str,
             str.upper,  # normalize to uppercase
-            vol.In(CHARGING_MODES),
+            vol.In(DASHBOARD_CHARGING_MODES),
         ),
     }
 )
@@ -561,28 +448,6 @@ SET_CURRENT_SCHEMA = vol.Schema(
     }
 )
 
-SET_MODE_API2_SCHEMA = vol.Schema(
-    {
-        vol.Optional("config_entry_id"): cv.string,
-        vol.Optional("charging_station_serial"): vol.Any(
-            vol.All(str, str.strip),
-            vol.All(vol.Coerce(int), vol.Coerce(str)),
-        ),
-        vol.Required("connector_id"): cv.positive_int,
-        vol.Required("mode"): vol.All(
-            str,
-            str.upper,
-            vol.In({"NORMAL", "SMART", "PAUSED"}),
-        ),
-        vol.Optional("limit"): vol.Coerce(int),
-        vol.Optional("limit_unit", default="AMPERE"): vol.All(
-            str,
-            str.upper,
-            vol.In({"AMPERE", "PERCENTAGE"}),
-        ),
-    }
-)
-
 
 async def register_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Registering Smappee EV services")
@@ -590,21 +455,9 @@ async def register_services(hass: HomeAssistant) -> None:
         DOMAIN, "start_charging", handle_start_charging, START_CHARGING_SCHEMA
     )
     hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging, PAUSE_STOP_SCHEMA)
-    hass.services.async_register(
-        DOMAIN,
-        "pause_charging_chargingstations",
-        handle_pause_charging_chargingstations,
-        PAUSE_STOP_SCHEMA,
-    )
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging, PAUSE_STOP_SCHEMA)
     hass.services.async_register(
         DOMAIN, "set_charging_mode", handle_set_charging_mode, SET_MODE_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN,
-        "set_charging_mode_chargingstations",
-        handle_set_charging_mode_chargingstations,
-        SET_MODE_API2_SCHEMA,
     )
     hass.services.async_register(DOMAIN, "set_current", handle_set_current, SET_CURRENT_SCHEMA)
 
@@ -613,8 +466,6 @@ async def unregister_services(hass: HomeAssistant) -> None:
     _LOGGER.info("Unregistering Smappee EV services")
     hass.services.async_remove(DOMAIN, "start_charging")
     hass.services.async_remove(DOMAIN, "pause_charging")
-    hass.services.async_remove(DOMAIN, "pause_charging_chargingstations")
     hass.services.async_remove(DOMAIN, "stop_charging")
     hass.services.async_remove(DOMAIN, "set_charging_mode")
-    hass.services.async_remove(DOMAIN, "set_charging_mode_chargingstations")
     hass.services.async_remove(DOMAIN, "set_current")

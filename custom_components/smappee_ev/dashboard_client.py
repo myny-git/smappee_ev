@@ -341,6 +341,23 @@ class SmappeeDashboardClient:
             )
         )
 
+    async def async_set_offline_charging(
+        self, serial: str, enabled: bool, failsafe_amps: int
+    ) -> bool:
+        return bool(
+            await self._request(
+                "PATCH",
+                f"v11/chargingstations/{serial}",
+                json={
+                    "offlineCharging": {
+                        "enabled": bool(enabled),
+                        "failSafe": int(failsafe_amps),
+                    }
+                },
+                expected=(200, 201, 204),
+            )
+        )
+
     async def async_execute_device_action(
         self,
         service_location_id: int | str,

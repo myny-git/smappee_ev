@@ -56,9 +56,6 @@
     "connector_service_failed": {
       "message": "Connectorservice {method_name} mislukt: {error}"
     },
-    "no_api2_connector_client": {
-      "message": "Geen overeenkomende API 2 connector client gevonden voor config entry {config_entry_id}, laadstationserienummer {charging_station_serial}, connector {connector_id}. Geef charging_station_serial op als meerdere laadstations dezelfde connectorpositie delen."
-    },
     "cannot_resolve_connector_client": {
       "message": "Kan connector client niet bepalen. Geef connector_id op als dit dubbelzinnig is."
     },
@@ -92,24 +89,6 @@
     "pause_charging": {
       "name": "Pauzeer laden",
       "description": "Pauzeer het laden voor de geselecteerde connector via de Dashboard v10 apparaat-actie wanneer beschikbaar.",
-      "fields": {
-        "config_entry_id": {
-          "name": "Config entry ID",
-          "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
-        },
-        "service_location_id": {
-          "name": "Service Location ID",
-          "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
-        },
-        "connector_id": {
-          "name": "Connector",
-          "description": "Optioneel: connectornummer (1 of 2)."
-        }
-      }
-    },
-    "pause_charging_chargingstations": {
-      "name": "Pauzeer laden (chargingstations)",
-      "description": "Compatibiliteitsservice: pauzeer laden via de Dashboard v10-actie.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -183,37 +162,7 @@
         },
         "mode": {
           "name": "Modus",
-          "description": "Laadmodus (STANDARD, SMART, SOLAR)."
-        }
-      }
-    },
-    "set_charging_mode_chargingstations": {
-      "name": "Stel laadmodus in (chargingstations)",
-      "description": "Compatibiliteitsservice: zet NORMAL, SMART en PAUSED om naar Dashboard v10-laadacties.",
-      "fields": {
-        "config_entry_id": {
-          "name": "Config entry ID",
-          "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
-        },
-        "charging_station_serial": {
-          "name": "Serienummer laadstation",
-          "description": "Optioneel: serienummer van het laadstation. Geef dit op als meerdere stations dezelfde connectorpositie gebruiken."
-        },
-        "connector_id": {
-          "name": "Connector",
-          "description": "Verplicht: connectorpositie (bijvoorbeeld 1 of 2)."
-        },
-        "mode": {
-          "name": "Modus",
-          "description": "Laadmodus (NORMAL, SMART, PAUSED)."
-        },
-        "limit": {
-          "name": "Limiet",
-          "description": "Optioneel: limietwaarde (alleen gebruikt wanneer modus NORMAL is)."
-        },
-        "limit_unit": {
-          "name": "Eenheid limiet",
-          "description": "Optioneel: eenheid voor limiet wanneer modus NORMAL is (AMPERE of PERCENTAGE)."
+          "description": "Laadmodus: Standaard, Slim of Zon."
         }
       }
     }
@@ -231,14 +180,14 @@
       "pause_charging": {
         "name": "Laadsessie pauzeren"
       },
-      "set_charging_mode": {
-        "name": "Laadmodus instellen"
-      },
       "stop_charging": {
         "name": "Laadsessie stoppen"
       },
       "restart_charging_station": {
         "name": "Laadstation herstarten"
+      },
+      "resume_charging": {
+        "name": "Laden hervatten"
       }
     },
     "number": {
@@ -253,6 +202,9 @@
       },
       "overload_maximum_load": {
         "name": "Maximale overbelasting"
+      },
+      "offline_failsafe_current": {
+        "name": "Offline failsafe-stroom"
       }
     },
     "select": {
@@ -271,6 +223,9 @@
       },
       "evcc_charging": {
         "name": "EVCC laden"
+      },
+      "offline_charging": {
+        "name": "Offline laden"
       }
     },
     "light": {

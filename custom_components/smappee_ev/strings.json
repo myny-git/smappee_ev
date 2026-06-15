@@ -56,9 +56,6 @@
     "connector_service_failed": {
       "message": "Connector service {method_name} failed: {error}"
     },
-    "no_api2_connector_client": {
-      "message": "No matching API 2 connector client found for config entry {config_entry_id}, charging station serial {charging_station_serial}, connector {connector_id}. Provide charging_station_serial if multiple charging stations share the same connector position."
-    },
     "cannot_resolve_connector_client": {
       "message": "Cannot resolve connector client. Provide connector_id if ambiguous."
     },
@@ -92,24 +89,6 @@
     "pause_charging": {
       "name": "Pause charging",
       "description": "Pause charging for the selected connector via the Dashboard v10 device action when available.",
-      "fields": {
-        "config_entry_id": {
-          "name": "Config entry ID",
-          "description": "Optional: specific config entry id to target (when multiple entries)."
-        },
-        "service_location_id": {
-          "name": "Service Location ID",
-          "description": "Optional: ID of the site (leave empty if only one site)."
-        },
-        "connector_id": {
-          "name": "Connector ID",
-          "description": "Optional: connector number (1 or 2)."
-        }
-      }
-    },
-    "pause_charging_chargingstations": {
-      "name": "Pause charging (chargingstations)",
-      "description": "Compatibility service: pause charging via the Dashboard v10 action.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -183,37 +162,7 @@
         },
         "mode": {
           "name": "Mode",
-          "description": "Charging mode (STANDARD, SMART, SOLAR)."
-        }
-      }
-    },
-    "set_charging_mode_chargingstations": {
-      "name": "Set charging mode (chargingstations)",
-      "description": "Compatibility service: map NORMAL, SMART and PAUSED to Dashboard v10 charging actions.",
-      "fields": {
-        "config_entry_id": {
-          "name": "Config entry ID",
-          "description": "Optional: specific config entry id to target (when multiple entries)."
-        },
-        "charging_station_serial": {
-          "name": "Charging station serial",
-          "description": "Optional: charging station serial number. Provide it when multiple stations share the same connector position."
-        },
-        "connector_id": {
-          "name": "Connector ID",
-          "description": "Required: connector position (for example 1 or 2)."
-        },
-        "mode": {
-          "name": "Mode",
-          "description": "Charging mode (NORMAL, SMART, PAUSED)."
-        },
-        "limit": {
-          "name": "Limit",
-          "description": "Optional: limit value (only used when mode is NORMAL)."
-        },
-        "limit_unit": {
-          "name": "Limit unit",
-          "description": "Optional: unit for limit when mode is NORMAL (AMPERE or PERCENTAGE)."
+          "description": "Charging mode: Standard, Smart or Solar."
         }
       }
     }

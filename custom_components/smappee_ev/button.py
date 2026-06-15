@@ -18,9 +18,19 @@ ACTION_ICONS = {
     "start_charging": "mdi:play-circle",
     "pause_charging": "mdi:pause-circle",
     "stop_charging": "mdi:stop-circle",
-    "set_charging_mode": "mdi:tune-variant",
+    "resume_charging": "mdi:play-pause",
     "restart_charging_station": "mdi:restart",
 }
+
+
+def _dashboard_mode(mode: str | None) -> str | None:
+    """Return a Dashboard v10 charging mode, accepting legacy/restored labels."""
+    mode_up = str(mode or "").upper()
+    if mode_up in {"STANDARD", "NORMAL"}:
+        return "STANDARD"
+    if mode_up in {"SMART", "SOLAR"}:
+        return mode_up
+    return None
 
 
 async def async_setup_entry(
@@ -86,7 +96,7 @@ async def async_setup_entry(
                             sid=sid,
                             station_uuid=st_uuid,
                             connector_uuid=cuuid,
-                            action="set_charging_mode",
+                            action="resume_charging",
                         ),
                     ]
                 )
@@ -105,6 +115,7 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
         sid: int,
         station_uuid: str,
         action: str,
+        name: str | None = None,
     ) -> None:
         SmappeeStationEntity.__init__(
             self,
@@ -114,6 +125,8 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
             unique_suffix=f"button:{action}",
         )
         self._attr_translation_key = action
+        if name is not None:
+            self._attr_name = name
         self.api_client = api_client
         self._action = action
         self._attr_icon = ACTION_ICONS.get(action)
@@ -139,6 +152,7 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         station_uuid: str,
         connector_uuid: str,
         action: str,
+        name: str | None = None,
     ) -> None:
         # Build unique id via base class
         SmappeeConnectorEntity.__init__(
@@ -151,6 +165,8 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
             unique_suffix=f"button:{action}",
         )
         self._attr_translation_key = action
+        if name is not None:
+            self._attr_name = name
         self.api_client = api_client
         self._action = action
         self._attr_icon = ACTION_ICONS.get(action)
@@ -191,14 +207,14 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         elif self._action == "stop_charging":
             await self.api_client.stop_charging()
             self.coordinator.async_schedule_dashboard_refresh()
-        elif self._action == "set_charging_mode":
+        elif self._action == "resume_charging":
             data = self.coordinator.data if self.coordinator else None
             mode = "STANDARD"
             if data and self.connector_uuid in (data.connectors or {}):
                 conn = data.connectors[self.connector_uuid]
                 mode = (
-                    getattr(conn, "selected_mode", None)
-                    or getattr(conn, "ui_mode_base", None)
+                    _dashboard_mode(getattr(conn, "selected_mode", None))
+                    or _dashboard_mode(getattr(conn, "ui_mode_base", None))
                     or "STANDARD"
                 )
             await self.api_client.set_charging_mode(mode)
