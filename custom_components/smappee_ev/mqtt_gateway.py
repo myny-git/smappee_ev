@@ -36,10 +36,15 @@ class SmappeeMqtt:
         serial_number: str,
         on_properties: Callable[[str, dict], None],
         service_location_id: int | str,
+        service_location_uuids: list[str] | None = None,
+        service_location_ids_by_uuid: dict[str, int | str] | None = None,
         on_connection_change: Callable[[bool], None] | None = None,
         mqtt_specs: list[Any] | None = None,
     ) -> None:
-        self._slu = service_location_uuid
+        slus = service_location_uuids or ([service_location_uuid] if service_location_uuid else [])
+        self._slus = tuple(dict.fromkeys(str(slu) for slu in slus if slu))
+        self._slu = self._slus[0] if self._slus else service_location_uuid
+        self._slu_ids = service_location_ids_by_uuid or {}
         self._client_id = client_id
         self._serial = serial_number
         self._on_properties = on_properties
@@ -108,15 +113,15 @@ class SmappeeMqtt:
             topic = self._spec_topic(spec)
             if topic:
                 topics.append(topic)
-        if self._slu:
+        for slu in self._slus:
             topics.extend(
                 [
-                    f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/state",
-                    f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/property/chargingstate",
-                    f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/updated",
-                    f"servicelocation/{self._slu}/etc/led/acledcontroller/v1/devices/updated",
-                    f"servicelocation/{self._slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}",
-                    f"servicelocation/{self._slu}/power",
+                    f"servicelocation/{slu}/etc/carcharger/acchargingcontroller/v1/devices/+/state",
+                    f"servicelocation/{slu}/etc/carcharger/acchargingcontroller/v1/devices/+/property/chargingstate",
+                    f"servicelocation/{slu}/etc/carcharger/acchargingcontroller/v1/devices/updated",
+                    f"servicelocation/{slu}/etc/led/acledcontroller/v1/devices/updated",
+                    f"servicelocation/{slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}",
+                    f"servicelocation/{slu}/power",
                 ]
             )
         topics = list(dict.fromkeys(topics))
@@ -352,34 +357,36 @@ class SmappeeMqtt:
 
     async def _publish_tracking_once(self) -> None:
         client = self._client
-        if not client or not self._slu:
+        if not client or not self._slus:
             return
-        topic = f"servicelocation/{self._slu}/tracking"
-        payload = {
-            "value": "ON",
-            "clientId": self._client_id,
-            "serialNumber": self._serial,
-            "type": MQTT_TRACKING_TYPE_RT_VALUES,
-        }
-        with suppress(MqttError):
-            await client.publish(topic, json.dumps(payload), qos=0)
-            _LOGGER.debug("MQTT tracking published")
+        for slu in self._slus:
+            topic = f"servicelocation/{slu}/tracking"
+            payload = {
+                "value": "ON",
+                "clientId": self._client_id,
+                "serialNumber": self._serial,
+                "type": MQTT_TRACKING_TYPE_RT_VALUES,
+            }
+            with suppress(MqttError):
+                await client.publish(topic, json.dumps(payload), qos=0)
+                _LOGGER.debug("MQTT tracking published to %s", topic)
 
     async def _publish_ha_heartbeat_once(self) -> None:
         client = self._client
-        if not client or not self._slu:
+        if not client or not self._slus:
             return
-        topic = f"servicelocation/{self._slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}"
-        value: int | str | None = self._slu_id
-        try:
-            if isinstance(value, str):
-                value = int(value)
-        except (TypeError, ValueError):  # conversion best-effort; non-fatal
-            _LOGGER.debug(
-                "Heartbeat serviceLocationId not numeric (slu_id=%r); sending null", self._slu_id
-            )
-            value = None
-        payload = {"serviceLocationId": value}
-        with suppress(MqttError):
-            await client.publish(topic, json.dumps(payload), qos=0)
-            _LOGGER.debug("MQTT HA heartbeat published to %s: %s", topic, payload)
+        for slu in self._slus:
+            topic = f"servicelocation/{slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}"
+            value: int | str | None = self._slu_ids.get(slu, self._slu_id)
+            try:
+                if isinstance(value, str):
+                    value = int(value)
+            except (TypeError, ValueError):  # conversion best-effort; non-fatal
+                _LOGGER.debug(
+                    "Heartbeat serviceLocationId not numeric (slu_id=%r); sending null", value
+                )
+                value = None
+            payload = {"serviceLocationId": value}
+            with suppress(MqttError):
+                await client.publish(topic, json.dumps(payload), qos=0)
+                _LOGGER.debug("MQTT HA heartbeat published to %s: %s", topic, payload)

@@ -79,6 +79,14 @@ def _charging_station(location: dict[str, Any]) -> dict[str, Any]:
 
 
 def _gateway(location: dict[str, Any]) -> dict[str, Any]:
+    gateways = location.get("gateways")
+    if isinstance(gateways, list):
+        for gateway in gateways:
+            if isinstance(gateway, dict) and gateway.get("role") == "MAIN":
+                return gateway
+        for gateway in gateways:
+            if isinstance(gateway, dict):
+                return gateway
     for key in ("gateway", "gatewayDevice", "device"):
         value = location.get(key)
         if isinstance(value, dict):
@@ -99,7 +107,7 @@ def _gateway_serial(location: dict[str, Any]) -> str | None:
 def _gateway_type(location: dict[str, Any]) -> str | None:
     gateway = _gateway(location)
     for source in (gateway, location):
-        value = _safe_str(source.get("type")) or _safe_str(source.get("deviceType"))
+        value = _safe_str(source.get("deviceType")) or _safe_str(source.get("type"))
         if value:
             return value
     return None

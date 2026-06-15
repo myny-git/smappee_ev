@@ -80,6 +80,13 @@ def _mqtt_info(mqtt_obj: object | None) -> dict[str, Any]:
     """Return redacted MQTT client configuration details."""
     if mqtt_obj is None:
         return {"configured": False}
+    if isinstance(mqtt_obj, list | tuple):
+        clients = list(mqtt_obj)
+        return {
+            "configured": bool(clients),
+            "client_count": len(clients),
+            "clients": [_mqtt_info(client) for client in clients],
+        }
     specs = getattr(mqtt_obj, "_mqtt_specs", None) or []
     return {
         "configured": True,
@@ -88,6 +95,7 @@ def _mqtt_info(mqtt_obj: object | None) -> dict[str, Any]:
         "client_id": _obfuscate(getattr(mqtt_obj, "_client_id", None)),
         "serial_number": _obfuscate(getattr(mqtt_obj, "_serial", None)),
         "spec_count": _safe_len(specs),
+        "service_location_uuids": [_obfuscate(slu) for slu in getattr(mqtt_obj, "_slus", ()) or ()],
         "specs": [
             {
                 "service_location_id": getattr(spec, "service_location_id", None),
@@ -120,6 +128,19 @@ def _dashboard_info(rt: RuntimeData | None) -> dict[str, Any]:
         "access_token_present": bool(getattr(dashboard, "_token", None)),
         "token_expires_at_present": bool(getattr(dashboard, "_token_expires_at_ms", None)),
     }
+
+
+def _mqtt_client_count(mqtt_by_site: object) -> int:
+    """Return total MQTT client count across all runtime site buckets."""
+    if not isinstance(mqtt_by_site, dict):
+        return 0
+    count = 0
+    for value in mqtt_by_site.values():
+        if isinstance(value, list | tuple):
+            count += len(value)
+        elif value is not None:
+            count += 1
+    return count
 
 
 async def async_get_config_entry_diagnostics(
@@ -159,7 +180,7 @@ async def async_get_config_entry_diagnostics(
         "domain": entry.domain,
         "version_manifest": manifest_version,
         "service_locations_total": len(sites or {}),
-        "mqtt_clients_total": len(getattr(rt, "mqtt", {}) or {}) if rt else 0,
+        "mqtt_clients_total": _mqtt_client_count(getattr(rt, "mqtt", {}) if rt else {}),
         "stations_total": 0,  # filled later
         "connectors_total": 0,  # filled later
         "connector_states_total": 0,  # filled later
@@ -180,7 +201,7 @@ async def async_get_config_entry_diagnostics(
     for site_id, site in (sites or {}).items():
         site_obj = site or {}
         stations = site_obj.get("stations", {})
-        # Defensive: RuntimeData.mqtt should be dict[int, SmappeeMqtt], but fall back gracefully
+        # Defensive: RuntimeData.mqtt may contain one or more SmappeeMqtt clients per site.
         mqtt_obj = (getattr(rt, "mqtt", {}) or {}).get(site_id) if rt else None
         # Aggregate counts
         station_count = len(stations)

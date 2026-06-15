@@ -110,7 +110,7 @@ class RuntimeData:
 
     api: object  # Dashboard client (kept generic to avoid circular import in type checking)
     sites: dict[int, dict]
-    mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt
+    mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt or list[SmappeeMqtt]
     dashboard: object | None = None
 
 

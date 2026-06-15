@@ -48,6 +48,7 @@ PLATFORMS = [
 ]
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
+MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
 
 # -------------------------
 # Helpers for discovery
@@ -385,6 +386,49 @@ def _mqtt_specs_from_highlevel_configs(configs: dict[int, dict[str, Any]]) -> li
     return unique_mqtt_channel_specs(specs)
 
 
+def _service_location_uuid_from_mqtt_topic(topic: str | None) -> str | None:
+    """Return the service-location UUID embedded in a Dashboard MQTT topic."""
+    if not topic:
+        return None
+    match = re.match(r"^servicelocation/([^/]+)/", topic)
+    return _safe_str(match.group(1)) if match else None
+
+
+def _group_mqtt_specs_by_credentials(
+    suuid: str | None,
+    sid: int | str,
+    mqtt_specs: list[MqttChannelSpec],
+) -> list[
+    tuple[
+        list[MqttChannelSpec],
+        list[str],
+        dict[str, int | str],
+    ]
+]:
+    """Group MQTT specs so every MQTT connection uses one credential set."""
+    grouped_specs: dict[tuple[str | None, str | None], list[MqttChannelSpec]] = {}
+    service_location_ids_by_group: dict[tuple[str | None, str | None], dict[str, int | str]] = {}
+
+    for spec in mqtt_specs:
+        spec_suuid = _service_location_uuid_from_mqtt_topic(spec.topic) or suuid
+        username = spec.username or spec_suuid or suuid
+        password = spec.password or spec_suuid or suuid
+        key = (username, password)
+        grouped_specs.setdefault(key, []).append(spec)
+        if spec_suuid:
+            service_location_ids_by_group.setdefault(key, {})[spec_suuid] = spec.service_location_id
+
+    groups = []
+    for key, specs in grouped_specs.items():
+        service_location_ids_by_uuid = service_location_ids_by_group.get(key, {})
+        service_location_uuids = list(service_location_ids_by_uuid)
+        if not service_location_uuids and suuid:
+            service_location_uuids = [suuid]
+            service_location_ids_by_uuid = {suuid: sid}
+        groups.append((specs, service_location_uuids, service_location_ids_by_uuid))
+    return groups
+
+
 async def _fetch_dashboard_connector_mapping(
     dashboard_client: SmappeeDashboardClient | None, station_devs: list[dict]
 ) -> dict[str, dict] | None:
@@ -704,6 +748,85 @@ async def _create_coordinators(
         coord.async_start_session_tracking()
 
 
+def _mqtt_runtime_value(mqtt_clients: list[SmappeeMqtt]) -> MqttRuntimeValue:
+    """Return a backwards-compatible MQTT runtime value."""
+    if not mqtt_clients:
+        return None
+    if len(mqtt_clients) == 1:
+        return mqtt_clients[0]
+    return mqtt_clients
+
+
+def _build_mqtt_clients(
+    *,
+    suuid: str | None,
+    serial_str: str,
+    sid: int | str,
+    client_id_prefix: str,
+    on_properties,
+    on_connection_change,
+    mqtt_specs: list[MqttChannelSpec] | None,
+) -> list[SmappeeMqtt]:
+    """Create one or more MQTT clients for a site based on credential sets."""
+    if mqtt_specs is None:
+        return [
+            SmappeeMqtt(
+                service_location_uuid=suuid,
+                client_id=f"{client_id_prefix}-{sid}",
+                serial_number=serial_str,
+                on_properties=on_properties,
+                service_location_id=sid,
+                on_connection_change=on_connection_change,
+            )
+        ]
+
+    spec_groups = _group_mqtt_specs_by_credentials(suuid, sid, mqtt_specs)
+    mqtt_clients: list[SmappeeMqtt] = []
+    for index, (specs, service_location_uuids, service_location_ids_by_uuid) in enumerate(
+        spec_groups, start=1
+    ):
+        mqtt_clients.append(
+            SmappeeMqtt(
+                service_location_uuid=service_location_uuids[0]
+                if service_location_uuids
+                else suuid,
+                service_location_uuids=service_location_uuids,
+                service_location_ids_by_uuid=service_location_ids_by_uuid,
+                client_id=f"{client_id_prefix}-{sid}"
+                if len(spec_groups) == 1
+                else f"{client_id_prefix}-{sid}-{index}",
+                serial_number=serial_str,
+                on_properties=on_properties,
+                service_location_id=sid,
+                on_connection_change=on_connection_change,
+                mqtt_specs=specs,
+            )
+        )
+    return mqtt_clients
+
+
+def _log_mqtt_subscriptions(
+    sid: int | str,
+    suuid: str | None,
+    mqtt_specs: list[MqttChannelSpec] | None,
+) -> None:
+    """Log MQTT subscriptions without leaking credentials."""
+    for spec in mqtt_specs or []:
+        _LOGGER.debug(
+            "Smappee MQTT subscription: sid=%s topic=%s username_present=%s source=highlevel",
+            spec.service_location_id,
+            spec.topic,
+            bool(spec.username),
+        )
+    if suuid and not mqtt_specs:
+        _LOGGER.debug(
+            "Smappee MQTT subscription: sid=%s topic=servicelocation/%s/power "
+            "username_present=True source=legacy",
+            sid,
+            suuid,
+        )
+
+
 def _setup_mqtt(
     hass,
     suuid,
@@ -713,7 +836,7 @@ def _setup_mqtt(
     client_id_prefix: str,
     update_interval: int,
     mqtt_specs: list[MqttChannelSpec] | None = None,
-) -> SmappeeMqtt | None:
+) -> MqttRuntimeValue:
     if not suuid and not mqtt_specs:
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
         return None
@@ -755,42 +878,32 @@ def _setup_mqtt(
                     _schedule_refresh(coord)
                 coord.apply_mqtt_connection_change(up)
 
-    if mqtt_specs is None:
-        mqtt = SmappeeMqtt(
-            service_location_uuid=suuid,
-            client_id=f"{client_id_prefix}-{sid}",
-            serial_number=serial_str,
-            on_properties=_on_props,
-            service_location_id=sid,
-            on_connection_change=_on_conn,
-        )
-    else:
-        mqtt = SmappeeMqtt(
-            service_location_uuid=suuid,
-            client_id=f"{client_id_prefix}-{sid}",
-            serial_number=serial_str,
-            on_properties=_on_props,
-            service_location_id=sid,
-            on_connection_change=_on_conn,
-            mqtt_specs=mqtt_specs,
-        )
-    for spec in mqtt_specs or []:
-        _LOGGER.debug(
-            "Smappee MQTT subscription: sid=%s topic=%s username_present=%s source=highlevel",
-            spec.service_location_id,
-            spec.topic,
-            bool(spec.username),
-        )
-    if suuid and not mqtt_specs:
-        _LOGGER.debug(
-            "Smappee MQTT subscription: sid=%s topic=servicelocation/%s/power "
-            "username_present=True source=legacy",
-            sid,
-            suuid,
-        )
-    mqtt.track_start_task(hass.async_create_task(mqtt.start()))
+    mqtt_clients = _build_mqtt_clients(
+        suuid=suuid,
+        serial_str=serial_str,
+        sid=sid,
+        client_id_prefix=client_id_prefix,
+        on_properties=_on_props,
+        on_connection_change=_on_conn,
+        mqtt_specs=mqtt_specs,
+    )
+    for mqtt in mqtt_clients:
+        mqtt.track_start_task(hass.async_create_task(mqtt.start()))
 
-    return mqtt
+    _log_mqtt_subscriptions(sid, suuid, mqtt_specs)
+    return _mqtt_runtime_value(mqtt_clients)
+
+
+def _iter_mqtt_clients(value: object) -> list[object]:
+    """Return MQTT clients from legacy single-client or grouped-client runtime values."""
+    if isinstance(value, list | tuple):
+        return list(value)
+    return [value] if value is not None else []
+
+
+def _mqtt_client_count(mqtt_by_site: dict[int, object]) -> int:
+    """Return the total number of MQTT clients across all sites."""
+    return sum(len(_iter_mqtt_clients(mqtt)) for mqtt in mqtt_by_site.values())
 
 
 async def _prepare_site(
@@ -801,7 +914,7 @@ async def _prepare_site(
     client_id_prefix: str,
     config_entry: SmappeeEvConfigEntry | None = None,
     dashboard_client: SmappeeDashboardClient | None = None,
-) -> tuple[dict[str, dict] | None, SmappeeMqtt | None]:
+) -> tuple[dict[str, dict] | None, MqttRuntimeValue]:
     """Build coordinators, station/connector clients and MQTT for one service location."""
 
     sid = sl["serviceLocationId"]
@@ -941,7 +1054,7 @@ async def _prepare_topology(
     client_id_prefix: str,
     config_entry: SmappeeEvConfigEntry | None = None,
     dashboard_client: SmappeeDashboardClient | None = None,
-) -> tuple[dict[str, dict] | None, SmappeeMqtt | None]:
+) -> tuple[dict[str, dict] | None, MqttRuntimeValue]:
     """Prepare one site-first Dashboard topology."""
 
     site_sid = topology.site_location_id
@@ -1154,7 +1267,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     topologies = await _load_dashboard_topologies(dashboard_client)
 
     sites: dict[int, dict] = {}
-    mqtt_clients: dict[int, SmappeeMqtt] = {}
+    mqtt_clients: dict[int, object] = {}
 
     # 2) Prepare each site in parallel
     client_id_prefix = f"ha-{entry.entry_id[-6:]}"
@@ -1244,19 +1357,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         if isinstance(rd, RuntimeData):
             # Stop all MQTT clients referenced in runtime_data
             for sid, mqtt in (rd.mqtt or {}).items():
-                stop_fn = getattr(mqtt, "stop", None)
-                if not callable(stop_fn):  # pragma: no cover - defensive
-                    continue
-                try:
-                    result = stop_fn()
-                    if asyncio.iscoroutine(result):
-                        await result
-                except asyncio.CancelledError:
-                    raise
-                except (RuntimeError, OSError) as err:
-                    _LOGGER.warning(
-                        "Failed to stop MQTT client for service location %s: %s", sid, err
-                    )
+                for mqtt_client in _iter_mqtt_clients(mqtt):
+                    stop_fn = getattr(mqtt_client, "stop", None)
+                    if not callable(stop_fn):  # pragma: no cover - defensive
+                        continue
+                    try:
+                        result = stop_fn()
+                        if asyncio.iscoroutine(result):
+                            await result
+                    except asyncio.CancelledError:
+                        raise
+                    except (RuntimeError, OSError) as err:
+                        _LOGGER.warning(
+                            "Failed to stop MQTT client for service location %s: %s", sid, err
+                        )
 
             # Allow coordinators to shutdown any background tasks
             for site in (rd.sites or {}).values():
