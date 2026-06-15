@@ -2,6 +2,7 @@ import asyncio
 from datetime import timedelta
 from inspect import isawaitable
 import logging
+import re
 from typing import Any, cast
 
 from aiohttp import ClientError, ClientSession
@@ -24,6 +25,13 @@ from .coordinator import SmappeeCoordinator
 from .dashboard_client import SmappeeDashboardClient
 from .data import RuntimeData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
+from .discovery import (
+    MqttChannelSpec,
+    SmappeeLocationTopology,
+    build_topologies_from_full_details,
+    parse_mqtt_channel_specs_from_highlevel,
+    unique_mqtt_channel_specs,
+)
 from .mqtt_gateway import SmappeeMqtt
 from .services import register_services, unregister_services
 
@@ -156,10 +164,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             updated = True
         version = 5
 
-    if data.get(CONF_DASHBOARD_REFRESH_TOKEN) and CONF_PASSWORD in data:
-        data.pop(CONF_PASSWORD)
-        updated = True
-
     for old_key in (
         "client_id",
         "client_secret",
@@ -290,6 +294,41 @@ async def _dashboard_discover_service_locations(
     return fallback
 
 
+async def _dashboard_discover_topologies(
+    dashboard_client: SmappeeDashboardClient | None,
+) -> list[SmappeeLocationTopology] | None:
+    """Discover Dashboard service locations and build site-first topologies."""
+    if not _dashboard_client_configured(dashboard_client):
+        return None
+    if dashboard_client is None:
+        return None
+    try:
+        locations = await dashboard_client.async_get_service_locations_full_details()
+    except asyncio.CancelledError:
+        raise
+    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        _LOGGER.warning("Dashboard service location topology discovery failed: %s", err)
+        raise
+
+    topologies = build_topologies_from_full_details(
+        [location for location in locations or [] if isinstance(location, dict)]
+    )
+    for topology in topologies:
+        _LOGGER.debug(
+            "Smappee topology: site=%s(%s), control=%s(%s), measurements=%s, "
+            "station_serial=%s, site_gateway=%s, control_gateway=%s",
+            topology.site_location_id,
+            topology.site_function_type,
+            topology.control_location_id,
+            topology.control_function_type,
+            topology.measurement_location_ids,
+            topology.charging_station_serial,
+            topology.site_gateway_serial,
+            topology.control_gateway_serial,
+        )
+    return topologies
+
+
 async def _dashboard_fetch_devices(
     dashboard_client: SmappeeDashboardClient | None, sid: int | str
 ) -> list[dict[str, Any]] | None:
@@ -305,6 +344,47 @@ async def _dashboard_fetch_devices(
         _LOGGER.warning("Dashboard smart device discovery failed for %s: %s", sid, err)
         return []
     return devices if isinstance(devices, list) else []
+
+
+async def _dashboard_fetch_highlevel_configs(
+    dashboard_client: SmappeeDashboardClient | None,
+    measurement_sids: list[int],
+) -> dict[int, dict[str, Any]]:
+    """Fetch highlevelconfiguration for all measurement service locations."""
+    if not _dashboard_client_configured(dashboard_client) or dashboard_client is None:
+        return {}
+
+    configs: dict[int, dict[str, Any]] = {}
+    for sid in dict.fromkeys(measurement_sids):
+        try:
+            cfg = await dashboard_client.async_get_highlevel_configuration(sid)
+        except asyncio.CancelledError:
+            raise
+        except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+            _LOGGER.warning("Dashboard highlevel configuration failed for %s: %s", sid, err)
+            continue
+        if isinstance(cfg, dict):
+            configs[sid] = cfg
+    return configs
+
+
+def _mqtt_specs_from_highlevel_configs(
+    configs: dict[int, dict[str, Any]]
+) -> list[MqttChannelSpec]:
+    specs: list[MqttChannelSpec] = []
+    for sid, cfg in configs.items():
+        parsed = parse_mqtt_channel_specs_from_highlevel(sid, cfg)
+        for spec in parsed:
+            _LOGGER.debug(
+                "Smappee highlevel mapping: sid=%s role=%s metric=%s topic=%s paths=%s",
+                spec.service_location_id,
+                spec.role,
+                spec.metric,
+                spec.topic,
+                spec.aspect_paths,
+            )
+        specs.extend(parsed)
+    return unique_mqtt_channel_specs(specs)
 
 
 async def _fetch_dashboard_connector_mapping(
@@ -368,6 +448,66 @@ def _fallback_dashboard_connector_mapping(
             "id": _safe_str(car.get("id")) or _safe_str(car.get("smartDeviceId")),
             "position": car.get("connectorNumber") or car.get("position") or index,
         }
+    return {station_serial: {"connectors": connectors}} if connectors else {}
+
+
+def _connector_position_from_measurement(measurement: dict[str, Any]) -> int | None:
+    for key in ("position", "connectorNumber"):
+        value = measurement.get(key)
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                pass
+    name = str(measurement.get("name") or "")
+    match = re.search(r"(?:^|\s-\s|\s)(\d+)\s*$", name)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _fallback_highlevel_connector_mapping(
+    station_serial: str | None,
+    highlevel_configs: dict[int, dict[str, Any]],
+) -> dict[str, dict]:
+    """Build measurement-only connector mapping from APPLIANCE/CAR_CHARGER entries."""
+    if not station_serial:
+        return {}
+
+    connectors: dict[str, dict] = {}
+    for cfg in highlevel_configs.values():
+        for measurement in cfg.get("measurements") or []:
+            if not isinstance(measurement, dict):
+                continue
+            if str(measurement.get("type") or "").upper() != "APPLIANCE":
+                continue
+            appliance = measurement.get("appliance")
+            appliance_data = appliance if isinstance(appliance, dict) else {}
+            appliance_type = appliance_data.get("type") or measurement.get("category")
+            if str(appliance_type or "").upper() != "CAR_CHARGER":
+                continue
+            connector_uuid = (
+                _safe_str(measurement.get("uuid"))
+                or _safe_str(measurement.get("smartDeviceUuid"))
+                or _safe_str(measurement.get("deviceUuid"))
+                or _safe_str(appliance_data.get("uuid"))
+                or _safe_str(appliance_data.get("smartDeviceUuid"))
+                or _safe_str(appliance_data.get("deviceUuid"))
+            )
+            if not connector_uuid:
+                continue
+            connectors.setdefault(
+                connector_uuid,
+                {
+                    "id": connector_uuid,
+                    "smart_device_uuid": connector_uuid,
+                    "position": _connector_position_from_measurement(measurement) or 1,
+                    "station_serial": station_serial,
+                },
+            )
     return {station_serial: {"connectors": connectors}} if connectors else {}
 
 
@@ -542,7 +682,12 @@ def _fallback_assign(stations, car_devs, serial_str, sid):
 
 
 async def _create_coordinators(
-    hass, stations, update_interval, config_entry=None, dashboard_client=None
+    hass,
+    stations,
+    update_interval,
+    config_entry=None,
+    dashboard_client=None,
+    highlevel_configs: dict[int, dict[str, Any]] | None = None,
 ):
     for bucket in stations.values():
         kwargs = {
@@ -553,6 +698,8 @@ async def _create_coordinators(
         }
         if dashboard_client is not None:
             kwargs["dashboard_client"] = dashboard_client
+        if highlevel_configs is not None:
+            kwargs["highlevel_configs"] = highlevel_configs
         coord = SmappeeCoordinator(hass, **kwargs)
         await coord.async_config_entry_first_refresh()
         bucket["coordinator"] = coord
@@ -560,9 +707,16 @@ async def _create_coordinators(
 
 
 def _setup_mqtt(
-    hass, suuid, serial_str, sid, stations, client_id_prefix: str, update_interval: int
+    hass,
+    suuid,
+    serial_str,
+    sid,
+    stations,
+    client_id_prefix: str,
+    update_interval: int,
+    mqtt_specs: list[MqttChannelSpec] | None = None,
 ) -> SmappeeMqtt | None:
-    if not suuid:
+    if not suuid and not mqtt_specs:
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
         return None
 
@@ -603,14 +757,39 @@ def _setup_mqtt(
                     _schedule_refresh(coord)
                 coord.apply_mqtt_connection_change(up)
 
-    mqtt = SmappeeMqtt(
-        service_location_uuid=suuid,
-        client_id=f"{client_id_prefix}-{sid}",
-        serial_number=serial_str,
-        on_properties=_on_props,
-        service_location_id=sid,
-        on_connection_change=_on_conn,
-    )
+    if mqtt_specs is None:
+        mqtt = SmappeeMqtt(
+            service_location_uuid=suuid,
+            client_id=f"{client_id_prefix}-{sid}",
+            serial_number=serial_str,
+            on_properties=_on_props,
+            service_location_id=sid,
+            on_connection_change=_on_conn,
+        )
+    else:
+        mqtt = SmappeeMqtt(
+            service_location_uuid=suuid,
+            client_id=f"{client_id_prefix}-{sid}",
+            serial_number=serial_str,
+            on_properties=_on_props,
+            service_location_id=sid,
+            on_connection_change=_on_conn,
+            mqtt_specs=mqtt_specs,
+        )
+    for spec in mqtt_specs or []:
+        _LOGGER.debug(
+            "Smappee MQTT subscription: sid=%s topic=%s username_present=%s source=highlevel",
+            spec.service_location_id,
+            spec.topic,
+            bool(spec.username),
+        )
+    if suuid and not mqtt_specs:
+        _LOGGER.debug(
+            "Smappee MQTT subscription: sid=%s topic=servicelocation/%s/power "
+            "username_present=True source=legacy",
+            sid,
+            suuid,
+        )
     mqtt.track_start_task(hass.async_create_task(mqtt.start()))
 
     return mqtt
@@ -761,6 +940,150 @@ async def _prepare_site(
     return stations, mqtt
 
 
+async def _prepare_topology(
+    hass: HomeAssistant,
+    topology: SmappeeLocationTopology,
+    update_interval: int,
+    client_id_prefix: str,
+    config_entry: SmappeeEvConfigEntry | None = None,
+    dashboard_client: SmappeeDashboardClient | None = None,
+) -> tuple[dict[str, dict] | None, SmappeeMqtt | None]:
+    """Prepare one site-first Dashboard topology."""
+
+    site_sid = topology.site_location_id
+    control_sid = topology.control_location_id
+    measurement_sids = topology.measurement_location_ids
+
+    highlevel_configs = await _dashboard_fetch_highlevel_configs(
+        dashboard_client, measurement_sids
+    )
+    mqtt_specs = _mqtt_specs_from_highlevel_configs(highlevel_configs)
+
+    devices = await _dashboard_fetch_devices(dashboard_client, control_sid)
+    if devices is None:
+        return None, None
+
+    station_devs, car_devs = _split_devices(devices)
+    station_serial = topology.charging_station_serial
+    serial_str = (
+        topology.site_gateway_serial
+        or topology.control_gateway_serial
+        or station_serial
+        or f"smappee-{site_sid}"
+    )
+
+    if station_serial and not station_devs:
+        station_devs = [
+            {
+                "uuid": station_serial,
+                "id": station_serial,
+                "serialNumber": station_serial,
+                "type": "CHARGINGSTATION",
+            }
+        ]
+        _LOGGER.debug(
+            "No CHARGINGSTATION smartdevice at control %s; using topology station serial %s",
+            control_sid,
+            station_serial,
+        )
+
+    if not station_devs and not car_devs and not station_serial:
+        _LOGGER.info("No chargers at %s (%s); skipping", topology.control_name, control_sid)
+        return None, None
+
+    station_serial_to_connectors = await _fetch_dashboard_connector_mapping(
+        dashboard_client, station_devs
+    )
+    if station_serial_to_connectors == {} and _dashboard_client_configured(dashboard_client):
+        station_serial_to_connectors = _fallback_dashboard_connector_mapping(station_devs, car_devs)
+    if station_serial_to_connectors == {}:
+        station_serial_to_connectors = _fallback_highlevel_connector_mapping(
+            station_serial,
+            highlevel_configs,
+        )
+    if station_serial_to_connectors is None:
+        station_serial_to_connectors = {}
+    else:
+        station_serial_to_connectors = _normalize_connector_mapping_station_keys(
+            station_serial_to_connectors,
+            station_serial or serial_str,
+        )
+
+    has_connector_mapping = any(
+        (m.get("connectors") or {}) for m in station_serial_to_connectors.values()
+    )
+
+    allowed_station_serials = set(station_serial_to_connectors.keys())
+    if allowed_station_serials:
+        filtered_station_devs = [
+            sd
+            for sd in station_devs
+            if (_station_serial(sd) or _safe_str(sd.get("uuid"))) in allowed_station_serials
+        ]
+        if filtered_station_devs:
+            station_devs = filtered_station_devs
+        elif has_connector_mapping:
+            station_devs = _station_devices_from_connector_mapping(station_serial_to_connectors)
+
+    allowed_connector_uuids = {
+        cu for m in station_serial_to_connectors.values() for cu in (m.get("connectors") or {})
+    }
+    if allowed_connector_uuids:
+        car_devs = [cd for cd in car_devs if _connector_uuid(cd) in allowed_connector_uuids]
+
+    stations = _make_station_clients_with_mapping_fallback(
+        serial_str,
+        control_sid,
+        station_devs,
+        station_serial_to_connectors,
+        has_connector_mapping,
+    )
+
+    if has_connector_mapping:
+        _assign_connectors(
+            stations,
+            car_devs,
+            station_serial_to_connectors,
+            serial_str,
+            control_sid,
+        )
+        total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
+        if total_assigned == 0 and len(stations) == 1:
+            _fallback_assign(stations, car_devs, serial_str, control_sid)
+        elif total_assigned == 0:
+            _LOGGER.warning(
+                "Connector mapping exists at control %s, but no connectors could be "
+                "assigned across %d station buckets",
+                control_sid,
+                len(stations),
+            )
+
+    await _create_coordinators(
+        hass,
+        stations,
+        update_interval,
+        config_entry=config_entry,
+        dashboard_client=dashboard_client,
+        highlevel_configs=highlevel_configs,
+    )
+
+    mqtt = _setup_mqtt(
+        hass,
+        topology.site_location_uuid or topology.control_location_uuid,
+        serial_str,
+        site_sid,
+        stations,
+        client_id_prefix,
+        update_interval,
+        mqtt_specs=mqtt_specs,
+    )
+
+    for bucket in stations.values():
+        bucket["mqtt"] = mqtt
+
+    return stations, mqtt
+
+
 def _create_dashboard_client(
     hass: HomeAssistant, entry: SmappeeEvConfigEntry, session: ClientSession
 ) -> SmappeeDashboardClient:
@@ -769,8 +1092,6 @@ def _create_dashboard_client(
     def _store_dashboard_tokens(tokens: dict[str, object]) -> None:
         data = dict(entry.data)
         data.update(tokens)
-        if data.get(CONF_DASHBOARD_REFRESH_TOKEN):
-            data.pop(CONF_PASSWORD, None)
         hass.config_entries.async_update_entry(entry, data=data)
 
     return SmappeeDashboardClient(
@@ -800,6 +1121,24 @@ async def _load_dashboard_service_locations(
     return locations
 
 
+async def _load_dashboard_topologies(
+    dashboard_client: SmappeeDashboardClient,
+) -> list[SmappeeLocationTopology]:
+    try:
+        topologies = await _dashboard_discover_topologies(dashboard_client)
+    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        _LOGGER.debug("Transient error loading dashboard topologies: %s", err)
+        raise ConfigEntryNotReady(f"Loading service location topology failed: {err}") from err
+
+    if topologies is None:
+        _LOGGER.debug("Dashboard discovery is not configured yet (retry later)")
+        raise ConfigEntryNotReady("Dashboard API is not configured")
+    if not topologies:
+        _LOGGER.debug("No candidate charging topologies found (retry later)")
+        raise ConfigEntryNotReady("No candidate charging topologies found")
+    return topologies
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Smappee EV component."""
     # Register services once domain-wide (multi-entry safe)
@@ -819,8 +1158,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     dashboard_client = _create_dashboard_client(hass, entry, session)
 
-    # 1) Discover sites
-    with_serial = await _load_dashboard_service_locations(dashboard_client)
+    # 1) Discover site-first topologies
+    topologies = await _load_dashboard_topologies(dashboard_client)
 
     sites: dict[int, dict] = {}
     mqtt_clients: dict[int, SmappeeMqtt] = {}
@@ -828,38 +1167,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     # 2) Prepare each site in parallel
     client_id_prefix = f"ha-{entry.entry_id[-6:]}"
     prep_tasks = [
-        _prepare_site(
+        _prepare_topology(
             hass,
-            session,
-            sl,
+            topology,
             update_interval,
             client_id_prefix,
             config_entry=entry,
             dashboard_client=dashboard_client,
         )
-        for sl in with_serial
+        for topology in topologies
     ]
     results = await asyncio.gather(*prep_tasks, return_exceptions=True)
-    for sl, res in zip(with_serial, results, strict=True):
+    for topology, res in zip(topologies, results, strict=True):
         if isinstance(res, asyncio.CancelledError):
             raise res
         if isinstance(res, ConfigEntryAuthFailed):
             raise res
         if isinstance(res, BaseException):
-            _LOGGER.warning("Site %s preparation failed: %s", sl.get("serviceLocationId"), res)
+            _LOGGER.warning("Site %s preparation failed: %s", topology.site_location_id, res)
             continue
         stations_map, mqtt = res
         if not stations_map:
             continue
-        sid = sl["serviceLocationId"]
+        sid = topology.site_location_id
         if mqtt:
             mqtt_clients[sid] = mqtt
-        sites[sid] = {
-            "stations": stations_map,
-            "name": sl.get("name"),
-            "serviceLocationUuid": sl.get("serviceLocationUuid"),
-            "deviceSerialNumber": sl.get("deviceSerialNumber"),
-        }
+        site = sites.setdefault(
+            sid,
+            {
+                "stations": {},
+                "name": topology.site_name,
+                "serviceLocationUuid": topology.site_location_uuid,
+                "deviceSerialNumber": topology.site_gateway_serial,
+                "controlLocationIds": [],
+                "measurementLocationIds": [],
+            },
+        )
+        site["stations"].update(stations_map)
+        site["controlLocationIds"].append(topology.control_location_id)
+        site["measurementLocationIds"] = list(
+            dict.fromkeys(site["measurementLocationIds"] + topology.measurement_location_ids)
+        )
 
     if not sites:
         _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")

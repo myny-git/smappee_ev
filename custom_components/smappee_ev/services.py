@@ -103,6 +103,12 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
     entry_id = call.data.get("config_entry_id")
     explicit_rt = _runtime_by_entry_id(hass, entry_id)
     sid = call.data.get("service_location_id")
+    if entry_id and explicit_rt is None:
+        raise _service_validation_error(
+            f"Config entry {entry_id} is not loaded or does not exist",
+            "config_entry_not_loaded",
+            config_entry_id=entry_id,
+        )
     if explicit_rt:
         if isinstance(sid, int):
             if sid not in explicit_rt.sites:

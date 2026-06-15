@@ -20,7 +20,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
+from .base_entities import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
@@ -205,7 +205,7 @@ class RestoredEnergyStationSensor(SmappeeStationEntity, RestoreSensor):
         await _async_restore_last_total_value(self)
 
 
-class RestoredEnergyConnectorSensor(SmappeeConnectorEntity, RestoreSensor):
+class RestoredEnergyConnectorSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     """Connector energy sensor with restore support and coordinator lifecycle."""
 
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -285,7 +285,7 @@ class StationPvEnergyImport(RestoredEnergyStationSensor):
 ############################################################
 
 
-class ConnCurrentL1(SmappeeConnectorEntity, SensorEntity):
+class ConnCurrentL1(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -311,7 +311,7 @@ class ConnCurrentL1(SmappeeConnectorEntity, SensorEntity):
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
 
 
-class ConnCurrentL2(SmappeeConnectorEntity, SensorEntity):
+class ConnCurrentL2(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -337,7 +337,7 @@ class ConnCurrentL2(SmappeeConnectorEntity, SensorEntity):
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
 
 
-class ConnCurrentL3(SmappeeConnectorEntity, SensorEntity):
+class ConnCurrentL3(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -363,7 +363,7 @@ class ConnCurrentL3(SmappeeConnectorEntity, SensorEntity):
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
 
-class ConnectorPowerSensor(SmappeeConnectorEntity, SensorEntity):
+class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -389,7 +389,7 @@ class ConnectorPowerSensor(SmappeeConnectorEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-class ConnectorCurrentASensor(SmappeeConnectorEntity, SensorEntity):
+class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -761,7 +761,7 @@ class StationGridVoltageL3(SmappeeStationEntity, SensorEntity):
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
 
-class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
+class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:ev-station"
 
@@ -786,7 +786,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorEntity, SensorEntity):
         return str(value) if value is not None else None
 
 
-class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
+class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:connection"
 
@@ -859,7 +859,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorEntity, RestoreSensor):
             self.async_write_ha_state()
 
 
-class SmappeeEvseStatusSensor(SmappeeConnectorEntity, RestoreSensor):
+class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:ev-plug-type2"
 

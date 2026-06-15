@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
@@ -39,6 +41,7 @@ class SmappeeDashboardClient:
         self._timeout = ClientTimeout(connect=HTTP_CONNECT_TIMEOUT, total=HTTP_TOTAL_TIMEOUT)
         self._token: str | None = None
         self._token_expires_at_ms = 0
+        self._auth_lock = asyncio.Lock()
         self._missing_credentials_logged = False
 
     def _token_valid(self) -> bool:
@@ -71,6 +74,8 @@ class SmappeeDashboardClient:
             json={"userName": self.username, "password": self.password},
             timeout=self._timeout,
         ) as resp:
+            if resp.status in (401, 403):
+                raise ConfigEntryAuthFailed("Dashboard credentials rejected")
             if resp.status != 200:
                 text = await resp.text()
                 raise RuntimeError(f"Dashboard login failed {resp.status}: {text}")
@@ -90,6 +95,8 @@ class SmappeeDashboardClient:
             json={"refreshToken": self.refresh_token, "language": "nl"},
             timeout=self._timeout,
         ) as resp:
+            if resp.status in (401, 403):
+                raise ConfigEntryAuthFailed("Dashboard refresh token rejected")
             if resp.status != 200:
                 return False
             data = await resp.json()
@@ -102,14 +109,29 @@ class SmappeeDashboardClient:
         """Return True when dashboard auth is available."""
         if self._token_valid():
             return True
-        try:
-            if self.refresh_token and await self.async_refresh():
+
+        async with self._auth_lock:
+            if self._token_valid():
                 return True
-            if await self.async_login():
-                return True
-        except (aiohttp.ClientError, TimeoutError, RuntimeError, ValueError) as err:
-            _LOGGER.debug("Dashboard authentication failed: %s", err)
-            return False
+
+            try:
+                if self.refresh_token:
+                    try:
+                        if await self.async_refresh():
+                            return True
+                    except ConfigEntryAuthFailed:
+                        if not (self.username and self.password):
+                            raise
+                        _LOGGER.debug(
+                            "Dashboard refresh token rejected; trying username/password login"
+                        )
+                if await self.async_login():
+                    return True
+            except ConfigEntryAuthFailed:
+                raise
+            except (aiohttp.ClientError, TimeoutError, RuntimeError, ValueError) as err:
+                _LOGGER.debug("Dashboard authentication failed: %s", err)
+                return False
 
         if not self._missing_credentials_logged:
             _LOGGER.warning(
@@ -130,6 +152,7 @@ class SmappeeDashboardClient:
         params: dict[str, Any] | None = None,
         expected: tuple[int, ...] = (200,),
         return_json: bool = False,
+        retry_auth: bool = True,
     ) -> Any | None:
         """Run an authenticated Dashboard API request."""
         if not await self.async_ensure_auth():
@@ -144,15 +167,30 @@ class SmappeeDashboardClient:
             headers=self._headers(),
             timeout=self._timeout,
         ) as resp:
-            if resp.status == 401 and self.refresh_token and await self.async_refresh():
-                return await self._request(
-                    method,
-                    path,
-                    json=json,
-                    params=params,
-                    expected=expected,
-                    return_json=return_json,
-                )
+            if resp.status in (401, 403) and retry_auth:
+                async with self._auth_lock:
+                    self._token = None
+                    refreshed = False
+                    if self.refresh_token:
+                        try:
+                            refreshed = await self.async_refresh()
+                        except ConfigEntryAuthFailed:
+                            if not (self.username and self.password):
+                                raise
+                    if not refreshed:
+                        refreshed = await self.async_login()
+                if refreshed:
+                    return await self._request(
+                        method,
+                        path,
+                        json=json,
+                        params=params,
+                        expected=expected,
+                        return_json=return_json,
+                        retry_auth=False,
+                    )
+            if resp.status in (401, 403):
+                raise ConfigEntryAuthFailed("Dashboard authorization failed")
             if resp.status not in expected:
                 text = await resp.text()
                 raise RuntimeError(

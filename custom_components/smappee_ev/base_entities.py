@@ -14,6 +14,8 @@ __all__ = [
     "SmappeeStationEntity",
     "SmappeeStationRestEntity",
     "SmappeeConnectorEntity",
+    "SmappeeConnectorRestEntity",
+    "SmappeeConnectorMqttEntity",
 ]
 
 
@@ -141,3 +143,24 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
         if not data:
             return None
         return (getattr(data, "connectors", None) or {}).get(self._connector_uuid)
+
+
+class SmappeeConnectorRestEntity(SmappeeConnectorEntity):
+    """Explicit base for connector entities that require REST/Dashboard reachability."""
+
+
+class SmappeeConnectorMqttEntity(SmappeeConnectorEntity):
+    """Base for connector entities whose values are primarily MQTT-backed."""
+
+    @property
+    def available(self) -> bool:
+        """Return True when coordinator data exists and MQTT is not known down."""
+        if not SmappeeBaseEntity.available.fget(self):
+            return False
+        conn = self._conn_state
+        if conn is None:
+            return False
+        data = getattr(self.coordinator, "data", None)
+        station = getattr(data, "station", None) if data else None
+        mqtt_connected = getattr(station, "mqtt_connected", None)
+        return mqtt_connected is not False

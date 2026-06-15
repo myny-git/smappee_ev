@@ -7,7 +7,7 @@ from contextlib import suppress
 import json
 import logging
 import ssl
-from typing import cast
+from typing import Any, cast
 
 from aiomqtt import Client, MqttError
 
@@ -31,12 +31,13 @@ class SmappeeMqtt:
     def __init__(
         self,
         *,
-        service_location_uuid: str,
+        service_location_uuid: str | None,
         client_id: str,
         serial_number: str,
         on_properties: Callable[[str, dict], None],
         service_location_id: int | str,
         on_connection_change: Callable[[bool], None] | None = None,
+        mqtt_specs: list[Any] | None = None,
     ) -> None:
         self._slu = service_location_uuid
         self._client_id = client_id
@@ -44,6 +45,9 @@ class SmappeeMqtt:
         self._on_properties = on_properties
         self._slu_id = service_location_id
         self._on_conn = on_connection_change
+        self._mqtt_specs = mqtt_specs or []
+        self._mqtt_username = self._first_spec_attr("username") or service_location_uuid
+        self._mqtt_password = self._first_spec_attr("password") or service_location_uuid
 
         self._client: Client | None = None
         self._stop = asyncio.Event()
@@ -53,6 +57,20 @@ class SmappeeMqtt:
         self._mqtt_was_connected: bool | None = None
 
     # ---------- helpers ----------
+
+    def _first_spec_attr(self, attr: str) -> str | None:
+        for spec in self._mqtt_specs:
+            value = getattr(spec, attr, None)
+            if value:
+                return str(value)
+        return None
+
+    def _spec_topic(self, spec: Any) -> str | None:
+        topic = getattr(spec, "topic", None)
+        if topic is None and isinstance(spec, dict):
+            topic = spec.get("topic")
+        text = str(topic).strip() if topic is not None else ""
+        return text or None
 
     @staticmethod
     def _to_text(raw: object) -> str:
@@ -85,14 +103,23 @@ class SmappeeMqtt:
 
     async def _subscribe_all(self, client: Client) -> None:
         """(Re)subscribe all topics after connect/reconnect."""
-        topics = [
-            f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/state",
-            f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/property/chargingstate",
-            f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/updated",
-            f"servicelocation/{self._slu}/etc/led/acledcontroller/v1/devices/updated",
-            f"servicelocation/{self._slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}",
-            f"servicelocation/{self._slu}/power",  # optional
-        ]
+        topics: list[str] = []
+        for spec in self._mqtt_specs:
+            topic = self._spec_topic(spec)
+            if topic:
+                topics.append(topic)
+        if self._slu:
+            topics.extend(
+                [
+                    f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/state",
+                    f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/+/property/chargingstate",
+                    f"servicelocation/{self._slu}/etc/carcharger/acchargingcontroller/v1/devices/updated",
+                    f"servicelocation/{self._slu}/etc/led/acledcontroller/v1/devices/updated",
+                    f"servicelocation/{self._slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}",
+                    f"servicelocation/{self._slu}/power",
+                ]
+            )
+        topics = list(dict.fromkeys(topics))
         for t in topics:
             await client.subscribe(t, qos=MQTT_QOS_AT_LEAST_ONCE)
 
@@ -159,8 +186,8 @@ class SmappeeMqtt:
                     async with Client(
                         hostname=MQTT_HOST,
                         port=MQTT_PORT_TLS,
-                        username=self._slu,
-                        password=self._slu,
+                        username=self._mqtt_username,
+                        password=self._mqtt_password,
                         identifier=self._client_id,  # aiomqtt v2.x
                         tls_context=ssl_ctx,
                         clean_session=True,
@@ -325,7 +352,7 @@ class SmappeeMqtt:
 
     async def _publish_tracking_once(self) -> None:
         client = self._client
-        if not client:
+        if not client or not self._slu:
             return
         topic = f"servicelocation/{self._slu}/tracking"
         payload = {
@@ -340,7 +367,7 @@ class SmappeeMqtt:
 
     async def _publish_ha_heartbeat_once(self) -> None:
         client = self._client
-        if not client:
+        if not client or not self._slu:
             return
         topic = f"servicelocation/{self._slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}"
         value: int | str | None = self._slu_id

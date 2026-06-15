@@ -32,6 +32,9 @@
         "service_location_not_in_entry": {
             "message": "Service location {service_location_id} hoort niet bij config entry {config_entry_id}"
         },
+        "config_entry_not_loaded": {
+            "message": "Config entry {config_entry_id} is niet geladen of bestaat niet."
+        },
         "multiple_service_locations": {
             "message": "Meerdere service locations gevonden. Geef service_location_id op."
         },

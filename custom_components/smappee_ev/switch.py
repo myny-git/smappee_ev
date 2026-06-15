@@ -141,7 +141,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             self.async_write_ha_state()
         except asyncio.CancelledError:
             raise
-        except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed) as err:
+        except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed, RuntimeError) as err:
             _LOGGER.warning("Failed to start charging on %s: %s", self.connector_uuid, err)
             self.async_write_ha_state()
             raise
@@ -160,7 +160,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             self.async_write_ha_state()
         except asyncio.CancelledError:
             raise
-        except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed) as err:
+        except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed, RuntimeError) as err:
             _LOGGER.warning("Failed to pause charging on %s: %s", self.connector_uuid, err)
             self.async_write_ha_state()
             raise

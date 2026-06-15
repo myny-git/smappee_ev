@@ -26,6 +26,7 @@ from .const import (
 from .dashboard_client import SmappeeDashboardClient
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
+from .discovery import parse_mqtt_channel_specs_from_highlevel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,6 +144,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         update_interval: int,
         config_entry: SmappeeEvConfigEntry | None = None,
         dashboard_client: SmappeeDashboardClient | None = None,
+        highlevel_configs: dict[int, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -154,6 +156,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self.station_client = station_client
         self.connector_clients = connector_clients
         self.dashboard_client = dashboard_client
+        self._highlevel_configs = highlevel_configs or {}
         self.station_client.dashboard_client = dashboard_client
         for client in self.connector_clients.values():
             client.dashboard_client = dashboard_client
@@ -327,15 +330,53 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         if self.dashboard_client is None:
             return
 
-        cfg = await self.dashboard_client.async_get_highlevel_configuration(
-            self.station_client.service_location_id
-        )
-        if cfg is None:
-            return
+        configs = dict(self._highlevel_configs)
+        if not configs:
+            cfg = await self.dashboard_client.async_get_highlevel_configuration(
+                self.station_client.service_location_id
+            )
+            if cfg is None:
+                return
+            configs[int(self.station_client.service_location_id)] = cfg
 
-        mapping = self._build_measurement_index_map_from_highlevel(cfg)
+        mapping = self._build_measurement_index_map_from_highlevel_configs(configs)
         if mapping:
             self._power_index_map = mapping
+
+    def _build_measurement_index_map_from_highlevel_configs(
+        self, configs: dict[int, dict[str, Any]]
+    ) -> dict[str, Any] | None:
+        """Build one MQTT index mapping from multiple highlevel configurations."""
+        merged: dict[str, Any] = {
+            "grid": {"power": [], "current": [], "cons": [], "energy": []},
+            "pv": {"power": [], "current": [], "cons": [], "energy": []},
+            "cars": {},
+        }
+        found = False
+        for sid, cfg in configs.items():
+            mapping = self._build_measurement_index_map_from_highlevel(cfg)
+            for spec in parse_mqtt_channel_specs_from_highlevel(sid, cfg):
+                _LOGGER.debug(
+                    "Smappee highlevel mapping: sid=%s role=%s metric=%s topic=%s paths=%s",
+                    spec.service_location_id,
+                    spec.role,
+                    spec.metric,
+                    spec.topic,
+                    spec.aspect_paths,
+                )
+            if not mapping:
+                continue
+            found = True
+            for key in ("power", "power_field", "current", "energy"):
+                value = mapping["grid"].get(key)
+                if value and not merged["grid"].get(key):
+                    merged["grid"][key] = value
+                value = mapping["pv"].get(key)
+                if value and not merged["pv"].get(key):
+                    merged["pv"][key] = value
+            merged["cars"].update(mapping["cars"])
+
+        return merged if found else None
 
     def _build_measurement_index_map_from_highlevel(
         self, cfg: dict[str, Any]
@@ -585,11 +626,12 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
                 "appliances": self.dashboard_client.async_get_appliances(service_location_id),
             }
             results = await asyncio.gather(*calls.values(), return_exceptions=True)
-            self._last_dashboard_refresh = now
 
             changed = False
             errors: list[str] = []
             responses = dict(zip(calls.keys(), results, strict=True))
+            if any(not isinstance(result, BaseException) for result in responses.values()):
+                self._last_dashboard_refresh = now
             for label, result in responses.items():
                 if isinstance(result, BaseException):
                     if isinstance(result, asyncio.CancelledError):
@@ -610,7 +652,10 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             highlevel = responses.get("high-level configuration")
             if isinstance(highlevel, dict):
-                mapping = self._build_measurement_index_map_from_highlevel(highlevel)
+                self._highlevel_configs[int(service_location_id)] = highlevel
+                mapping = self._build_measurement_index_map_from_highlevel_configs(
+                    self._highlevel_configs
+                )
                 if mapping is not None:
                     self._power_index_map = mapping
 

@@ -7,6 +7,7 @@ from typing import Any
 import aiohttp
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
@@ -53,8 +54,11 @@ async def _async_dashboard_auth_data(
             if refresh_token:
                 return {
                     CONF_USERNAME: user_input[CONF_USERNAME],
+                    CONF_PASSWORD: user_input[CONF_PASSWORD],
                     CONF_DASHBOARD_REFRESH_TOKEN: refresh_token,
                 }
+    except ConfigEntryAuthFailed as err:
+        _LOGGER.debug("Dashboard authentication rejected during setup: %s", err)
     except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.debug("Dashboard authentication unavailable during setup: %s", err)
     return None

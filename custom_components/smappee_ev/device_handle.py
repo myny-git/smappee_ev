@@ -361,5 +361,4 @@ class SmappeeDeviceHandle:
         except asyncio.CancelledError:
             raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
-            _LOGGER.warning("Dashboard recent sessions fetch failed: %s", err)
-            return []
+            raise RuntimeError(f"Dashboard recent sessions fetch failed: {err}") from err

@@ -32,6 +32,9 @@
     "service_location_not_in_entry": {
       "message": "Service location {service_location_id} does not belong to config entry {config_entry_id}"
     },
+    "config_entry_not_loaded": {
+      "message": "Config entry {config_entry_id} is not loaded or does not exist."
+    },
     "multiple_service_locations": {
       "message": "Multiple service locations detected. Provide service_location_id."
     },
