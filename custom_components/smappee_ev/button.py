@@ -10,7 +10,6 @@ from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -50,13 +49,11 @@ async def async_setup_entry(
                         api_client=st_client,
                         sid=sid,
                         station_uuid=st_uuid,
-                        name="Restart charging station",
                         action="restart_charging_station",
                     )
                 )
 
             for cuuid, client in (conns or {}).items():
-                lbl = build_connector_label(client, cuuid).split(" ", 1)[1]  # get number / tail
                 entities.extend(
                     [
                         SmappeeActionButton(
@@ -65,7 +62,6 @@ async def async_setup_entry(
                             sid=sid,
                             station_uuid=st_uuid,
                             connector_uuid=cuuid,
-                            name=f"Start charging {lbl}",
                             action="start_charging",
                         ),
                         SmappeeActionButton(
@@ -74,7 +70,6 @@ async def async_setup_entry(
                             sid=sid,
                             station_uuid=st_uuid,
                             connector_uuid=cuuid,
-                            name=f"Pause charging {lbl}",
                             action="pause_charging",
                         ),
                         SmappeeActionButton(
@@ -83,7 +78,6 @@ async def async_setup_entry(
                             sid=sid,
                             station_uuid=st_uuid,
                             connector_uuid=cuuid,
-                            name=f"Stop charging {lbl}",
                             action="stop_charging",
                         ),
                         SmappeeActionButton(
@@ -92,7 +86,6 @@ async def async_setup_entry(
                             sid=sid,
                             station_uuid=st_uuid,
                             connector_uuid=cuuid,
-                            name=f"Set charging mode {lbl}",
                             action="set_charging_mode",
                         ),
                     ]
@@ -111,7 +104,6 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
         api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
-        name: str,
         action: str,
     ) -> None:
         SmappeeStationEntity.__init__(
@@ -120,8 +112,8 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
             sid,
             station_uuid,
             unique_suffix=f"button:{action}",
-            name=name,
         )
+        self._attr_translation_key = action
         self.api_client = api_client
         self._action = action
         self._attr_icon = ACTION_ICONS.get(action)
@@ -146,10 +138,9 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         sid: int,
         station_uuid: str,
         connector_uuid: str,
-        name: str,
         action: str,
     ) -> None:
-        # Build name/unique id via base class
+        # Build unique id via base class
         SmappeeConnectorEntity.__init__(
             self,
             coordinator,
@@ -158,8 +149,8 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
             station_uuid,
             connector_uuid,
             unique_suffix=f"button:{action}",
-            name=name,
         )
+        self._attr_translation_key = action
         self.api_client = api_client
         self._action = action
         self._attr_icon = ACTION_ICONS.get(action)

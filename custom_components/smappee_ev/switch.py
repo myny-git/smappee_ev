@@ -16,7 +16,6 @@ from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
-from .helpers import build_connector_label
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -77,6 +76,8 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     """Switch to control start/pause charging on a specific connector."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "evcc_charging"
+    _attr_icon = "mdi:ev-station"
 
     def __init__(
         self,
@@ -87,7 +88,6 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         station_uuid: str,
         connector_uuid: str,
     ) -> None:
-        num_lbl = build_connector_label(api_client, connector_uuid).split(" ", 1)[1]
         SmappeeConnectorEntity.__init__(
             self,
             coordinator,
@@ -96,7 +96,6 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             station_uuid,
             connector_uuid,
             unique_suffix="switch:charging",
-            name=f"Connector {num_lbl} EVCC charging",
         )
         self.api_client = api_client
         self._is_on = False
@@ -107,10 +106,6 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     def is_on(self) -> bool:
         """Show last EVCC intent only (not physical session state)."""
         return self._is_on
-
-    @property
-    def icon(self) -> str:
-        return "mdi:ev-station" if self.is_on else "mdi:ev-station-disabled"
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -175,6 +170,7 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
     """Switch to toggle station availability (acchargingstation action)."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "station_available"
 
     def __init__(
         self,
@@ -190,7 +186,6 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
             sid,
             station_uuid,
             unique_suffix="switch:station_available",
-            name="Station available",
         )
         self.api_client = api_client
 

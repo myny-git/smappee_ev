@@ -13,7 +13,6 @@ from .helpers import station_serial
 
 PARALLEL_UPDATES = 0
 
-
 def _station_serial(coord: SmappeeCoordinator) -> str:
     return station_serial(coord)
 
@@ -38,10 +37,9 @@ async def async_setup_entry(
 
 
 class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
-    _attr_has_entity_name = True
-    _attr_name = "MQTT Connected"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "mqtt_connected"
 
     def __init__(
         self,
@@ -56,7 +54,6 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
             sid,
             station_uuid,
             unique_suffix="mqtt_connected",
-            name="MQTT Connected",
         )
         self.api_client = api_client
 

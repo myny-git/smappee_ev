@@ -47,6 +47,7 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
     _attr_icon = "mdi:led-on"
+    _attr_translation_key = "led"
 
     def __init__(
         self,
@@ -62,7 +63,6 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
             sid,
             station_uuid,
             unique_suffix="light:led",
-            name="LED",
         )
         self.api_client = api_client
 

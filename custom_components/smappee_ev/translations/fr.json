@@ -217,5 +217,168 @@
         }
       }
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "mqtt_connected": {
+        "name": "MQTT connecté"
+      }
+    },
+    "button": {
+      "start_charging": {
+        "name": "Démarrer la session de charge"
+      },
+      "pause_charging": {
+        "name": "Mettre en pause la session de charge"
+      },
+      "set_charging_mode": {
+        "name": "Définir le mode de charge"
+      },
+      "stop_charging": {
+        "name": "Arrêter la session de charge"
+      },
+      "restart_charging_station": {
+        "name": "Redémarrer la borne de recharge"
+      }
+    },
+    "number": {
+      "min_surpluspct": {
+        "name": "Pourcentage minimum de surplus"
+      },
+      "max_charging_speed": {
+        "name": "Vitesse de charge maximale"
+      },
+      "capacity_maximum_power": {
+        "name": "Puissance maximale de capacité"
+      },
+      "overload_maximum_load": {
+        "name": "Charge maximale de surcharge"
+      }
+    },
+    "select": {
+      "charging_mode": {
+        "name": "Mode de charge",
+        "state": {
+          "smart": "Charge intelligente",
+          "solar": "Charge solaire",
+          "standard": "Charge standard"
+        }
+      }
+    },
+    "switch": {
+      "station_available": {
+        "name": "Borne disponible"
+      },
+      "evcc_charging": {
+        "name": "Charge EVCC"
+      }
+    },
+    "light": {
+      "led": {
+        "name": "LED"
+      }
+    },
+    "sensor": {
+      "mqtt_last_seen": {
+        "name": "Dernière connexion MQTT"
+      },
+      "grid_power": {
+        "name": "Puissance du réseau"
+      },
+      "house_consumption_power": {
+        "name": "Puissance de consommation du logement"
+      },
+      "pv_power": {
+        "name": "Puissance photovoltaïque"
+      },
+      "grid_energy_import": {
+        "name": "Énergie importée du réseau"
+      },
+      "grid_energy_export": {
+        "name": "Énergie exportée vers le réseau"
+      },
+      "pv_energy_import": {
+        "name": "Énergie photovoltaïque importée"
+      },
+      "current_l1": {
+        "name": "Courant L1"
+      },
+      "current_l2": {
+        "name": "Courant L2"
+      },
+      "current_l3": {
+        "name": "Courant L3"
+      },
+      "power": {
+        "name": "Puissance"
+      },
+      "current": {
+        "name": "Courant"
+      },
+      "support_grid": {
+        "name": "Support réseau"
+      },
+      "energy_import": {
+        "name": "Énergie importée"
+      },
+      "grid_currents": {
+        "name": "Courants réseau (L1–L3)"
+      },
+      "pv_currents": {
+        "name": "Courants PV (L1–L3)"
+      },
+      "grid_current_l1": {
+        "name": "Courant réseau L1"
+      },
+      "grid_current_l2": {
+        "name": "Courant réseau L2"
+      },
+      "grid_current_l3": {
+        "name": "Courant réseau L3"
+      },
+      "pv_current_l1": {
+        "name": "Courant PV L1"
+      },
+      "pv_current_l2": {
+        "name": "Courant PV L2"
+      },
+      "pv_current_l3": {
+        "name": "Courant PV L3"
+      },
+      "grid_voltage_l1": {
+        "name": "Tension réseau L1"
+      },
+      "grid_voltage_l2": {
+        "name": "Tension réseau L2"
+      },
+      "grid_voltage_l3": {
+        "name": "Tension réseau L3"
+      },
+      "charging_state": {
+        "name": "État de charge",
+        "state": {
+          "started": "Démarré",
+          "suspended": "Suspendu",
+          "stopped": "Arrêté"
+        }
+      },
+      "evcc_state": {
+        "name": "État EVCC"
+      },
+      "evse_status": {
+        "name": "État EVSE",
+        "state": {
+          "available": "Disponible",
+          "cable_connected": "Câble connecté",
+          "charging": "En charge",
+          "charging_finished": "Charge terminée",
+          "error": "Erreur",
+          "suspended_evse": "Suspendu par le chargeur"
+        }
+      },
+      "session_energy": {
+        "name": "Énergie de session"
+      }
+    }
   }
 }

@@ -217,5 +217,168 @@
         }
       }
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "mqtt_connected": {
+        "name": "MQTT Connected"
+      }
+    },
+    "button": {
+      "start_charging": {
+        "name": "Start charging session"
+      },
+      "pause_charging": {
+        "name": "Pause charging session"
+      },
+      "set_charging_mode": {
+        "name": "Set charging mode"
+      },
+      "stop_charging": {
+        "name": "Stop charging session"
+      },
+      "restart_charging_station": {
+        "name": "Restart charging station"
+      }
+    },
+    "number": {
+      "min_surpluspct": {
+        "name": "Min Surplus Percentage"
+      },
+      "max_charging_speed": {
+        "name": "Max charging speed"
+      },
+      "capacity_maximum_power": {
+        "name": "Capacity maximum power"
+      },
+      "overload_maximum_load": {
+        "name": "Overload maximum load"
+      }
+    },
+    "select": {
+      "charging_mode": {
+        "name": "Charging mode",
+        "state": {
+          "smart": "Smart charging",
+          "solar": "Solar charging",
+          "standard": "Standard charging"
+        }
+      }
+    },
+    "switch": {
+      "station_available": {
+        "name": "Station available"
+      },
+      "evcc_charging": {
+        "name": "EVCC charging"
+      }
+    },
+    "light": {
+      "led": {
+        "name": "LED"
+      }
+    },
+    "sensor": {
+      "mqtt_last_seen": {
+        "name": "MQTT last seen"
+      },
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "house_consumption_power": {
+        "name": "House consumption power"
+      },
+      "pv_power": {
+        "name": "PV power"
+      },
+      "grid_energy_import": {
+        "name": "Grid energy import"
+      },
+      "grid_energy_export": {
+        "name": "Grid energy export"
+      },
+      "pv_energy_import": {
+        "name": "PV energy import"
+      },
+      "current_l1": {
+        "name": "Current L1"
+      },
+      "current_l2": {
+        "name": "Current L2"
+      },
+      "current_l3": {
+        "name": "Current L3"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "current": {
+        "name": "Current"
+      },
+      "support_grid": {
+        "name": "Support grid"
+      },
+      "energy_import": {
+        "name": "Energy import"
+      },
+      "grid_currents": {
+        "name": "Grid current (L1–L3)"
+      },
+      "pv_currents": {
+        "name": "PV current (L1–L3)"
+      },
+      "grid_current_l1": {
+        "name": "Grid current L1"
+      },
+      "grid_current_l2": {
+        "name": "Grid current L2"
+      },
+      "grid_current_l3": {
+        "name": "Grid current L3"
+      },
+      "pv_current_l1": {
+        "name": "PV current L1"
+      },
+      "pv_current_l2": {
+        "name": "PV current L2"
+      },
+      "pv_current_l3": {
+        "name": "PV current L3"
+      },
+      "grid_voltage_l1": {
+        "name": "Grid voltage L1"
+      },
+      "grid_voltage_l2": {
+        "name": "Grid voltage L2"
+      },
+      "grid_voltage_l3": {
+        "name": "Grid voltage L3"
+      },
+      "charging_state": {
+        "name": "Charging state",
+        "state": {
+          "started": "Started",
+          "suspended": "Suspended",
+          "stopped": "Stopped"
+        }
+      },
+      "evcc_state": {
+        "name": "EVCC state"
+      },
+      "evse_status": {
+        "name": "EVSE status",
+        "state": {
+          "available": "Available",
+          "cable_connected": "Cable connected",
+          "charging": "Charging",
+          "charging_finished": "Charging finished",
+          "error": "Error",
+          "suspended_evse": "Paused by charger"
+        }
+      },
+      "session_energy": {
+        "name": "Session energy"
+      }
+    }
   }
 }
