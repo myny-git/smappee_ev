@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any, cast
 
 from homeassistant.helpers.entity import DeviceInfo
@@ -10,8 +9,6 @@ from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
-
-_LOGGER = logging.getLogger(__name__)
 
 __all__ = [
     "SmappeeBaseEntity",
@@ -104,11 +101,11 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
         unique_suffix: str,
     ) -> None:
         self._connector_uuid = connector_uuid
-        api = cast(SmappeeDeviceHandle, api)
-        sid = int(sid)
-        station_uuid = station_uuid
-        connector_uuid = connector_uuid
-        unique_suffix = unique_suffix
+        self.api = cast(SmappeeDeviceHandle, api)
+        self.sid = int(sid)
+        self.station_uuid = station_uuid
+        self.connector_uuid = connector_uuid
+        self.unique_suffix = unique_suffix
         connector_label = build_connector_id(
             cast(SmappeeDeviceHandle, api), connector_uuid
         )

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -14,7 +12,6 @@ from .device_handle import SmappeeDeviceHandle
 from .helpers import station_serial
 
 PARALLEL_UPDATES = 0
-_LOGGER = logging.getLogger(__name__)
 
 def _station_serial(coord: SmappeeCoordinator) -> str:
     return station_serial(coord)
