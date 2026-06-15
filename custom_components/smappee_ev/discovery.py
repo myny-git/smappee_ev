@@ -148,9 +148,7 @@ def build_topologies_from_full_details(
         topologies.append(
             SmappeeLocationTopology(
                 site_location_id=site_id,
-                site_location_uuid=_safe_str(
-                    site.get("serviceLocationUuid") or site.get("uuid")
-                ),
+                site_location_uuid=_safe_str(site.get("serviceLocationUuid") or site.get("uuid")),
                 site_name=_safe_str(site.get("name")) or f"Smappee {site_id}",
                 site_function_type=_safe_str(site.get("functionType")),
                 control_location_id=control_id,
@@ -197,9 +195,7 @@ def _measurement_role(measurement: dict[str, Any]) -> str | None:
         return "production"
     appliance = measurement.get("appliance")
     appliance_type = (
-        appliance.get("type")
-        if isinstance(appliance, dict)
-        else measurement.get("category")
+        appliance.get("type") if isinstance(appliance, dict) else measurement.get("category")
     )
     if mtype == "APPLIANCE" and str(appliance_type or "").upper() == "CAR_CHARGER":
         return "car_charger"
@@ -224,9 +220,7 @@ def parse_mqtt_channel_specs_from_highlevel(
         if not topic:
             return
         aspect_paths = [
-            dict(item)
-            for item in channel.get("aspectPaths") or []
-            if isinstance(item, dict)
+            dict(item) for item in channel.get("aspectPaths") or [] if isinstance(item, dict)
         ]
         key = (
             service_location_id,

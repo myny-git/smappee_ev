@@ -220,9 +220,7 @@ async def async_get_config_entry_diagnostics(
                     "station_handle": _handle_info(st_client),
                     "available": getattr(st, "available", None) if st else None,
                     "api_available": getattr(st, "api_available", None) if st else None,
-                    "dashboard_available": getattr(st, "dashboard_available", None)
-                    if st
-                    else None,
+                    "dashboard_available": getattr(st, "dashboard_available", None) if st else None,
                     "led_brightness": getattr(st, "led_brightness", None) if st else None,
                     "dashboard_led_device_id": _obfuscate(
                         getattr(st, "dashboard_led_device_id", None) if st else None
@@ -252,15 +250,9 @@ async def async_get_config_entry_diagnostics(
                         if cstate
                         else getattr(client, "connector_number", None),
                         "available": getattr(cstate, "available", None) if cstate else None,
-                        "api_available": getattr(cstate, "api_available", None)
-                        if cstate
-                        else None,
-                        "session_state": getattr(cstate, "session_state", None)
-                        if cstate
-                        else None,
-                        "session_cause": getattr(cstate, "session_cause", None)
-                        if cstate
-                        else None,
+                        "api_available": getattr(cstate, "api_available", None) if cstate else None,
+                        "session_state": getattr(cstate, "session_state", None) if cstate else None,
+                        "session_cause": getattr(cstate, "session_cause", None) if cstate else None,
                         "stopped_by_cloud": getattr(cstate, "stopped_by_cloud", None)
                         if cstate
                         else None,
@@ -270,9 +262,7 @@ async def async_get_config_entry_diagnostics(
                         "optimization_strategy": getattr(cstate, "optimization_strategy", None)
                         if cstate
                         else None,
-                        "ui_mode_base": getattr(cstate, "ui_mode_base", None)
-                        if cstate
-                        else None,
+                        "ui_mode_base": getattr(cstate, "ui_mode_base", None) if cstate else None,
                         "paused": getattr(cstate, "paused", None) if cstate else None,
                         "selected_current_limit": getattr(cstate, "selected_current_limit", None)
                         if cstate
@@ -307,9 +297,7 @@ async def async_get_config_entry_diagnostics(
                         "energy_import_kwh": getattr(cstate, "energy_import_kwh", None)
                         if cstate
                         else None,
-                        "power_phases": getattr(cstate, "power_phases", None)
-                        if cstate
-                        else None,
+                        "power_phases": getattr(cstate, "power_phases", None) if cstate else None,
                         "current_phases": getattr(cstate, "current_phases", None)
                         if cstate
                         else None,

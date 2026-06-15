@@ -13,6 +13,7 @@ from .helpers import station_serial
 
 PARALLEL_UPDATES = 0
 
+
 def _station_serial(coord: SmappeeCoordinator) -> str:
     return station_serial(coord)
 

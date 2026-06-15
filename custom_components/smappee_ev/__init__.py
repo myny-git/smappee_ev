@@ -368,9 +368,7 @@ async def _dashboard_fetch_highlevel_configs(
     return configs
 
 
-def _mqtt_specs_from_highlevel_configs(
-    configs: dict[int, dict[str, Any]]
-) -> list[MqttChannelSpec]:
+def _mqtt_specs_from_highlevel_configs(configs: dict[int, dict[str, Any]]) -> list[MqttChannelSpec]:
     specs: list[MqttChannelSpec] = []
     for sid, cfg in configs.items():
         parsed = parse_mqtt_channel_specs_from_highlevel(sid, cfg)
@@ -950,9 +948,7 @@ async def _prepare_topology(
     control_sid = topology.control_location_id
     measurement_sids = topology.measurement_location_ids
 
-    highlevel_configs = await _dashboard_fetch_highlevel_configs(
-        dashboard_client, measurement_sids
-    )
+    highlevel_configs = await _dashboard_fetch_highlevel_configs(dashboard_client, measurement_sids)
     mqtt_specs = _mqtt_specs_from_highlevel_configs(highlevel_configs)
 
     devices = await _dashboard_fetch_devices(dashboard_client, control_sid)
