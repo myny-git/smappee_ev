@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers import update_coordinator
 
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
@@ -44,7 +44,9 @@ def _is_int_like(value: object) -> bool:
 type SmappeeEntityCoordinator = SmappeeSiteCoordinator | SmappeeStationCoordinator
 
 
-class SmappeeBaseEntity[CoordinatorT: SmappeeEntityCoordinator](CoordinatorEntity[CoordinatorT]):
+class SmappeeBaseEntity[CoordinatorT: SmappeeEntityCoordinator](
+    update_coordinator.CoordinatorEntity[CoordinatorT],
+):
     """Common base providing station/connector id storage and device_info."""
 
     _attr_has_entity_name = True
