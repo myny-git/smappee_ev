@@ -5,6 +5,9 @@ from homeassistant import const as ha_const
 
 DOMAIN = "smappee_ev"
 MANUFACTURER = "Smappee"
+CONFIGURATION_URL: Final = "https://dashboard.smappee.net"
+
+ATTRIBUTION: Final = f"Data provided by {MANUFACTURER}"
 
 # Coordinator polling interval (seconds) – kept internal, no user option anymore
 UPDATE_INTERVAL_DEFAULT: Final = 30
