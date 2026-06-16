@@ -10,7 +10,7 @@ from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
 
 PARALLEL_UPDATES = 1
-
+MODES = [mode.lower() for mode in CHARGING_MODES]
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -45,7 +45,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
     """Home Assistant select entity for Smappee charging mode."""
 
     _attr_has_entity_name = True
-    _attr_options = CHARGING_MODES
+    _attr_options = MODES
     _attr_translation_key = "charging_mode"
 
     def __init__(
@@ -106,7 +106,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         if not last or last.state in (None, "unknown", "unavailable"):
             return
         restored = last.state
-        if restored not in CHARGING_MODES:
+        if restored not in MODES:
             return
         st = self._state()
         updated_data = False
