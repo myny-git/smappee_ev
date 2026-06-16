@@ -141,8 +141,20 @@ class SmappeeStationEntity(SmappeeBaseEntity):
         station_uuid: str,
         unique_suffix: str = "entity",
         name: str | None = None,
+        *,
+        device_scope: str = "station",
+        led_device_id: str | None = None,
+        led_name: str | None = None,
     ) -> None:
-        super().__init__(coordinator, sid, station_uuid, unique_suffix=unique_suffix)
+        super().__init__(
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix=unique_suffix,
+            device_scope=device_scope,
+            led_device_id=led_device_id,
+            led_name=led_name,
+        )
         if name is not None:
             self._attr_name = name
 
@@ -194,8 +206,7 @@ class SmappeeLedEntity(SmappeeStationRestEntity):
         led_device_id: str | None = None,
         led_name: str | None = None,
     ) -> None:
-        SmappeeBaseEntity.__init__(
-            self,
+        super().__init__(
             coordinator,
             sid,
             station_uuid,

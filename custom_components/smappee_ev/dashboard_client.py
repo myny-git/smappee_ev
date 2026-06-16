@@ -431,6 +431,16 @@ class SmappeeDashboardClient:
             {"Integer": int(min_surpluspct)},
         )
 
+    async def async_set_connector_max_current(
+        self, service_location_id: int | str, device_id: str, max_current_a: int
+    ) -> bool:
+        return await self.async_update_configuration_property(
+            service_location_id,
+            device_id,
+            "etc.smart.device.type.car.charger.config.max.current",
+            {"Quantity": {"value": int(max_current_a), "unit": "A"}},
+        )
+
     async def async_start_charging(
         self, service_location_id: int | str, device_id: str, percentage: int
     ) -> bool:

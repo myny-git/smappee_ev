@@ -213,13 +213,16 @@
         "name": "Min Surplus Percentage"
       },
       "max_charging_speed": {
-        "name": "Max charging speed"
+        "name": "Charging current limit"
+      },
+      "connector_max_current": {
+        "name": "Maximum current"
       },
       "capacity_maximum_power": {
-        "name": "Capacity maximum power"
+        "name": "Maximum capacity"
       },
       "overload_maximum_load": {
-        "name": "Overload maximum load"
+        "name": "Main circuit breaker"
       },
       "offline_failsafe_current": {
         "name": "Offline failsafe current"

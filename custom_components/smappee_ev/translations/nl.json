@@ -213,13 +213,16 @@
         "name": "Minimale overschotpercentage"
       },
       "max_charging_speed": {
-        "name": "Maximale laadsnelheid"
+        "name": "Laadstroomlimiet"
+      },
+      "connector_max_current": {
+        "name": "Maximale stroomsterkte"
       },
       "capacity_maximum_power": {
-        "name": "Maximaal vermogen"
+        "name": "Maximale capaciteit"
       },
       "overload_maximum_load": {
-        "name": "Maximale overbelasting"
+        "name": "Hoofdstroomonderbreker"
       },
       "offline_failsafe_current": {
         "name": "Offline failsafe-stroom"

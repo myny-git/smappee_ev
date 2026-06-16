@@ -213,13 +213,16 @@
         "name": "Mindest-Überschuss-Prozentsatz"
       },
       "max_charging_speed": {
-        "name": "Maximale Ladegeschwindigkeit"
+        "name": "Ladestrombegrenzung"
+      },
+      "connector_max_current": {
+        "name": "Maximaler Strom"
       },
       "capacity_maximum_power": {
-        "name": "Maximale Leistungskapazität"
+        "name": "Maximale Kapazität"
       },
       "overload_maximum_load": {
-        "name": "Maximale Überlast"
+        "name": "Hauptschutzschalter"
       },
       "offline_failsafe_current": {
         "name": "Offline-Failsafe-Strom"

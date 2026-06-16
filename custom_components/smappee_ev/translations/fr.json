@@ -213,13 +213,16 @@
         "name": "Pourcentage minimum de surplus"
       },
       "max_charging_speed": {
-        "name": "Vitesse de charge maximale"
+        "name": "Limite de courant de charge"
+      },
+      "connector_max_current": {
+        "name": "Courant maximal"
       },
       "capacity_maximum_power": {
-        "name": "Puissance maximale de capacité"
+        "name": "Capacité maximale"
       },
       "overload_maximum_load": {
-        "name": "Charge maximale de surcharge"
+        "name": "Disjoncteur principal"
       },
       "offline_failsafe_current": {
         "name": "Courant failsafe hors ligne"

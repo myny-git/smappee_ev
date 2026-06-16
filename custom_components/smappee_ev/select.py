@@ -12,6 +12,7 @@ from .device_handle import SmappeeDeviceHandle
 PARALLEL_UPDATES = 1
 MODES = [mode.lower() for mode in CHARGING_MODES]
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
@@ -77,9 +78,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         st = self._state()
 
         return (
-            getattr(st, "selected_mode", None) or
-            getattr(st, "ui_mode_base", None) or
-            "standard"
+            getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None) or "standard"
         ).lower()
 
     async def async_select_option(self, option: str) -> None:

@@ -252,6 +252,12 @@ class SmappeeDeviceHandle:
         await self._require_dashboard_action("async_set_min_surpluspct", int(min_surpluspct))
         _LOGGER.info("min.surpluspct set successfully to %d%% via Dashboard v10", min_surpluspct)
 
+    async def set_connector_max_current(self, max_current_a: int) -> None:
+        await self._require_dashboard_action("async_set_connector_max_current", int(max_current_a))
+        _LOGGER.info(
+            "connector max current set successfully to %d A via Dashboard v10", max_current_a
+        )
+
     async def set_percentage_limit(
         self, percentage: int, *, min_current: int = 6, max_current: int = 32
     ) -> tuple[float, int]:

@@ -197,28 +197,6 @@ def make_device_info(
         legacy_identifier=legacy_identifier,
     )
 
-    # The station is the main device (parent)
-    station_identifier = (DOMAIN, f"{sid}:{serial}:{station_uuid}")
-
-    device_info = {
-        "identifiers": {station_identifier},
-        "name": f"Smappee EV {serial}",
-        "manufacturer": MANUFACTURER,
-        "model": "EV Wall",
-    }
-
-    # If a connector label is provided, treat it as a child device
-    if connector_label:
-        device_info.update(
-            {
-                "identifiers": {(DOMAIN, f"{sid}:{serial}:{station_uuid}:{connector_label}")},
-                "name": f"Smappee EV {serial} | Connector {connector_label}",
-                "via_device": station_identifier,
-            }
-        )
-
-    return cast(DeviceInfo, device_info)
-
 
 def make_unique_id(
     sid: int,

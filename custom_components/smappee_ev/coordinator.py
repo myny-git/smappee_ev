@@ -881,6 +881,9 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 return False
 
             service_location_id = self.station_client.service_location_id
+            site_service_location_id = (
+                getattr(self.station_client, "site_location_id", None) or service_location_id
+            )
             station_serial = (
                 self.station_client.charging_station_serial or self.station_client.serial
             )
@@ -889,10 +892,10 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                     station_serial
                 ),
                 "capacity protection": self.dashboard_client.async_get_capacity_protection(
-                    service_location_id
+                    site_service_location_id
                 ),
                 "overload protection": self.dashboard_client.async_get_overload_protection(
-                    service_location_id
+                    site_service_location_id
                 ),
                 "high-level configuration": self.dashboard_client.async_get_highlevel_configuration(
                     service_location_id

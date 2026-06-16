@@ -14,7 +14,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
+from .base_entities import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
+from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
@@ -26,6 +27,17 @@ PARALLEL_UPDATES = 1
 def _active_or_true(value: bool | None) -> bool:
     """Default to active for value-only Dashboard writes when state is unknown."""
     return bool(value) if value is not None else True
+
+
+def _dashboard_coord_for_site(site: dict[str, Any]) -> SmappeeCoordinator | None:
+    """Return a station coordinator that can serve site-scoped Dashboard settings."""
+    for bucket in ((site or {}).get("stations") or {}).values():
+        if not isinstance(bucket, dict):
+            continue
+        coord: SmappeeCoordinator | None = bucket.get("coordinator")
+        if coord is not None and getattr(coord, "dashboard_client", None) is not None:
+            return coord
+    return None
 
 
 async def async_setup_entry(
@@ -40,6 +52,21 @@ async def async_setup_entry(
     entities: list[NumberEntity] = []
     for sid, site in (sites or {}).items():
         stations = (site or {}).get("stations", {})
+        dashboard_coord = _dashboard_coord_for_site(site or {})
+        if dashboard_coord is not None:
+            entities.append(
+                SmappeeCapacityMaximumPowerNumber(
+                    coordinator=dashboard_coord,
+                    sid=sid,
+                )
+            )
+            entities.append(
+                SmappeeOverloadMaximumLoadNumber(
+                    coordinator=dashboard_coord,
+                    sid=sid,
+                )
+            )
+
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
             conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
@@ -47,20 +74,6 @@ async def async_setup_entry(
             if getattr(coord, "dashboard_client", None) is not None:
                 st_client: SmappeeDeviceHandle | None = bucket.get("station_client") or getattr(
                     coord, "station_client", None
-                )
-                entities.append(
-                    SmappeeCapacityMaximumPowerNumber(
-                        coordinator=coord,
-                        sid=sid,
-                        station_uuid=st_uuid,
-                    )
-                )
-                entities.append(
-                    SmappeeOverloadMaximumLoadNumber(
-                        coordinator=coord,
-                        sid=sid,
-                        station_uuid=st_uuid,
-                    )
                 )
                 if st_client is not None:
                     entities.append(
@@ -76,6 +89,15 @@ async def async_setup_entry(
             for cuuid, client in (conns or {}).items():
                 entities.append(
                     SmappeeCombinedCurrentSlider(
+                        coordinator=coord,
+                        api_client=client,
+                        sid=sid,
+                        station_uuid=st_uuid,
+                        connector_uuid=cuuid,
+                    )
+                )
+                entities.append(
+                    SmappeeConnectorMaxCurrentNumber(
                         coordinator=coord,
                         api_client=client,
                         sid=sid,
@@ -151,7 +173,13 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         if not st:
             return None
         if st.selected_current_limit is not None:
-            return round(float(st.selected_current_limit), 1)
+            return round(
+                max(
+                    float(st.min_current),
+                    min(float(st.max_current), float(st.selected_current_limit)),
+                ),
+                1,
+            )
         if st.max_current <= st.min_current:
             return round(float(st.min_current), 1)
         rng = st.max_current - st.min_current
@@ -247,6 +275,75 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
                 self.async_write_ha_state()
 
 
+class SmappeeConnectorMaxCurrentNumber(SmappeeConnectorEntity, _BaseNumber):
+    """Connector configuration maximum current."""
+
+    _attr_device_class = NumberDeviceClass.CURRENT
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:current-ac"
+    _attr_translation_key = "connector_max_current"
+
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        api_client: SmappeeDeviceHandle,
+        sid: int,
+        station_uuid: str,
+        connector_uuid: str,
+    ) -> None:
+        SmappeeConnectorEntity.__init__(
+            self,
+            coordinator,
+            api_client,
+            sid,
+            station_uuid,
+            connector_uuid,
+            unique_suffix="number:connector_max_current",
+        )
+        self.api_client = api_client
+        data: IntegrationData | None = coordinator.data
+        st: ConnectorState | None = data.connectors.get(connector_uuid) if data else None
+        min_current = st.min_current if st else DEFAULT_MIN_CURRENT
+        self._post_init(
+            UnitOfElectricCurrent.AMPERE,
+            float(min_current),
+            float(DEFAULT_MAX_CURRENT),
+            1,
+        )
+
+    def _state(self) -> ConnectorState | None:
+        data: IntegrationData | None = self.coordinator.data
+        return data.connectors.get(self.connector_uuid) if data else None
+
+    @property
+    def native_value(self) -> int | None:
+        st = self._state()
+        value = getattr(st, "max_current", None) if st else None
+        return int(value) if value is not None else None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        st = self._state()
+        if st and st.min_current is not None:
+            self._attr_native_min_value = float(st.min_current)
+        super()._handle_coordinator_update()
+
+    async def async_set_native_value(self, value: float) -> None:
+        st = self._state()
+        if not st:
+            return
+        min_current = int(st.min_current or DEFAULT_MIN_CURRENT)
+        amps = max(min_current, min(DEFAULT_MAX_CURRENT, int(round(value))))
+        await self.api_client.set_connector_max_current(amps)
+        st.max_current = amps
+        if st.selected_current_limit is not None:
+            st.selected_current_limit = min(float(st.selected_current_limit), float(amps))
+        data = self.coordinator.data
+        if data:
+            self.coordinator.async_set_updated_data(data)
+        self.coordinator.async_schedule_dashboard_refresh()
+
+
 class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     """Min Surplus Percentage (connector-level)."""
 
@@ -318,7 +415,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
                 self.async_write_ha_state()
 
 
-class SmappeeCapacityMaximumPowerNumber(SmappeeStationEntity, _BaseNumber):
+class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity, _BaseNumber):
     """Dashboard capacity protection maximum power setting."""
 
     _attr_device_class = NumberDeviceClass.POWER
@@ -331,13 +428,12 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeStationEntity, _BaseNumber):
         *,
         coordinator: SmappeeCoordinator,
         sid: int,
-        station_uuid: str,
+        station_uuid: str | None = None,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="number:capacity_maximum_power",
         )
         self._post_init(UnitOfPower.KILO_WATT, 0, 10, 0.1)
@@ -376,7 +472,7 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeStationEntity, _BaseNumber):
         self.coordinator.async_schedule_dashboard_refresh()
 
 
-class SmappeeOverloadMaximumLoadNumber(SmappeeStationEntity, _BaseNumber):
+class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity, _BaseNumber):
     """Dashboard overload protection maximum load setting."""
 
     _attr_device_class = NumberDeviceClass.CURRENT
@@ -389,13 +485,12 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeStationEntity, _BaseNumber):
         *,
         coordinator: SmappeeCoordinator,
         sid: int,
-        station_uuid: str,
+        station_uuid: str | None = None,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="number:overload_maximum_load",
         )
         self._post_init(UnitOfElectricCurrent.AMPERE, 0, 32, 1)
