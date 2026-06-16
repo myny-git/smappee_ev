@@ -22,14 +22,26 @@ from .const import (
     MQTT_TRACK_INTERVAL_SEC,
     MQTT_TRACKING_TYPE_RT_VALUES,
 )
+from .helpers import anonymize_uuid
 
 _LOGGER = logging.getLogger(__name__)
-_TOPIC_SECRET_RE = re.compile(r"(servicelocation/)[^/]+(/)")
+_TOPIC_SECRET_RE = re.compile(r"(servicelocation/)([^/]+)(/)")
 
 
 def redact_mqtt_topic(topic: str) -> str:
-    """Redact service-location UUIDs from MQTT topics before logging."""
-    return _TOPIC_SECRET_RE.sub(r"\1***\2", topic)
+    """Redact service-location UUIDs from MQTT topics using anonymization."""
+
+    def replacer(match: re.Match) -> str:
+        # Group 1: 'servicelocation/'
+        # Group 2: UUID
+        # Group 3: '/'
+        prefix = match.group(1)
+        uuid = match.group(2)
+        suffix = match.group(3)
+
+        return f"{prefix}{anonymize_uuid(uuid)}{suffix}"
+
+    return _TOPIC_SECRET_RE.sub(replacer, topic)
 
 
 class SmappeeMqtt:

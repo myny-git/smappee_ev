@@ -18,6 +18,7 @@ from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
+from .helpers import anonymize_uuid
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -132,7 +133,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             _LOGGER.debug(
                 "Charging switch ON â†’ STANDARD (sid=%s, uuid=%s)",
                 self._sid,
-                self.connector_uuid,
+                anonymize_uuid(self.connector_uuid),
             )
             await self.api_client.set_charging_mode("STANDARD")
             st = self._conn_state
@@ -157,7 +158,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             _LOGGER.debug(
                 "Charging switch OFF â†’ pause (sid=%s, uuid=%s)",
                 self._sid,
-                self.connector_uuid,
+                anonymize_uuid(self.connector_uuid),
             )
             await self.api_client.pause_charging()
             self.coordinator.async_schedule_dashboard_refresh()

@@ -417,7 +417,7 @@ def _mqtt_specs_from_highlevel_configs(configs: dict[int, dict[str, Any]]) -> li
                 spec.service_location_id,
                 spec.role,
                 spec.metric,
-                spec.topic,
+                redact_mqtt_topic(spec.topic),
                 spec.aspect_paths,
             )
         specs.extend(parsed)
