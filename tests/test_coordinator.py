@@ -347,6 +347,38 @@ class TestSmappeeCoordinator:
             await coordinator._async_get_recent_sessions()
 
     @pytest.mark.asyncio
+    async def test_recent_session_partial_runtime_failure_keeps_successful_sessions(
+        self, coordinator
+    ):
+        """A down connector should not discard recent sessions from healthy connectors."""
+        ok_client = MagicMock(spec=SmappeeDeviceHandle)
+        ok_client.async_get_recent_sessions = AsyncMock(
+            return_value=[{"energy": 1.2}, "malformed", {"energy": 2.3}]
+        )
+        failing_client = MagicMock(spec=SmappeeDeviceHandle)
+        failing_client.async_get_recent_sessions = AsyncMock(side_effect=RuntimeError("offline"))
+        coordinator.connector_clients = {"ok": ok_client, "failing": failing_client}
+
+        sessions = await coordinator._async_get_recent_sessions()
+
+        assert sessions == [{"energy": 1.2}, {"energy": 2.3}]
+        assert coordinator._connector_session_available == {"ok": True, "failing": False}
+
+    @pytest.mark.asyncio
+    async def test_recent_session_all_runtime_failures_raise_first_error(self, coordinator):
+        """All connector session endpoints failing should surface an error to the refresh path."""
+        first_client = MagicMock(spec=SmappeeDeviceHandle)
+        first_client.async_get_recent_sessions = AsyncMock(side_effect=RuntimeError("first"))
+        second_client = MagicMock(spec=SmappeeDeviceHandle)
+        second_client.async_get_recent_sessions = AsyncMock(side_effect=RuntimeError("second"))
+        coordinator.connector_clients = {"first": first_client, "second": second_client}
+
+        with pytest.raises(RuntimeError, match="first"):
+            await coordinator._async_get_recent_sessions()
+
+        assert coordinator._connector_session_available == {"first": False, "second": False}
+
+    @pytest.mark.asyncio
     async def test_recent_session_refresh_failure_is_attempt_throttled(
         self, coordinator, mock_connector_client
     ):
@@ -362,20 +394,93 @@ class TestSmappeeCoordinator:
         assert coordinator._last_session_api_update == 0.0
 
     @pytest.mark.asyncio
+    async def test_active_session_loop_cancels_without_active_connectors(
+        self, coordinator, mock_connector_client
+    ):
+        """The periodic session loop should stop before API I/O when no session is active."""
+        scheduled = []
+        active_loop_unsub = MagicMock()
+
+        def capture_interval(_hass, callback, interval):
+            scheduled.append((callback, interval))
+            return active_loop_unsub
+
+        with patch(
+            "custom_components.smappee_ev.coordinator.async_track_time_interval",
+            side_effect=capture_interval,
+        ):
+            conn = coordinator.data.connectors["test_uuid"]
+            conn.session_state = "CHARGING"
+            coordinator._ensure_active_session_loop()
+            conn.session_state = "AVAILABLE"
+            await scheduled[0][0](None)
+
+        active_loop_unsub.assert_called_once()
+        mock_connector_client.async_get_recent_sessions.assert_not_called()
+        assert coordinator._session_active_loop_unsub is None
+
+    @pytest.mark.asyncio
+    async def test_active_session_loop_reschedules_when_session_becomes_paused(self, coordinator):
+        """Active-session polling should slow down when the only active session is paused."""
+        scheduled = []
+        unsubs = [MagicMock(), MagicMock()]
+
+        def capture_interval(_hass, callback, interval):
+            scheduled.append((callback, interval))
+            return unsubs[len(scheduled) - 1]
+
+        async def pause_during_refresh(_reason, *, force=False):
+            conn = coordinator.data.connectors["test_uuid"]
+            conn.raw_charging_mode = "PAUSED"
+
+        with patch(
+            "custom_components.smappee_ev.coordinator.async_track_time_interval",
+            side_effect=capture_interval,
+        ):
+            conn = coordinator.data.connectors["test_uuid"]
+            conn.session_state = "CHARGING"
+            coordinator._async_refresh_recent_sessions = AsyncMock(side_effect=pause_during_refresh)
+            coordinator._ensure_active_session_loop()
+            await scheduled[0][0](None)
+
+        assert len(scheduled) == 2
+        assert scheduled[0][1] != scheduled[1][1]
+        unsubs[0].assert_called_once()
+        assert coordinator._session_active_loop_unsub is unsubs[1]
+
+    @pytest.mark.asyncio
     async def test_chargingstate_started_schedules_session_refresh(
         self, coordinator, mock_connector_client
     ):
         """Test STARTED MQTT state schedules a debounced session refresh."""
         mock_connector_client.async_get_recent_sessions.return_value = [{"energy": 2.0}]
         coordinator._session_tracking_started = True
+        scheduled: list[tuple[int, object]] = []
+        refresh_unsub = MagicMock()
+        loop_unsub = MagicMock()
 
-        with patch("custom_components.smappee_ev.coordinator.SESSION_START_REFRESH_DELAY", 0):
+        def capture_call_later(_hass, delay, callback):
+            scheduled.append((delay, callback))
+            return refresh_unsub
+
+        with (
+            patch("custom_components.smappee_ev.coordinator.SESSION_START_REFRESH_DELAY", 0),
+            patch(
+                "custom_components.smappee_ev.coordinator.async_call_later",
+                side_effect=capture_call_later,
+            ),
+            patch(
+                "custom_components.smappee_ev.coordinator.async_track_time_interval",
+                return_value=loop_unsub,
+            ),
+        ):
             conn = coordinator.data.connectors["test_uuid"]
             coordinator._handle_connector_property_chargingstate(
                 conn, {"chargingState": "STARTED"}, "test_uuid"
             )
-            assert coordinator._session_refresh_task is not None
-            await coordinator._session_refresh_task
+            assert scheduled
+            assert scheduled[0][0] == 0
+            await scheduled[0][1](None)
 
         mock_connector_client.async_get_recent_sessions.assert_called_once()
         assert coordinator.data.recent_sessions == [{"energy": 2.0}]
@@ -385,20 +490,37 @@ class TestSmappeeCoordinator:
     async def test_chargingstate_active_update_does_not_reschedule_start_refresh(self, coordinator):
         """Test repeated active MQTT updates do not keep delaying the start refresh."""
         coordinator._session_tracking_started = True
+        scheduled: list[tuple[int, object]] = []
+        refresh_unsub = MagicMock()
+        loop_unsub = MagicMock()
 
-        with patch("custom_components.smappee_ev.coordinator.SESSION_START_REFRESH_DELAY", 60):
+        def capture_call_later(_hass, delay, callback):
+            scheduled.append((delay, callback))
+            return refresh_unsub
+
+        with (
+            patch("custom_components.smappee_ev.coordinator.SESSION_START_REFRESH_DELAY", 60),
+            patch(
+                "custom_components.smappee_ev.coordinator.async_call_later",
+                side_effect=capture_call_later,
+            ),
+            patch(
+                "custom_components.smappee_ev.coordinator.async_track_time_interval",
+                return_value=loop_unsub,
+            ),
+        ):
             conn = coordinator.data.connectors["test_uuid"]
             coordinator._handle_connector_property_chargingstate(
                 conn, {"chargingState": "STARTED"}, "test_uuid"
             )
-            first_task = coordinator._session_refresh_task
 
             coordinator._handle_connector_property_chargingstate(
                 conn, {"chargingState": "STARTED"}, "test_uuid"
             )
 
-        assert first_task is not None
-        assert coordinator._session_refresh_task is first_task
+        assert len(scheduled) == 1
+        assert scheduled[0][0] == 60
+        refresh_unsub.assert_not_called()
         await coordinator.async_shutdown()
 
     @pytest.mark.asyncio
@@ -410,16 +532,33 @@ class TestSmappeeCoordinator:
         coordinator._session_tracking_started = True
         conn = coordinator.data.connectors["test_uuid"]
         conn.session_state = "CHARGING"
+        scheduled: list[tuple[int, object]] = []
+        final_unsub = MagicMock()
+        active_loop_unsub = MagicMock()
+        coordinator._session_active_loop_unsub = active_loop_unsub
+        coordinator._session_active_loop_interval = 30
 
-        with patch("custom_components.smappee_ev.coordinator.SESSION_FINAL_REFRESH_DELAYS", (0,)):
+        def capture_call_later(_hass, delay, callback):
+            scheduled.append((delay, callback))
+            return final_unsub
+
+        with (
+            patch("custom_components.smappee_ev.coordinator.SESSION_FINAL_REFRESH_DELAYS", (0,)),
+            patch(
+                "custom_components.smappee_ev.coordinator.async_call_later",
+                side_effect=capture_call_later,
+            ),
+        ):
             coordinator._handle_connector_property_chargingstate(
                 conn, {"chargingState": "STOPPED"}, "test_uuid"
             )
-            assert coordinator._session_final_refresh_task is not None
-            await coordinator._session_final_refresh_task
+            assert scheduled
+            assert scheduled[0][0] == 0
+            await scheduled[0][1](None)
 
         mock_connector_client.async_get_recent_sessions.assert_called_once()
         assert coordinator.data.recent_sessions == [{"energy": 4.0}]
+        active_loop_unsub.assert_called_once()
         await coordinator.async_shutdown()
 
     @pytest.mark.asyncio

@@ -240,6 +240,8 @@ def test_session_energy_sensor_uses_single_connector_energy_fallback():
 
     assert entity.native_value == 4.2
     assert "duration_minutes" not in entity.extra_state_attributes
+    assert "duration_formatted" not in entity.extra_state_attributes
+    assert "from" not in entity.extra_state_attributes
 
 
 def test_session_helpers_ignore_empty_missing_and_invalid_values():

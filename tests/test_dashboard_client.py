@@ -1,8 +1,73 @@
+import time
 from unittest.mock import AsyncMock, MagicMock
 
+import aiohttp
+from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
 from custom_components.smappee_ev.dashboard_client import SmappeeDashboardClient
+
+
+class _Response:
+    def __init__(
+        self,
+        status: int,
+        payload=None,
+        *,
+        text: str = "",
+        content_length: int | None = 1,
+        json_exc: Exception | None = None,
+    ):
+        self.status = status
+        self._payload = payload
+        self._text = text
+        self.content_length = content_length
+        self._json_exc = json_exc
+
+    async def json(self):
+        if self._json_exc is not None:
+            raise self._json_exc
+        return self._payload
+
+    async def text(self):
+        return self._text
+
+
+class _ResponseContext:
+    def __init__(self, response: _Response):
+        self.response = response
+
+    async def __aenter__(self):
+        return self.response
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _Session:
+    def __init__(self, *, posts=None, requests=None):
+        self.posts = list(posts or [])
+        self.requests = list(requests or [])
+        self.post_calls = []
+        self.request_calls = []
+
+    def post(self, url, **kwargs):
+        self.post_calls.append((url, kwargs))
+        return _ResponseContext(self.posts.pop(0))
+
+    def request(self, method, url, **kwargs):
+        self.request_calls.append((method, url, kwargs))
+        return _ResponseContext(self.requests.pop(0))
+
+
+def _client(session=None, **kwargs) -> SmappeeDashboardClient:
+    return SmappeeDashboardClient(
+        username=kwargs.pop("username", None),
+        password=kwargs.pop("password", None),
+        refresh_token=kwargs.pop("refresh_token", None),
+        session=session or MagicMock(),
+        token_update_callback=kwargs.pop("token_update_callback", MagicMock()),
+    )
 
 
 @pytest.mark.asyncio
@@ -309,6 +374,85 @@ async def test_dashboard_recent_sessions_uses_v10_range_mode():
     assert kwargs["params"]["rangeMode"] == "stop_or_start"
     assert "," in kwargs["params"]["range"]
     assert kwargs["return_json"] is True
+
+
+@pytest.mark.asyncio
+async def test_dashboard_request_reauthenticates_and_retries_after_unauthorized():
+    """A stale access token should be refreshed once and the API call retried."""
+    token_updates = MagicMock()
+    expires_at = int(time.time() * 1000) + 300_000
+    session = _Session(
+        posts=[
+            _Response(
+                200,
+                {
+                    "token": "new-token",
+                    "refreshToken": "new-refresh",
+                    "tokenExpirationTimestamp": expires_at,
+                },
+            )
+        ],
+        requests=[
+            _Response(401, text="expired"),
+            _Response(200, {"ok": True}),
+        ],
+    )
+    client = _client(
+        session,
+        refresh_token="old-refresh",  # noqa: S106 - fake token value for retry behavior
+        token_update_callback=token_updates,
+    )
+    client._token = "old-token"  # noqa: S105 - fake token value for retry behavior
+    client._token_expires_at_ms = expires_at
+
+    data = await client._request("GET", "v11/example", return_json=True)
+
+    assert data == {"ok": True}
+    assert [call[2]["headers"]["token"] for call in session.request_calls] == [
+        "old-token",
+        "new-token",
+    ]
+    token_updates.assert_called_once_with({"dashboard_refresh_token": "new-refresh"})
+
+
+@pytest.mark.asyncio
+async def test_dashboard_request_returns_none_when_auth_unavailable():
+    """No credentials means no network request is attempted."""
+    session = _Session(requests=[_Response(200, {"ok": True})])
+    client = _client(session)
+
+    assert await client._request("GET", "v11/example", return_json=True) is None
+    assert session.request_calls == []
+
+
+@pytest.mark.asyncio
+async def test_dashboard_login_rejects_bad_credentials():
+    session = _Session(posts=[_Response(401, text="nope")])
+    client = _client(session, username="user", password="wrong")  # noqa: S106
+
+    with pytest.raises(ConfigEntryAuthFailed, match="Dashboard credentials rejected"):
+        await client.async_login()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_request_non_json_body_returns_none():
+    expires_at = int(time.time() * 1000) + 300_000
+    content_error = aiohttp.ContentTypeError(MagicMock(), ())
+    session = _Session(requests=[_Response(200, json_exc=content_error)])
+    client = _client(session)
+    client._token = "token"  # noqa: S105 - fake token value for auth header
+    client._token_expires_at_ms = expires_at
+
+    assert await client._request("GET", "v11/example", return_json=True) is None
+
+
+@pytest.mark.asyncio
+async def test_dashboard_list_and_dict_methods_ignore_malformed_response_shapes():
+    client = _client()
+    client._request = AsyncMock(side_effect=({"unexpected": "dict"}, ["unexpected-list"]))
+
+    assert await client.async_get_service_locations_full_details() is None
+    assert await client.async_get_charging_station_details("SERIAL") is None
 
 
 @pytest.mark.asyncio

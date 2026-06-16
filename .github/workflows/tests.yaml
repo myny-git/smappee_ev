@@ -39,4 +39,4 @@ jobs:
             --cov=custom_components.smappee_ev \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-fail-under=50
+            --cov-fail-under=80

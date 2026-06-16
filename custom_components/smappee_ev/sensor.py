@@ -1122,24 +1122,27 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             )
         )
 
-    @property
-    def _active_session_data(self) -> dict[str, Any]:
+    def _active_session_match(self) -> tuple[dict[str, Any], bool]:
         if not self.coordinator.data:
-            return {}
+            return {}, False
         sessions = self.coordinator.data.recent_sessions
         if not isinstance(sessions, list):
-            return {}
+            return {}, False
         for session in sessions:
             if isinstance(session, dict) and self._session_matches_connector(session):
-                return session
+                return session, True
         if (
             len(self.coordinator.connector_clients) == 1
             and sessions
             and isinstance(sessions[0], dict)
             and "energy" in sessions[0]
         ):
-            return sessions[0]
-        return {}
+            return sessions[0], False
+        return {}, False
+
+    @property
+    def _active_session_data(self) -> dict[str, Any]:
+        return self._active_session_match()[0]
 
     @property
     def native_value(self) -> float | None:
@@ -1154,17 +1157,19 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes of the sensor."""
-        session = self._active_session_data
+        session, connector_matched = self._active_session_match()
         if not session:
             return {}
 
         excluded = {"energy", "controller", "station", "address", "updateChannels", "rfidToken"}
+        if not connector_matched:
+            excluded |= {"from", "to"}
         attrs = {k: v for k, v in session.items() if k not in excluded}
 
         start_time = _session_ts_to_datetime(session.get("from"))
         end_time = _session_ts_to_datetime(session.get("to"))
 
-        if start_time:
+        if connector_matched and start_time:
             attrs["from"] = start_time.isoformat()
 
             current_time = end_time if end_time else dt_util.now()
@@ -1176,7 +1181,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             # Use the new formatted duration (HH:MM:SS)
             attrs["duration_formatted"] = format_as_hms(duration)
 
-        if end_time:
+        if connector_matched and end_time:
             attrs["to"] = end_time.isoformat()
 
         return attrs
