@@ -122,6 +122,7 @@ def make_connector_device_info(
     charging_station_serial: str,
     connector_key: str,
     connector_label: str | None = None,
+    station_name: str | None = None,
 ) -> DeviceInfo:
     """Return Home Assistant device_info for a connector."""
     label = connector_label or connector_key
@@ -133,7 +134,7 @@ def make_connector_device_info(
                     site_sid, control_sid, charging_station_serial, connector_key
                 )
             },
-            "name": f"Smappee EV {charging_station_serial} | Connector {label}",
+            "name": f"{station_name} | Connector {label}",
             "manufacturer": MANUFACTURER,
             "model": "Connector",
             "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
@@ -184,6 +185,7 @@ def make_device_info(
             resolved_station_serial,
             resolved_connector_key,
             connector_label,
+            station_name,
         )
 
     return make_station_device_info(
