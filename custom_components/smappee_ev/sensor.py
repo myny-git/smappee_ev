@@ -852,9 +852,13 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
 
     @property
     def native_value(self) -> str | None:
+        """Return the current session state."""
         st = self._conn_state
-        value = getattr(st, "session_state", None) if st else None
-        return str(value) if value is not None else None
+        if st is None:
+            return None
+
+        value = getattr(st, "session_state", None)
+        return str(value).lower() if value is not None else None
 
 
 class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
@@ -954,7 +958,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         st = self._conn_state
         value = getattr(st, "status_current", None) if st else None
         if value is not None:
-            return str(value)
+            return str(value).lower()
         return self._restored_value
 
     async def async_added_to_hass(self) -> None:

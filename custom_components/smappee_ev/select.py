@@ -9,9 +9,8 @@ from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
 
-MODES = [mode.upper() for mode in CHARGING_MODES]
 PARALLEL_UPDATES = 1
-
+MODES = [mode.lower() for mode in CHARGING_MODES]
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -46,7 +45,6 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
     """Home Assistant select entity for Smappee charging mode."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:tune-variant"
     _attr_options = MODES
     _attr_translation_key = "charging_mode"
 
@@ -69,19 +67,20 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
             unique_suffix="select:charging_mode",
         )
         self.api_client = api_client
-        self._attr_name = f"Charging Mode {self._connector_label}"
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
         return data.connectors.get(self._connector_uuid) if data else None
 
     @property
-    def current_option(self) -> str | None:
+    def current_option(self) -> str:
         st = self._state()
-        if st:
-            mode = st.selected_mode or st.ui_mode_base or "STANDARD"
-            return mode.upper() if mode else "STANDARD"
-        return "STANDARD"
+
+        return (
+            getattr(st, "selected_mode", None) or
+            getattr(st, "ui_mode_base", None) or
+            "standard"
+        ).lower()
 
     async def async_select_option(self, option: str) -> None:
         data = self.coordinator.data
@@ -120,3 +119,15 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         if not updated_data:
             if getattr(self, "platform", None) is not None:
                 self.async_write_ha_state()
+
+    @property
+    def icon(self) -> str:
+        """Return a custom icon matching the active operational strategy context."""
+        mode = self.current_option
+        if mode == "solar":
+            return "mdi:solar-power"
+        if mode == "smart":
+            return "mdi:brain"
+        if mode == "standard":
+            return "mdi:lightning-bolt"
+        return "mdi:ev-station"
