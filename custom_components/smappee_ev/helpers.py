@@ -312,8 +312,8 @@ def format_as_hms(td: timedelta) -> str:
     """
     Format a timedelta object into a human-readable HH:MM:SS string.
 
-    This function calculates the total hours, minutes, and seconds from a 
-    given timedelta object and returns them as a zero-padded string, 
+    This function calculates the total hours, minutes, and seconds from a
+    given timedelta object and returns them as a zero-padded string,
     even if the duration exceeds 24 hours.
 
     Args:
