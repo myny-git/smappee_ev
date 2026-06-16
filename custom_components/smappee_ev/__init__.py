@@ -16,6 +16,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
+    CONF_NEEDS_DASHBOARD_REAUTH,
     CONF_PASSWORD,
     CONF_USERNAME,
     DOMAIN,
@@ -150,11 +151,9 @@ def _station_serial(dev: dict[str, Any]) -> str | None:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate older config entry versions to the current format.
 
-    Flow VERSION = 5.
-    Version history relevant here:
-      - v4 (and earlier) could still persist an 'update_interval' in data/options.
-      - v5 removes user control of update interval (internal only) and drops that field.
-    We migrate incrementally so users can skip versions safely.
+    Version history:
+      - v5 removes user control of update interval and drops old OAuth/v3 fields.
+      - v6 marks entries without Dashboard credentials for reauthentication.
     """
     version = entry.version
     data = dict(entry.data)
@@ -162,7 +161,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     updated = False
 
-    # v5 cleanup: remove legacy 'update_interval' key if present (from v4 or earlier)
+    # v5 cleanup: remove legacy update interval key if present.
     if version < 5:
         if "update_interval" in data:
             data.pop("update_interval")
@@ -172,6 +171,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             updated = True
         version = 5
 
+    # Remove old v3/OAuth credentials.
     for old_key in (
         "client_id",
         "client_secret",
@@ -183,13 +183,38 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             data.pop(old_key)
             updated = True
 
+    # v6: Dashboard v10/v11 requires Dashboard credentials.
+    if version < 6:
+        has_dashboard_credentials = bool(
+            data.get(CONF_DASHBOARD_REFRESH_TOKEN)
+            or (data.get(CONF_USERNAME) and data.get(CONF_PASSWORD))
+        )
+
+        if not has_dashboard_credentials:
+            data[CONF_NEEDS_DASHBOARD_REAUTH] = True
+            updated = True
+
+        version = 6
+
     if updated or version != entry.version:
-        hass.config_entries.async_update_entry(entry, data=data, options=options, version=version)
-        _LOGGER.info("Smappee EV config entry %s migrated to version %s", entry.entry_id, version)
+        hass.config_entries.async_update_entry(
+            entry,
+            data=data,
+            options=options,
+            version=version,
+        )
+        _LOGGER.info(
+            "Smappee EV config entry %s migrated to version %s",
+            entry.entry_id,
+            version,
+        )
     else:
         _LOGGER.debug(
-            "Smappee EV config entry %s already at latest version %s", entry.entry_id, version
+            "Smappee EV config entry %s already at latest version %s",
+            entry.entry_id,
+            version,
         )
+
     return True
 
 
@@ -1602,6 +1627,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     update_interval = UPDATE_INTERVAL_DEFAULT
 
     dashboard_client = _create_dashboard_client(hass, entry, session)
+
+    if entry.data.get(CONF_NEEDS_DASHBOARD_REAUTH) or not _dashboard_client_configured(
+        dashboard_client
+    ):
+        raise ConfigEntryAuthFailed(
+            "Smappee Dashboard credentials are required after migration to API v10/v11"
+        )
 
     # 1) Discover site-first topologies
     topologies = await _load_dashboard_topologies(dashboard_client)
