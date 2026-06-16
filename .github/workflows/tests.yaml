@@ -27,7 +27,7 @@ jobs:
 
       - name: Create virtual environment
         run: |
-          uv venv --python 3.12
+          uv venv --python 3.14
 
       - name: Install test dependencies
         run: |
