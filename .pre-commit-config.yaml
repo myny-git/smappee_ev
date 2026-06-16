@@ -13,7 +13,7 @@ repos:
           - --quiet-level=2
           - --check-filenames
           - --check-hidden
-          - --skip=*.po,*.min.js,*.svg,*.png,*.jpg,*.json
+          - --skip=.coverage,*.po,*.min.js,*.svg,*.png,*.jpg,*.json
           - --ignore-words-list=smappee,HA,nd
 
   - repo: https://github.com/pre-commit/mirrors-mypy

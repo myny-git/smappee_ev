@@ -3,5 +3,5 @@
 quiet-level = 2
 check-filenames =
 check-hidden =
-skip = .git,*.po,*.min.js,*.svg,*.png,*.jpg,*.json
+skip = .git,.coverage,*.po,*.min.js,*.svg,*.png,*.jpg,*.json
 ignore-words-list = hass,HA,Smappee
