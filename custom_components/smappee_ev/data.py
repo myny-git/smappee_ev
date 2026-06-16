@@ -10,6 +10,29 @@ from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 
 
 @dataclass
+class SiteState:
+    """Holds state for one Smappee site/service location."""
+
+    mqtt_connected: bool | None = None
+    last_mqtt_rx: float | None = None
+
+    grid_power_total: int | None = None
+    grid_power_phases: list[int] | None = None
+    grid_energy_import_kwh: float | None = None
+    grid_energy_export_kwh: float | None = None
+    grid_current_phases: list[float] | None = None
+    grid_voltage_phases: list[int] | None = None
+
+    house_consumption_power: int | None = None
+    always_on_power: int | None = None
+
+    pv_power_total: int | None = None
+    pv_power_phases: list[int] | None = None
+    pv_energy_import_kwh: float | None = None
+    pv_current_phases: list[float] | None = None
+
+
+@dataclass
 class ConnectorState:
     """Holds state for one connector."""
 
@@ -99,6 +122,67 @@ class IntegrationData:
     station: StationState
     connectors: dict[str, ConnectorState]  # keyed by UUID
     recent_sessions: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class SiteData:
+    """Top-level state container for site-scoped data."""
+
+    site: SiteState
+
+
+@dataclass
+class SmappeeConnectorRuntime:
+    """Runtime objects for one connector."""
+
+    connector_key: str
+    connector_uuid: str | None
+    connector_position: int | None
+    connector_client: object
+
+
+@dataclass
+class SmappeeLedRuntime:
+    """Runtime objects for one LED controller."""
+
+    led_key: str
+    led_device_id: str | None
+    led_device_uuid: str | None = None
+    led_device_name: str | None = None
+
+
+@dataclass
+class SmappeeStationRuntime:
+    """Runtime objects for one charging station."""
+
+    site_location_id: int
+    control_location_id: int
+    control_name: str | None
+    control_uuid: str | None
+    control_function_type: str | None
+    charging_station_serial: str
+    charging_station_model: str | None
+    station_client: object
+    station_coordinator: object | None
+    led_devices: dict[str, SmappeeLedRuntime] = field(default_factory=dict)
+    connectors: dict[str, SmappeeConnectorRuntime] = field(default_factory=dict)
+
+
+@dataclass
+class SmappeeSiteRuntime:
+    """Runtime objects for one site/service location."""
+
+    site_location_id: int
+    site_name: str
+    site_function_type: str | None
+    site_uuid: str | None
+    gateway_serial: str | None
+    gateway_type: str | None
+    measurement_location_ids: list[int]
+    highlevel_configs: dict[int, dict[str, Any]] = field(default_factory=dict)
+    mqtt_clients: object | None = None
+    site_coordinator: object | None = None
+    stations: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass

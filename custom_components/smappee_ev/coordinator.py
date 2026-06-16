@@ -24,9 +24,15 @@ from .const import (
     DEFAULT_MIN_CURRENT,
 )
 from .dashboard_client import SmappeeDashboardClient
-from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
+from .data import (
+    ConnectorState,
+    IntegrationData,
+    SiteData,
+    SiteState,
+    SmappeeEvConfigEntry,
+    StationState,
+)
 from .device_handle import SmappeeDeviceHandle
-from .discovery import parse_mqtt_channel_specs_from_highlevel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -141,7 +147,240 @@ def _mqtt_channel_topic(channel: dict[str, Any] | None) -> str | None:
     return topic or None
 
 
-class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
+class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
+    """Single source of truth for one site/service-location MQTT state."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        *,
+        site_location_id: int,
+        site_name: str,
+        site_uuid: str | None,
+        gateway_serial: str | None,
+        gateway_type: str | None,
+        update_interval: int,
+        config_entry: SmappeeEvConfigEntry | None = None,
+        highlevel_configs: dict[int, dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"Smappee EV Site Coordinator {site_location_id}",
+            update_interval=timedelta(seconds=update_interval),
+            config_entry=config_entry,
+        )
+        self.site_location_id = int(site_location_id)
+        self.site_name = site_name
+        self.site_uuid = site_uuid
+        self.gateway_serial = gateway_serial
+        self.gateway_type = gateway_type
+        self._highlevel_configs = highlevel_configs or {}
+        self._power_index_maps_by_topic: dict[str, dict[str, Any]] | None = None
+
+    async def _async_update_data(self) -> SiteData:
+        await self._ensure_power_index_map()
+        return self.data or SiteData(site=SiteState())
+
+    async def _ensure_power_index_map(self) -> None:
+        if self._power_index_maps_by_topic is not None:
+            return
+        mapping = self._build_measurement_index_maps_by_topic_from_highlevel_configs(
+            self._highlevel_configs
+        )
+        if mapping:
+            self._power_index_maps_by_topic = mapping
+
+    def _build_measurement_index_maps_by_topic_from_highlevel_configs(
+        self, configs: dict[int, dict[str, Any]]
+    ) -> dict[str, dict[str, Any]] | None:
+        maps_by_topic: dict[str, dict[str, Any]] = {}
+        for cfg in configs.values():
+            mapping = self._build_measurement_index_maps_by_topic_from_highlevel(cfg)
+            if not mapping:
+                continue
+            for topic, topic_map in mapping.items():
+                merged = maps_by_topic.setdefault(topic, _empty_power_topic_map())
+                for role in ("grid", "pv"):
+                    for key in ("power", "power_field", "current", "energy"):
+                        value = topic_map[role].get(key)
+                        if value and not merged[role].get(key):
+                            merged[role][key] = value
+        return maps_by_topic or None
+
+    def _build_measurement_index_maps_by_topic_from_highlevel(
+        self, cfg: dict[str, Any]
+    ) -> dict[str, dict[str, Any]] | None:
+        maps_by_topic: dict[str, dict[str, Any]] = {}
+        for meas in cfg.get("measurements") or []:
+            if not isinstance(meas, dict):
+                continue
+            channels = meas.get("updateChannels") or {}
+            if not isinstance(channels, dict):
+                continue
+            power_idx, power_field = _indexes_and_field_from_aspect_paths(
+                channels.get("activePower"), "activePowerData", "channelData"
+            )
+            power_topic = _mqtt_channel_topic(channels.get("activePower"))
+            current_idx = _indexes_from_aspect_paths(channels.get("current"), "currentData")
+            current_topic = _mqtt_channel_topic(channels.get("current"))
+            energy_idx = _indexes_from_aspect_paths(
+                channels.get("meterReadings"), "importActiveEnergyData"
+            )
+            energy_topic = _mqtt_channel_topic(channels.get("meterReadings"))
+            mtype = str(meas.get("type") or "").upper()
+            if mtype == "GRID":
+                if power_topic:
+                    topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
+                    topic_map["grid"]["power"] = power_idx
+                    topic_map["grid"]["power_field"] = power_field
+                if current_topic:
+                    topic_map = maps_by_topic.setdefault(current_topic, _empty_power_topic_map())
+                    topic_map["grid"]["current"] = current_idx
+                if energy_topic:
+                    topic_map = maps_by_topic.setdefault(energy_topic, _empty_power_topic_map())
+                    topic_map["grid"]["energy"] = energy_idx
+                continue
+            if mtype == "PRODUCTION":
+                if power_topic:
+                    topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
+                    topic_map["pv"]["power"] = power_idx
+                    topic_map["pv"]["power_field"] = power_field
+                if current_topic:
+                    topic_map = maps_by_topic.setdefault(current_topic, _empty_power_topic_map())
+                    topic_map["pv"]["current"] = current_idx
+                if energy_topic:
+                    topic_map = maps_by_topic.setdefault(energy_topic, _empty_power_topic_map())
+                    topic_map["pv"]["energy"] = energy_idx
+        return maps_by_topic or None
+
+    def _set_if_changed(self, obj: object, attr: str, value) -> bool:
+        if value is None:
+            return False
+        cur = getattr(obj, attr, None)
+        if value != cur:
+            setattr(obj, attr, value)
+            return True
+        return False
+
+    def _apply_site_group(
+        self,
+        site: SiteState,
+        payload: dict,
+        power_idxs: list[int],
+        current_idxs: list[int],
+        energy_idxs: list[int],
+        power_key_prefix: str,
+        power_field: str | None = None,
+    ) -> bool:
+        changed = False
+        active = _active_power_values(payload, power_field)
+        currents_ma = payload.get("currentData") or []
+        voltage_dv = payload.get("phaseVoltageData") or []
+        imp_wh = payload.get("importActiveEnergyData") or []
+        exp_wh = payload.get("exportActiveEnergyData") or []
+        p_ph = _pick(active, power_idxs)
+        if p_ph:
+            changed |= self._set_if_changed(site, f"{power_key_prefix}_power_phases", p_ph)
+            changed |= self._set_if_changed(site, f"{power_key_prefix}_power_total", sum(p_ph))
+            i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
+            if i_ph:
+                changed |= self._set_if_changed(site, f"{power_key_prefix}_current_phases", i_ph)
+        if power_key_prefix == "grid":
+            v_ph = _volts_from_dv(_pick(voltage_dv, [0, 1, 2]))
+            if v_ph:
+                changed |= self._set_if_changed(site, "grid_voltage_phases", v_ph)
+        if energy_idxs:
+            if power_key_prefix == "grid":
+                changed |= self._set_if_changed(
+                    site,
+                    "grid_energy_import_kwh",
+                    round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3),
+                )
+                changed |= self._set_if_changed(
+                    site,
+                    "grid_energy_export_kwh",
+                    round(sum(_pick(exp_wh, energy_idxs)) / 1000.0, 3),
+                )
+            else:
+                changed |= self._set_if_changed(
+                    site,
+                    "pv_energy_import_kwh",
+                    round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3),
+                )
+        return changed
+
+    def _handle_power(self, topic: str, payload: dict) -> bool:
+        data = self.data
+        if not data:
+            return False
+        idx_map = (self._power_index_maps_by_topic or {}).get(topic)
+        if not idx_map:
+            return False
+        site = data.site
+        changed = False
+        grid = idx_map.get("grid", {})
+        pv = idx_map.get("pv", {})
+        changed |= self._apply_site_group(
+            site,
+            payload,
+            grid.get("power", []),
+            grid.get("current", []),
+            grid.get("energy", []),
+            "grid",
+            grid.get("power_field"),
+        )
+        changed |= self._apply_site_group(
+            site,
+            payload,
+            pv.get("power", []),
+            pv.get("current", []),
+            pv.get("energy", []),
+            "pv",
+            pv.get("power_field"),
+        )
+        cp = payload.get("consumptionPower")
+        if isinstance(cp, int | float):
+            changed |= self._set_if_changed(site, "house_consumption_power", int(cp))
+        sp = payload.get("solarPower")
+        if isinstance(sp, int | float):
+            changed |= self._set_if_changed(site, "pv_power_total", int(sp))
+        always_on = payload.get("alwaysOnPower")
+        if isinstance(always_on, int | float):
+            changed |= self._set_if_changed(site, "always_on_power", int(always_on))
+        return changed
+
+    def apply_mqtt_connection_change(self, up: bool) -> None:
+        data = self.data
+        if not data:
+            return
+        site = data.site
+        changed = False
+        site.last_mqtt_rx = _now()
+        if up and not getattr(site, "mqtt_connected", False):
+            site.mqtt_connected = True
+            changed = True
+        elif not up and getattr(site, "mqtt_connected", None) is not False:
+            site.mqtt_connected = False
+            changed = True
+        if changed:
+            self.async_set_updated_data(data)
+
+    def apply_mqtt_properties(self, topic: str, payload: dict) -> None:
+        data = self.data
+        if not data:
+            return
+        data.site.last_mqtt_rx = _now()
+        changed = True
+        if not getattr(data.site, "mqtt_connected", False):
+            data.site.mqtt_connected = True
+        if topic.endswith("/power"):
+            changed |= self._handle_power(topic, payload)
+        if changed:
+            self.async_set_updated_data(data)
+
+
+class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
     """Single source of truth: fetch station + all connector state here."""
 
     @staticmethod
@@ -165,6 +404,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         config_entry: SmappeeEvConfigEntry | None = None,
         dashboard_client: SmappeeDashboardClient | None = None,
         highlevel_configs: dict[int, dict[str, Any]] | None = None,
+        site_name: str | None = None,
+        gateway_serial: str | None = None,
+        gateway_type: str | None = None,
+        station_name: str | None = None,
+        station_model: str | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -177,6 +421,11 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
         self.connector_clients = connector_clients
         self.dashboard_client = dashboard_client
         self._highlevel_configs = highlevel_configs or {}
+        self.site_name = site_name
+        self.gateway_serial = gateway_serial
+        self.gateway_type = gateway_type
+        self.station_name = station_name
+        self.station_model = station_model
         self.station_client.dashboard_client = dashboard_client
         for client in self.connector_clients.values():
             client.dashboard_client = dashboard_client
@@ -368,17 +617,8 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
     ) -> dict[str, dict[str, Any]] | None:
         """Build MQTT index mappings grouped by exact power topic."""
         maps_by_topic: dict[str, dict[str, Any]] = {}
-        for sid, cfg in configs.items():
+        for cfg in configs.values():
             mapping = self._build_measurement_index_maps_by_topic_from_highlevel(cfg)
-            for spec in parse_mqtt_channel_specs_from_highlevel(sid, cfg):
-                _LOGGER.debug(
-                    "Smappee highlevel mapping: sid=%s role=%s metric=%s topic=%s paths=%s",
-                    spec.service_location_id,
-                    spec.role,
-                    spec.metric,
-                    spec.topic,
-                    spec.aspect_paths,
-                )
             if not mapping:
                 continue
             for topic, topic_map in mapping.items():
@@ -1823,3 +2063,7 @@ class SmappeeCoordinator(DataUpdateCoordinator[IntegrationData]):
             return True
 
         return False
+
+
+# Backwards-compatible public name used by older tests and platform code.
+SmappeeCoordinator = SmappeeStationCoordinator

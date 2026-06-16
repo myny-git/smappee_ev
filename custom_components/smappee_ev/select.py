@@ -9,7 +9,7 @@ from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
 
-MODES = list(CHARGING_MODES)
+MODES = [mode.upper() for mode in CHARGING_MODES]
 PARALLEL_UPDATES = 1
 
 
@@ -69,6 +69,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
             unique_suffix="select:charging_mode",
         )
         self.api_client = api_client
+        self._attr_name = f"Charging Mode {self._connector_label}"
 
     def _state(self) -> ConnectorState | None:
         data: IntegrationData | None = self.coordinator.data
@@ -78,9 +79,9 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
     def current_option(self) -> str | None:
         st = self._state()
         if st:
-            mode = st.selected_mode or st.ui_mode_base or "standard"
-            return mode.lower() if mode else "standard"
-        return "standard"
+            mode = st.selected_mode or st.ui_mode_base or "STANDARD"
+            return mode.upper() if mode else "STANDARD"
+        return "STANDARD"
 
     async def async_select_option(self, option: str) -> None:
         data = self.coordinator.data
@@ -117,4 +118,5 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
                 self.coordinator.async_set_updated_data(data)
                 updated_data = True
         if not updated_data:
-            self.async_write_ha_state()
+            if getattr(self, "platform", None) is not None:
+                self.async_write_ha_state()

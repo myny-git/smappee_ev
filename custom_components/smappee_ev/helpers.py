@@ -9,13 +9,191 @@ from homeassistant.helpers.entity import DeviceInfo
 from .const import DOMAIN, MANUFACTURER
 
 
+def site_device_identifier(site_sid: int | str) -> tuple[str, str]:
+    """Return the registry identifier for a site/gateway device."""
+    return (DOMAIN, f"site:{site_sid}")
+
+
+def station_device_identifier(
+    site_sid: int | str,
+    control_sid: int | str,
+    charging_station_serial: str,
+) -> tuple[str, str]:
+    """Return the registry identifier for a charging station device."""
+    return (DOMAIN, f"station:{site_sid}:{control_sid}:{charging_station_serial}")
+
+
+def led_device_identifier(
+    site_sid: int | str,
+    control_sid: int | str,
+    charging_station_serial: str,
+    led_device_id: str,
+) -> tuple[str, str]:
+    """Return the registry identifier for a LED controller device."""
+    return (DOMAIN, f"led:{site_sid}:{control_sid}:{charging_station_serial}:{led_device_id}")
+
+
+def connector_device_identifier(
+    site_sid: int | str,
+    control_sid: int | str,
+    charging_station_serial: str,
+    connector_key: str,
+) -> tuple[str, str]:
+    """Return the registry identifier for a connector device."""
+    return (
+        DOMAIN,
+        f"connector:{site_sid}:{control_sid}:{charging_station_serial}:{connector_key}",
+    )
+
+
+def make_site_device_info(
+    site_sid: int | str,
+    site_name: str | None,
+    gateway_serial: str | None = None,
+    gateway_type: str | None = None,
+) -> DeviceInfo:
+    """Return Home Assistant device_info for a site/service location."""
+    name = site_name or f"Smappee {site_sid}"
+    model_parts = [part for part in (gateway_type, "Service Location") if part]
+    return cast(
+        DeviceInfo,
+        {
+            "identifiers": {site_device_identifier(site_sid)},
+            "name": f"Smappee {name}",
+            "manufacturer": MANUFACTURER,
+            "model": " / ".join(model_parts) if model_parts else "Service Location",
+            **({"serial_number": gateway_serial} if gateway_serial else {}),
+        },
+    )
+
+
+def make_station_device_info(
+    site_sid: int | str,
+    control_sid: int | str,
+    charging_station_serial: str,
+    *,
+    station_name: str | None = None,
+    station_model: str | None = None,
+    legacy_identifier: str | None = None,
+) -> DeviceInfo:
+    """Return Home Assistant device_info for a charging station."""
+    identifiers = {station_device_identifier(site_sid, control_sid, charging_station_serial)}
+    if legacy_identifier:
+        identifiers.add((DOMAIN, legacy_identifier))
+    return cast(
+        DeviceInfo,
+        {
+            "identifiers": identifiers,
+            "name": station_name or f"Smappee EV {charging_station_serial}",
+            "manufacturer": MANUFACTURER,
+            "model": station_model or "EV Wall",
+            "serial_number": charging_station_serial,
+            "via_device": site_device_identifier(site_sid),
+        },
+    )
+
+
+def make_led_device_info(
+    site_sid: int | str,
+    control_sid: int | str,
+    charging_station_serial: str,
+    led_device_id: str,
+    *,
+    led_name: str | None = None,
+) -> DeviceInfo:
+    """Return Home Assistant device_info for a LED controller."""
+    return cast(
+        DeviceInfo,
+        {
+            "identifiers": {
+                led_device_identifier(site_sid, control_sid, charging_station_serial, led_device_id)
+            },
+            "name": led_name or f"Smappee EV {charging_station_serial} LED controller",
+            "manufacturer": MANUFACTURER,
+            "model": "LED Controller",
+            "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
+        },
+    )
+
+
+def make_connector_device_info(
+    site_sid: int | str,
+    control_sid: int | str,
+    charging_station_serial: str,
+    connector_key: str,
+    connector_label: str | None = None,
+) -> DeviceInfo:
+    """Return Home Assistant device_info for a connector."""
+    label = connector_label or connector_key
+    return cast(
+        DeviceInfo,
+        {
+            "identifiers": {
+                connector_device_identifier(
+                    site_sid, control_sid, charging_station_serial, connector_key
+                )
+            },
+            "name": f"Smappee EV {charging_station_serial} | Connector {label}",
+            "manufacturer": MANUFACTURER,
+            "model": "Connector",
+            "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
+        },
+    )
+
+
 def make_device_info(
     sid: int,
     serial: str,
     station_uuid: str,
     connector_label: str | None = None,
+    *,
+    scope: str = "station",
+    site_name: str | None = None,
+    gateway_serial: str | None = None,
+    gateway_type: str | None = None,
+    control_sid: int | str | None = None,
+    charging_station_serial: str | None = None,
+    station_name: str | None = None,
+    station_model: str | None = None,
+    led_device_id: str | None = None,
+    led_name: str | None = None,
+    connector_key: str | None = None,
 ) -> DeviceInfo:
     """Return a Home Assistant device_info dict for a station or connector."""
+    if scope == "site":
+        return make_site_device_info(sid, site_name, gateway_serial or serial, gateway_type)
+
+    resolved_control_sid = control_sid or sid
+    resolved_station_serial = charging_station_serial or serial
+    legacy_identifier = f"{sid}:{serial}:{station_uuid}"
+
+    if scope == "led" and led_device_id:
+        return make_led_device_info(
+            sid,
+            resolved_control_sid,
+            resolved_station_serial,
+            led_device_id,
+            led_name=led_name,
+        )
+
+    if scope == "connector":
+        resolved_connector_key = connector_key or connector_label or "unknown"
+        return make_connector_device_info(
+            sid,
+            resolved_control_sid,
+            resolved_station_serial,
+            resolved_connector_key,
+            connector_label,
+        )
+
+    return make_station_device_info(
+        sid,
+        resolved_control_sid,
+        resolved_station_serial,
+        station_name=station_name,
+        station_model=station_model,
+        legacy_identifier=legacy_identifier,
+    )
 
     # The station is the main device (parent)
     station_identifier = (DOMAIN, f"{sid}:{serial}:{station_uuid}")
@@ -69,7 +247,14 @@ def make_unique_id(
 
 def station_serial(coord) -> str:
     """Return the station serial from a coordinator (fallback 'unknown')."""
-    return getattr(getattr(coord, "station_client", None), "serial_id", "unknown")
+    station_client = getattr(coord, "station_client", None)
+    if station_client is None:
+        return "unknown"
+    return (
+        getattr(station_client, "charging_station_serial", None)
+        or getattr(station_client, "serial_id", None)
+        or "unknown"
+    )
 
 
 def connector_state(coordinator, connector_uuid: str) -> Any | None:
@@ -126,6 +311,10 @@ def safe_sum(values) -> float | None:
 
 __all__ = [
     "make_device_info",
+    "make_site_device_info",
+    "make_station_device_info",
+    "make_led_device_info",
+    "make_connector_device_info",
     "make_unique_id",
     "station_serial",
     "connector_state",

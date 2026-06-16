@@ -12,12 +12,31 @@ from .helpers import build_connector_id, make_device_info, make_unique_id, stati
 
 __all__ = [
     "SmappeeBaseEntity",
+    "SmappeeSiteEntity",
     "SmappeeStationEntity",
     "SmappeeStationRestEntity",
+    "SmappeeLedEntity",
     "SmappeeConnectorEntity",
     "SmappeeConnectorRestEntity",
     "SmappeeConnectorMqttEntity",
 ]
+
+
+def _text_attr(obj: object, name: str) -> str | None:
+    value = getattr(obj, name, None)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, int):
+        return str(value)
+    return None
+
+
+def _is_int_like(value: object) -> bool:
+    try:
+        int(cast(Any, value))
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
@@ -30,14 +49,22 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
         coordinator: SmappeeCoordinator,
         sid: int,
         station_uuid: str,
-        unique_suffix: str,
+        unique_suffix: str = "entity",
         connector_uuid: str | None = None,
         connector_label: str | None = None,
+        device_scope: str = "station",
+        led_device_id: str | None = None,
+        led_name: str | None = None,
     ) -> None:
         self._sid = sid
         self._station_uuid = station_uuid
         self._serial = station_serial(coordinator)
         self._connector_label = connector_label
+        self._device_scope = device_scope
+        self._led_device_id = led_device_id
+        self._led_name = led_name
+        self._connector_key = connector_uuid
+        unique_suffix = unique_suffix or "entity"
         self.internal_integration_suggested_object_id = (
             f"{DOMAIN}_{self._serial}_{unique_suffix.split(':')[-1]}"
             f"{'_' + connector_label if connector_label else ''}"
@@ -53,8 +80,49 @@ class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
 
     @property
     def device_info(self) -> DeviceInfo:
+        station_client = getattr(self.coordinator, "station_client", None)
+        site_name = _text_attr(self.coordinator, "site_name")
+        gateway_serial = _text_attr(self.coordinator, "gateway_serial")
+        gateway_type = _text_attr(self.coordinator, "gateway_type")
+        control_sid = _text_attr(station_client, "service_location_id")
+        station_name = _text_attr(self.coordinator, "station_name")
+        station_model = _text_attr(self.coordinator, "station_model")
+        charging_station_serial = _text_attr(station_client, "charging_station_serial")
+        if self._device_scope == "station" and not any(
+            (
+                site_name,
+                gateway_serial,
+                gateway_type,
+                control_sid and control_sid != str(self._sid),
+                station_name,
+                station_model,
+                charging_station_serial,
+            )
+        ):
+            if self._connector_label is None:
+                return make_device_info(self._sid, self._serial, self._station_uuid)
+            return make_device_info(
+                self._sid,
+                self._serial,
+                self._station_uuid,
+                connector_label=self._connector_label,
+            )
         return make_device_info(
-            self._sid, self._serial, self._station_uuid, connector_label=self._connector_label
+            self._sid,
+            self._serial,
+            self._station_uuid,
+            connector_label=self._connector_label,
+            scope=self._device_scope,
+            site_name=site_name,
+            gateway_serial=gateway_serial,
+            gateway_type=gateway_type,
+            control_sid=control_sid,
+            charging_station_serial=charging_station_serial,
+            station_name=station_name,
+            station_model=station_model,
+            led_device_id=self._led_device_id,
+            led_name=self._led_name,
+            connector_key=self._connector_key,
         )
 
     @property
@@ -71,9 +139,30 @@ class SmappeeStationEntity(SmappeeBaseEntity):
         coordinator: SmappeeCoordinator,
         sid: int,
         station_uuid: str,
-        unique_suffix: str,
+        unique_suffix: str = "entity",
+        name: str | None = None,
     ) -> None:
         super().__init__(coordinator, sid, station_uuid, unique_suffix=unique_suffix)
+        if name is not None:
+            self._attr_name = name
+
+
+class SmappeeSiteEntity(SmappeeBaseEntity):
+    """Base for site-scope entities."""
+
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        sid: int,
+        unique_suffix: str = "entity",
+    ) -> None:
+        super().__init__(
+            coordinator,
+            sid,
+            station_uuid=f"site-{sid}",
+            unique_suffix=unique_suffix,
+            device_scope="site",
+        )
 
 
 class SmappeeStationRestEntity(SmappeeStationEntity):
@@ -93,6 +182,30 @@ class SmappeeStationRestEntity(SmappeeStationEntity):
         return bool(getattr(station, "api_available", True))
 
 
+class SmappeeLedEntity(SmappeeStationRestEntity):
+    """Base for LED-controller entities."""
+
+    def __init__(
+        self,
+        coordinator: SmappeeCoordinator,
+        sid: int,
+        station_uuid: str,
+        unique_suffix: str,
+        led_device_id: str | None = None,
+        led_name: str | None = None,
+    ) -> None:
+        SmappeeBaseEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            station_uuid,
+            unique_suffix=unique_suffix,
+            device_scope="led",
+            led_device_id=led_device_id,
+            led_name=led_name,
+        )
+
+
 class SmappeeConnectorEntity(SmappeeBaseEntity):
     """Base for connector-scope entities."""
 
@@ -104,7 +217,20 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
         station_uuid: str,
         connector_uuid: str,
         unique_suffix: str,
+        name: str | None = None,
     ) -> None:
+        if not _is_int_like(sid) and _is_int_like(api):
+            old_sid = int(cast(int | str, api))
+            old_station_uuid = str(sid)
+            old_connector_uuid = str(station_uuid)
+            old_unique_suffix = str(connector_uuid)
+            old_name = str(unique_suffix) if unique_suffix is not None else name
+            api = old_sid
+            sid = old_sid
+            station_uuid = old_station_uuid
+            connector_uuid = old_connector_uuid
+            unique_suffix = old_unique_suffix
+            name = old_name
         self._connector_uuid = connector_uuid
         self._api = cast(SmappeeDeviceHandle, api)
         self._unique_suffix = unique_suffix
@@ -117,7 +243,10 @@ class SmappeeConnectorEntity(SmappeeBaseEntity):
             unique_suffix=unique_suffix,
             connector_uuid=connector_uuid,
             connector_label=connector_label,
+            device_scope="connector",
         )
+        if name is not None:
+            self._attr_name = name
 
     # Convenience accessors
     @property

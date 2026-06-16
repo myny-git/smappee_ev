@@ -20,8 +20,8 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, SmappeeStationEntity
-from .coordinator import SmappeeCoordinator
+from .base_entities import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, SmappeeSiteEntity
+from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
 from .helpers import safe_sum, update_total_increasing
@@ -44,30 +44,33 @@ async def async_setup_entry(
 
     for sid, site in (sites or {}).items():
         stations = (site or {}).get("stations", {})
+        site_coord: SmappeeSiteCoordinator | None = (site or {}).get("site_coordinator")
+        if site_coord is None:
+            first_bucket = next(iter((stations or {}).values()), None)
+            site_coord = first_bucket.get("coordinator") if isinstance(first_bucket, dict) else None
+        if site_coord is not None:
+            entities.append(SmappeeMqttLastSeenSensor(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridPower(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationPvPower(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationHouseConsumptionPower(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridEnergyImport(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridEnergyExport(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationPvEnergyImport(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridCurrents(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridCurrentL1(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridCurrentL2(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridCurrentL3(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationPvCurrents(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationPvCurrentL1(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationPvCurrentL2(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationPvCurrentL3(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridVoltageL1(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridVoltageL2(site_coord, None, sid, f"site-{sid}"))
+            entities.append(StationGridVoltageL3(site_coord, None, sid, f"site-{sid}"))
+
         for st_uuid, bucket in (stations or {}).items():
             coord: SmappeeCoordinator = bucket["coordinator"]
-            st_client: SmappeeDeviceHandle = bucket["station_client"]
             conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
-
-            # ---- Station sensors ----
-            entities.append(SmappeeMqttLastSeenSensor(coord, st_client, sid, st_uuid))
-            entities.append(StationGridPower(coord, st_client, sid, st_uuid))
-            entities.append(StationPvPower(coord, st_client, sid, st_uuid))
-            entities.append(StationHouseConsumptionPower(coord, st_client, sid, st_uuid))
-            entities.append(StationGridEnergyImport(coord, st_client, sid, st_uuid))
-            entities.append(StationGridEnergyExport(coord, st_client, sid, st_uuid))
-            entities.append(StationPvEnergyImport(coord, st_client, sid, st_uuid))
-            entities.append(StationGridCurrents(coord, st_client, sid, st_uuid))
-            entities.append(StationGridCurrentL1(coord, st_client, sid, st_uuid))
-            entities.append(StationGridCurrentL2(coord, st_client, sid, st_uuid))
-            entities.append(StationGridCurrentL3(coord, st_client, sid, st_uuid))
-            entities.append(StationPvCurrents(coord, st_client, sid, st_uuid))
-            entities.append(StationPvCurrentL1(coord, st_client, sid, st_uuid))
-            entities.append(StationPvCurrentL2(coord, st_client, sid, st_uuid))
-            entities.append(StationPvCurrentL3(coord, st_client, sid, st_uuid))
-            entities.append(StationGridVoltageL1(coord, st_client, sid, st_uuid))
-            entities.append(StationGridVoltageL2(coord, st_client, sid, st_uuid))
-            entities.append(StationGridVoltageL3(coord, st_client, sid, st_uuid))
 
             # ---- Connector sensors ----
             for cuuid, client in (conns or {}).items():
@@ -97,74 +100,95 @@ async def async_setup_entry(
 # --------------- Station sensors ---------------
 
 
-class StationGridPower(SmappeeStationEntity, SensorEntity):
+def _site_state(coordinator: SmappeeSiteCoordinator | SmappeeCoordinator):
+    data = getattr(coordinator, "data", None)
+    if data is None:
+        return None
+    return getattr(data, "site", None) or getattr(data, "station", None)
+
+
+def _safe_write_ha_state(entity: SensorEntity) -> None:
+    if getattr(entity, "platform", None) is not None:
+        entity.async_write_ha_state()
+
+
+class StationGridPower(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_translation_key = "grid_power"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_power",
         )
 
     @property
     def native_value(self) -> float | None:
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         v = getattr(st, "grid_power_total", None)
         return float(v) if isinstance(v, int | float) else None
 
 
-class StationHouseConsumptionPower(SmappeeStationEntity, SensorEntity):
+class StationHouseConsumptionPower(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_translation_key = "house_consumption_power"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:house_consumption_power",
         )
 
     @property
     def native_value(self) -> float | None:
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         v = getattr(st, "house_consumption_power", None)
         return float(v) if isinstance(v, int | float) else None
 
 
-class StationPvPower(SmappeeStationEntity, SensorEntity):
+class StationPvPower(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_translation_key = "pv_power"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:pv_power",
         )
 
     @property
     def native_value(self) -> float | None:
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         v = getattr(st, "pv_power_total", None)
         return float(v) if isinstance(v, int | float) else None
 
@@ -190,7 +214,7 @@ async def _async_restore_last_total_value(sensor: RestoreSensor) -> None:
             sensor._last_value = float(last.native_value)  # type: ignore[attr-defined]
 
 
-class RestoredEnergyStationSensor(SmappeeStationEntity, RestoreSensor):
+class RestoredEnergyStationSensor(SmappeeSiteEntity, RestoreSensor):
     """Station energy sensor with restore support and coordinator lifecycle."""
 
     _attr_device_class = SensorDeviceClass.ENERGY
@@ -201,7 +225,7 @@ class RestoredEnergyStationSensor(SmappeeStationEntity, RestoreSensor):
         return _total_increasing_value(self, candidate)
 
     async def async_added_to_hass(self) -> None:
-        await SmappeeStationEntity.async_added_to_hass(self)
+        await SmappeeSiteEntity.async_added_to_hass(self)
         await _async_restore_last_total_value(self)
 
 
@@ -224,19 +248,22 @@ class StationGridEnergyImport(RestoredEnergyStationSensor):
     _attr_translation_key = "grid_energy_import"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_energy_import_kwh",
         )
 
     @property
     def native_value(self) -> float | None:
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         return self._total_increasing_value(getattr(st, "grid_energy_import_kwh", None))
 
 
@@ -244,19 +271,22 @@ class StationGridEnergyExport(RestoredEnergyStationSensor):
     _attr_translation_key = "grid_energy_export"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_energy_export_kwh",
         )
 
     @property
     def native_value(self) -> float | None:
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         return self._total_increasing_value(getattr(st, "grid_energy_export_kwh", None))
 
 
@@ -264,19 +294,22 @@ class StationPvEnergyImport(RestoredEnergyStationSensor):
     _attr_translation_key = "pv_energy_import"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:pv_energy_import_kwh",
         )
 
     @property
     def native_value(self) -> float | None:
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         return self._total_increasing_value(getattr(st, "pv_energy_import_kwh", None))
 
 
@@ -478,33 +511,37 @@ class ConnEnergyImport(RestoredEnergyConnectorSensor):
         return self._total_increasing_value(getattr(st, "energy_import_kwh", None) if st else None)
 
 
-class StationGridCurrents(SmappeeStationEntity, SensorEntity):
+class StationGridCurrents(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "grid_currents"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_currents",
         )
+        self._attr_name = "Grid current (L1-L3)"
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         total = safe_sum(vals)
         return round(total, 3) if isinstance(total, float) else None
 
     @property
     def extra_state_attributes(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return (
             {"L1": vals[0], "L2": vals[1], "L3": vals[2]}
@@ -513,33 +550,37 @@ class StationGridCurrents(SmappeeStationEntity, SensorEntity):
         )
 
 
-class StationPvCurrents(SmappeeStationEntity, SensorEntity):
+class StationPvCurrents(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "pv_currents"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:pv_currents",
         )
+        self._attr_name = "PV current (L1-L3)"
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         total = safe_sum(vals)
         return round(total, 3) if isinstance(total, float) else None
 
     @property
     def extra_state_attributes(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return (
             {"L1": vals[0], "L2": vals[1], "L3": vals[2]}
@@ -548,218 +589,245 @@ class StationPvCurrents(SmappeeStationEntity, SensorEntity):
         )
 
 
-class StationGridCurrentL1(SmappeeStationEntity, SensorEntity):
+class StationGridCurrentL1(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "grid_current_l1"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_current_l1",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
 
 
-class StationGridCurrentL2(SmappeeStationEntity, SensorEntity):
+class StationGridCurrentL2(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "grid_current_l2"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_current_l2",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
 
 
-class StationGridCurrentL3(SmappeeStationEntity, SensorEntity):
+class StationGridCurrentL3(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "grid_current_l3"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_current_l3",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
 
-class StationPvCurrentL1(SmappeeStationEntity, SensorEntity):
+class StationPvCurrentL1(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "pv_current_l1"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:pv_current_l1",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
 
 
-class StationPvCurrentL2(SmappeeStationEntity, SensorEntity):
+class StationPvCurrentL2(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "pv_current_l2"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:pv_current_l2",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
 
 
-class StationPvCurrentL3(SmappeeStationEntity, SensorEntity):
+class StationPvCurrentL3(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_translation_key = "pv_current_l3"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:pv_current_l3",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
 
-class StationGridVoltageL1(SmappeeStationEntity, SensorEntity):
+class StationGridVoltageL1(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
     _attr_translation_key = "grid_voltage_l1"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_voltage_l1",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_voltage_phases", None) if st else None
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
 
 
-class StationGridVoltageL2(SmappeeStationEntity, SensorEntity):
+class StationGridVoltageL2(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
     _attr_translation_key = "grid_voltage_l2"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_voltage_l2",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_voltage_phases", None) if st else None
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
 
 
-class StationGridVoltageL3(SmappeeStationEntity, SensorEntity):
+class StationGridVoltageL3(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
     _attr_translation_key = "grid_voltage_l3"
 
     def __init__(
-        self, coordinator: SmappeeCoordinator, api: SmappeeDeviceHandle, sid: int, station_uuid: str
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:grid_voltage_l3",
         )
 
     @property
     def native_value(self):
-        st = self.coordinator.data.station if self.coordinator.data else None
+        st = _site_state(self.coordinator)
         vals = getattr(st, "grid_voltage_phases", None) if st else None
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
@@ -786,7 +854,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
     def native_value(self) -> str | None:
         st = self._conn_state
         value = getattr(st, "session_state", None) if st else None
-        return str(value.lower()) if value is not None else None
+        return str(value) if value is not None else None
 
 
 class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
@@ -859,7 +927,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
             }
 
         if self._restored_value is not None or self._restored_attributes:
-            self.async_write_ha_state()
+            _safe_write_ha_state(self)
 
 
 class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
@@ -886,7 +954,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         st = self._conn_state
         value = getattr(st, "status_current", None) if st else None
         if value is not None:
-            return str(value.lower())
+            return str(value)
         return self._restored_value
 
     async def async_added_to_hass(self) -> None:
@@ -900,11 +968,11 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
             restored_value = None
         if restored_value is not None:
             self._restored_value = str(restored_value)
-            self.async_write_ha_state()
+            _safe_write_ha_state(self)
 
 
-class SmappeeMqttLastSeenSensor(SmappeeStationEntity, SensorEntity):
-    """Station-scope 'last MQTT RX' as timestamp sensor."""
+class SmappeeMqttLastSeenSensor(SmappeeSiteEntity, SensorEntity):
+    """Site-scope 'last MQTT RX' as timestamp sensor."""
 
     _attr_translation_key = "mqtt_last_seen"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
@@ -914,24 +982,22 @@ class SmappeeMqttLastSeenSensor(SmappeeStationEntity, SensorEntity):
 
     def __init__(
         self,
-        coordinator: SmappeeCoordinator,
-        api_client: SmappeeDeviceHandle,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api_client: SmappeeDeviceHandle | None,
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="sensor:mqtt_last_seen",
         )
         self.api_client = api_client
 
     @property
     def native_value(self) -> datetime | None:
-        data = self.coordinator.data
-        st = data.station if data else None
+        st = _site_state(self.coordinator)
         ts = getattr(st, "last_mqtt_rx", None)
         if ts is None:
             return None

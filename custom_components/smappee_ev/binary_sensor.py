@@ -5,10 +5,9 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeStationEntity
-from .coordinator import SmappeeCoordinator
+from .base_entities import SmappeeSiteEntity
+from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .data import SmappeeEvConfigEntry
-from .device_handle import SmappeeDeviceHandle
 from .helpers import station_serial
 
 PARALLEL_UPDATES = 0
@@ -28,40 +27,45 @@ async def async_setup_entry(
 
     entities: list[SmappeeMqttConnectivity] = []
     for sid, site in (sites or {}).items():
-        stations = (site or {}).get("stations", {})
-        for st_uuid, bucket in (stations or {}).items():
-            coord: SmappeeCoordinator = bucket["coordinator"]
-            st_client: SmappeeDeviceHandle = bucket["station_client"]
-            entities.append(SmappeeMqttConnectivity(coord, st_client, sid, st_uuid))
+        coord: SmappeeSiteCoordinator | None = (site or {}).get("site_coordinator")
+        if coord is None:
+            stations = (site or {}).get("stations", {})
+            first_bucket = next(iter((stations or {}).values()), None)
+            coord = first_bucket.get("coordinator") if isinstance(first_bucket, dict) else None
+        if coord is not None:
+            entities.append(SmappeeMqttConnectivity(coord, sid))
 
     async_add_entities(entities, False)
 
 
-class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
+class SmappeeMqttConnectivity(SmappeeSiteEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "mqtt_connected"
 
     def __init__(
         self,
-        coordinator: SmappeeCoordinator,
-        api_client: SmappeeDeviceHandle,
+        coordinator: SmappeeSiteCoordinator,
         sid: int,
-        station_uuid: str,
+        api_client: object | None = None,
+        station_uuid: str | None = None,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeSiteEntity.__init__(
             self,
             coordinator,
             sid,
-            station_uuid,
             unique_suffix="mqtt_connected",
         )
+        if station_uuid is not None:
+            self._station_uuid = station_uuid
         self.api_client = api_client
+        self._attr_name = "MQTT Connected"
 
     @property
     def is_on(self) -> bool:
-        st = self.coordinator.data.station if self.coordinator.data else None
-        return bool(getattr(st, "mqtt_connected", False))
+        data = self.coordinator.data if self.coordinator.data else None
+        site = getattr(data, "site", None) or getattr(data, "station", None)
+        return bool(getattr(site, "mqtt_connected", False))
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
@@ -69,4 +73,6 @@ class SmappeeMqttConnectivity(SmappeeStationEntity, BinarySensorEntity):
             "service_location_id": self._sid,
             "station_serial": self._serial,
             "station_uuid": self._station_uuid,
+            "gateway_serial": getattr(self.coordinator, "gateway_serial", None),
+            "site_uuid": getattr(self.coordinator, "site_uuid", None),
         }

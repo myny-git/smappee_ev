@@ -243,7 +243,8 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
                     self.coordinator.async_set_updated_data(data)
                     updated_data = True
         if not updated_data:
-            self.async_write_ha_state()
+            if getattr(self, "platform", None) is not None:
+                self.async_write_ha_state()
 
 
 class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
@@ -313,7 +314,8 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
                 self.coordinator.async_set_updated_data(data)
                 updated_data = True
         if not updated_data:
-            self.async_write_ha_state()
+            if getattr(self, "platform", None) is not None:
+                self.async_write_ha_state()
 
 
 class SmappeeCapacityMaximumPowerNumber(SmappeeStationEntity, _BaseNumber):

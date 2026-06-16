@@ -6,7 +6,7 @@ from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEnti
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeStationRestEntity
+from .base_entities import SmappeeLedEntity
 from .const import DEFAULT_LED_BRIGHTNESS
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry
@@ -29,19 +29,23 @@ async def async_setup_entry(
         stations = (site or {}).get("stations", {})
         for st_uuid, bucket in (stations or {}).items():
             if bucket.get("connector_clients"):
+                led_devices = bucket.get("led_devices") or {}
+                led_key, led_info = next(iter(led_devices.items()), (None, {}))
                 entities.append(
                     SmappeeLedLight(
                         coordinator=bucket["coordinator"],
                         api_client=bucket["station_client"],
                         sid=sid,
                         station_uuid=st_uuid,
+                        led_device_id=led_key,
+                        led_name=led_info.get("name") if isinstance(led_info, dict) else None,
                     )
                 )
 
     async_add_entities(entities, False)
 
 
-class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
+class SmappeeLedLight(SmappeeLedEntity, LightEntity):
     """Dimmable LED ring on the Smappee EV charger."""
 
     _attr_color_mode = ColorMode.BRIGHTNESS
@@ -56,13 +60,17 @@ class SmappeeLedLight(SmappeeStationRestEntity, LightEntity):
         api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
+        led_device_id: str | None = None,
+        led_name: str | None = None,
     ) -> None:
-        SmappeeStationRestEntity.__init__(
+        SmappeeLedEntity.__init__(
             self,
             coordinator,
             sid,
             station_uuid,
             unique_suffix="light:led",
+            led_device_id=led_device_id,
+            led_name=led_name,
         )
         self.api_client = api_client
         self._last_nonzero_brightness: int | None = None

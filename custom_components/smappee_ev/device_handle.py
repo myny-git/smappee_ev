@@ -23,12 +23,16 @@ class SmappeeDeviceHandle:
         connector_number: int | None = None,
         is_station: bool = False,
         charging_station_serial: str | None = None,
+        site_location_id: int | str | None = None,
+        charging_station_model: str | None = None,
     ):
         self.serial = serial
         self.charging_station_serial = charging_station_serial
+        self.charging_station_model = charging_station_model
         self.smart_device_uuid = smart_device_uuid
         self.smart_device_id = smart_device_id
         self.service_location_id = service_location_id
+        self.site_location_id = site_location_id or service_location_id
         self.connector_number = connector_number
 
         self.is_station = is_station
@@ -40,8 +44,10 @@ class SmappeeDeviceHandle:
         self._callbacks: set[Callable[..., Any]] = set()  # kept for future hook use
 
         _LOGGER.info(
-            "SmappeeDeviceHandle initialized (serial=%s, connector=%s, station=%s)",
+            "SmappeeDeviceHandle initialized "
+            "(serial=%s, charging_station_serial=%s, connector=%s, station=%s)",
             self.serial,
+            self.charging_station_serial,
             self.connector_number,
             self.is_station,
         )
