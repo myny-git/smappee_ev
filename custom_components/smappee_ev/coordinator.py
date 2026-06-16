@@ -34,6 +34,8 @@ from .data import (
     StationState,
 )
 from .device_handle import SmappeeDeviceHandle
+from .helpers import anonymize_uuid
+from .mqtt_gateway import redact_mqtt_topic
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -508,17 +510,17 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         previous = self._connector_api_available.get(uuid)
         if previous is available:
             if not available and err is not None:
-                _LOGGER.debug("Connector %s update still failing: %s", uuid, err)
+                _LOGGER.debug("Connector %s update still failing: %s", anonymize_uuid(uuid), err)
             return
 
         self._connector_api_available[uuid] = available
         if available:
             if previous is False:
-                _LOGGER.info("Connector %s update recovered", uuid)
+                _LOGGER.info("Connector %s update recovered", anonymize_uuid(uuid))
             return
 
         if err is not None:
-            _LOGGER.warning("Connector %s update failed; marking unavailable: %s", uuid, err)
+            _LOGGER.warning("Connector %s update failed; marking unavailable: %s", anonymize_uuid(uuid), err)
 
     def _log_connector_session_transition(
         self, uuid: str, available: bool, err: Exception | None = None
@@ -527,17 +529,17 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         previous = self._connector_session_available.get(uuid)
         if previous is available:
             if not available and err is not None:
-                _LOGGER.debug("Connector %s session fetch still failing: %s", uuid, err)
+                _LOGGER.debug("Connector %s session fetch still failing: %s", anonymize_uuid(uuid), err)
             return
 
         self._connector_session_available[uuid] = available
         if available:
             if previous is False:
-                _LOGGER.info("Connector %s session fetch recovered", uuid)
+                _LOGGER.info("Connector %s session fetch recovered", anonymize_uuid(uuid))
             return
 
         if err is not None:
-            _LOGGER.warning("Connector %s session fetch failed: %s", uuid, err)
+            _LOGGER.warning("Connector %s session fetch failed: %s", anonymize_uuid(uuid), err)
 
     def _log_station_api_transition(self, available: bool, err: Exception | None = None) -> None:
         """Log station REST reachability only when it changes."""
@@ -1662,7 +1664,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             if not was_active:
                 self._schedule_session_refresh(
-                    f"connector {connector_uuid or '?'} active",
+                    f"connector {anonymize_uuid(connector_uuid) or '?'} active",
                     delay=SESSION_START_REFRESH_DELAY,
                 )
             return
@@ -1744,7 +1746,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                     return
 
                 await self._async_refresh_recent_sessions(
-                    f"connector {connector_uuid or '?'} finalizing after {delay}s",
+                    f"connector {anonymize_uuid(connector_uuid) or '?'} finalizing after {delay}s",
                     force=True,
                 )
 
@@ -2052,7 +2054,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             roles.append("cars")
         _LOGGER.debug(
             "Smappee MQTT power apply: topic=%s roles=%s payload_keys=%s",
-            topic,
+            redact_mqtt_topic(topic),
             roles,
             list(payload.keys()),
         )

@@ -330,3 +330,12 @@ def format_as_hms(td: timedelta) -> str:
     seconds = total_seconds % 60
 
     return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+def anonymize_uuid(uuid: str | None) -> str:
+    """Mask a UUID while keeping it consistent for debugging."""
+    if uuid is None:
+        return "none"
+    if not uuid or len(uuid) < 8:
+        return "****"
+
+    return f"{uuid[:4]}****{uuid[-4:]}"
