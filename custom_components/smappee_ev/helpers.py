@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, MANUFACTURER
+from .const import CONFIGURATION_URL, DOMAIN, MANUFACTURER
 
 
 def site_device_identifier(site_sid: int | str) -> tuple[str, str]:
@@ -53,7 +53,7 @@ def make_site_device_info(
     gateway_type: str | None = None,
 ) -> DeviceInfo:
     """Return Home Assistant device_info for a site/service location."""
-    name = site_name or f"Smappee {site_sid}"
+    name = site_name or f"{MANUFACTURER} {site_sid}"
     model_parts = [part for part in (gateway_type, "Service Location") if part]
     return cast(
         DeviceInfo,
@@ -61,6 +61,7 @@ def make_site_device_info(
             "identifiers": {site_device_identifier(site_sid)},
             "name": name,
             "manufacturer": MANUFACTURER,
+            "configuration_url": CONFIGURATION_URL,
             "model": " / ".join(model_parts) if model_parts else "Service Location",
             **({"serial_number": gateway_serial} if gateway_serial else {}),
         },
@@ -84,8 +85,9 @@ def make_station_device_info(
         DeviceInfo,
         {
             "identifiers": identifiers,
-            "name": station_name or f"Smappee EV {charging_station_serial}",
+            "name": station_name or f"{MANUFACTURER} EV {charging_station_serial}",
             "manufacturer": MANUFACTURER,
+            "configuration_url": CONFIGURATION_URL,
             "model": station_model or "EV Wall",
             "serial_number": charging_station_serial,
             "via_device": site_device_identifier(site_sid),
@@ -108,8 +110,9 @@ def make_led_device_info(
             "identifiers": {
                 led_device_identifier(site_sid, control_sid, charging_station_serial, led_device_id)
             },
-            "name": led_name or f"Smappee EV {charging_station_serial} LED controller",
+            "name": led_name or f"{MANUFACTURER} EV {charging_station_serial} LED controller",
             "manufacturer": MANUFACTURER,
+            "configuration_url": CONFIGURATION_URL,
             "model": "LED Controller",
             "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
         },
@@ -136,6 +139,7 @@ def make_connector_device_info(
             },
             "name": f"{station_name} | Connector {label}",
             "manufacturer": MANUFACTURER,
+            "configuration_url": CONFIGURATION_URL,
             "model": "Connector",
             "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
         },

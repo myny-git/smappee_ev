@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.helpers import update_coordinator
 
-from .const import DOMAIN
+from .const import ATTRIBUTION, DOMAIN
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
@@ -50,6 +50,7 @@ class SmappeeBaseEntity[CoordinatorT: SmappeeEntityCoordinator](
     """Common base providing station/connector id storage and device_info."""
 
     _attr_has_entity_name = True
+    _attr_attribution = ATTRIBUTION
 
     def __init__(
         self,
