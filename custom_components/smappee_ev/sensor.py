@@ -1153,6 +1153,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes of the sensor."""
         session = self._active_session_data
         if not session:
             return {}
@@ -1169,8 +1170,11 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             current_time = end_time if end_time else dt_util.now()
             duration = current_time - start_time
 
+            # Keep duration in minutes for legacy/other purposes
             attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
-            attrs["duration_formatted"] = str(duration).split('.')[0]
+
+            # Use the new formatted duration (HH:MM:SS)
+            attrs["duration_formatted"] = self._format_as_hms(duration)
 
         if end_time:
             attrs["to"] = end_time.isoformat()
