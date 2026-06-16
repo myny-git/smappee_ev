@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, cast
 
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -40,17 +40,16 @@ def _is_int_like(value: object) -> bool:
 
 
 type SmappeeEntityCoordinator = SmappeeSiteCoordinator | SmappeeStationCoordinator
-_CoordinatorT = TypeVar("_CoordinatorT", bound=SmappeeEntityCoordinator)
 
 
-class SmappeeBaseEntity(CoordinatorEntity[_CoordinatorT], Generic[_CoordinatorT]):
+class SmappeeBaseEntity[CoordinatorT: SmappeeEntityCoordinator](CoordinatorEntity[CoordinatorT]):
     """Common base providing station/connector id storage and device_info."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        coordinator: _CoordinatorT,
+        coordinator: CoordinatorT,
         sid: int,
         station_uuid: str,
         unique_suffix: str = "entity",
