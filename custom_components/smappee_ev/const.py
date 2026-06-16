@@ -7,8 +7,6 @@ DOMAIN = "smappee_ev"
 MANUFACTURER = "Smappee"
 CONFIGURATION_URL: Final = "https://dashboard.smappee.net"
 
-ATTRIBUTION: Final = f"Data provided by {MANUFACTURER}"
-
 CONF_NEEDS_DASHBOARD_REAUTH = "needs_dashboard_reauth"
 
 # Coordinator polling interval (seconds) – kept internal, no user option anymore

@@ -520,7 +520,9 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             return
 
         if err is not None:
-            _LOGGER.warning("Connector %s update failed; marking unavailable: %s", anonymize_uuid(uuid), err)
+            _LOGGER.warning(
+                "Connector %s update failed; marking unavailable: %s", anonymize_uuid(uuid), err
+            )
 
     def _log_connector_session_transition(
         self, uuid: str, available: bool, err: Exception | None = None
@@ -529,7 +531,9 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         previous = self._connector_session_available.get(uuid)
         if previous is available:
             if not available and err is not None:
-                _LOGGER.debug("Connector %s session fetch still failing: %s", anonymize_uuid(uuid), err)
+                _LOGGER.debug(
+                    "Connector %s session fetch still failing: %s", anonymize_uuid(uuid), err
+                )
             return
 
         self._connector_session_available[uuid] = available
