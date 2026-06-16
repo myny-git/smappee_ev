@@ -165,7 +165,9 @@ I built this fork because I own a **Smappee EV Wall Home** and wanted deeper con
 The goal is to offer reliable support for charging mode switching and eventually more smart charging controls.
 I am also looking into EVCC integration.
 
-Contributions, feedback, or bug reports are very welcome! I am not a programmer, but I'll do my best.
+Contributions, feedback, or bug reports are very welcome! I am not a programmer, but I'll do my best.  
+If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)
+
 
 ## ☕ Support
 
