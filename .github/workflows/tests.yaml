@@ -21,12 +21,22 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          python-version: "3.12"
           enable-cache: true
-          cache-dependency-glob: requirements-test.txt
+          cache-dependency-glob: |
+            requirements-test.txt
+
+      - name: Create virtual environment
+        run: |
+          uv venv --python 3.12
 
       - name: Install test dependencies
-        run: uv pip install --system -r requirements-test.txt
+        run: |
+          uv pip install -r requirements-test.txt
 
-      - name: Run tests
-        run: pytest -vv
+      - name: Run tests with coverage
+        run: |
+          uv run pytest -vv \
+            --cov=custom_components.smappee_ev \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=50
