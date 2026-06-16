@@ -236,7 +236,7 @@
         "name": "Laadmodus",
         "state": {
           "smart": "Slim laden",
-          "solar": "Zonneladen",
+          "solar": "Laden met zonne-energie",
           "standard": "Standaard laden"
         }
       }
@@ -356,7 +356,7 @@
         }
       },
       "session_energy": {
-        "name": "Sessieverbruik energie"
+        "name": "Sessie"
       }
     }
   }

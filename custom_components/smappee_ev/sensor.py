@@ -1158,7 +1158,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         if not session:
             return {}
 
-        excluded = {"energy", "controller", "station", "address", "updateChannels"}
+        excluded = {"energy", "controller", "station", "address", "updateChannels", "rfidToken"}
         attrs = {k: v for k, v in session.items() if k not in excluded}
 
         start_time = _session_ts_to_datetime(session.get("from"))
