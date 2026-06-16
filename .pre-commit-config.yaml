@@ -1,0 +1,28 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.12
+    hooks:
+      - id: ruff
+      - id: ruff-format
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args:
+          - --quiet-level=2
+          - --check-filenames
+          - --check-hidden
+          - --skip=*.po,*.min.js,*.svg,*.png,*.jpg,*.json
+          - --ignore-words-list=smappee,HA,nd
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.16.0
+    hooks:
+      - id: mypy
+        files: ^custom_components/smappee_ev/
+        additional_dependencies:
+          - aiohttp
+          - voluptuous
+          - homeassistant
+          - "aiomqtt>=2.5.0,<3.0.0"
