@@ -4,9 +4,10 @@
 > This is a personal project developed by me and I am not affiliated with Smappee in any way. Use at your own risk.
 
 ## 🧠 Credits
+
 The original code started as a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". However, the codebase has been completely refactored, resulting in a **new and independent integration**.
 
-This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging. However, energy data may also be available in this integration. Feel free to join the discord channel if you have questions or want to contribute! 
+This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging. However, energy data may also be available in this integration. Feel free to join the discord channel if you have questions or want to contribute!
 <div align="center">
 
 [![HACS][hacs-shield]][hacs-url]
@@ -32,6 +33,7 @@ This custom integration unlocks **more control over your Smappee** charger and c
 The main ambition is to have independent control of the Smappee EV charger via Home Assistant and eventually add those sensors in other energy management systems.
 
 ### API architecture
+
 - MQTT remains the live data source for power, current, energy and fast charger state.
 - Smappee Dashboard REST API v10/v11 is used for discovery, station details, charger configuration, capacity protection, overload protection, recent sessions and charger availability.
 - Dashboard v10/v11 calls are used for charging mode, start, pause, stop, percentage/current limit, LED brightness, min surplus percentage and availability.
@@ -39,11 +41,13 @@ The main ambition is to have independent control of the Smappee EV charger via H
 - Dashboard configuration data refreshes at most every 30 minutes, with a forced refresh shortly after supported dashboard writes.
 
 ### ✅ Charging Mode Control
+
 - UI controls (select, number slider, **Set Charging Mode** button) use Dashboard v10 actions when a Dashboard token is available.
 - The EVCC switch uses Dashboard v10 actions for enable (`STANDARD`) and disable (`PAUSED`) when a Dashboard token is available.
 - `smappee_ev.set_charging_mode` sets mode via the same dashboard-first path: `STANDARD`, `SMART`, or `SOLAR`.
 
 ### ✅ Direct Charger Control
+
 - Pause charging via **`smappee_ev.pause_charging`** (Dashboard v10 action)
 - Stop charging sessions from Home Assistant
 - Set fixed charging **currents** (in Amps)
@@ -51,9 +55,11 @@ The main ambition is to have independent control of the Smappee EV charger via H
 - Target a specific connector by selecting `service_location_id` and/or `connector_id`, which is especially useful in multi-station setups
 
 ### ✅ LED Brightness Control
+
 - Adjust LED ring brightness (%) via Dashboard v10 config writes when a Dashboard token is available.
 
 ### ✅ Charger State Feedback
+
 - Real-time **Session State**:
   - `CHARGING`, `PAUSED`, `SUSPENDED`, etc.
 - **EVCC State** for in-depth diagnostics (e.g. state A/B/C/E)
@@ -63,6 +69,7 @@ The main ambition is to have independent control of the Smappee EV charger via H
 - **Charging mode** is correctly restored from Home Assistant's persistent state after a restart (MQTT confirms or corrects it shortly after boot)
 
 #### ⚡️ Advanced / Developer Notes
+
 - All values for currents/brightnesses are always **integers** (no floats in UI)
 - Integration tested on:  
   - **Smappee EV Wall Home** (single and double cable)
@@ -70,15 +77,18 @@ The main ambition is to have independent control of the Smappee EV charger via H
   - Should work similarly on other Smappee chargers using the same API
 
 ## 📘 Integration into other energy management systems
+
 - [EVCC integration](./docs/EVCC.md) – Learn how to use these Home Assistant sensors for EVCC.
 - [openEMS integration](./docs/openEMS.md) - Learn how to use these Home Assistant sensors for openEMS. (under construction)
 - [emhass integration](./docs/emhass.md) - Learn how to use these Home Assistant sensors for emhass. (under construction)
 
 > ## ⚠️ Important
+>
 > This is a HACS custom integration.
 > Do **not** try to add this repository as an **add-on** in Home Assistant - it won't work that way.
 
 ## 📦 Installation Instructions
+
 ### Step 1. Add the Integration via HACS
 
 > [!NOTE]  
@@ -107,6 +117,7 @@ During setup, you will be prompted to enter:
 - **Password** on the Smappee dashboard
 
 ### 🧩 Entities
+
 More information on the specifics of the entities/buttons/services can be found in the [docs](https://github.com/myny-git/smappee_ev/blob/main/docs/HA_integration.md). Take care: names are subject to change as users can rename their Smappee device.
 
 All main UI controls (select, buttons, number slider, EVCC switch and LED light) use Dashboard v10/v11 calls when Dashboard authentication and device ids are available. The integration no longer documents or exposes the old legacy control path.
@@ -117,6 +128,36 @@ This is the current version of the entities (for my EV Wall Home single connecto
 
 > ⚠️ **Note**  
 > The Smappee APP is sometimes not correct or responsive. Better to use the online Smappee Dashboard to check functionality.
+
+## 📐 Automation Blueprints
+
+### Smappee: Forgot to Scan RFID Badge
+
+Sends a push notification to your phone when your EV has been plugged into the Smappee charger for a configurable amount of time without starting a charging session — a reminder to scan your RFID badge.
+
+#### What it does
+
+- **Monitors charger status:** Watches for the `cable_connected` state on your Smappee EVSE sensor.
+- **Configurable delay:** Waits a set amount of time (default: 5 minutes) before alerting, to allow for normal badge scanning.
+- **Mobile notification:** Sends a push notification to your phone via the Home Assistant Companion app.
+
+#### Easy Import
+
+Click the button below to import this blueprint into your Home Assistant instance:
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint URL pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmyny-git%2Fsmappee_ev%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fforgot_to_scan_rfid_badge.yaml)
+
+#### Manual Setup
+
+1. Download `blueprints/automation/forgot_to_scan_rfid_badge.yaml`.
+2. Place it in your Home Assistant config directory:
+
+   ```bash
+   config/blueprints/automation/forgot_to_scan_rfid_badge.yaml
+
+   ```
+
+3. Go to **Settings → Automations & Scenes → Blueprints**, click **Reload Blueprints**, then **Create Automation**.
 
 ## 💡 Notes
 

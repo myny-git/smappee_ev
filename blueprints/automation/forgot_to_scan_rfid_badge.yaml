@@ -1,0 +1,74 @@
+blueprint:
+  name: 'Smappee: Forgot to Scan RFID Badge'
+  description: Send a push notification when the charger remains in a connected state
+    without transaction authorization.
+  domain: automation
+  input:
+    charger_status_sensor:
+      name: Smappee EVSE Status Sensor
+      description: The sensor that monitors the active operational status of the charger.
+      selector:
+        entity:
+          filter:
+          - domain:
+            - sensor
+            integration: smappee_ev
+          multiple: false
+          reorder: false
+    delay_time:
+      name: Delay Time
+      description: How long the charger must be connected before sending the alert.
+      default: 5
+      selector:
+        number:
+          min: 1.0
+          max: 60.0
+          unit_of_measurement: minutes
+          mode: slider
+          step: 1.0
+    notify_device:
+      name: Notification Device
+      description: The smartphone device that will receive the push notification.
+      selector:
+        device:
+          filter:
+          - integration: mobile_app
+          multiple: false
+    notification_title:
+      name: Notification Title
+      description: The title header text of the push notification message.
+      default: '⚡ Smappee: Forgot to badge?'
+      selector:
+        text:
+          multiple: false
+          multiline: false
+    notification_message:
+      name: Notification Message
+      description: The body text of the message. Use {{ delay_minutes }} to inject
+        the dynamic countdown value.
+      default: The car has been connected for {{ delay_minutes }} minutes, but the
+        charging session has not started. Don't forget to swipe your RFID card!
+      selector:
+        text:
+          multiple: false
+          multiline: false
+  source_url: https://gist.githubusercontent.com/geertmeersman/e80be328374676addb24bf39a42ad902/raw/a26b30bc36415e7aba406473d6a206dc439bf83d/forgot_badge.yaml
+variables:
+  delay_minutes: !input delay_time
+  notification_message: !input notification_message
+trigger:
+- platform: state
+  entity_id: !input charger_status_sensor
+  to: cable_connected
+  for:
+    minutes: !input delay_time
+condition: []
+action:
+- domain: mobile_app
+  type: notify
+  device_id: !input notify_device
+  title: !input notification_title
+  message: '{{ notification_message }}'
+  data:
+    icon_url: https://raw.githubusercontent.com/home-assistant/brands/refs/heads/master/custom_integrations/smappee_ev/icon.png
+mode: single
