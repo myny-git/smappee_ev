@@ -415,7 +415,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
                 self.async_write_ha_state()
 
 
-class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity, _BaseNumber):
+class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _BaseNumber):
     """Dashboard capacity protection maximum power setting."""
 
     _attr_device_class = NumberDeviceClass.POWER
@@ -472,7 +472,7 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity, _BaseNumber):
         self.coordinator.async_schedule_dashboard_refresh()
 
 
-class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity, _BaseNumber):
+class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _BaseNumber):
     """Dashboard overload protection maximum load setting."""
 
     _attr_device_class = NumberDeviceClass.CURRENT

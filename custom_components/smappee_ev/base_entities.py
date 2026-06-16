@@ -162,12 +162,12 @@ class SmappeeStationEntity(SmappeeBaseEntity[SmappeeCoordinator]):
             self._attr_name = name
 
 
-class SmappeeSiteEntity(SmappeeBaseEntity[SmappeeEntityCoordinator]):
+class SmappeeSiteEntity[CoordinatorT: SmappeeEntityCoordinator](SmappeeBaseEntity[CoordinatorT]):
     """Base for site-scope entities."""
 
     def __init__(
         self,
-        coordinator: SmappeeEntityCoordinator,
+        coordinator: CoordinatorT,
         sid: int,
         unique_suffix: str = "entity",
     ) -> None:
