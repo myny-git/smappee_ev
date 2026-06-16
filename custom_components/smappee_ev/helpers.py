@@ -308,6 +308,7 @@ __all__ = [
     "safe_sum",
 ]
 
+
 def format_as_hms(td: timedelta) -> str:
     """
     Format a timedelta object into a human-readable HH:MM:SS string.

@@ -68,7 +68,7 @@ class SmappeeBaseEntity[CoordinatorT: SmappeeEntityCoordinator](
         self._station_uuid = station_uuid
         serial = station_serial(coordinator)
         if not serial or serial == "unknown":
-            serial = _text_attr(coordinator, "gateway_serial")
+            serial = _text_attr(coordinator, "gateway_serial") or "unknown"
         self._serial = serial
         self._connector_label = connector_label
         self._device_scope = device_scope
