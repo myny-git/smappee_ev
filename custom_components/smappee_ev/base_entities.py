@@ -6,7 +6,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import SmappeeCoordinator
+from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
@@ -39,14 +39,17 @@ def _is_int_like(value: object) -> bool:
     return True
 
 
-class SmappeeBaseEntity(CoordinatorEntity[SmappeeCoordinator]):
+type SmappeeEntityCoordinator = SmappeeSiteCoordinator | SmappeeStationCoordinator
+
+
+class SmappeeBaseEntity(CoordinatorEntity[SmappeeEntityCoordinator]):
     """Common base providing station/connector id storage and device_info."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        coordinator: SmappeeCoordinator,
+        coordinator: SmappeeEntityCoordinator,
         sid: int,
         station_uuid: str,
         unique_suffix: str = "entity",
@@ -164,7 +167,7 @@ class SmappeeSiteEntity(SmappeeBaseEntity):
 
     def __init__(
         self,
-        coordinator: SmappeeCoordinator,
+        coordinator: SmappeeEntityCoordinator,
         sid: int,
         unique_suffix: str = "entity",
     ) -> None:

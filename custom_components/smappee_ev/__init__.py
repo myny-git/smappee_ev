@@ -55,6 +55,7 @@ PLATFORMS = [
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
+MqttRouteTarget = SmappeeSiteCoordinator | SmappeeStationCoordinator
 
 # -------------------------
 # Helpers for discovery
@@ -417,14 +418,14 @@ def _build_mqtt_routes(
     mqtt_specs: list[MqttChannelSpec] | None,
     site_coordinator: SmappeeSiteCoordinator | None,
     stations: dict[str, dict],
-) -> dict[str, list[object]]:
+) -> dict[str, list[MqttRouteTarget]]:
     """Build explicit MQTT topic routes for site and station coordinators."""
-    routes: dict[str, list[object]] = {}
-    station_coordinators = [
-        bucket.get("coordinator")
-        for bucket in stations.values()
-        if bucket.get("coordinator") is not None
-    ]
+    routes: dict[str, list[MqttRouteTarget]] = {}
+    station_coordinators: list[MqttRouteTarget] = []
+    for bucket in stations.values():
+        coordinator = bucket.get("coordinator")
+        if coordinator is not None:
+            station_coordinators.append(cast(MqttRouteTarget, coordinator))
     for spec in mqtt_specs or []:
         if spec.role in {"grid", "production", "consumption", "always_on"}:
             if site_coordinator is not None:
@@ -434,10 +435,10 @@ def _build_mqtt_routes(
             for coord in station_coordinators:
                 routes.setdefault(spec.topic, []).append(coord)
 
-    deduped_routes: dict[str, list[object]] = {}
+    deduped_routes: dict[str, list[MqttRouteTarget]] = {}
     for topic, targets in routes.items():
         seen: set[int] = set()
-        deduped_targets: list[object] = []
+        deduped_targets: list[MqttRouteTarget] = []
         for target in targets:
             target_id = id(target)
             if target_id in seen:
