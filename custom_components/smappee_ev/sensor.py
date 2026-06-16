@@ -241,7 +241,7 @@ class RestoredEnergyConnectorSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         return _total_increasing_value(self, candidate)
 
     async def async_added_to_hass(self) -> None:
-        await SmappeeConnectorEntity.async_added_to_hass(self)
+        await super().async_added_to_hass()
         await _async_restore_last_total_value(self)
 
 
@@ -909,7 +909,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added."""
-        await SmappeeConnectorEntity.async_added_to_hass(self)
+        await super().async_added_to_hass()
 
         # Restore previous state if available
         last_data = await self.async_get_last_sensor_data()
@@ -964,7 +964,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added."""
-        await SmappeeConnectorEntity.async_added_to_hass(self)
+        await super().async_added_to_hass()
 
         # Restore previous state if available
         last_data = await self.async_get_last_sensor_data()
