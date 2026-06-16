@@ -27,10 +27,12 @@ def _required_with_optional_default(key: str, defaults: Mapping[str, Any]) -> vo
 def _credentials_schema(defaults: Mapping[str, Any] | None = None) -> vol.Schema:
     """Return the credentials form schema, optionally prefilled from entry data."""
     defaults = defaults or {}
-    return vol.Schema({
-        _required_with_optional_default(CONF_USERNAME, defaults): str,
-        vol.Required(CONF_PASSWORD): str,
-    })
+    return vol.Schema(
+        {
+            _required_with_optional_default(CONF_USERNAME, defaults): str,
+            vol.Required(CONF_PASSWORD): str,
+        }
+    )
 
 
 async def _async_dashboard_auth_data(
