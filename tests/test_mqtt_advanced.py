@@ -107,7 +107,7 @@ async def test_subscriptions_and_message_parsing(monkeypatch):
     mqtt = SmappeeMqtt(
         service_location_uuid="slu-1",
         client_id="cid1",
-        serial_number="SER",
+        serial_number="SERIAL1",
         on_properties=on_props,
         service_location_id=123,
         on_connection_change=on_conn,
@@ -172,7 +172,7 @@ async def test_tracking_and_heartbeat_publish(monkeypatch):
     mqtt = SmappeeMqtt(
         service_location_uuid="slu-2",
         client_id="cid2",
-        serial_number="SER2",
+        serial_number="SERIAL2",
         on_properties=lambda *_: None,
         service_location_id="789",  # str to test int conversion
     )
@@ -211,7 +211,7 @@ async def test_reconnect_backoff(monkeypatch):
     mqtt = SmappeeMqtt(
         service_location_uuid="slu-3",
         client_id="cid3",
-        serial_number="SER3",
+        serial_number="SERIAL3",
         on_properties=lambda *_: None,
         service_location_id=1,
         on_connection_change=lambda up: events.append(up),

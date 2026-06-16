@@ -1,0 +1,30 @@
+{
+    "name": "HA custom integration dev",
+    "image": "ghcr.io/home-assistant/home-assistant:stable",
+    "overrideCommand": true,
+    "appPort": [
+        "8124:8123"
+    ],
+    "mounts": [
+        "source=${localWorkspaceFolder}/custom_components/smappee_ev,target=/config/custom_components/smappee_ev,type=bind,consistency=cached",
+        "source=${localWorkspaceFolder}/.ha-config,target=/config,type=bind,consistency=cached"
+    ],
+    "containerEnv": {
+        "PYTHONASYNCIODEBUG": "1"
+    },
+    "postCreateCommand": "bash -lc 'mkdir -p /config/custom_components /config/.storage'",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "charliermarsh.ruff",
+                "ms-python.vscode-pylance",
+                "ms-python.python",
+                "redhat.vscode-yaml"
+            ],
+            "settings": {
+                "python.terminal.activateEnvInCurrentTerminal": true,
+                "editor.formatOnSave": true
+            }
+        }
+    }
+}
