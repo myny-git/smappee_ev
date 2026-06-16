@@ -912,6 +912,8 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 self._last_dashboard_refresh = now
             for label, result in responses.items():
                 if isinstance(result, BaseException):
+                    if isinstance(result, ConfigEntryAuthFailed):
+                        raise result
                     if isinstance(result, asyncio.CancelledError):
                         raise result
                     errors.append(f"{label}: {result}")
@@ -964,6 +966,8 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         errors: list[str] = []
         for uuid, result in zip(calls.keys(), results, strict=True):
             if isinstance(result, BaseException):
+                if isinstance(result, ConfigEntryAuthFailed):
+                    raise result
                 if isinstance(result, asyncio.CancelledError):
                     raise result
                 errors.append(f"load management {uuid}: {result}")
@@ -1750,6 +1754,8 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         for (connector_uuid, _client), result in zip(pairs, results, strict=True):
             if isinstance(result, BaseException):
                 if isinstance(result, asyncio.CancelledError):
+                    raise result
+                if isinstance(result, ConfigEntryAuthFailed):
                     raise result
                 if isinstance(result, Exception):
                     errors.append((connector_uuid, result))

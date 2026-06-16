@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import logging
 
+from aiohttp import ClientError
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
+from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
@@ -21,6 +24,22 @@ ACTION_ICONS = {
     "resume_charging": "mdi:play-pause",
     "restart_charging_station": "mdi:restart",
 }
+
+
+def _connector_action_error(method_name: str, err: BaseException) -> HomeAssistantError:
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="connector_service_failed",
+        translation_placeholders={"method_name": method_name, "error": str(err)},
+    )
+
+
+def _station_action_error(method_name: str, err: BaseException) -> HomeAssistantError:
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="station_service_failed",
+        translation_placeholders={"method_name": method_name, "error": str(err)},
+    )
 
 
 def _dashboard_mode(mode: str | None) -> str | None:
@@ -134,7 +153,10 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Execute the action on press."""
         if self._action == "restart_charging_station":
-            await self.api_client.restart_charging_station()
+            try:
+                await self.api_client.restart_charging_station()
+            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+                raise _station_action_error("restart_charging_station", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         else:
             _LOGGER.debug("Unknown station action for button: %s", self._action)
@@ -191,21 +213,30 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
                 min_current = 6
             if not isinstance(max_current, int | float) or max_current <= 0:
                 max_current = 32
-            cur, pct = await self.api_client.start_charging(
-                current=target_a,
-                min_current=int(min_current),
-                max_current=int(max_current),
-            )
+            try:
+                cur, pct = await self.api_client.start_charging(
+                    current=target_a,
+                    min_current=int(min_current),
+                    max_current=int(max_current),
+                )
+            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+                raise _connector_action_error("start_charging", err) from err
             if data and conn is not None:
                 conn.selected_current_limit = cur
                 conn.selected_percentage_limit = pct
                 self.coordinator.async_set_updated_data(data)
             self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "pause_charging":
-            await self.api_client.pause_charging()
+            try:
+                await self.api_client.pause_charging()
+            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+                raise _connector_action_error("pause_charging", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "stop_charging":
-            await self.api_client.stop_charging()
+            try:
+                await self.api_client.stop_charging()
+            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+                raise _connector_action_error("stop_charging", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "resume_charging":
             data = self.coordinator.data if self.coordinator else None
@@ -217,7 +248,10 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
                     or _dashboard_mode(getattr(conn, "ui_mode_base", None))
                     or "STANDARD"
                 )
-            await self.api_client.set_charging_mode(mode)
+            try:
+                await self.api_client.set_charging_mode(mode)
+            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+                raise _connector_action_error("set_charging_mode", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         else:
             _LOGGER.debug("Unknown action for button: %s", self._action)

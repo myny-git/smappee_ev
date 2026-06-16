@@ -103,9 +103,6 @@ The main ambition is to have independent control of the Smappee EV charger via H
 
 During setup, you will be prompted to enter:
 
-- **Client ID** and **Client Secret**  
-→ Request these by emailing [support@smappee.com](mailto:support@smappee.com)
-
 - **Username** on the Smappee dashboard
 - **Password** on the Smappee dashboard
 

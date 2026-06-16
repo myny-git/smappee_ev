@@ -1,16 +1,26 @@
+from aiohttp import ClientError
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .base_entities import SmappeeConnectorEntity
-from .const import CHARGING_MODES
+from .const import CHARGING_MODES, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
 
 PARALLEL_UPDATES = 1
 MODES = [mode.lower() for mode in CHARGING_MODES]
+
+
+def _connector_action_error(method_name: str, err: BaseException) -> HomeAssistantError:
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="connector_service_failed",
+        translation_placeholders={"method_name": method_name, "error": str(err)},
+    )
 
 
 async def async_setup_entry(
@@ -90,12 +100,12 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
             self.coordinator.async_set_updated_data(data)
         try:
             await self.api_client.set_charging_mode(option.upper())
-        except Exception:
+        except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
             if conn:
                 conn.selected_mode = previous_mode
                 if data:
                     self.coordinator.async_set_updated_data(data)
-            raise
+            raise _connector_action_error("set_charging_mode", err) from err
         self.coordinator.async_schedule_dashboard_refresh()
         self.async_write_ha_state()
 

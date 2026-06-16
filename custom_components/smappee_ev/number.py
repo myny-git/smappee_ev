@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aiohttp import ClientError
 from homeassistant.components.number import (
     NumberDeviceClass,
     NumberEntity,
@@ -398,7 +399,17 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
         return int(st.min_surpluspct)
 
     async def async_set_native_value(self, value: float) -> None:
-        await self.api_client.set_min_surpluspct(int(value))
+        try:
+            await self.api_client.set_min_surpluspct(int(value))
+        except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="connector_service_failed",
+                translation_placeholders={
+                    "method_name": "set_min_surpluspct",
+                    "error": str(err),
+                },
+            ) from err
         # Optimistic immediate update
         st = self._state()
         if st:

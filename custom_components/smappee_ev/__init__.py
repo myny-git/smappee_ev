@@ -1053,6 +1053,7 @@ def _setup_mqtt(
     update_interval: int,
     mqtt_specs: list[MqttChannelSpec] | None = None,
     site_coordinator: SmappeeSiteCoordinator | None = None,
+    background_tasks: set[asyncio.Task] | None = None,
 ) -> MqttRuntimeValue:
     if not suuid and not mqtt_specs:
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
@@ -1093,9 +1094,13 @@ def _setup_mqtt(
 
         task = hass.async_create_task(refresh_result)
         refresh_tasks[task_key] = task
+        if background_tasks is not None:
+            background_tasks.add(task)
         task.add_done_callback(
             lambda done_task, key=task_key: _handle_mqtt_refresh_done(refresh_tasks, done_task, key)
         )
+        if background_tasks is not None:
+            task.add_done_callback(background_tasks.discard)
 
     def _on_conn(up: bool) -> None:
         _handle_mqtt_connection_change(
@@ -1365,6 +1370,7 @@ async def _prepare_topology(
     client_id_prefix: str,
     config_entry: SmappeeEvConfigEntry | None = None,
     dashboard_client: SmappeeDashboardClient | None = None,
+    background_tasks: set[asyncio.Task] | None = None,
 ) -> tuple[dict[str, dict] | None, MqttRuntimeValue]:
     """Prepare one site-first Dashboard topology."""
 
@@ -1512,6 +1518,7 @@ async def _prepare_topology(
         update_interval,
         mqtt_specs=mqtt_specs,
         site_coordinator=site_coordinator,
+        background_tasks=background_tasks,
     )
 
     for bucket in stations.values():
@@ -1601,6 +1608,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     sites: dict[int, dict] = {}
     mqtt_clients: dict[int, object] = {}
+    background_tasks: set[asyncio.Task] = set()
 
     # 2) Prepare each site in parallel
     client_id_prefix = f"ha-{entry.entry_id[-6:]}"
@@ -1612,55 +1620,74 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             client_id_prefix,
             config_entry=entry,
             dashboard_client=dashboard_client,
+            background_tasks=background_tasks,
         )
         for topology in topologies
     ]
-    results = await asyncio.gather(*prep_tasks, return_exceptions=True)
-    for topology, res in zip(topologies, results, strict=True):
-        if isinstance(res, asyncio.CancelledError):
-            raise res
-        if isinstance(res, ConfigEntryAuthFailed):
-            raise res
-        if isinstance(res, BaseException):
-            _LOGGER.warning("Site %s preparation failed: %s", topology.site_location_id, res)
-            continue
-        stations_map, mqtt = res
-        if not stations_map:
-            continue
-        sid = topology.site_location_id
-        if mqtt:
-            mqtt_clients[sid] = mqtt
-        site = sites.setdefault(
-            sid,
-            {
-                "stations": {},
-                "name": topology.site_name,
-                "site_name": topology.site_name,
-                "site_function_type": topology.site_function_type,
-                "serviceLocationUuid": topology.site_location_uuid,
-                "site_uuid": topology.site_location_uuid,
-                "deviceSerialNumber": topology.site_gateway_serial,
-                "gateway_serial": topology.site_gateway_serial,
-                "gateway_type": topology.site_gateway_type,
-                "controlLocationIds": [],
-                "measurementLocationIds": [],
-                "site_coordinator": None,
-                "highlevel_configs": {},
-            },
-        )
-        first_bucket = next(iter(stations_map.values()), {})
-        if site.get("site_coordinator") is None:
-            site["site_coordinator"] = first_bucket.get("site_coordinator")
-        site["stations"].update(stations_map)
-        site["controlLocationIds"].append(topology.control_location_id)
-        site["measurementLocationIds"] = list(
-            dict.fromkeys(site["measurementLocationIds"] + topology.measurement_location_ids)
-        )
-        site["highlevel_configs"].update(first_bucket.get("highlevel_configs") or {})
+    try:
+        results = await asyncio.gather(*prep_tasks, return_exceptions=True)
+        hard_error: BaseException | None = None
+        for topology, res in zip(topologies, results, strict=True):
+            if isinstance(res, asyncio.CancelledError):
+                hard_error = hard_error or res
+                continue
+            if isinstance(res, ConfigEntryAuthFailed):
+                hard_error = hard_error or res
+                continue
+            if isinstance(res, BaseException):
+                _LOGGER.warning("Site %s preparation failed: %s", topology.site_location_id, res)
+                continue
+            stations_map, mqtt = res
+            sid = topology.site_location_id
+            if mqtt:
+                mqtt_clients[sid] = mqtt
+            if not stations_map:
+                continue
+            site = sites.setdefault(
+                sid,
+                {
+                    "stations": {},
+                    "name": topology.site_name,
+                    "site_name": topology.site_name,
+                    "site_function_type": topology.site_function_type,
+                    "serviceLocationUuid": topology.site_location_uuid,
+                    "site_uuid": topology.site_location_uuid,
+                    "deviceSerialNumber": topology.site_gateway_serial,
+                    "gateway_serial": topology.site_gateway_serial,
+                    "gateway_type": topology.site_gateway_type,
+                    "controlLocationIds": [],
+                    "measurementLocationIds": [],
+                    "site_coordinator": None,
+                    "highlevel_configs": {},
+                },
+            )
+            first_bucket = next(iter(stations_map.values()), {})
+            if site.get("site_coordinator") is None:
+                site["site_coordinator"] = first_bucket.get("site_coordinator")
+            site["stations"].update(stations_map)
+            site["controlLocationIds"].append(topology.control_location_id)
+            site["measurementLocationIds"] = list(
+                dict.fromkeys(site["measurementLocationIds"] + topology.measurement_location_ids)
+            )
+            site["highlevel_configs"].update(first_bucket.get("highlevel_configs") or {})
 
-    if not sites:
-        _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")
-        raise ConfigEntryNotReady("No Smappee EV stations discovered (will retry)")
+        if hard_error is not None:
+            raise hard_error
+
+        if not sites:
+            _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")
+            raise ConfigEntryNotReady("No Smappee EV stations discovered (will retry)")
+    except BaseException:
+        await _async_shutdown_runtime_resources(
+            RuntimeData(
+                api=dashboard_client,
+                sites=sites,
+                mqtt=cast(dict[int, object], mqtt_clients),
+                dashboard=dashboard_client,
+                background_tasks=background_tasks,
+            )
+        )
+        raise
 
     # Store runtime data only on the entry (preferred pattern); avoid duplicating in hass.data
     runtime = RuntimeData(
@@ -1668,6 +1695,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         sites=sites,
         mqtt=cast(dict[int, object], mqtt_clients),
         dashboard=dashboard_client,
+        background_tasks=background_tasks,
     )
     entry.runtime_data = runtime
     try:
@@ -1742,6 +1770,13 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
                 raise
             except (RuntimeError, OSError) as err:
                 _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
+
+    pending_tasks = [task for task in rd.background_tasks if not task.done()]
+    for task in pending_tasks:
+        task.cancel()
+    if pending_tasks:
+        await asyncio.gather(*pending_tasks, return_exceptions=True)
+    rd.background_tasks.difference_update(pending_tasks)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:

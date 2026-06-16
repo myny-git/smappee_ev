@@ -1,6 +1,7 @@
 # custom_components/smappee_ev/data.py
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -196,6 +197,7 @@ class RuntimeData:
     sites: dict[int, dict]
     mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt or list[SmappeeMqtt]
     dashboard: object | None = None
+    background_tasks: set[asyncio.Task] = field(default_factory=set)
 
 
 type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]
