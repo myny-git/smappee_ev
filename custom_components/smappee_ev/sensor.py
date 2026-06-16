@@ -19,12 +19,13 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .base_entities import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, SmappeeSiteEntity
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import safe_sum, update_total_increasing
+from .helpers import format_as_hms, safe_sum, update_total_increasing
 
 PARALLEL_UPDATES = 0
 
@@ -1152,26 +1153,30 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes of the sensor."""
         session = self._active_session_data
         if not session:
             return {}
 
-        attrs = dict(session)
-        attrs.pop("energy", None)
-        attrs.pop("controller", None)
-        attrs.pop("station", None)
-        attrs.pop("address", None)
-        attrs.pop("updateChannels", None)
+        excluded = {"energy", "controller", "station", "address", "updateChannels"}
+        attrs = {k: v for k, v in session.items() if k not in excluded}
 
         start_time = _session_ts_to_datetime(session.get("from"))
-        if start_time is not None:
+        end_time = _session_ts_to_datetime(session.get("to"))
+
+        if start_time:
             attrs["from"] = start_time.isoformat()
 
-        end_time = _session_ts_to_datetime(session.get("to"))
-        if end_time is not None:
+            current_time = end_time if end_time else dt_util.now()
+            duration = current_time - start_time
+
+            # Keep duration in minutes for legacy/other purposes
+            attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
+
+            # Use the new formatted duration (HH:MM:SS)
+            attrs["duration_formatted"] = format_as_hms(duration)
+
+        if end_time:
             attrs["to"] = end_time.isoformat()
 
-        if start_time is not None and end_time is not None:
-            duration = end_time - start_time
-            attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
         return attrs
