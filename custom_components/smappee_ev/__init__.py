@@ -38,7 +38,7 @@ from .helpers import (
     site_device_identifier,
     station_device_identifier,
 )
-from .mqtt_gateway import SmappeeMqtt
+from .mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
 from .services import register_services, unregister_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -996,16 +996,51 @@ def _log_mqtt_subscriptions(
         _LOGGER.debug(
             "Smappee MQTT subscription: sid=%s topic=%s username_present=%s source=highlevel",
             spec.service_location_id,
-            spec.topic,
+            redact_mqtt_topic(spec.topic),
             bool(spec.username),
         )
     if suuid and not mqtt_specs:
         _LOGGER.debug(
-            "Smappee MQTT subscription: sid=%s topic=servicelocation/%s/power "
-            "username_present=True source=legacy",
+            "Smappee MQTT subscription: sid=%s topic=%s username_present=True source=legacy",
             sid,
-            suuid,
+            redact_mqtt_topic(f"servicelocation/{suuid}/power"),
         )
+
+
+def _handle_mqtt_refresh_done(
+    refresh_tasks: dict[int, asyncio.Task], done_task: asyncio.Task, key: int
+) -> None:
+    """Drop a finished MQTT fallback refresh task and consume its exception."""
+    refresh_tasks.pop(key, None)
+    if done_task.cancelled():
+        return
+    try:
+        exc = done_task.exception()
+    except asyncio.CancelledError:
+        return
+    if exc is not None:
+        _LOGGER.debug("MQTT fallback refresh failed: %s", exc)
+
+
+def _handle_mqtt_connection_change(
+    up: bool,
+    site_coordinator: SmappeeSiteCoordinator | None,
+    stations: dict[str, dict],
+    update_interval: int,
+    schedule_refresh,
+) -> None:
+    """Apply MQTT connection state to site and station coordinators."""
+    if site_coordinator is not None:
+        site_coordinator.apply_mqtt_connection_change(up)
+    for bucket in stations.values():
+        coord = bucket.get("coordinator")
+        if coord:
+            if up:
+                coord.update_interval = None
+            elif coord.update_interval is None:
+                coord.update_interval = timedelta(seconds=update_interval)
+                schedule_refresh(coord)
+            coord.apply_mqtt_connection_change(up)
 
 
 def _setup_mqtt(
@@ -1041,6 +1076,8 @@ def _setup_mqtt(
     refresh_tasks: dict[int, asyncio.Task] = {}
 
     def _schedule_refresh(coord) -> None:
+        if getattr(coord, "_shutting_down", False):
+            return
         task_key = id(coord)
         existing = refresh_tasks.get(task_key)
         if existing is not None and not existing.done():
@@ -1056,20 +1093,18 @@ def _setup_mqtt(
 
         task = hass.async_create_task(refresh_result)
         refresh_tasks[task_key] = task
-        task.add_done_callback(lambda _task, key=task_key: refresh_tasks.pop(key, None))
+        task.add_done_callback(
+            lambda done_task, key=task_key: _handle_mqtt_refresh_done(refresh_tasks, done_task, key)
+        )
 
     def _on_conn(up: bool) -> None:
-        if site_coordinator is not None:
-            site_coordinator.apply_mqtt_connection_change(up)
-        for bucket in stations.values():
-            coord = bucket.get("coordinator")
-            if coord:
-                if up:
-                    coord.update_interval = None
-                elif coord.update_interval is None:
-                    coord.update_interval = timedelta(seconds=update_interval)
-                    _schedule_refresh(coord)
-                coord.apply_mqtt_connection_change(up)
+        _handle_mqtt_connection_change(
+            up,
+            site_coordinator,
+            stations,
+            update_interval,
+            _schedule_refresh,
+        )
 
     mqtt_routes = _build_mqtt_routes(mqtt_specs, site_coordinator, stations)
 
@@ -1635,26 +1670,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         dashboard=dashboard_client,
     )
     entry.runtime_data = runtime
-    _register_runtime_devices(hass, entry)
+    try:
+        _register_runtime_devices(hass, entry)
 
-    # Platforms start
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        # Platforms start
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Services already registered domain-wide in async_setup
+        # Services already registered domain-wide in async_setup
 
-    for _svc in (
-        "set_available",
-        "set_unavailable",
-        "set_min_surpluspct",
-        "pause_charging_chargingstations",
-        "set_charging_mode_chargingstations",
-    ):
-        try:
-            if hass.services.has_service(DOMAIN, _svc):
-                hass.services.async_remove(DOMAIN, _svc)
-                _LOGGER.info("Removed deprecated service %s.%s", DOMAIN, _svc)
-        except (RuntimeError, ValueError) as err:
-            _LOGGER.debug("While removing deprecated service %s: %s", _svc, err)
+        for _svc in (
+            "set_available",
+            "set_unavailable",
+            "set_min_surpluspct",
+            "pause_charging_chargingstations",
+            "set_charging_mode_chargingstations",
+        ):
+            try:
+                if hass.services.has_service(DOMAIN, _svc):
+                    hass.services.async_remove(DOMAIN, _svc)
+                    _LOGGER.info("Removed deprecated service %s.%s", DOMAIN, _svc)
+            except (RuntimeError, ValueError) as err:
+                _LOGGER.debug("While removing deprecated service %s: %s", _svc, err)
+    except asyncio.CancelledError:
+        await _async_shutdown_runtime_resources(runtime)
+        raise
+    except Exception:
+        await _async_shutdown_runtime_resources(runtime)
+        raise
 
     return True
 
@@ -1671,6 +1713,37 @@ async def _shutdown_site_coordinator(site: dict[str, Any]) -> None:
             _LOGGER.debug("Site coordinator shutdown issue: %s", exc)
 
 
+async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
+    """Stop MQTT clients and coordinator background tasks for runtime data."""
+    # Mark coordinators as shutting down before stopping MQTT, because MQTT
+    # disconnect callbacks can otherwise schedule fallback refreshes.
+    for site in (rd.sites or {}).values():
+        await _shutdown_site_coordinator(site)
+        for bucket in site.get("stations", {}).values():
+            coord = bucket.get("coordinator")
+            if coord and hasattr(coord, "async_shutdown"):
+                try:
+                    await coord.async_shutdown()
+                except asyncio.CancelledError:
+                    raise
+                except (RuntimeError, OSError, ValueError) as exc:
+                    _LOGGER.debug("Coordinator shutdown issue: %s", exc)
+
+    for sid, mqtt in (rd.mqtt or {}).items():
+        for mqtt_client in _iter_mqtt_clients(mqtt):
+            stop_fn = getattr(mqtt_client, "stop", None)
+            if not callable(stop_fn):  # pragma: no cover - defensive
+                continue
+            try:
+                result = stop_fn()
+                if asyncio.iscoroutine(result):
+                    await result
+            except asyncio.CancelledError:
+                raise
+            except (RuntimeError, OSError) as err:
+                _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Unload a Smappee EV config entry."""
     _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
@@ -1683,35 +1756,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         )
     else:
         if isinstance(rd, RuntimeData):
-            # Stop all MQTT clients referenced in runtime_data
-            for sid, mqtt in (rd.mqtt or {}).items():
-                for mqtt_client in _iter_mqtt_clients(mqtt):
-                    stop_fn = getattr(mqtt_client, "stop", None)
-                    if not callable(stop_fn):  # pragma: no cover - defensive
-                        continue
-                    try:
-                        result = stop_fn()
-                        if asyncio.iscoroutine(result):
-                            await result
-                    except asyncio.CancelledError:
-                        raise
-                    except (RuntimeError, OSError) as err:
-                        _LOGGER.warning(
-                            "Failed to stop MQTT client for service location %s: %s", sid, err
-                        )
-
-            # Allow coordinators to shutdown any background tasks
-            for site in (rd.sites or {}).values():
-                await _shutdown_site_coordinator(site)
-                for bucket in site.get("stations", {}).values():
-                    coord = bucket.get("coordinator")
-                    if coord and hasattr(coord, "async_shutdown"):
-                        try:
-                            await coord.async_shutdown()
-                        except asyncio.CancelledError:
-                            raise
-                        except (RuntimeError, OSError, ValueError) as exc:
-                            _LOGGER.debug("Coordinator shutdown issue: %s", exc)
+            await _async_shutdown_runtime_resources(rd)
         else:
             _LOGGER.debug(
                 "Unload requested for %s but runtime_data is invalid (may have failed early)",

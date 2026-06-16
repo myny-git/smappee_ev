@@ -159,26 +159,30 @@ class SmappeeDashboardClient:
             return None
 
         url = f"{DASHBOARD_API_URL}/{path.lstrip('/')}"
+        failed_token = self._token
         async with self._session.request(
             method,
             url,
             json=json,
             params=params,
-            headers=self._headers(),
+            headers={"token": str(failed_token), "content-type": "application/json"},
             timeout=self._timeout,
         ) as resp:
             if resp.status in (401, 403) and retry_auth:
                 async with self._auth_lock:
-                    self._token = None
-                    refreshed = False
-                    if self.refresh_token:
-                        try:
-                            refreshed = await self.async_refresh()
-                        except ConfigEntryAuthFailed:
-                            if not (self.username and self.password):
-                                raise
-                    if not refreshed:
-                        refreshed = await self.async_login()
+                    if self._token and self._token != failed_token and self._token_valid():
+                        refreshed = True
+                    else:
+                        self._token = None
+                        refreshed = False
+                        if self.refresh_token:
+                            try:
+                                refreshed = await self.async_refresh()
+                            except ConfigEntryAuthFailed:
+                                if not (self.username and self.password):
+                                    raise
+                        if not refreshed:
+                            refreshed = await self.async_login()
                 if refreshed:
                     return await self._request(
                         method,

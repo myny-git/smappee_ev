@@ -1171,9 +1171,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         if end_time is not None:
             attrs["to"] = end_time.isoformat()
 
-        if start_time is not None:
-            if end_time is None:
-                end_time = datetime.now(UTC)
+        if start_time is not None and end_time is not None:
             duration = end_time - start_time
             attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
         return attrs

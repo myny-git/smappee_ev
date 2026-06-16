@@ -6,6 +6,7 @@ from collections.abc import Callable
 from contextlib import suppress
 import json
 import logging
+import re
 import ssl
 from typing import Any, cast
 
@@ -23,6 +24,12 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_TOPIC_SECRET_RE = re.compile(r"(servicelocation/)[^/]+(/)")
+
+
+def redact_mqtt_topic(topic: str) -> str:
+    """Redact service-location UUIDs from MQTT topics before logging."""
+    return _TOPIC_SECRET_RE.sub(r"\1***\2", topic)
 
 
 class SmappeeMqtt:
@@ -222,7 +229,11 @@ class SmappeeMqtt:
                                 msg.topic.value if hasattr(msg.topic, "value") else str(msg.topic)
                             )
                             payload_raw = self._to_text(msg.payload)
-                            _LOGGER.debug("MQTT RX %s: %s", topic_str, payload_raw[:400])
+                            _LOGGER.debug(
+                                "MQTT RX %s (%d bytes)",
+                                redact_mqtt_topic(topic_str),
+                                len(payload_raw),
+                            )
 
                             try:
                                 payload = json.loads(payload_raw)
@@ -238,7 +249,8 @@ class SmappeeMqtt:
                                         payload = inner
                             except json.JSONDecodeError:
                                 _LOGGER.debug(
-                                    "Non-JSON MQTT payload on %s: %r", topic_str, payload_raw
+                                    "Non-JSON MQTT payload on %s",
+                                    redact_mqtt_topic(topic_str),
                                 )
                                 continue
 
@@ -290,6 +302,8 @@ class SmappeeMqtt:
                         _LOGGER.info("MQTT stopped")
                         self._notify_conn(False)
                     else:
+                        self._log_mqtt_connection_transition(False)
+                        self._notify_conn(False)
                         _LOGGER.debug("MQTT connection loop ended; reconnecting")
         finally:
             self._client = None
@@ -369,7 +383,7 @@ class SmappeeMqtt:
             }
             with suppress(MqttError):
                 await client.publish(topic, json.dumps(payload), qos=0)
-                _LOGGER.debug("MQTT tracking published to %s", topic)
+                _LOGGER.debug("MQTT tracking published to %s", redact_mqtt_topic(topic))
 
     async def _publish_ha_heartbeat_once(self) -> None:
         client = self._client
@@ -389,4 +403,7 @@ class SmappeeMqtt:
             payload = {"serviceLocationId": value}
             with suppress(MqttError):
                 await client.publish(topic, json.dumps(payload), qos=0)
-                _LOGGER.debug("MQTT HA heartbeat published to %s: %s", topic, payload)
+                _LOGGER.debug(
+                    "MQTT HA heartbeat published to %s",
+                    redact_mqtt_topic(topic),
+                )

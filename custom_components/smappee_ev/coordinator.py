@@ -444,6 +444,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._last_dashboard_warning = 0.0
         self._dashboard_refresh_lock = asyncio.Lock()
         self._dashboard_refresh_task: asyncio.Task | None = None
+        self._shutting_down = False
 
     async def _async_update_data(self) -> IntegrationData:
         try:
@@ -1011,12 +1012,15 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         self, delay: float = DASHBOARD_REFRESH_AFTER_WRITE_DELAY
     ) -> None:
         """Schedule a forced dashboard refresh after a write."""
+        if self._shutting_down:
+            return
         task = self._dashboard_refresh_task
         if task is not None and not task.done():
             task.cancel()
         self._dashboard_refresh_task = self.hass.async_create_task(
             self._async_delayed_dashboard_refresh(delay)
         )
+        self._dashboard_refresh_task.add_done_callback(self._log_background_task_exception)
 
     async def _async_delayed_dashboard_refresh(self, delay: float) -> None:
         try:
@@ -1027,6 +1031,8 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 self.async_set_updated_data(data)
         except asyncio.CancelledError:
             raise
+        except ConfigEntryAuthFailed:
+            self._start_background_reauth()
         finally:
             if self._dashboard_refresh_task is asyncio.current_task():
                 self._dashboard_refresh_task = None
@@ -1532,6 +1538,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
     async def async_shutdown(self) -> None:
         """Cancel session refresh background tasks."""
+        self._shutting_down = True
         for task in (
             self._session_refresh_task,
             self._session_active_loop_task,
@@ -1552,6 +1559,30 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         ]
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    def _start_background_reauth(self) -> None:
+        """Start reauth for auth failures raised outside coordinator polling."""
+        entry = self.config_entry
+        if entry is None:
+            _LOGGER.warning("Smappee background task failed authentication")
+            return
+        start_reauth = getattr(entry, "async_start_reauth", None)
+        if callable(start_reauth):
+            start_reauth(self.hass)
+            return
+        _LOGGER.warning("Smappee background task failed authentication")
+
+    def _log_background_task_exception(self, task: asyncio.Task) -> None:
+        """Consume and log unexpected background task exceptions."""
+        if task.cancelled():
+            return
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+        if exc is None or isinstance(exc, ConfigEntryAuthFailed):
+            return
+        _LOGGER.warning("Smappee background task failed", exc_info=exc)
 
     @staticmethod
     def _normalized_session_value(value: object) -> str:
@@ -1637,12 +1668,15 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             self._schedule_final_session_refreshes(connector_uuid)
 
     def _ensure_active_session_loop(self) -> None:
+        if self._shutting_down:
+            return
         task = self._session_active_loop_task
         if task is not None and not task.done():
             return
         self._session_active_loop_task = self.hass.async_create_task(
             self._async_active_session_loop()
         )
+        self._session_active_loop_task.add_done_callback(self._log_background_task_exception)
 
     def _cancel_active_session_loop(self) -> None:
         task = self._session_active_loop_task
@@ -1664,12 +1698,15 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 self._session_active_loop_task = None
 
     def _schedule_final_session_refreshes(self, connector_uuid: str | None) -> None:
+        if self._shutting_down:
+            return
         task = self._session_final_refresh_task
         if task is not None and not task.done():
             task.cancel()
         self._session_final_refresh_task = self.hass.async_create_task(
             self._async_final_session_refreshes(connector_uuid)
         )
+        self._session_final_refresh_task.add_done_callback(self._log_background_task_exception)
 
     async def _async_final_session_refreshes(self, connector_uuid: str | None) -> None:
         try:
@@ -1686,12 +1723,15 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 self._session_final_refresh_task = None
 
     def _schedule_session_refresh(self, reason: str, *, delay: int, force: bool = False) -> None:
+        if self._shutting_down:
+            return
         task = self._session_refresh_task
         if task is not None and not task.done():
             task.cancel()
         self._session_refresh_task = self.hass.async_create_task(
             self._async_delayed_session_refresh(reason, delay, force=force)
         )
+        self._session_refresh_task.add_done_callback(self._log_background_task_exception)
 
     async def _async_get_recent_sessions(self) -> list[dict[str, Any]]:
         """Fetch recent charging sessions from the connector endpoints."""
@@ -1748,6 +1788,9 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
             try:
                 recent_sessions = await self._async_get_recent_sessions()
+            except ConfigEntryAuthFailed:
+                self._start_background_reauth()
+                return
             except (TimeoutError, ClientError, RuntimeError) as err:
                 _LOGGER.warning("Recent session refresh failed for %s: %s", reason, err)
                 return

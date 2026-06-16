@@ -11,11 +11,12 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entities import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
-from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
+from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
@@ -208,7 +209,14 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
     async def async_set_native_value(self, value: float) -> None:
         st = self._state()
         if not st:
-            return
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="connector_service_failed",
+                translation_placeholders={
+                    "method_name": "set_current",
+                    "error": "connector state is unavailable",
+                },
+            )
         min_c, max_c = st.min_current, st.max_current
         cur_float, pct_int = await self.api_client.set_current(
             value, min_current=int(min_c), max_current=int(max_c)
@@ -331,7 +339,14 @@ class SmappeeConnectorMaxCurrentNumber(SmappeeConnectorEntity, _BaseNumber):
     async def async_set_native_value(self, value: float) -> None:
         st = self._state()
         if not st:
-            return
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="connector_service_failed",
+                translation_placeholders={
+                    "method_name": "set_connector_max_current",
+                    "error": "connector state is unavailable",
+                },
+            )
         min_current = int(st.min_current or DEFAULT_MIN_CURRENT)
         amps = max(min_current, min(DEFAULT_MAX_CURRENT, int(round(value))))
         await self.api_client.set_connector_max_current(amps)
@@ -463,7 +478,10 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
         data = self.coordinator.data
         st = self._station_state()
         if dashboard is None or data is None or st is None:
-            return
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="station_unavailable",
+            )
         power_kw = round(max(0.0, float(value)), 1)
         active = _active_or_true(st.capacity_protection_active)
         await dashboard.async_set_capacity_protection(self._sid, active, power_kw)
@@ -520,7 +538,10 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
         data = self.coordinator.data
         st = self._station_state()
         if dashboard is None or data is None or st is None:
-            return
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="station_unavailable",
+            )
         maximum_load_a = max(0, int(round(value)))
         active = _active_or_true(st.overload_protection_active)
         await dashboard.async_set_overload_protection(self._sid, active, maximum_load_a)
@@ -579,7 +600,10 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
         data = self.coordinator.data
         st = self._station_state()
         if data is None or st is None:
-            return
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="station_unavailable",
+            )
         failsafe = max(0, int(round(value)))
         enabled = (
             bool(st.offline_charging_enabled) if st.offline_charging_enabled is not None else True

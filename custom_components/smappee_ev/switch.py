@@ -14,6 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
+from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
@@ -220,9 +221,15 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
     async def _set_available(self, value: bool) -> None:
         data: IntegrationData | None = self.coordinator.data
         st = self._station_state()
-        prev = getattr(st, "available", None) if st else None
+        if data is None or st is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="station_unavailable",
+            )
 
-        if data and st is not None and prev != value:
+        prev = st.available
+
+        if prev != value:
             st.available = value
             self.coordinator.async_set_updated_data(data)
 
@@ -232,13 +239,28 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
             else:
                 await self.api_client.set_unavailable()
             self.coordinator.async_schedule_dashboard_refresh()
-        except Exception as err:
+        except (
+            ClientError,
+            TimeoutError,
+            HomeAssistantError,
+            UpdateFailed,
+            RuntimeError,
+            ValueError,
+        ) as err:
             _LOGGER.warning("Set station availability failed (sid=%s): %s", self._sid, err)
             # revert optimistic update
-            if data and st is not None and prev is not None:
-                st.available = prev
-                self.coordinator.async_set_updated_data(data)
-            raise
+            st.available = prev
+            self.coordinator.async_set_updated_data(data)
+            if isinstance(err, HomeAssistantError):
+                raise
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="station_service_failed",
+                translation_placeholders={
+                    "method_name": "set_available" if value else "set_unavailable",
+                    "error": str(err),
+                },
+            ) from err
 
 
 class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
@@ -287,24 +309,42 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
     async def _set_offline_charging(self, enabled: bool) -> None:
         data: IntegrationData | None = self.coordinator.data
         st = self._station_state()
-        if st is None:
-            return
+        if data is None or st is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="station_unavailable",
+            )
 
         prev_enabled = st.offline_charging_enabled
         failsafe = st.offline_failsafe_current_a
         if failsafe is None:
             failsafe = 3
 
-        if data and prev_enabled != enabled:
+        if prev_enabled != enabled:
             st.offline_charging_enabled = enabled
             self.coordinator.async_set_updated_data(data)
 
         try:
             await self.api_client.set_offline_charging_config(enabled, failsafe)
             self.coordinator.async_schedule_dashboard_refresh()
-        except Exception as err:
+        except (
+            ClientError,
+            TimeoutError,
+            HomeAssistantError,
+            UpdateFailed,
+            RuntimeError,
+            ValueError,
+        ) as err:
             _LOGGER.warning("Set offline charging failed (sid=%s): %s", self._sid, err)
-            if data and prev_enabled is not None:
-                st.offline_charging_enabled = prev_enabled
-                self.coordinator.async_set_updated_data(data)
-            raise
+            st.offline_charging_enabled = prev_enabled
+            self.coordinator.async_set_updated_data(data)
+            if isinstance(err, HomeAssistantError):
+                raise
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="station_service_failed",
+                translation_placeholders={
+                    "method_name": "set_offline_charging_config",
+                    "error": str(err),
+                },
+            ) from err

@@ -41,6 +41,9 @@
     "no_station_client": {
       "message": "Kein station client für config entry {config_entry_id} und service location {service_location_id} gefunden."
     },
+    "station_unavailable": {
+      "message": "Stationsstatus ist nicht verfügbar."
+    },
     "station_method_not_found": {
       "message": "Station-Methode {method_name} nicht gefunden."
     },
