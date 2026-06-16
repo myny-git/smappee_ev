@@ -25,7 +25,7 @@ from .base_entities import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, S
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import safe_sum, update_total_increasing
+from .helpers import format_as_hms, safe_sum, update_total_increasing
 
 PARALLEL_UPDATES = 0
 
@@ -1174,7 +1174,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             attrs["duration_minutes"] = round(duration.total_seconds() / 60.0, 1)
 
             # Use the new formatted duration (HH:MM:SS)
-            attrs["duration_formatted"] = self._format_as_hms(duration)
+            attrs["duration_formatted"] = format_as_hms(duration)
 
         if end_time:
             attrs["to"] = end_time.isoformat()
