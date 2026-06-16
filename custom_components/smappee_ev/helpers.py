@@ -59,7 +59,7 @@ def make_site_device_info(
         DeviceInfo,
         {
             "identifiers": {site_device_identifier(site_sid)},
-            "name": f"Smappee {name}",
+            "name": name,
             "manufacturer": MANUFACTURER,
             "model": " / ".join(model_parts) if model_parts else "Service Location",
             **({"serial_number": gateway_serial} if gateway_serial else {}),
