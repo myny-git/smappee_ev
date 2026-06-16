@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
+
+if TYPE_CHECKING:
+    from homeassistant.helpers.entity import DeviceInfo
 
 __all__ = [
     "SmappeeBaseEntity",
