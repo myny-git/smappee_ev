@@ -5,9 +5,10 @@
 
 ## 🧠 Credits
 
-The original code started as a fork of [`gvnuland/smappee_ev`](https://github.com/gvnuland/smappee_ev), so credits for the initial working version goes to ""@gvnuland"". However, the codebase has been completely refactored, resulting in a **new and independent integration**.
+This Home Assistant integration provides an integration for Smappee devices, including extended control features for Smappee EV chargers with charging modes, current limits, availability control, LED brightness, and status feedback. It is intended for users who want to integrate their Smappee EV charger more deeply into Home Assistant, EVCC, or other energy management setups. Depending on your device and configuration, energy-related data may also be available. 
 
-This integration is designed to be **complementary to the official Smappee integration**, offering additional control features for Smappee EV charging. However, energy data may also be available in this integration. Feel free to join the discord channel if you have questions or want to contribute!
+Feel free to join the Discord channel if you have questions, want to share feedback, or would like to contribute!
+
 <div align="center">
 
 [![HACS][hacs-shield]][hacs-url]
@@ -28,9 +29,7 @@ This integration is designed to be **complementary to the official Smappee integ
 
 ## 🔧 Features
 
-This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the [Smappee API](https://smappee.atlassian.net/wiki/spaces/DEVAPI/overview) and mqtt.smappee.net.
-
-The main ambition is to have independent control of the Smappee EV charger via Home Assistant and eventually add those sensors in other energy management systems.
+This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the Smappee dashboard api-calls and mqtt.smappee.net.
 
 ### API architecture
 
