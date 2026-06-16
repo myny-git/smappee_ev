@@ -4,60 +4,60 @@
       "user": {
         "description": "Veuillez ajouter vos identifiants Smappee Dashboard",
         "data": {
-          "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
+          "username": "Votre nom d'utilisateur sur le tableau de bord Smappee",
           "password": "Votre mot de passe sur le tableau de bord Smappee"
         }
       },
       "reauth_confirm": {
-        "description": "Mettez a jour vos identifiants Smappee Dashboard pour vous reconnecter",
+        "description": "Mettez à jour vos identifiants Smappee Dashboard pour vous reconnecter",
         "data": {
-          "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
+          "username": "Votre nom d'utilisateur sur le tableau de bord Smappee",
           "password": "Votre mot de passe sur le tableau de bord Smappee"
         }
       },
       "reconfigure": {
-        "description": "Mettez a jour vos identifiants Smappee Dashboard",
+        "description": "Mettez à jour vos identifiants Smappee Dashboard",
         "data": {
-          "username": "Votre nom dâ€™utilisateur sur le tableau de bord Smappee",
+          "username": "Votre nom d'utilisateur sur le tableau de bord Smappee",
           "password": "Votre mot de passe sur le tableau de bord Smappee"
         }
       }
     },
     "error": {
-      "auth_failed": "Autorisation Ã©chouÃ©e",
+      "auth_failed": "Autorisation échouée",
       "cannot_connect": "Connexion impossible"
     }
   },
   "exceptions": {
     "service_location_not_in_entry": {
-      "message": "La service location {service_location_id} n'appartient pas Ã  la config entry {config_entry_id}"
+      "message": "La service location {service_location_id} n'appartient pas à la config entry {config_entry_id}"
     },
     "config_entry_not_loaded": {
-      "message": "La config entry {config_entry_id} n'est pas chargee ou n'existe pas."
+      "message": "La config entry {config_entry_id} n'est pas chargée ou n'existe pas."
     },
     "multiple_service_locations": {
-      "message": "Plusieurs service locations dÃ©tectÃ©es. Indiquez service_location_id."
+      "message": "Plusieurs service locations détectées. Indiquez service_location_id."
     },
     "no_station_client": {
-      "message": "Aucun station client trouvÃ© pour la config entry {config_entry_id} et la service location {service_location_id}."
+      "message": "Aucun station client trouvé pour la config entry {config_entry_id} et la service location {service_location_id}."
     },
     "station_method_not_found": {
-      "message": "MÃ©thode station {method_name} introuvable."
+      "message": "Méthode station {method_name} introuvable."
     },
     "station_service_failed": {
-      "message": "Service station {method_name} Ã©chouÃ© : {error}"
+      "message": "Service station {method_name} échoué : {error}"
     },
     "no_connector_client": {
-      "message": "Aucun connector client correspondant trouvÃ© pour la config entry {config_entry_id}, la service location {service_location_id}, le connector {connector_id}."
+      "message": "Aucun connector client correspondant trouvé pour la config entry {config_entry_id}, la service location {service_location_id}, le connector {connector_id}."
     },
     "connector_method_not_found": {
-      "message": "MÃ©thode connector {method_name} introuvable."
+      "message": "Méthode connector {method_name} introuvable."
     },
     "connector_service_failed": {
-      "message": "Service connector {method_name} Ã©chouÃ© : {error}"
+      "message": "Service connector {method_name} échoué : {error}"
     },
     "cannot_resolve_connector_client": {
-      "message": "Impossible de dÃ©terminer le connector client. Indiquez connector_id si le choix est ambigu."
+      "message": "Impossible de déterminer le connector client. Indiquez connector_id si le choix est ambigu."
     },
     "current_out_of_range": {
       "message": "Le courant {current} A est hors de la plage {min_current}-{max_current} A pour ce connector."
@@ -65,34 +65,34 @@
   },
   "services": {
     "start_charging": {
-      "name": "DÃ©marrer la charge",
-      "description": "DÃ©marre la charge. Si â€˜currentâ€™ nâ€™est pas fourni, le courant configurÃ© ou minimal sera utilisÃ©.",
+      "name": "Démarrer la charge",
+      "description": "Démarre la charge. Si 'current' n'est pas fourni, le courant configuré ou minimal sera utilisé.",
       "fields": {
         "config_entry_id": {
-          "name": "ID de lâ€™entrÃ©e de configuration",
-          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
         },
         "service_location_id": {
           "name": "ID du site (Service Location)",
-          "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
         },
         "connector_id": {
           "name": "ID du connecteur",
-          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2, laisser vide sâ€™il nâ€™y en a quâ€™un)."
+          "description": "Optionnel : numéro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
         },
         "current": {
           "name": "Courant (A)",
-          "description": "Optionnel : courant de charge Ã  utiliser (en ampÃ¨res)."
+          "description": "Optionnel : courant de charge à utiliser (en ampères)."
         }
       }
     },
     "pause_charging": {
       "name": "Mettre en pause la charge",
-      "description": "Met en pause la charge pour le connecteur sÃ©lectionnÃ© via l'action Dashboard v10 si disponible.",
+      "description": "Met en pause la charge pour le connecteur sélectionné via l'action Dashboard v10 si disponible.",
       "fields": {
         "config_entry_id": {
-          "name": "ID de l'entrÃ©e de configuration",
-          "description": "Optionnel : ID d'entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
         },
         "service_location_id": {
           "name": "ID du site (Service Location)",
@@ -100,35 +100,17 @@
         },
         "connector_id": {
           "name": "ID du connecteur",
-          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
         }
       }
     },
     "stop_charging": {
-      "name": "ArrÃªter la charge",
-      "description": "ArrÃªte la charge pour le connecteur sÃ©lectionnÃ©.",
+      "name": "Arrêter la charge",
+      "description": "Arrête la charge pour le connecteur sélectionné.",
       "fields": {
         "config_entry_id": {
-          "name": "ID de lâ€™entrÃ©e de configuration",
-          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
-        },
-        "service_location_id": {
-          "name": "ID du site (Service Location)",
-          "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
-        },
-        "connector_id": {
-          "name": "ID du connecteur",
-          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
-        }
-      }
-    },
-    "set_current": {
-      "name": "DÃ©finir le courant",
-      "description": "DÃ©finit le courant de charge en ampÃ¨res (1 dÃ©cimale). Converti en pourcentage entier le plus proche et envoyÃ© via setPercentageLimit. Le curseur et les entitÃ©s numÃ©riques se mettent Ã  jour immÃ©diatement.",
-      "fields": {
-        "config_entry_id": {
-          "name": "ID de l'entrÃ©e de configuration",
-          "description": "Optionnel : ID d'entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
         },
         "service_location_id": {
           "name": "ID du site (Service Location)",
@@ -136,29 +118,65 @@
         },
         "connector_id": {
           "name": "ID du connecteur",
-          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "resume_charging": {
+      "name": "Reprendre la charge",
+      "description": "Reprend la charge en restaurant le mode de charge sélectionné, ou STANDARD si aucun mode n'est connu.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        }
+      }
+    },
+    "set_current": {
+      "name": "Définir le courant",
+      "description": "Définit le courant de charge en ampères (1 décimale). Converti en pourcentage entier le plus proche et envoyé via setPercentageLimit. Le curseur et les entités numériques se mettent à jour immédiatement.",
+      "fields": {
+        "config_entry_id": {
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
+        },
+        "service_location_id": {
+          "name": "ID du site (Service Location)",
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
+        },
+        "connector_id": {
+          "name": "ID du connecteur",
+          "description": "Optionnel : numéro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
         },
         "current": {
           "name": "Courant (A)",
-          "description": "Courant de charge en ampÃ¨res (1 dÃ©cimale, ex. 11,4). LimitÃ© Ã  la plage minâ€“max configurÃ©e du connecteur."
+          "description": "Courant de charge en ampères (1 décimale, ex. 11,4). Limité à la plage min–max configurée du connecteur."
         }
       }
     },
     "set_charging_mode": {
-      "name": "DÃ©finir le mode de charge",
-      "description": "DÃ©finit le mode de charge dâ€™un connecteur.",
+      "name": "Définir le mode de charge",
+      "description": "Définit le mode de charge d'un connecteur.",
       "fields": {
         "config_entry_id": {
-          "name": "ID de lâ€™entrÃ©e de configuration",
-          "description": "Optionnel : ID dâ€™entrÃ©e de configuration Ã  cibler (en cas de plusieurs entrÃ©es)."
+          "name": "ID de l'entrée de configuration",
+          "description": "Optionnel : ID d'entrée de configuration à cibler (en cas de plusieurs entrées)."
         },
         "service_location_id": {
           "name": "ID du site (Service Location)",
-          "description": "Optionnel : ID du site (laisser vide sâ€™il nâ€™y a quâ€™un seul site)."
+          "description": "Optionnel : ID du site (laisser vide s'il n'y a qu'un seul site)."
         },
         "connector_id": {
           "name": "ID du connecteur",
-          "description": "Optionnel : numÃ©ro de connecteur (1 ou 2)."
+          "description": "Optionnel : numéro de connecteur (1 ou 2)."
         },
         "mode": {
           "name": "Mode",

@@ -105,6 +105,28 @@ stop_charging:
         number:
           min: 1
 
+resume_charging:
+  description: "Resume charging on a connector by restoring the selected charging mode, or STANDARD when no mode is known."
+  fields:
+    config_entry_id:
+      description: "Optional: Specific config entry id to target (when multiple entries)."
+      required: false
+      example: "a1b2c3d4e5f6"
+    service_location_id:
+      description: "Optional: Service Location ID."
+      required: false
+      example: 173311
+      selector:
+        number:
+          min: 1
+    connector_id:
+      description: "Optional: Connector number."
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+
 start_charging:
   description: "Start charging on a connector. "
   fields:

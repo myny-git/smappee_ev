@@ -122,6 +122,24 @@
         }
       }
     },
+    "resume_charging": {
+      "name": "Laden hervatten",
+      "description": "Hervat het laden door de geselecteerde laadmodus te herstellen, of STANDARD als er geen modus bekend is.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optioneel: specifiek config entry id om te targeten (bij meerdere entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optioneel: ID van de site (laat leeg als er maar \u00e9\u00e9n site is)."
+        },
+        "connector_id": {
+          "name": "Connector",
+          "description": "Optioneel: connectornummer (1 of 2)."
+        }
+      }
+    },
     "set_current": {
       "name": "Stel stroom in",
       "description": "Stel de laadstroom in Amp\u00e8re in (1 decimaal nauwkeurig). Wordt omgezet naar het dichtstbijzijnde percentage en verzonden via setPercentageLimit. De schuifregelaar en getalsentiteiten worden direct bijgewerkt.",

@@ -122,6 +122,24 @@
         }
       }
     },
+    "resume_charging": {
+      "name": "Resume charging",
+      "description": "Resume charging by restoring the selected charging mode, or STANDARD when no mode is known.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2)."
+        }
+      }
+    },
     "set_current": {
       "name": "Set current",
       "description": "Set the charging current in Ampere (1 decimal precision). Converted to the nearest integer percentage and sent via setPercentageLimit. The slider and number entities update immediately.",

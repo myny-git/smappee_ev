@@ -190,6 +190,16 @@ def _get_connector_state(
     return None
 
 
+def _dashboard_mode(mode: str | None) -> str | None:
+    """Return a Dashboard v10 charging mode, accepting legacy/restored labels."""
+    mode_up = str(mode or "").upper()
+    if mode_up in {"STANDARD", "NORMAL"}:
+        return "STANDARD"
+    if mode_up in {"SMART", "SOLAR"}:
+        return mode_up
+    return None
+
+
 def _schedule_dashboard_refresh_for_client(
     hass: HomeAssistant, client: SmappeeDeviceHandle
 ) -> None:
@@ -361,6 +371,33 @@ async def handle_stop_charging(call: ServiceCall) -> None:
     await async_handle_connector_service(call.hass, call, "stop_charging")
 
 
+async def handle_resume_charging(call: ServiceCall) -> None:
+    connector_id = call.data.get("connector_id")
+    rt, sid = _resolve_sid(call.hass, call)
+    client = get_connector_client(rt, sid, connector_id)
+    if not client:
+        raise _service_validation_error(
+            "Cannot resolve connector client (provide connector_id if ambiguous)",
+            "cannot_resolve_connector_client",
+        )
+
+    conn_state = _get_connector_state(rt, client)
+    mode = "STANDARD"
+    if conn_state:
+        mode = (
+            _dashboard_mode(conn_state.selected_mode)
+            or _dashboard_mode(conn_state.ui_mode_base)
+            or "STANDARD"
+        )
+
+    await async_handle_connector_service(
+        call.hass,
+        call,
+        "set_charging_mode",
+        {"mode": mode},
+    )
+
+
 async def handle_set_charging_mode(call: ServiceCall) -> None:
     await async_handle_connector_service(
         call.hass,
@@ -457,6 +494,9 @@ async def register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "pause_charging", handle_pause_charging, PAUSE_STOP_SCHEMA)
     hass.services.async_register(DOMAIN, "stop_charging", handle_stop_charging, PAUSE_STOP_SCHEMA)
     hass.services.async_register(
+        DOMAIN, "resume_charging", handle_resume_charging, PAUSE_STOP_SCHEMA
+    )
+    hass.services.async_register(
         DOMAIN, "set_charging_mode", handle_set_charging_mode, SET_MODE_SCHEMA
     )
     hass.services.async_register(DOMAIN, "set_current", handle_set_current, SET_CURRENT_SCHEMA)
@@ -467,5 +507,6 @@ async def unregister_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, "start_charging")
     hass.services.async_remove(DOMAIN, "pause_charging")
     hass.services.async_remove(DOMAIN, "stop_charging")
+    hass.services.async_remove(DOMAIN, "resume_charging")
     hass.services.async_remove(DOMAIN, "set_charging_mode")
     hass.services.async_remove(DOMAIN, "set_current")

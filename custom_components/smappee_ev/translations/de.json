@@ -30,7 +30,7 @@
   },
   "exceptions": {
     "service_location_not_in_entry": {
-      "message": "Service location {service_location_id} gehÃ¶rt nicht zu config entry {config_entry_id}"
+      "message": "Service location {service_location_id} gehört nicht zu config entry {config_entry_id}"
     },
     "config_entry_not_loaded": {
       "message": "Config entry {config_entry_id} ist nicht geladen oder existiert nicht."
@@ -39,7 +39,7 @@
       "message": "Mehrere service locations gefunden. Geben Sie service_location_id an."
     },
     "no_station_client": {
-      "message": "Kein station client fÃ¼r config entry {config_entry_id} und service location {service_location_id} gefunden."
+      "message": "Kein station client für config entry {config_entry_id} und service location {service_location_id} gefunden."
     },
     "station_method_not_found": {
       "message": "Station-Methode {method_name} nicht gefunden."
@@ -48,7 +48,7 @@
       "message": "Station-Service {method_name} fehlgeschlagen: {error}"
     },
     "no_connector_client": {
-      "message": "Kein passender connector client fÃ¼r config entry {config_entry_id}, service location {service_location_id}, connector {connector_id} gefunden."
+      "message": "Kein passender connector client für config entry {config_entry_id}, service location {service_location_id}, connector {connector_id} gefunden."
     },
     "connector_method_not_found": {
       "message": "Connector-Methode {method_name} nicht gefunden."
@@ -60,17 +60,17 @@
       "message": "Connector client kann nicht ermittelt werden. Geben Sie connector_id an, wenn die Auswahl mehrdeutig ist."
     },
     "current_out_of_range": {
-      "message": "Strom {current} A liegt auÃŸerhalb des Bereichs {min_current}-{max_current} A fÃ¼r diesen Connector."
+      "message": "Strom {current} A liegt außerhalb des Bereichs {min_current}-{max_current} A für diesen Connector."
     }
   },
   "services": {
     "start_charging": {
       "name": "Laden starten",
-      "description": "Startet den Ladevorgang. Wenn â€˜currentâ€™ nicht angegeben ist, wird der konfigurierte oder minimale Strom verwendet.",
+      "description": "Startet den Ladevorgang. Wenn 'current' nicht angegeben ist, wird der konfigurierte oder minimale Strom verwendet.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
-          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
         },
         "service_location_id": {
           "name": "Service-Location-ID",
@@ -88,11 +88,11 @@
     },
     "pause_charging": {
       "name": "Laden pausieren",
-      "description": "Pausiert den Ladevorgang fÃ¼r den ausgewÃ¤hlten Connector Ã¼ber die Dashboard v10 GerÃ¤teaktion, wenn verfÃ¼gbar.",
+      "description": "Pausiert den Ladevorgang für den ausgewählten Connector über die Dashboard v10 Geräteaktion, wenn verfügbar.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
-          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
         },
         "service_location_id": {
           "name": "Service-Location-ID",
@@ -106,11 +106,29 @@
     },
     "stop_charging": {
       "name": "Laden stoppen",
-      "description": "Stoppt den Ladevorgang fÃ¼r den ausgewÃ¤hlten Connector.",
+      "description": "Stoppt den Ladevorgang für den ausgewählten Connector.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
-          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
+        },
+        "service_location_id": {
+          "name": "Service-Location-ID",
+          "description": "Optional: ID des Standorts (leer lassen, wenn nur ein Standort vorhanden ist)."
+        },
+        "connector_id": {
+          "name": "Connector-ID",
+          "description": "Optional: Connector-Nummer (1 oder 2)."
+        }
+      }
+    },
+    "resume_charging": {
+      "name": "Laden fortsetzen",
+      "description": "Setzt den Ladevorgang fort, indem der gewählte Lademodus wiederhergestellt wird, oder STANDARD, wenn kein Modus bekannt ist.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurations-Eintrags-ID",
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
         },
         "service_location_id": {
           "name": "Service-Location-ID",
@@ -150,7 +168,7 @@
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
-          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren EintrÃ¤gen)."
+          "description": "Optional: bestimmte Config-Entry-ID ansprechen (bei mehreren Einträgen)."
         },
         "service_location_id": {
           "name": "Service-Location-ID",
