@@ -236,8 +236,8 @@
         "name": "Lademodus",
         "state": {
           "smart": "Intelligentes Laden",
-          "solar": "Solarladen",
-          "standard": "Standardladen"
+          "solar": "Solarladung",
+          "standard": "Normales Laden"
         }
       }
     },
@@ -356,7 +356,7 @@
         }
       },
       "session_energy": {
-        "name": "Sitzungsenergie"
+        "name": "Sitzung"
       }
     }
   }

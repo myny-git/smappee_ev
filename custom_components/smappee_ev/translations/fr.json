@@ -235,9 +235,9 @@
       "charging_mode": {
         "name": "Mode de charge",
         "state": {
-          "smart": "Charge intelligente",
-          "solar": "Charge solaire",
-          "standard": "Charge standard"
+          "smart": "Recharge intelligente",
+          "solar": "Recharge solaire",
+          "standard": "Recharge standard"
         }
       }
     },
@@ -356,7 +356,7 @@
         }
       },
       "session_energy": {
-        "name": "Énergie de session"
+        "name": "Session"
       }
     }
   }
