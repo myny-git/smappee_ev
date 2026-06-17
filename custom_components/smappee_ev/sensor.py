@@ -454,7 +454,7 @@ class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
         if isinstance(vals, list) and vals:
             try:
                 return float(sum(float(x) for x in vals))
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 return None
         return None
 
@@ -1010,7 +1010,7 @@ class SmappeeMqttLastSeenSensor(SmappeeSiteEntity, SensorEntity):
             return None
         try:
             return datetime.fromtimestamp(float(ts), tz=UTC)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return None
 
 
@@ -1018,13 +1018,13 @@ def _session_ts_to_datetime(value: object) -> datetime | None:
     """Convert session timestamps that may be seconds or milliseconds."""
     try:
         ts = float(value)  # type: ignore[arg-type]
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
     if abs(ts) > 10_000_000_000:
         ts /= 1000
     try:
         return datetime.fromtimestamp(ts, tz=UTC)
-    except OSError, OverflowError, ValueError:
+    except (OSError, OverflowError, ValueError):
         return None
 
 
@@ -1153,7 +1153,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             return None
         try:
             return round(float(energy_kwh), 2)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return None
 
     @property
