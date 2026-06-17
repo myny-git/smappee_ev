@@ -159,6 +159,35 @@ Click the button below to import this blueprint into your Home Assistant instanc
 
 3. Go to **Settings → Automations & Scenes → Blueprints**, click **Reload Blueprints**, then **Create Automation**.
 
+---
+
+### Smappee: Sun-based LED Brightness
+
+Automatically adjusts the Smappee charger LED brightness based on sunrise and sunset, with configurable time offsets and brightness levels for each event.
+
+#### What it does
+
+- **Sun-triggered:** Reacts to sunrise and sunset events to change LED brightness automatically.
+- **Configurable offsets:** Shift the trigger time before or after sunrise/sunset (e.g. `-00:30:00` to trigger 30 minutes early).
+- **Configurable brightness:** Set independent brightness percentages for daytime and nighttime.
+
+#### Easy Import
+
+Click the button below to import this blueprint into your Home Assistant instance:
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint URL pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmyny-git%2Fsmappee_ev%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fsun_led.yaml)
+
+#### Manual Setup
+
+1. Download `blueprints/automation/sun_led.yaml`.
+2. Place it in your Home Assistant config directory:
+
+   ```bash
+   config/blueprints/automation/sun_led.yaml
+   ```
+
+3. Go to **Settings → Automations & Scenes → Blueprints**, click **Reload Blueprints**, then **Create Automation**.
+
 ## 💡 Notes
 
 I built this project because I own a **Smappee EV Wall Home** and wanted deeper control through Home Assistant.  
