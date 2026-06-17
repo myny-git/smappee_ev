@@ -404,10 +404,10 @@ class SmappeeMqtt:
         for slu in self._slus:
             topic = f"servicelocation/{slu}{MQTT_HEARTBEAT_TOPIC_SUFFIX}"
             value: int | str | None = self._slu_ids.get(slu, self._slu_id)
-            try:
+            with suppress(TypeError, ValueError):
                 if isinstance(value, str):
                     value = int(value)
-            except TypeError, ValueError:  # conversion best-effort; non-fatal
+            if not isinstance(value, (int, float)):
                 _LOGGER.debug(
                     "Heartbeat serviceLocationId not numeric (slu_id=%r); sending null", value
                 )

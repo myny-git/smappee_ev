@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -452,10 +453,8 @@ class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
         st = self._conn_state
         vals = getattr(st, "current_phases", None) if st else None
         if isinstance(vals, list) and vals:
-            try:
+            with suppress(TypeError, ValueError):
                 return float(sum(float(x) for x in vals))
-            except TypeError, ValueError:
-                return None
         return None
 
 
@@ -1008,24 +1007,23 @@ class SmappeeMqttLastSeenSensor(SmappeeSiteEntity, SensorEntity):
         ts = getattr(st, "last_mqtt_rx", None)
         if ts is None:
             return None
-        try:
+        with suppress(TypeError, ValueError):
             return datetime.fromtimestamp(float(ts), tz=UTC)
-        except TypeError, ValueError:
-            return None
+        return None
 
 
 def _session_ts_to_datetime(value: object) -> datetime | None:
     """Convert session timestamps that may be seconds or milliseconds."""
-    try:
+    ts = None
+    with suppress(TypeError, ValueError):
         ts = float(value)  # type: ignore[arg-type]
-    except TypeError, ValueError:
+    if ts is None:
         return None
     if abs(ts) > 10_000_000_000:
         ts /= 1000
-    try:
+    with suppress(OSError, OverflowError, ValueError):
         return datetime.fromtimestamp(ts, tz=UTC)
-    except OSError, OverflowError, ValueError:
-        return None
+    return None
 
 
 def _nested_value(data: dict[str, Any], *paths: tuple[str, ...]) -> object:
@@ -1151,10 +1149,9 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         energy_kwh = self._active_session_data.get("energy")
         if energy_kwh is None:
             return None
-        try:
+        with suppress(TypeError, ValueError):
             return round(float(energy_kwh), 2)
-        except TypeError, ValueError:
-            return None
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

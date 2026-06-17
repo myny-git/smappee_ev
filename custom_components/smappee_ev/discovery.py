@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,10 +60,8 @@ def _location_id(location: dict[str, Any]) -> int | None:
         value = location.get(key)
         if value is None:
             continue
-        try:
+        with suppress(TypeError, ValueError):
             return int(value)
-        except TypeError, ValueError:
-            continue
     return None
 
 
@@ -141,10 +140,10 @@ def build_topologies_from_full_details(
             continue
 
         parent_id = control.get("parentId")
-        try:
-            parent_id_int = int(parent_id) if parent_id is not None else None
-        except TypeError, ValueError:
-            parent_id_int = None
+        parent_id_int = None
+        if parent_id is not None:
+            with suppress(TypeError, ValueError):
+                parent_id_int = int(parent_id)
 
         site_id = parent_id_int if parent_id_int in locations_by_id else control_id
         site = locations_by_id.get(site_id, control)
