@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
-from homeassistant.helpers import update_coordinator
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
@@ -45,7 +45,7 @@ type SmappeeEntityCoordinator = SmappeeSiteCoordinator | SmappeeStationCoordinat
 CoordinatorT = TypeVar("CoordinatorT", bound=SmappeeEntityCoordinator)
 
 
-class SmappeeBaseEntity(update_coordinator.CoordinatorEntity[CoordinatorT]):
+class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
     """Common base providing station/connector id storage and device_info."""
 
     _attr_has_entity_name = True
