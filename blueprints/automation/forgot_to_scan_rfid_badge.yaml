@@ -26,14 +26,13 @@ blueprint:
           unit_of_measurement: minutes
           mode: slider
           step: 1.0
-    notify_device:
-      name: Notification Device
-      description: The smartphone device that will receive the push notification.
+    notify_service:
+      name: Notification Service
+      description: The notify service or group that should receive the notification.
       selector:
-        device:
-          filter:
-          - integration: mobile_app
-          multiple: false
+        target:
+          entity:
+            domain: notify
     notification_title:
       name: Notification Title
       description: The title header text of the push notification message.
@@ -64,11 +63,9 @@ trigger:
     minutes: !input delay_time
 condition: []
 action:
-- domain: mobile_app
-  type: notify
-  device_id: !input notify_device
-  title: !input notification_title
-  message: '{{ notification_message }}'
+- action: notify.send_message
+  target: !input notify_service
   data:
-    icon_url: https://raw.githubusercontent.com/home-assistant/brands/refs/heads/master/custom_integrations/smappee_ev/icon.png
+    title: !input notification_title
+    message: '{{ notification_message }}'
 mode: single
