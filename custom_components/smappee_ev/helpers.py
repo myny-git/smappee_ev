@@ -290,7 +290,7 @@ def safe_sum(values) -> float | None:
         return None
     try:
         return float(sum(float(v) for v in values))
-    except TypeError, ValueError:  # any non-numeric
+    except (TypeError, ValueError):  # any non-numeric
         return None
 
 

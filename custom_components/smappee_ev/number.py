@@ -262,7 +262,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
             return
         try:
             restored = round(float(last.native_value), 1)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return
         updated_data = False
         st = self._state()
@@ -426,7 +426,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
             return
         try:
             restored = int(float(last.native_value))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return
         st = self._state()
         updated_data = False
