@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import timedelta
 from typing import Any, cast
 
@@ -288,10 +289,9 @@ def safe_sum(values) -> float | None:
     """
     if not isinstance(values, list | tuple) or not values:  # type: ignore[arg-type]
         return None
-    try:
+    with suppress(TypeError, ValueError):
         return float(sum(float(v) for v in values))
-    except TypeError, ValueError:  # any non-numeric
-        return None
+    return None
 
 
 __all__ = [

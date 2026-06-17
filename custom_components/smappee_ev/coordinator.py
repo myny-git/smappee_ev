@@ -54,10 +54,9 @@ _MQTT_PATH_RE = re.compile(r"\$\.([A-Za-z0-9_]+)\[(\d+)\]")
 
 def _to_int(value: Any, default: int = 0) -> int:
     """Convert a value to int safely, fallback to default on error."""
-    try:
+    with suppress(TypeError, ValueError):
         return int(value)  # type: ignore[arg-type]
-    except TypeError, ValueError:
-        return default
+    return default
 
 
 def _pick(seq: Sequence[int] | list, idxs: Iterable[int]) -> list[int]:
@@ -1324,10 +1323,9 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
     @staticmethod
     def _as_int(v: Any, default: int | None = None) -> int | None:
-        try:
+        with suppress(TypeError, ValueError):
             return int(v)  # type: ignore[arg-type]
-        except TypeError, ValueError:
-            return default
+        return default
 
     # UI mappings
     @staticmethod
@@ -1471,10 +1469,10 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 changed |= self._set_if_changed(conn, "support_grid", grid_support)
 
             n = ccp.get("etc.smart.device.type.car.charger.smappee.charger.number")
-            try:
-                n_int = int(n) if n is not None else None
-            except TypeError, ValueError:
-                n_int = None
+            n_int = None
+            if n is not None:
+                with suppress(TypeError, ValueError):
+                    n_int = int(n)
             if n_int is not None:
                 changed |= self._set_if_changed(conn, "connector_number", n_int)
 

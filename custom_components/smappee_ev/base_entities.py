@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -34,11 +35,10 @@ def _text_attr(obj: object, name: str) -> str | None:
 
 
 def _is_int_like(value: object) -> bool:
-    try:
+    with suppress(TypeError, ValueError):
         int(cast(Any, value))
-    except TypeError, ValueError:
-        return False
-    return True
+        return True
+    return False
 
 
 type SmappeeEntityCoordinator = SmappeeSiteCoordinator | SmappeeStationCoordinator

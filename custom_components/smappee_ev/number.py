@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 import logging
 from typing import Any
 
@@ -260,9 +261,10 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         last = await self.async_get_last_number_data()
         if not last or last.native_value is None:
             return
-        try:
+        restored = None
+        with suppress(TypeError, ValueError):
             restored = round(float(last.native_value), 1)
-        except TypeError, ValueError:
+        if restored is None:
             return
         updated_data = False
         st = self._state()
@@ -424,9 +426,10 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
         last = await self.async_get_last_number_data()
         if not last or last.native_value is None:
             return
-        try:
+        restored = None
+        with suppress(TypeError, ValueError):
             restored = int(float(last.native_value))
-        except TypeError, ValueError:
+        if restored is None:
             return
         st = self._state()
         updated_data = False

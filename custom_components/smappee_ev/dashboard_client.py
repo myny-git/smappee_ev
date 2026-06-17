@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import logging
 import time
 from typing import Any
@@ -59,10 +60,8 @@ class SmappeeDashboardClient:
             self.refresh_token = str(refresh_token)
             self._token_update_callback({CONF_DASHBOARD_REFRESH_TOKEN: self.refresh_token})
         if expires_at is not None:
-            try:
+            with suppress(TypeError, ValueError):
                 self._token_expires_at_ms = int(expires_at)
-            except TypeError, ValueError:
-                self._token_expires_at_ms = 0
 
     async def async_login(self) -> bool:
         """Authenticate with dashboard username/password."""
@@ -204,10 +203,9 @@ class SmappeeDashboardClient:
                 return True
             if resp.content_length == 0:
                 return None
-            try:
+            with suppress(aiohttp.ContentTypeError, ValueError):
                 return await resp.json()
-            except aiohttp.ContentTypeError, ValueError:
-                return None
+            return None
 
     async def async_get_service_locations_full_details(self) -> list[dict[str, Any]] | None:
         data = await self._request(

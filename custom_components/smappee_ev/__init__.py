@@ -1,6 +1,7 @@
 """Set up and manage runtime data for the Smappee EV integration."""
 
 import asyncio
+from contextlib import suppress
 from datetime import timedelta
 from inspect import isawaitable
 import logging
@@ -85,14 +86,12 @@ def _safe_str(value: object) -> str | None:
     """Convert to stripped string or None if not possible."""
     if value is None:
         return None
-    try:
-        s = str(value)
-    except TypeError, ValueError:
-        return None
-    s = s.strip()
-    if s.lower() in {"none", "null"}:
-        return None
-    return s or None
+    with suppress(TypeError, ValueError):
+        s = str(value).strip()
+        if s.lower() in {"none", "null"}:
+            return None
+        return s or None
+    return None
 
 
 def _find_in(dev: dict, *keys: str) -> str | None:
@@ -612,18 +611,15 @@ def _connector_position_from_measurement(measurement: dict[str, Any]) -> int | N
     for key in ("position", "connectorNumber"):
         value = measurement.get(key)
         if value is not None:
-            try:
+            with suppress(TypeError, ValueError):
                 return int(value)
-            except TypeError, ValueError:
-                pass
     name = str(measurement.get("name") or "")
     match = re.search(r"(?:^|\s-\s|\s)(\d+)\s*$", name)
     if not match:
         return None
-    try:
+    with suppress(TypeError, ValueError):
         return int(match.group(1))
-    except TypeError, ValueError:
-        return None
+    return None
 
 
 def _fallback_highlevel_connector_mapping(
