@@ -407,7 +407,7 @@ class SmappeeMqtt:
             try:
                 if isinstance(value, str):
                     value = int(value)
-            except (TypeError, ValueError):  # conversion best-effort; non-fatal
+            except TypeError, ValueError:  # conversion best-effort; non-fatal
                 _LOGGER.debug(
                     "Heartbeat serviceLocationId not numeric (slu_id=%r); sending null", value
                 )

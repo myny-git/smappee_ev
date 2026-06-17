@@ -87,7 +87,7 @@ def _safe_str(value: object) -> str | None:
         return None
     try:
         s = str(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     s = s.strip()
     if s.lower() in {"none", "null"}:
@@ -614,7 +614,7 @@ def _connector_position_from_measurement(measurement: dict[str, Any]) -> int | N
         if value is not None:
             try:
                 return int(value)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 pass
     name = str(measurement.get("name") or "")
     match = re.search(r"(?:^|\s-\s|\s)(\d+)\s*$", name)
@@ -622,7 +622,7 @@ def _connector_position_from_measurement(measurement: dict[str, Any]) -> int | N
         return None
     try:
         return int(match.group(1))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

@@ -61,7 +61,7 @@ def _location_id(location: dict[str, Any]) -> int | None:
             continue
         try:
             return int(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
     return None
 
@@ -143,7 +143,7 @@ def build_topologies_from_full_details(
         parent_id = control.get("parentId")
         try:
             parent_id_int = int(parent_id) if parent_id is not None else None
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             parent_id_int = None
 
         site_id = parent_id_int if parent_id_int in locations_by_id else control_id

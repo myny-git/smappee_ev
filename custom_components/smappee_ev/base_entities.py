@@ -36,7 +36,7 @@ def _text_attr(obj: object, name: str) -> str | None:
 def _is_int_like(value: object) -> bool:
     try:
         int(cast(Any, value))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
     return True
 

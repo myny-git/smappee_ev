@@ -56,7 +56,7 @@ def _to_int(value: Any, default: int = 0) -> int:
     """Convert a value to int safely, fallback to default on error."""
     try:
         return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
@@ -1326,7 +1326,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
     def _as_int(v: Any, default: int | None = None) -> int | None:
         try:
             return int(v)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return default
 
     # UI mappings
@@ -1473,7 +1473,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             n = ccp.get("etc.smart.device.type.car.charger.smappee.charger.number")
             try:
                 n_int = int(n) if n is not None else None
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 n_int = None
             if n_int is not None:
                 changed |= self._set_if_changed(conn, "connector_number", n_int)

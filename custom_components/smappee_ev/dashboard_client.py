@@ -61,7 +61,7 @@ class SmappeeDashboardClient:
         if expires_at is not None:
             try:
                 self._token_expires_at_ms = int(expires_at)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 self._token_expires_at_ms = 0
 
     async def async_login(self) -> bool:
@@ -206,7 +206,7 @@ class SmappeeDashboardClient:
                 return None
             try:
                 return await resp.json()
-            except (aiohttp.ContentTypeError, ValueError):
+            except aiohttp.ContentTypeError, ValueError:
                 return None
 
     async def async_get_service_locations_full_details(self) -> list[dict[str, Any]] | None:
