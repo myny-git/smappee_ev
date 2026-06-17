@@ -1,0 +1,93 @@
+blueprint:
+  name: "Smappee: Charger status and sun-based LED brightness"
+  description: Adjust LED brightness based on charger availability (2% when available) and sun state with configurable offsets.
+  domain: automation
+  input:
+    charger_status_sensor:
+      name: Smappee EVSE Status Sensor
+      description: The sensor that monitors the active operational status of the charger.
+      selector:
+        entity:
+          filter:
+          - domain:
+            - sensor
+            integration: smappee_ev
+          multiple: false
+          reorder: false
+    target_light:
+      name: Smappee EV LED Light
+      selector:
+        entity:
+          domain: light
+          integration: smappee_ev
+    sunrise_offset:
+      name: Sunrise offset
+      default: "00:00:00"
+      selector:
+        time:
+    sunset_offset:
+      name: Sunset offset
+      default: "00:00:00"
+      selector:
+        time:
+    sunrise_brightness:
+      name: Sunrise brightness
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    sunset_brightness:
+      name: Sunset brightness
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+
+mode: single
+triggers:
+  - trigger: sun
+    event: sunrise
+    offset: !input sunrise_offset
+    id: sunrise
+  - trigger: sun
+    event: sunset
+    offset: !input sunset_offset
+    id: sunset
+  - trigger: state
+    entity_id: !input charger_status_sensor
+    id: charger_status
+actions:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input charger_status_sensor
+            state: "available"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input target_light
+            data:
+              brightness_pct: 2
+    default:
+      - if:
+          - condition: sun
+            after: sunrise
+            after_offset: !input sunrise_offset
+            before: sunset
+            before_offset: !input sunset_offset
+        then:
+          - action: light.turn_on
+            target:
+              entity_id: !input target_light
+            data:
+              brightness_pct: !input sunrise_brightness
+        else:
+          - action: light.turn_on
+            target:
+              entity_id: !input target_light
+            data:
+              brightness_pct: !input sunset_brightness
