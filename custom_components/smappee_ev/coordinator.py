@@ -1,4 +1,5 @@
-# custom_components/smappee_ev/coordinator.py
+"""Coordinator logic for Smappee EV service locations and charging stations."""
+
 from __future__ import annotations
 
 import asyncio
@@ -119,7 +120,7 @@ def _indexes_and_field_from_aspect_paths(
     return indexes, selected_field
 
 
-def _active_power_values(payload: dict, field: str | None = None) -> list:
+def _active_power_values(payload: dict[str, Any], field: str | None = None) -> list[Any]:
     """Return active power values from the Dashboard-indicated MQTT array field."""
     if field:
         values = payload.get(field)

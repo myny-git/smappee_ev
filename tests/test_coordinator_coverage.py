@@ -487,44 +487,42 @@ async def test_recent_session_refresh_lock_throttle_reauth_and_success(hass, mon
 
 
 @pytest.mark.asyncio
-async def test_session_scheduling_callbacks_and_shutdown_paths(hass):
+async def test_session_tracking_shutdown_cancels_pending_scheduled_refreshes(hass):
     coord = _station_coordinator(hass)
-    coord._async_refresh_recent_sessions = AsyncMock()
-    callbacks = []
+    coord.connector_clients["conn-1"].async_get_recent_sessions = AsyncMock(return_value=[])
+    scheduled = []
     unsubs = []
+    active_loop_unsub = MagicMock()
 
     def fake_call_later(_hass, delay, callback):
         unsub = MagicMock(name=f"unsub-{delay}")
-        callbacks.append((delay, callback, unsub))
+        scheduled.append((delay, callback))
         unsubs.append(unsub)
         return unsub
 
-    with patch(
-        "custom_components.smappee_ev.coordinator.async_call_later", side_effect=fake_call_later
+    with (
+        patch("custom_components.smappee_ev.coordinator.SESSION_FINAL_REFRESH_DELAYS", (30, 120)),
+        patch(
+            "custom_components.smappee_ev.coordinator.async_call_later", side_effect=fake_call_later
+        ),
+        patch(
+            "custom_components.smappee_ev.coordinator.async_track_time_interval",
+            return_value=active_loop_unsub,
+        ),
     ):
-        coord._schedule_session_refresh("manual", delay=5, force=True)
-        assert coord._session_refresh_unsub is unsubs[-1]
-        await callbacks[-1][1](None)
+        coord.data.connectors["conn-1"].session_state = "CHARGING"
+        coord.async_start_session_tracking()
+        coord.apply_mqtt_properties(
+            "servicelocation/site/etc/carcharger/acchargingcontroller/v1"
+            "/devices/conn-1/property/chargingstate",
+            {"chargingState": "STOPPED"},
+        )
 
-        coord._schedule_final_session_refreshes("conn-1")
-        assert [delay for delay, _, _ in callbacks[-3:]] == [30, 120, 300]
-        assert len(coord._session_final_refresh_unsubs) == 3
-        await callbacks[-3][1](None)
+        assert [delay for delay, _ in scheduled] == [0, 30, 120]
 
-    coord._async_refresh_recent_sessions.assert_any_await("manual", force=True)
-    coord._async_refresh_recent_sessions.assert_any_await(
-        "connector **** finalizing after 30s", force=True
-    )
-    assert len(coord._session_final_refresh_unsubs) == 2
+        await coord.async_shutdown()
+        await scheduled[-1][1](None)
 
-    coord._cancel_session_refresh()
-    coord._cancel_final_session_refreshes()
-    assert unsubs[0].called is False
-    assert unsubs[1].called is False
-    assert all(unsub.called for unsub in unsubs[2:])
-
-    coord._shutting_down = True
-    with patch("custom_components.smappee_ev.coordinator.async_call_later") as call_later:
-        coord._schedule_session_refresh("ignored", delay=1)
-        coord._schedule_final_session_refreshes("conn-1")
-    call_later.assert_not_called()
+    assert all(unsub.called for unsub in unsubs)
+    active_loop_unsub.assert_called_once()
+    coord.connector_clients["conn-1"].async_get_recent_sessions.assert_not_awaited()

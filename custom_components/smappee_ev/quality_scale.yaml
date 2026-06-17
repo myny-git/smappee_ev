@@ -1,0 +1,112 @@
+# Integration quality scale status for Smappee EV.
+# Values: done | in_progress | todo | exempt.
+# This file is advisory for moving toward higher quality levels.
+
+rules:
+  # Bronze.
+  action-setup: done
+  appropriate-polling:
+    status: in_progress
+    comment: Live charger data is primarily event-driven via MQTT, but Dashboard/API refresh intervals and fallback polling behavior should still be documented and reviewed.
+  brands: todo
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage:
+    status: in_progress
+    comment: The main config flow, reauthentication, and reconfiguration paths are tested, but duplicate setup behavior should be verified through the Home Assistant flow manager.
+  dependency-transparency: done
+  docs-actions:
+    status: in_progress
+    comment: Service actions are documented, but the documentation should be reviewed against the official quality-scale requirement and made complete for all actions, parameters, and expected behavior.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: todo
+  entity-event-setup:
+    status: in_progress
+    comment: Entity lifecycle and subscription cleanup should be reviewed to ensure all MQTT/event subscriptions are created and removed in the correct Home Assistant lifecycle methods.
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry:
+    status: in_progress
+    comment: The implementation uses a unique ID to prevent duplicates, but duplicate setup behavior should still be verified through the Home Assistant flow manager.
+
+  # Silver.
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters:
+    status: in_progress
+    comment: Configuration parameters are partly documented, but all config flow fields, options, defaults, and user-visible implications should be described explicitly.
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner:
+    status: in_progress
+    comment: The manifest should list only active maintainers as code owners. Verify whether all listed code owners are still active maintainers.
+  log-when-unavailable:
+    status: in_progress
+    comment: The integration should log once when the service or device becomes unavailable and once when it recovers, without repeatedly logging the same failure.
+  parallel-updates: done
+  reauthentication-flow: done
+  test-coverage:
+    status: in_progress
+    comment: The official Silver requirement is above 95% coverage for all integration modules. Current coverage is 91.54% with all tests passing, so this is close but not yet complete.
+
+  # Gold.
+  devices: done
+  diagnostics: done
+  discovery:
+    status: in_progress
+    comment: Discovery support should be reviewed and tested against the official rule, including whether devices can be discovered automatically in supported setups.
+  discovery-update-info: todo
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations:
+    status: in_progress
+    comment: Known limitations should be documented explicitly, including API limitations, supported charger models, data freshness, and any behavior that depends on Smappee cloud or MQTT availability.
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting:
+    status: in_progress
+    comment: Troubleshooting information exists or is partly covered, but it should be expanded with common setup, authentication, MQTT, charging control, and unavailable-entity issues.
+  docs-use-cases: done
+  dynamic-devices: todo
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default:
+    status: in_progress
+    comment: Review whether noisy, diagnostic, advanced, or rarely used entities should be disabled by default using entity registry defaults.
+  entity-translations: done
+  exception-translations: done
+  icon-translations: todo
+  reconfiguration-flow: done
+  repair-issues:
+    status: exempt
+    comment: Authentication and credential issues are handled via reauthentication and reconfiguration; no additional repair flow is currently needed.
+  stale-devices: done
+
+  # Platinum.
+  async-dependency: done
+  inject-websession: done
+  strict-typing:
+    status: in_progress
+    comment: The codebase is typed and mypy is used, but full strict typing is not yet achieved. Remaining untyped or partially typed helpers should be cleaned up first.
+  # Internal roadmap items.
+  centralized-constants: done
+  code-structure-entity-base: done
+  error-handling: done
+  future-proof: done
+  generic-http-helper: done
+  modularization: done
+  mqtt-client-id: done
+  multi-entry: done
+  restore-entity: done
+  service-validation: done
+  state-restoration: done
+  test-coverage-91:
+    status: done
+    comment: The test suite currently passes with 474 tests, 0 xfailed tests, and 91.54% coverage.
+
+  translation-en: done
+  translation-nl: done

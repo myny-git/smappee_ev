@@ -7,8 +7,15 @@ from unittest.mock import MagicMock, patch
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    MockModule,
+    mock_config_flow,
+    mock_integration,
+    mock_platform,
+)
 
+from custom_components.smappee_ev import config_flow as config_flow_module
 from custom_components.smappee_ev.config_flow import SmappeeEvConfigFlow
 from custom_components.smappee_ev.const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
@@ -124,7 +131,6 @@ async def test_user_flow_auth_unexpected_exception(hass):
 
 @pytest.mark.asyncio
 async def test_user_flow_already_configured(hass):
-    pytest.xfail("Flow manager not used: duplicate abort not triggered in direct flow usage")
     existing = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -134,23 +140,27 @@ async def test_user_flow_already_configured(hass):
         unique_id="smappee_ev:test_user",
     )
     existing.add_to_hass(hass)
-    flow = SmappeeEvConfigFlow()
-    flow.hass = hass
-    flow.context = {}
-    with patch(
-        "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
-        _dashboard_login_success,
+    mock_integration(hass, MockModule(DOMAIN), built_in=False)
+    mock_platform(hass, f"{DOMAIN}.config_flow", config_flow_module, built_in=False)
+
+    with (
+        mock_config_flow(DOMAIN, SmappeeEvConfigFlow),
+        patch(
+            "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+            _dashboard_login_success,
+        ),
     ):
-        result = await flow.async_step_user(
-            {
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": "user"},
+            data={
                 CONF_USERNAME: "test_user",
                 CONF_PASSWORD: "test_pass",
-            }
+            },
         )
-    if result.get("type") == FlowResultType.ABORT:
-        assert result.get("reason") == "already_configured"
-    else:
-        assert result.get("type") == FlowResultType.CREATE_ENTRY
+
+    assert result.get("type") == FlowResultType.ABORT
+    assert result.get("reason") == "already_configured"
 
 
 @pytest.mark.asyncio

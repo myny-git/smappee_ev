@@ -14,7 +14,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           enable-cache: true
 
       - name: Ruff Lint
@@ -33,7 +33,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           enable-cache: true
 
       - name: Run Codespell
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # actions/checkout v6.0.0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # actions/setup-python v5.4.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
   
       - name: Install mypy + deps + stubs
         run: |
@@ -82,7 +82,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2

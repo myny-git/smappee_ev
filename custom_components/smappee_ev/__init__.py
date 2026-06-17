@@ -1,3 +1,5 @@
+"""Set up and manage runtime data for the Smappee EV integration."""
+
 import asyncio
 from datetime import timedelta
 from inspect import isawaitable
@@ -45,25 +47,23 @@ from .services import register_services, unregister_services
 _LOGGER = logging.getLogger(__name__)
 _SERVICE_REGISTRATION_SENTINEL = "start_charging"
 PLATFORMS = [
-    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.LIGHT,
     Platform.NUMBER,
     Platform.SELECT,
-    Platform.BUTTON,
+    Platform.SENSOR,
     Platform.SWITCH,
-    Platform.BINARY_SENSOR,
-    Platform.LIGHT,
 ]
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
 MqttRouteTarget = SmappeeSiteCoordinator | SmappeeStationCoordinator
 
-# -------------------------
-# Helpers for discovery
-# -------------------------
+# Discovery helpers.
 
 
-def _is_station(dev: dict) -> bool:
+def _is_station(dev: dict[str, Any]) -> bool:
     """True if device is a CHARGINGSTATION smartdevice."""
     t = dev.get("type")
     if isinstance(t, dict):
@@ -71,7 +71,7 @@ def _is_station(dev: dict) -> bool:
     return (dev.get("type") or "").upper() == "CHARGINGSTATION"
 
 
-def _is_connector(dev: dict) -> bool:
+def _is_connector(dev: dict[str, Any]) -> bool:
     """True if device is a CARCHARGER smartdevice."""
     if isinstance(dev.get("carCharger"), dict):
         return True
@@ -81,12 +81,12 @@ def _is_connector(dev: dict) -> bool:
     return (dev.get("type") or "").upper() == "CARCHARGER"
 
 
-def _safe_str(val) -> str | None:
+def _safe_str(value: object) -> str | None:
     """Convert to stripped string or None if not possible."""
-    if val is None:
+    if value is None:
         return None
     try:
-        s = str(val)
+        s = str(value)
     except (TypeError, ValueError):
         return None
     s = s.strip()
@@ -204,13 +204,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             version=version,
         )
         _LOGGER.info(
-            "Smappee EV config entry %s migrated to version %s",
+            "Config entry %s migrated to version %s",
             entry.entry_id,
             version,
         )
     else:
         _LOGGER.debug(
-            "Smappee EV config entry %s already at latest version %s",
+            "Config entry %s already at latest version %s",
             entry.entry_id,
             version,
         )
@@ -1097,7 +1097,10 @@ def _setup_mqtt(
             )
         for coord in targets:
             if coord:
-                coord.apply_mqtt_properties(topic, payload)
+                try:
+                    coord.apply_mqtt_properties(topic, payload)
+                except Exception:
+                    _LOGGER.exception("Failed to apply MQTT properties from %s", topic)
 
     refresh_tasks: dict[int, asyncio.Task] = {}
 
@@ -1248,6 +1251,33 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
 
 
 async def _prepare_site(
+    hass: HomeAssistant,
+    session: ClientSession,
+    sl: dict,
+    update_interval: int,
+    client_id_prefix: str,
+    config_entry: SmappeeEvConfigEntry | None = None,
+    dashboard_client: SmappeeDashboardClient | None = None,
+) -> tuple[dict[str, dict] | None, MqttRuntimeValue]:
+    """Build coordinators, station/connector clients and MQTT for one service location."""
+    try:
+        return await _async_prepare_site(
+            hass,
+            session,
+            sl,
+            update_interval,
+            client_id_prefix,
+            config_entry=config_entry,
+            dashboard_client=dashboard_client,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        _LOGGER.exception("Failed to prepare service location %s", sl.get("serviceLocationId"))
+        return None, None
+
+
+async def _async_prepare_site(
     hass: HomeAssistant,
     session: ClientSession,
     sl: dict,
@@ -1812,8 +1842,8 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
-    """Unload a Smappee EV config entry."""
-    _LOGGER.debug("Unloading Smappee EV config entry: %s", entry.entry_id)
+    """Unload a config entry."""
+    _LOGGER.debug("Unloading config entry: %s", entry.entry_id)
     try:
         rd = entry.runtime_data
     except AttributeError:

@@ -139,7 +139,6 @@ class TestErrorHandling:
         _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
         assert stations["station1_uuid"]["connector_clients"] == {}
 
-    @pytest.mark.xfail(reason="Function does not currently handle exceptions")
     @pytest.mark.asyncio
     async def test_prepare_site_exception_handling(self, hass, mock_dashboard_handle, mock_session):
         """Test _prepare_site with exceptions during execution."""
@@ -299,7 +298,6 @@ class TestErrorHandling:
             # Verify shutdown was called
             coordinator.async_shutdown.assert_called_once()
 
-    @pytest.mark.xfail(reason="Function does not currently handle exceptions")
     @pytest.mark.asyncio
     async def test_setup_mqtt_callback_exception_handling(self, hass):
         """Test _setup_mqtt callback exception handling."""
@@ -331,16 +329,10 @@ class TestErrorHandling:
             # Extract the on_properties callback
             on_props_callback = mock_mqtt_class.call_args[1]["on_properties"]
 
-            # We need to check the implementation's behavior without letting exceptions
-            # fail our test. We're actually testing exception handling here.
-            # Since we don't know exactly what specific exception type the implementation
-            # is catching, we'll wrap our call in a generic try/except and check what happened.
             assert mock_coordinator.apply_mqtt_properties.call_count == 0
             assert mock_coordinator.async_set_updated_data.call_count == 0
             assert mock_log_exception.call_count == 0
 
-            # Call the callback - ideally the implementation should handle the exception,
-            # but currently it doesn't. This test will be marked as xfail.
             on_props_callback("test/topic", {"property": "value"})
 
             # Verify apply_mqtt_properties was called
@@ -351,7 +343,6 @@ class TestErrorHandling:
             # Verify async_set_updated_data was not called due to the exception
             mock_coordinator.async_set_updated_data.assert_not_called()
 
-            # Ideally, the exception should be logged, but currently it isn't
             mock_log_exception.assert_called_once()
 
     @pytest.mark.asyncio

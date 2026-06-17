@@ -3,9 +3,9 @@
 > [!IMPORTANT]
 > This is a personal project developed by me and I am not affiliated with Smappee in any way. Use at your own risk.
 
-## 🧠 Credits
+## About
 
-This Home Assistant integration provides an integration for Smappee devices, including extended control features for Smappee EV chargers with charging modes, current limits, availability control, LED brightness, and status feedback. It is intended for users who want to integrate their Smappee EV charger more deeply into Home Assistant, EVCC, or other energy management setups. Depending on your device and configuration, energy-related data may also be available. 
+This Home Assistant integration provides extended local control and monitoring for Smappee EV chargers, including charging modes, current limits, availability control, LED brightness, and status feedback. It is intended for users who want to integrate their Smappee EV charger more deeply into Home Assistant, EVCC, or other energy management setups. Depending on your device and configuration, energy-related data may also be available.
 
 Feel free to join the Discord channel if you have questions, want to share feedback, or would like to contribute!
 
@@ -30,7 +30,7 @@ Feel free to join the Discord channel if you have questions, want to share feedb
 
 ## 🔧 Features
 
-This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It goes far beyond the official integration, which lacks support for the full EV charger API. It is based on the Smappee dashboard api-calls and mqtt.smappee.net.
+This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It is based on the Smappee Dashboard API calls and mqtt.smappee.net.
 
 ### API architecture
 
@@ -161,7 +161,7 @@ Click the button below to import this blueprint into your Home Assistant instanc
 
 ## 💡 Notes
 
-I built this fork because I own a **Smappee EV Wall Home** and wanted deeper control through Home Assistant.  
+I built this project because I own a **Smappee EV Wall Home** and wanted deeper control through Home Assistant.  
 The goal is to offer reliable support for charging mode switching and eventually more smart charging controls.
 I am also looking into EVCC integration.
 

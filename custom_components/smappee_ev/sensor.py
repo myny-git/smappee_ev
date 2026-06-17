@@ -1,3 +1,5 @@
+"""Sensor platform for the Smappee EV integration."""
+
 from __future__ import annotations
 
 import contextlib

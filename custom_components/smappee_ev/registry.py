@@ -1,3 +1,5 @@
+"""Registry cleanup helpers for the Smappee EV integration."""
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +37,7 @@ def async_remove_config_entry_registry_entries(
     if entity_count or device_count:
         _LOGGER.info(
             "Removed %d entity registry entries and %d device registry entries for "
-            "Smappee EV config entry %s before rediscovery",
+            "config entry %s before rediscovery",
             entity_count,
             device_count,
             entry.entry_id,
