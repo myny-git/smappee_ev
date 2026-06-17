@@ -173,6 +173,54 @@ def test_build_topology_multiple_charging_stations_under_same_parent():
     assert all(topology.site_location_id == 1 for topology in topologies)
 
 
+def test_build_topology_accepts_alternate_ids_gateways_and_write_access():
+    topologies = build_topologies_from_full_details(
+        [
+            {
+                "serviceLocationId": "10",
+                "uuid": "site-uuid",
+                "name": "Site",
+                "canWrite": True,
+                "gatewayDevice": {"serial": "SITEGW", "type": "P1S1"},
+            },
+            {
+                "locationId": "20",
+                "parentId": "10",
+                "name": "Station",
+                "chargingstations": [{"serial": "STATION-ALT"}],
+                "device": {"deviceSerialNumber": "CTRL-GW", "deviceType": "Connect"},
+            },
+            {"id": "bad"},
+            "not-a-location",
+        ]
+    )
+
+    assert len(topologies) == 1
+    topology = topologies[0]
+    assert topology.site_location_id == 10
+    assert topology.control_location_id == 20
+    assert topology.charging_station_serial == "STATION-ALT"
+    assert topology.site_gateway_serial == "SITEGW"
+    assert topology.site_gateway_type == "P1S1"
+    assert topology.control_gateway_serial == "CTRL-GW"
+    assert topology.control_gateway_type == "Connect"
+    assert topology.write_access is True
+
+
+def test_build_topology_ignores_invalid_parent_and_missing_station_payloads():
+    topologies = build_topologies_from_full_details(
+        [
+            {"id": 1, "parentId": "not-an-int", "chargingStation": {"serial": "A"}},
+            {"id": 2, "chargingStations": ["bad"]},
+            {"id": 3, "chargingstation": "bad"},
+        ]
+    )
+
+    assert len(topologies) == 1
+    assert topologies[0].site_location_id == 1
+    assert topologies[0].control_name == "Smappee 1"
+
+
 def test_parse_highlevel_mqtt_specs_for_measurements_and_update_specs():
     config = {
         "measurements": [
@@ -238,3 +286,47 @@ def test_unique_mqtt_channel_specs_deduplicates_topics():
 
     assert len(specs) == 1
     assert specs[0].topic == "same-topic"
+
+
+def test_parse_highlevel_mqtt_specs_filters_invalid_channels_and_duplicates():
+    assert parse_mqtt_channel_specs_from_highlevel(1, None) == []
+
+    config = {
+        "measurements": [
+            "bad",
+            {"type": "UNKNOWN", "updateChannels": {"activePower": _mqtt_channel("x", "$.x")}},
+            {
+                "type": "GRID",
+                "updateChannels": {
+                    "activePower": _mqtt_channel("grid", "$.channelData[0]"),
+                    "duplicatePower": _mqtt_channel("grid", "$.channelData[0]"),
+                    "httpOnly": {"protocol": "HTTP", "name": "ignored"},
+                    "missingTopic": {"protocol": "MQTT", "name": ""},
+                    "badShape": "ignored",
+                },
+                "actuals": [
+                    "bad",
+                    {"updateChannels": {"current": _mqtt_channel("current", "$.i")}},
+                ],
+            },
+            {
+                "type": "APPLIANCE",
+                "category": "OTHER",
+                "updateChannels": {"activePower": _mqtt_channel("ignored-car", "$.x")},
+            },
+        ],
+        "updateSpecs": {
+            "consumption": "bad",
+            "production": {"channel": "bad"},
+            "alwaysOn": {"channel": _mqtt_channel("always", "$.always")},
+        },
+    }
+
+    specs = parse_mqtt_channel_specs_from_highlevel(1, config)
+
+    assert [(spec.role, spec.metric, spec.topic) for spec in specs] == [
+        ("grid", "activePower", "grid"),
+        ("grid", "duplicatePower", "grid"),
+        ("grid", "current", "current"),
+        ("always_on", "alwaysOn", "always"),
+    ]

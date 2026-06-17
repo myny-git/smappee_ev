@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
+from aiohttp import ClientError
 import pytest
 
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
@@ -166,6 +168,30 @@ async def test_smartdevices_return_none_without_dashboard():
 
 
 @pytest.mark.asyncio
+async def test_smartdevices_return_none_for_errors_and_bad_shapes():
+    dashboard = RecordingDashboard()
+    dashboard.async_get_smart_devices = AsyncMock(side_effect=[RuntimeError("down"), {"bad": True}])
+    client = make_client(dashboard=dashboard)
+
+    assert await client.async_get_smartdevices() is None
+    assert await client.async_get_smartdevices() is None
+
+
+@pytest.mark.asyncio
+async def test_dashboard_action_error_paths_and_missing_methods():
+    dashboard = RecordingDashboard()
+    client = make_client(dashboard=dashboard)
+
+    dashboard.async_set_charging_mode = None
+    with pytest.raises(RuntimeError, match="is not available"):
+        await client.set_charging_mode("SMART")
+
+    dashboard.async_set_charging_mode = AsyncMock(side_effect=ClientError("offline"))
+    with pytest.raises(RuntimeError, match="failed for device"):
+        await client.set_charging_mode("SMART")
+
+
+@pytest.mark.asyncio
 async def test_set_charging_mode_dashboard_only():
     dashboard = RecordingDashboard()
     client = make_client(loc="236259", dashboard=dashboard)
@@ -204,6 +230,49 @@ async def test_dashboard_action_false_result_raises():
 
     with pytest.raises(RuntimeError, match="returned no success"):
         await client.set_charging_mode("SMART")
+
+
+@pytest.mark.asyncio
+async def test_station_level_dashboard_action_error_paths():
+    dashboard = RecordingDashboard()
+    client = make_client(station_serial="STATION", dashboard=dashboard)
+
+    dashboard.async_set_charger_availability = None
+    with pytest.raises(RuntimeError, match="availability action is not available"):
+        await client.set_available()
+
+    dashboard.async_set_charger_availability = AsyncMock(side_effect=TimeoutError("timeout"))
+    with pytest.raises(RuntimeError, match="availability failed"):
+        await client.set_unavailable()
+
+    dashboard.async_restart_charging_station = None
+    with pytest.raises(RuntimeError, match="restart action is not available"):
+        await client.restart_charging_station()
+
+    dashboard.async_restart_charging_station = AsyncMock(return_value=False)
+    with pytest.raises(RuntimeError, match="restart returned no success"):
+        await client.restart_charging_station()
+
+
+@pytest.mark.asyncio
+async def test_offline_charging_error_paths():
+    client = make_client()
+    with pytest.raises(RuntimeError, match="not configured"):
+        await client.set_offline_charging_config(True, 6)
+
+    dashboard = RecordingDashboard()
+    client = make_client(station_serial="STATION", dashboard=dashboard)
+    dashboard.async_set_offline_charging = None
+    with pytest.raises(RuntimeError, match="offline charging action is not available"):
+        await client.set_offline_charging_config(True, 6)
+
+    dashboard.async_set_offline_charging = AsyncMock(side_effect=ValueError("bad"))
+    with pytest.raises(RuntimeError, match="offline charging failed"):
+        await client.set_offline_charging_config(True, 6)
+
+    dashboard.async_set_offline_charging = AsyncMock(return_value=False)
+    with pytest.raises(RuntimeError, match="offline charging returned no success"):
+        await client.set_offline_charging_config(True, 6)
 
 
 @pytest.mark.asyncio

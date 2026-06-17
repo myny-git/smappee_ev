@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 from aiomqtt import MqttError
 import pytest
 
+from custom_components.smappee_ev.discovery import MqttChannelSpec
 from custom_components.smappee_ev.mqtt_gateway import SmappeeMqtt
 
 
@@ -89,6 +90,60 @@ class TestSmappeeMqtt:
         await mqtt_gateway._publish_ha_heartbeat_once()
         assert any("tracking" in t for t, _ in publishes)
         assert any("heartbeat" in t for t, _ in publishes)
+
+    @pytest.mark.asyncio
+    async def test_subscribe_all_deduplicates_specs_and_legacy_topics(
+        self, mock_properties_callback
+    ):
+        subscribed: list[str] = []
+        topic = "servicelocation/u/power"
+
+        class FakeClient:
+            async def subscribe(self, sub_topic, qos=0):
+                subscribed.append(sub_topic)
+
+        spec = MqttChannelSpec(1, "grid", "activePower", topic, None, None, [])
+        gw = SmappeeMqtt(
+            service_location_uuid="u",
+            service_location_uuids=["u", "u"],
+            client_id="c",
+            serial_number="s",
+            on_properties=mock_properties_callback,
+            service_location_id=1,
+            mqtt_specs=[spec, spec],
+        )
+
+        await gw._subscribe_all(FakeClient())
+
+        assert subscribed.count(topic) == 1
+        assert "servicelocation/u/homeassistant/heartbeat" in subscribed
+        assert any(item.endswith("/property/chargingstate") for item in subscribed)
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_publish_uses_uuid_specific_ids_and_null_for_bad_ids(
+        self, mock_properties_callback
+    ):
+        publishes: list[tuple[str, str]] = []
+
+        class FakeClient:
+            async def publish(self, topic, payload, qos=0):
+                publishes.append((topic, payload))
+
+        gw = SmappeeMqtt(
+            service_location_uuid="u1",
+            service_location_uuids=["u1", "u2"],
+            service_location_ids_by_uuid={"u1": "123", "u2": "not-numeric"},
+            client_id="c",
+            serial_number="s",
+            on_properties=mock_properties_callback,
+            service_location_id=1,
+        )
+        gw._client = FakeClient()  # type: ignore[assignment]
+
+        await gw._publish_ha_heartbeat_once()
+
+        assert '"serviceLocationId": 123' in publishes[0][1]
+        assert '"serviceLocationId": null' in publishes[1][1]
 
     def test_connection_callback_error_swallowed(self, mock_properties_callback):
         # Callback that raises should be swallowed by _notify_conn

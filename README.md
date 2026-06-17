@@ -19,6 +19,7 @@ Feel free to join the Discord channel if you have questions, want to share feedb
 [![Downloads-latest][downloads-latest-shield]][downloads-latest-url]
 [![Hassfest][hassfest-shield]][hassfest-url]
 [![Lint][lint-shield]][lint-url]
+[![Coverage][coverage-shield]][coverage-url]
 [![License][license-shield]][license-url]
 [![Commits][commits-shield]][commits-url]
 [![Stars][stars-shield]][stars-url]
@@ -212,6 +213,9 @@ If this integration is useful to you, feel free to support its development:
 
 [lint-shield]: https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/lint.yaml?branch=main&label=Lint&style=flat-square&logo=ruff
 [lint-url]: https://github.com/myny-git/smappee_ev/actions/workflows/lint.yaml
+
+[coverage-shield]: https://img.shields.io/badge/Coverage-91%25-brightgreen?style=flat-square
+[coverage-url]: https://github.com/myny-git/smappee_ev/actions/workflows/tests.yaml
 
 [downloads-shield]: https://img.shields.io/github/downloads/myny-git/smappee_ev/total?style=flat-square
 [downloads-url]: https://my.home-assistant.io/redirect/config_flow_start/?domain=smappee_ev
