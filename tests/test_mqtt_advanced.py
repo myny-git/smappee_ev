@@ -4,12 +4,24 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+import inspect
 import json
 from typing import Any
 
 import pytest
 
 from custom_components.smappee_ev.mqtt_gateway import MQTT_HEARTBEAT_TOPIC_SUFFIX, SmappeeMqtt
+
+
+async def wait_until(condition, *, timeout_seconds=2.0, interval=0.01):
+    async with asyncio.timeout(timeout_seconds):
+        while True:
+            result = condition()
+            if inspect.isawaitable(result):
+                result = await result
+            if result:
+                return
+            await asyncio.sleep(interval)
 
 
 class FakeMsg:
@@ -140,8 +152,12 @@ async def test_subscriptions_and_message_parsing(monkeypatch):
     hb_payload = json.dumps({"serviceLocationId": 123})
     await stream.push(f"servicelocation/slu-1{MQTT_HEARTBEAT_TOPIC_SUFFIX}", hb_payload)
 
-    # Allow processing
-    await asyncio.sleep(0.05)
+    await wait_until(
+        lambda: any(
+            d.get("power") == 100 and d.get("deviceUUID") == "dev-1" for _, d in topics_props
+        )
+        and any(t.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX) for t, _ in topics_props)
+    )
 
     # Stop
     await mqtt.stop()
@@ -184,8 +200,10 @@ async def test_tracking_and_heartbeat_publish(monkeypatch):
     monkeypatch.setattr("custom_components.smappee_ev.mqtt_gateway.Client", PatchedClient())
     await mqtt.start()
 
-    # Allow tracking loop to publish at least once
-    await asyncio.sleep(0.1)
+    await wait_until(
+        lambda: any(t.endswith("/tracking") for t, _ in published)
+        and any(t.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX) for t, _ in published)
+    )
     await mqtt.stop()
 
     tracking_topics = [t for t, _ in published if t.endswith("/tracking")]
@@ -232,10 +250,9 @@ async def test_reconnect_backoff(monkeypatch):
     )
 
     await mqtt.start()
-    # Let first (failing) and second (success) attempts happen
-    await asyncio.sleep(0.03)  # first failure + short wait
+    await wait_until(lambda: factory.calls >= 1)
     factory._raise_first = False  # allow success on next attempt
-    await asyncio.sleep(0.05)  # allow successful connect
+    await wait_until(lambda: factory.calls >= 2 and True in events)
     await mqtt.stop()
 
     # Should have at least one successful connection (True) and final False
