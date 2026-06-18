@@ -197,35 +197,10 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Execute the action on press."""
         if self._action == "start_charging":
-            data = self.coordinator.data if self.coordinator else None
-            target_a: float = 6.0
-            conn = None
-            if data and self.connector_uuid in (data.connectors or {}):
-                conn = data.connectors[self.connector_uuid]
-                sel = getattr(conn, "selected_current_limit", None)
-                mn = getattr(conn, "min_current", None)
-                if isinstance(sel, int | float) and sel > 0:
-                    target_a = sel
-                elif isinstance(mn, int) and mn > 0:
-                    target_a = mn
-            min_current = getattr(conn, "min_current", 6) if conn else 6
-            max_current = getattr(conn, "max_current", 32) if conn else 32
-            if not isinstance(min_current, int | float) or min_current <= 0:
-                min_current = 6
-            if not isinstance(max_current, int | float) or max_current <= 0:
-                max_current = 32
             try:
-                cur, pct = await self.api_client.start_charging(
-                    current=target_a,
-                    min_current=int(min_current),
-                    max_current=int(max_current),
-                )
+                await self.api_client.start_charging()
             except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("start_charging", err) from err
-            if data and conn is not None:
-                conn.selected_current_limit = cur
-                conn.selected_percentage_limit = pct
-                self.coordinator.async_set_updated_data(data)
             self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "pause_charging":
             try:

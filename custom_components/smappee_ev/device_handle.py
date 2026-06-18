@@ -198,39 +198,16 @@ class SmappeeDeviceHandle:
         _LOGGER.debug("Charging mode set successfully (%s via Dashboard v10)", mode_up)
         return True
 
-    async def start_charging(
-        self, current: float, *, min_current: int = 6, max_current: int = 32
-    ) -> tuple[float, int]:
-        """Start charging at (clamped) amperage.
+    async def start_charging(self) -> None:
+        """Start charging via Dashboard v10.
 
-        Returns (current_amps, percentage_limit) so caller can update ConnectorState.
+        This matches the Smappee app Start button:
+        startcharging = {"percentageLimit": 100}.
+
+        Use set_current to adjust the current/percentage limit.
         """
-        # _request handles auth
-        if max_current < min_current:
-            min_current, max_current = max_current, min_current
-
-        min_current_f = float(min_current)
-        max_current_f = float(max_current)
-        current_f = round(float(current), 1)
-
-        if max_current_f == min_current_f:
-            target = round(min_current_f, 1)
-            percentage = 100
-        else:
-            requested = max(min_current_f, min(current_f, max_current_f))
-            rng = max_current_f - min_current_f
-            percentage = int(max(0, min(100, round(((requested - min_current_f) * 100.0) / rng))))
-            target = round(min_current_f + (percentage / 100.0) * rng, 1)
-
-        await self._require_dashboard_action("async_start_charging", percentage)
-        _LOGGER.debug(
-            "Started charging successfully via Dashboard v10 (target=%s A, pct=%s, range=%s-%s)",
-            target,
-            percentage,
-            min_current,
-            max_current,
-        )
-        return target, percentage
+        await self._require_dashboard_action("async_start_charging")
+        _LOGGER.debug("Started charging successfully via Dashboard v10")
 
     async def pause_charging(self) -> None:
         """Pause charging via Dashboard v10.

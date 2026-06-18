@@ -69,7 +69,7 @@ This custom integration unlocks **more control over your Smappee** charger and c
 
 #### ⚡️ Advanced / Developer Notes
 
-- All values for currents/brightnesses are always **integers** (no floats in UI)
+- Most values for currents/brightnesses are always **integers** (no floats in UI), except for current limits which are **1 decimal precision**. The integration converts the requested current to the nearest supported percentage for the connector's configured range.
 - Integration tested on:  
   - **Smappee EV Wall Home** (single and double cable)
   - **Smappee EV One Business**

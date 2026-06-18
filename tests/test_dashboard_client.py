@@ -213,7 +213,7 @@ async def test_dashboard_start_charging_action_payload():
     )
     client._request = AsyncMock(return_value=True)
 
-    ok = await client.async_start_charging(236259, "CARCHARGER-acchargingcontroller-123", 40)
+    ok = await client.async_start_charging(236259, "CARCHARGER-acchargingcontroller-123")
 
     assert ok is True
     client._request.assert_awaited_once_with(
@@ -227,7 +227,7 @@ async def test_dashboard_start_charging_action_payload():
                     "unit": "%",
                     "required": True,
                 },
-                "values": [{"Integer": 40}],
+                "values": [{"Integer": 100}],
             }
         ],
         expected=(200, 201, 204),

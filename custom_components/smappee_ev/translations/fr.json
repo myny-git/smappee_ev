@@ -69,7 +69,7 @@
   "services": {
     "start_charging": {
       "name": "Démarrer la charge",
-      "description": "Démarre la charge. Si 'current' n'est pas fourni, le courant configuré ou minimal sera utilisé.",
+      "description": "Démarre la charge pour le connecteur sélectionné.",
       "fields": {
         "config_entry_id": {
           "name": "ID de l'entrée de configuration",
@@ -82,10 +82,6 @@
         "connector_id": {
           "name": "ID du connecteur",
           "description": "Optionnel : numéro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
-        },
-        "current": {
-          "name": "Courant (A)",
-          "description": "Optionnel : courant de charge à utiliser (en ampères)."
         }
       }
     },

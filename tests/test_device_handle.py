@@ -29,12 +29,8 @@ class RecordingDashboard:
     ) -> bool:
         return await self._record("async_set_charging_mode", service_location_id, device_id, mode)
 
-    async def async_start_charging(
-        self, service_location_id: str, device_id: str, percentage: int
-    ) -> bool:
-        return await self._record(
-            "async_start_charging", service_location_id, device_id, percentage
-        )
+    async def async_start_charging(self, service_location_id: str, device_id: str) -> bool:
+        return await self._record("async_start_charging", service_location_id, device_id)
 
     async def async_pause_charging(self, service_location_id: str, device_id: str) -> bool:
         return await self._record("async_pause_charging", service_location_id, device_id)
@@ -276,31 +272,13 @@ async def test_offline_charging_error_paths():
 
 
 @pytest.mark.asyncio
-async def test_start_charging_clamps_and_sends_percentage():
+async def test_start_charging_sends_start_action():
     dashboard = RecordingDashboard()
     client = make_client(dashboard=dashboard)
 
-    target, pct = await client.start_charging(40, min_current=6, max_current=32)
+    await client.start_charging()
 
-    assert target == 32
-    assert pct == 100
-    assert dashboard.calls == [("async_start_charging", ("100", "DASHBOARD_DEVICE", 100))]
-
-
-@pytest.mark.asyncio
-async def test_start_charging_reversed_and_degenerate_ranges():
-    dashboard = RecordingDashboard()
-    client = make_client(dashboard=dashboard)
-
-    target, pct = await client.start_charging(20, min_current=32, max_current=6)
-    fixed_target, fixed_pct = await client.start_charging(15, min_current=16, max_current=16)
-
-    assert (target, pct) == (20, 54)
-    assert (fixed_target, fixed_pct) == (16, 100)
-    assert dashboard.calls[-2:] == [
-        ("async_start_charging", ("100", "DASHBOARD_DEVICE", 54)),
-        ("async_start_charging", ("100", "DASHBOARD_DEVICE", 100)),
-    ]
+    assert dashboard.calls == [("async_start_charging", ("100", "DASHBOARD_DEVICE"))]
 
 
 @pytest.mark.asyncio

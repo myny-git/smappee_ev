@@ -309,50 +309,13 @@ class TestServiceHandlers:
         call = ServiceCall(
             domain="smappee_ev",
             service="start_charging",
-            data={"current": 16, "connector_id": 1},
-            hass=mock_hass_with_entries,
-        )
-
-        await services.handle_start_charging(call)
-
-        mock_api_client.start_charging.assert_called_once_with(
-            current=16, min_current=6, max_current=32
-        )
-
-    @pytest.mark.asyncio
-    async def test_handle_start_charging_defaults_to_min_current(
-        self, mock_hass_with_entries, mock_api_client
-    ):
-        """Test start charging defaults to the connector minimum current."""
-        call = ServiceCall(
-            domain="smappee_ev",
-            service="start_charging",
             data={"connector_id": 1},
             hass=mock_hass_with_entries,
         )
 
         await services.handle_start_charging(call)
 
-        mock_api_client.start_charging.assert_called_once_with(
-            current=6, min_current=6, max_current=32
-        )
-
-    @pytest.mark.asyncio
-    async def test_handle_start_charging_validation_error(
-        self, mock_hass, mock_loaded_entries, mock_api_client
-    ):
-        """Test start charging with current out of range."""
-        mock_hass.config_entries.async_entries.return_value = mock_loaded_entries
-
-        call = ServiceCall(
-            domain="smappee_ev",
-            service="start_charging",
-            data={"current": 50, "connector_id": 1},  # Too high
-            hass=mock_hass,
-        )
-
-        with pytest.raises(ServiceValidationError, match="current 50 A out of range"):
-            await services.handle_start_charging(call)
+        mock_api_client.start_charging.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_handle_pause_charging_success(
@@ -452,10 +415,10 @@ class TestServiceHandlers:
         mock_hass.config_entries.async_entries.return_value = []
 
         call = ServiceCall(
-            domain="smappee_ev", service="start_charging", data={"current": 16}, hass=mock_hass
+            domain="smappee_ev", service="start_charging", data={}, hass=mock_hass
         )
 
-        with pytest.raises(ServiceValidationError, match="Cannot resolve connector client"):
+        with pytest.raises(ServiceValidationError, match="No matching connector client"):
             await services.handle_start_charging(call)
 
     @pytest.mark.asyncio
@@ -466,7 +429,7 @@ class TestServiceHandlers:
         mock_hass.config_entries.async_entries.return_value = mock_loaded_entries
 
         call = ServiceCall(
-            domain="smappee_ev", service="start_charging", data={"current": 16}, hass=mock_hass
+            domain="smappee_ev", service="start_charging", data={}, hass=mock_hass
         )
 
         with pytest.raises(ServiceValidationError, match="Multiple service locations"):
@@ -493,7 +456,7 @@ class TestServiceHandlers:
         call = ServiceCall(
             domain="smappee_ev",
             service="start_charging",
-            data={"current": 16, "connector_id": 1},
+            data={"connector_id": 1},
             hass=mock_hass,
         )
 
@@ -524,15 +487,13 @@ class TestServiceHandlers:
         call = ServiceCall(
             domain="smappee_ev",
             service="start_charging",
-            data={"config_entry_id": "entry_a", "current": 16, "connector_id": 1},
+            data={"config_entry_id": "entry_a", "connector_id": 1},
             hass=mock_hass,
         )
 
         await services.handle_start_charging(call)
 
-        site_a_client.start_charging.assert_awaited_once_with(
-            current=16, min_current=6, max_current=32
-        )
+        site_a_client.start_charging.assert_awaited_once_with()
         site_b_client.start_charging.assert_not_called()
 
     @pytest.mark.asyncio
@@ -560,7 +521,6 @@ class TestServiceHandlers:
                 "config_entry_id": "entry_a",
                 "service_location_id": 22222,
                 "connector_id": 2,
-                "current": 16,
             },
             hass=mock_hass,
         )
@@ -580,7 +540,7 @@ class TestServiceHandlers:
         call = ServiceCall(
             domain="smappee_ev",
             service="start_charging",
-            data={"current": 16, "connector_id": 1},
+            data={"connector_id": 1},
             hass=mock_hass,
         )
 
@@ -829,19 +789,10 @@ class TestServiceSchemas:
             "config_entry_id": "test_id",
             "service_location_id": 12345,
             "connector_id": 1,
-            "current": 16,
         }
 
-        # Schema should not raise exception
         result = services.START_CHARGING_SCHEMA(data)
-        assert result["current"] == 16
-
-    def test_start_charging_schema_minimum_current(self):
-        """Test start charging schema with minimum current validation."""
-        data = {"current": 3}  # Below minimum of 6
-
-        with pytest.raises(vol.Invalid):
-            services.START_CHARGING_SCHEMA(data)
+        assert result["connector_id"] == 1
 
     def test_set_mode_schema_valid(self):
         """Test set mode schema with valid mode."""

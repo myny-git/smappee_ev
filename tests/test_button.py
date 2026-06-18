@@ -129,7 +129,10 @@ async def test_station_button_press_restart_charging_station(mock_coordinator):
 async def test_button_press_start_charging(mock_coordinator):
     """Test pressing the start charging button."""
     api_client = MagicMock()
-    api_client.start_charging = AsyncMock(return_value=(10, 50))
+    api_client.start_charging = AsyncMock()
+    connector = mock_coordinator.data.connectors["conn1"]
+    connector.selected_current_limit = 10
+    connector.selected_percentage_limit = 50
 
     button = SmappeeActionButton(
         coordinator=mock_coordinator,
@@ -143,26 +146,17 @@ async def test_button_press_start_charging(mock_coordinator):
 
     await button.async_press()
 
-    # Verify the API client was called with the correct parameters
-    api_client.start_charging.assert_called_once_with(
-        current=10,  # Should use the selected_current_limit from the connector
-        min_current=6,
-        max_current=32,
-    )
-
-    # Verify the connector data was updated
-    connector = mock_coordinator.data.connectors["conn1"]
+    api_client.start_charging.assert_awaited_once_with()
     assert connector.selected_current_limit == 10
     assert connector.selected_percentage_limit == 50
+    mock_coordinator.async_set_updated_data.assert_not_called()
+    mock_coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
-    # Verify coordinator was updated
-    mock_coordinator.async_set_updated_data.assert_called_once()
 
-
-async def test_button_press_start_charging_uses_float_selected_current(mock_coordinator):
-    """Test pressing the start charging button uses a restored/slider float current."""
+async def test_button_press_start_charging_ignores_restored_slider_limit(mock_coordinator):
+    """Test pressing the start charging button ignores restored slider current."""
     api_client = MagicMock()
-    api_client.start_charging = AsyncMock(return_value=(16.5, 40))
+    api_client.start_charging = AsyncMock()
     connector = mock_coordinator.data.connectors["conn1"]
     connector.selected_current_limit = 16.5
 
@@ -178,76 +172,13 @@ async def test_button_press_start_charging_uses_float_selected_current(mock_coor
 
     await button.async_press()
 
-    api_client.start_charging.assert_called_once_with(
-        current=16.5,
-        min_current=6,
-        max_current=32,
-    )
-
-
-async def test_button_press_start_charging_no_selected_current(mock_coordinator):
-    """Test pressing the start charging button without a selected current."""
-    api_client = MagicMock()
-    api_client.start_charging = AsyncMock(return_value=(6, 50))
-
-    # Remove selected_current_limit
-    connector = mock_coordinator.data.connectors["conn1"]
-    connector.selected_current_limit = None
-
-    button = SmappeeActionButton(
-        coordinator=mock_coordinator,
-        api_client=api_client,
-        sid=1,
-        station_uuid="station1",
-        connector_uuid="conn1",
-        name="Start Charging",
-        action="start_charging",
-    )
-
-    await button.async_press()
-
-    # Should fall back to min_current
-    api_client.start_charging.assert_called_once_with(
-        current=6,
-        min_current=6,
-        max_current=32,
-    )
-
-
-async def test_button_press_start_charging_no_min_current(mock_coordinator):
-    """Test pressing the start charging button without min or selected current."""
-    api_client = MagicMock()
-    api_client.start_charging = AsyncMock(return_value=(6, 50))
-
-    # Remove selected_current_limit and min_current
-    connector = mock_coordinator.data.connectors["conn1"]
-    connector.selected_current_limit = None
-    connector.min_current = None
-
-    button = SmappeeActionButton(
-        coordinator=mock_coordinator,
-        api_client=api_client,
-        sid=1,
-        station_uuid="station1",
-        connector_uuid="conn1",
-        name="Start Charging",
-        action="start_charging",
-    )
-
-    await button.async_press()
-
-    # Should use default current/range values
-    api_client.start_charging.assert_called_once_with(
-        current=6,
-        min_current=6,
-        max_current=32,
-    )
+    api_client.start_charging.assert_awaited_once_with()
 
 
 async def test_button_press_start_charging_no_connector(mock_coordinator):
     """Test pressing the start charging button with a non-existent connector."""
     api_client = MagicMock()
-    api_client.start_charging = AsyncMock(return_value=(6, 50))
+    api_client.start_charging = AsyncMock()
 
     button = SmappeeActionButton(
         coordinator=mock_coordinator,
@@ -261,18 +192,13 @@ async def test_button_press_start_charging_no_connector(mock_coordinator):
 
     await button.async_press()
 
-    # Should use default values
-    api_client.start_charging.assert_called_once_with(
-        current=6,
-        min_current=6,
-        max_current=32,
-    )
+    api_client.start_charging.assert_awaited_once_with()
 
 
 async def test_button_press_start_charging_no_coordinator_data(mock_coordinator):
     """Test pressing the start charging button with no coordinator data."""
     api_client = MagicMock()
-    api_client.start_charging = AsyncMock(return_value=(6, 50))
+    api_client.start_charging = AsyncMock()
 
     # Set coordinator data to None
     mock_coordinator.data = None
@@ -289,12 +215,7 @@ async def test_button_press_start_charging_no_coordinator_data(mock_coordinator)
 
     await button.async_press()
 
-    # Should use default values
-    api_client.start_charging.assert_called_once_with(
-        current=6,
-        min_current=6,
-        max_current=32,
-    )
+    api_client.start_charging.assert_awaited_once_with()
 
 
 async def test_button_press_pause_charging():

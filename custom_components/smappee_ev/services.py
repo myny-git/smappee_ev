@@ -12,6 +12,7 @@ import voluptuous as vol
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
+from .helpers import runtime_sites
 
 _LOGGER = logging.getLogger(__name__)
 DASHBOARD_CHARGING_MODES = {mode.upper() for mode in CHARGING_MODES}
@@ -83,7 +84,7 @@ def _find_runtime_for_sid(hass: HomeAssistant, sid: int) -> RuntimeData | None:
     """Return the runtime_data whose sites contains sid (first match)."""
     for entry in _iter_loaded_entries(hass):
         rd = entry.runtime_data
-        if sid in rd.sites:
+        if sid in runtime_sites(rd.sites):
             return rd
     return None
 
@@ -126,8 +127,9 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
             config_entry_id=entry_id,
         )
     if explicit_rt:
+        explicit_sites = runtime_sites(explicit_rt.sites)
         if isinstance(sid, int):
-            if sid not in explicit_rt.sites:
+            if sid not in explicit_sites:
                 raise _service_validation_error(
                     f"service_location_id {sid} does not belong to config_entry_id {entry_id}",
                     "service_location_not_in_entry",
@@ -135,7 +137,7 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
                     config_entry_id=entry_id,
                 )
             return explicit_rt, sid
-        return explicit_rt, _only_or_single_sid(explicit_rt.sites)
+        return explicit_rt, _only_or_single_sid(explicit_sites)
 
     # No explicit entry: if sid given, try locate its runtime
     if isinstance(sid, int):
@@ -147,22 +149,23 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
     loaded_entries = _iter_loaded_entries(hass)
     if (
         not isinstance(sid, int)
-        and sum(len(entry.runtime_data.sites or {}) for entry in loaded_entries) > 1
+        and sum(len(runtime_sites(entry.runtime_data.sites)) for entry in loaded_entries) > 1
     ):
         _raise_multiple_service_locations()
 
     if not loaded_entries:
         return None, None
     rt = loaded_entries[0].runtime_data
+    sites = runtime_sites(rt.sites)
     if isinstance(sid, int):
-        return (rt, sid if sid in rt.sites else None)
-    return rt, _only_or_single_sid(rt.sites)
+        return (rt, sid if sid in sites else None)
+    return rt, _only_or_single_sid(sites)
 
 
 def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeDeviceHandle | None:
     if not rt or sid is None:
         return None
-    site = rt.sites.get(sid) or {}
+    site = runtime_sites(rt.sites).get(sid) or {}
     # site {"stations": {st_uuid: {"station_client":..., ...}}}
     stations = (site.get("stations") or {}).values()
     first = next(iter(stations), None)
@@ -181,7 +184,7 @@ def get_connector_client(
 ) -> SmappeeDeviceHandle | None:
     if not rt or sid is None:
         return None
-    site = rt.sites.get(sid) or {}
+    site = runtime_sites(rt.sites).get(sid) or {}
     conns = _connector_clients_for_site(site)
     if connector_id is not None:
         for client in conns:
@@ -202,7 +205,7 @@ def _get_connector_state(
     uuid = getattr(client, "smart_device_uuid", None)
     if not uuid:
         return None
-    for site in rt.sites.values():
+    for site in runtime_sites(rt.sites).values():
         for bucket in (site.get("stations") or {}).values():
             coord = bucket.get("coordinator")
             if coord and coord.data:
@@ -228,7 +231,7 @@ def _schedule_dashboard_refresh_for_client(
     """Schedule the owning coordinator to refresh slow Dashboard data after a write."""
     client_uuid = getattr(client, "smart_device_uuid", None)
     for entry in _iter_loaded_entries(hass):
-        for site in entry.runtime_data.sites.values():
+        for site in runtime_sites(entry.runtime_data.sites).values():
             for bucket in (site.get("stations") or {}).values():
                 coord = bucket.get("coordinator")
                 if coord is None:
@@ -269,7 +272,7 @@ async def async_handle_station_service(
     extra_args: dict | None = None,
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
-    if rt and sid is None and len(rt.sites) > 1:
+    if rt and sid is None and len(runtime_sites(rt.sites)) > 1:
         _raise_multiple_service_locations()
     client = get_station_client(rt, sid)
     if not client:
@@ -306,7 +309,7 @@ async def async_handle_connector_service(
     extra_args: dict | None = None,
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
-    if rt and sid is None and len(rt.sites) > 1:
+    if rt and sid is None and len(runtime_sites(rt.sites)) > 1:
         _raise_multiple_service_locations()
     connector_id = call.data.get("connector_id")
     client = get_connector_client(rt, sid, connector_id)
@@ -346,37 +349,7 @@ async def async_handle_connector_service(
 
 
 async def handle_start_charging(call: ServiceCall) -> None:
-    current = call.data.get("current")
-    connector_id = call.data.get("connector_id")
-    rt, sid = _resolve_sid(call.hass, call)
-    client = get_connector_client(rt, sid, connector_id)
-
-    if not client:
-        raise _service_validation_error(
-            "Cannot resolve connector client (provide connector_id if ambiguous)",
-            "cannot_resolve_connector_client",
-        )
-
-    min_c, max_c = _connector_current_range(rt, client)
-
-    if current is None:
-        # Default to the connector's configured minimum
-        current = min_c
-    elif current < min_c or current > max_c:
-        raise _service_validation_error(
-            f"current {current} A out of range {min_c}-{max_c} A for this connector",
-            "current_out_of_range",
-            current=current,
-            min_current=min_c,
-            max_current=max_c,
-        )
-
-    await async_handle_connector_service(
-        call.hass,
-        call,
-        "start_charging",
-        {"current": current, "min_current": min_c, "max_current": max_c},
-    )
+    await async_handle_connector_service(call.hass, call, "start_charging")
 
 
 async def handle_pause_charging(call: ServiceCall) -> None:
@@ -464,8 +437,6 @@ START_CHARGING_SCHEMA = vol.Schema(
         vol.Optional("config_entry_id"): cv.string,
         vol.Optional("service_location_id"): cv.positive_int,
         vol.Optional("connector_id"): cv.positive_int,
-        # Only enforce a sane minimum; device specific max validated dynamically in handler
-        vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=6)),
     }
 )
 

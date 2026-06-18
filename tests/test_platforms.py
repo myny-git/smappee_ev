@@ -5,19 +5,12 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 import pytest
 
 from custom_components.smappee_ev import button, light, sensor, switch
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import (
-    IntegrationData,
-    RuntimeData,
-    SiteData,
-    SiteState,
-    StationState,
-)
+from custom_components.smappee_ev.data import IntegrationData, SiteData, SiteState, StationState
 from custom_components.smappee_ev.helpers import (
     build_connector_label,
     connector_device_identifier,
@@ -42,27 +35,25 @@ from tests.factories import (
 @pytest.fixture
 def mock_runtime_data():
     """Create mock runtime data."""
-    runtime = MagicMock(spec=RuntimeData)
-    runtime.sites = {
-        12345: {
-            "stations": {
-                "station_uuid": {
-                    "coordinator": MagicMock(spec=SmappeeCoordinator),
-                    "station_client": MagicMock(),
-                    "connector_clients": {"connector_uuid": MagicMock()},
+    return make_runtime_data(
+        sites={
+            12345: make_site(
+                stations={
+                    "station_uuid": make_station_bucket(
+                        coordinator=MagicMock(spec=SmappeeCoordinator),
+                        station_client=MagicMock(),
+                        connector_clients={"connector_uuid": MagicMock()},
+                    )
                 }
-            }
+            )
         }
-    }
-    return runtime
+    )
 
 
 @pytest.fixture
 def mock_config_entry(mock_runtime_data):
     """Create mock config entry."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.runtime_data = mock_runtime_data
-    return entry
+    return make_config_entry(runtime_data=mock_runtime_data)
 
 
 class TestButtonPlatform:
@@ -84,11 +75,10 @@ class TestButtonPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant):
         """Test button platform setup with no sites."""
-        runtime = MagicMock(spec=RuntimeData)
+        runtime = make_runtime_data()
         runtime.sites = None
 
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = runtime
+        entry = make_config_entry(runtime_data=runtime)
 
         async_add_entities = MagicMock()
 
@@ -100,11 +90,8 @@ class TestButtonPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_empty_sites(self, hass: HomeAssistant):
         """Test button platform setup with empty sites."""
-        runtime = MagicMock(spec=RuntimeData)
-        runtime.sites = {}
-
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = runtime
+        runtime = make_runtime_data()
+        entry = make_config_entry(runtime_data=runtime)
 
         async_add_entities = MagicMock()
 
@@ -133,11 +120,10 @@ class TestSensorPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant):
         """Test sensor platform setup with no sites."""
-        runtime = MagicMock(spec=RuntimeData)
+        runtime = make_runtime_data()
         runtime.sites = None
 
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = runtime
+        entry = make_config_entry(runtime_data=runtime)
 
         async_add_entities = MagicMock()
 
@@ -159,26 +145,26 @@ class TestSensorPlatform:
         station_coord_2.data = IntegrationData(station=StationState(), connectors={})
         station_coord_2.last_update_success = True
 
-        runtime = MagicMock(spec=RuntimeData)
-        runtime.sites = {
-            317418: {
-                "site_coordinator": site_coord,
-                "stations": {
-                    "station-a": {
-                        "coordinator": station_coord_1,
-                        "station_client": MagicMock(),
-                        "connector_clients": {"connector-a": MagicMock()},
+        runtime = make_runtime_data(
+            sites={
+                317418: make_site(
+                    stations={
+                        "station-a": make_station_bucket(
+                            coordinator=station_coord_1,
+                            station_client=MagicMock(),
+                            connector_clients={"connector-a": MagicMock()},
+                        ),
+                        "station-b": make_station_bucket(
+                            coordinator=station_coord_2,
+                            station_client=MagicMock(),
+                            connector_clients={"connector-b": MagicMock()},
+                        ),
                     },
-                    "station-b": {
-                        "coordinator": station_coord_2,
-                        "station_client": MagicMock(),
-                        "connector_clients": {"connector-b": MagicMock()},
-                    },
-                },
+                    site_coordinator=site_coord,
+                )
             }
-        }
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = runtime
+        )
+        entry = make_config_entry(runtime_data=runtime)
         async_add_entities = MagicMock()
 
         await sensor.async_setup_entry(hass, entry, async_add_entities)
@@ -265,11 +251,10 @@ class TestLightPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant):
         """Test light platform setup with no sites."""
-        runtime = MagicMock(spec=RuntimeData)
+        runtime = make_runtime_data()
         runtime.sites = None
 
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = runtime
+        entry = make_config_entry(runtime_data=runtime)
 
         async_add_entities = MagicMock()
 
@@ -498,11 +483,10 @@ class TestPlatformErrors:
     @pytest.mark.asyncio
     async def test_setup_with_corrupted_sites(self, hass: HomeAssistant):
         """Test platform setup with corrupted sites data."""
-        runtime = MagicMock(spec=RuntimeData)
+        runtime = make_runtime_data()
         runtime.sites = "invalid_data"  # Should be dict, not string
 
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = runtime
+        entry = make_config_entry(runtime_data=runtime)
 
         async_add_entities = MagicMock()
 

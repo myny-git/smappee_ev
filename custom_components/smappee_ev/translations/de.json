@@ -69,7 +69,7 @@
   "services": {
     "start_charging": {
       "name": "Laden starten",
-      "description": "Startet den Ladevorgang. Wenn 'current' nicht angegeben ist, wird der konfigurierte oder minimale Strom verwendet.",
+      "description": "Startet den Ladevorgang für den ausgewählten Connector.",
       "fields": {
         "config_entry_id": {
           "name": "Konfigurations-Eintrags-ID",
@@ -82,10 +82,6 @@
         "connector_id": {
           "name": "Connector-ID",
           "description": "Optional: Connector-Nummer (1 oder 2; leer lassen, wenn nur einer vorhanden ist)."
-        },
-        "current": {
-          "name": "Strom (A)",
-          "description": "Optional: zu verwendender Ladestrom (in Ampere)."
         }
       }
     },

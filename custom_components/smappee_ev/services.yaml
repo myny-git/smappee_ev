@@ -128,7 +128,7 @@ resume_charging:
           min: 1
 
 start_charging:
-  description: "Start charging on a connector. "
+  description: "Start charging on a connector."
   fields:
     config_entry_id:
       description: "Optional: Specific config entry id to target (when multiple entries)."
@@ -148,12 +148,3 @@ start_charging:
       selector:
         number:
           min: 1
-    current:
-      description: "Optional: Charging current in Ampere"
-      required: false
-      example: 16
-      selector:
-        number:
-          min: 6
-          max: 32
-          unit_of_measurement: "A"

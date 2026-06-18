@@ -443,9 +443,7 @@ class SmappeeDashboardClient:
             {"Quantity": {"value": int(max_current_a), "unit": "A"}},
         )
 
-    async def async_start_charging(
-        self, service_location_id: int | str, device_id: str, percentage: int
-    ) -> bool:
+    async def async_start_charging(self, service_location_id: int | str, device_id: str) -> bool:
         payload = [
             {
                 "spec": {
@@ -454,7 +452,7 @@ class SmappeeDashboardClient:
                     "unit": "%",
                     "required": True,
                 },
-                "values": [{"Integer": int(percentage)}],
+                "values": [{"Integer": 100}],
             }
         ]
         return await self.async_execute_device_action(

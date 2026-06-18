@@ -252,7 +252,9 @@ async def async_get_config_entry_diagnostics(
     out: dict[str, Any] = {}
 
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
-    sites = runtime_sites(getattr(rt, "sites", {}) if rt else {})
+    raw_sites = getattr(rt, "sites", {}) if rt else {}
+    sites_valid = isinstance(raw_sites, dict)
+    sites = runtime_sites(raw_sites)
     sensitive_values = _entry_sensitive_values(entry) + _runtime_sensitive_values(rt)
     # Stable ordering for diffs / logs
     out["sites"] = sorted(sites.keys(), key=_sort_as_text)
@@ -281,6 +283,7 @@ async def async_get_config_entry_diagnostics(
         "state": state_name,
         "domain": entry.domain,
         "version_manifest": manifest_version,
+        "runtime_sites_valid": sites_valid,
         "service_locations_total": len(sites or {}),
         "mqtt_clients_total": _mqtt_client_count(getattr(rt, "mqtt", {}) if rt else {}),
         "stations_total": 0,  # filled later

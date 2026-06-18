@@ -142,6 +142,7 @@ class TestDiagnostics:
         assert diagnostics["meta"]["title"] == "Smappee EV — **REDACTED**"
         assert diagnostics["meta"]["state"] == "loaded"
         assert diagnostics["meta"]["domain"] == "smappee_ev"
+        assert diagnostics["meta"]["runtime_sites_valid"] is True
         assert diagnostics["meta"]["service_locations_total"] == 1
         assert diagnostics["meta"]["stations_total"] == 1
         assert diagnostics["meta"]["connectors_total"] == 2
@@ -230,6 +231,20 @@ class TestDiagnostics:
         assert diagnostics["meta"]["connectors_total"] == 0
         assert diagnostics["summary"]["service_location_ids_count"] == 0
         assert diagnostics["meta"]["version_manifest"] is None
+        assert diagnostics["meta"]["runtime_sites_valid"] is True
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_reports_invalid_runtime_sites(self, hass):
+        """Expose corrupted runtime site shape instead of only showing zero sites."""
+        runtime = make_runtime_data()
+        runtime.sites = "invalid_data"
+        entry = make_config_entry(runtime_data=runtime)
+
+        diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+        assert diagnostics["sites"] == []
+        assert diagnostics["meta"]["runtime_sites_valid"] is False
+        assert diagnostics["meta"]["service_locations_total"] == 0
 
     @pytest.mark.asyncio
     async def test_diagnostics_with_partial_data(self, hass, mock_runtime_data):

@@ -72,7 +72,7 @@
   "services": {
     "start_charging": {
       "name": "Start charging",
-      "description": "Start charging. If 'current' is omitted, the configured or minimum current will be used.",
+      "description": "Start charging for the selected connector.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -85,10 +85,6 @@
         "connector_id": {
           "name": "Connector ID",
           "description": "Optional: connector number (1 or 2, leave empty if only one)."
-        },
-        "current": {
-          "name": "Current (A)",
-          "description": "Optional: charging current to use (in Ampere)."
         }
       }
     },
