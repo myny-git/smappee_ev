@@ -414,9 +414,7 @@ class TestServiceHandlers:
         """Test service call when no client is found."""
         mock_hass.config_entries.async_entries.return_value = []
 
-        call = ServiceCall(
-            domain="smappee_ev", service="start_charging", data={}, hass=mock_hass
-        )
+        call = ServiceCall(domain="smappee_ev", service="start_charging", data={}, hass=mock_hass)
 
         with pytest.raises(ServiceValidationError, match="No matching connector client"):
             await services.handle_start_charging(call)
@@ -428,9 +426,7 @@ class TestServiceHandlers:
         mock_loaded_entries[0].runtime_data.sites[67890] = {"test": "data"}
         mock_hass.config_entries.async_entries.return_value = mock_loaded_entries
 
-        call = ServiceCall(
-            domain="smappee_ev", service="start_charging", data={}, hass=mock_hass
-        )
+        call = ServiceCall(domain="smappee_ev", service="start_charging", data={}, hass=mock_hass)
 
         with pytest.raises(ServiceValidationError, match="Multiple service locations"):
             await services.handle_start_charging(call)
