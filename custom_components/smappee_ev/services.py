@@ -93,6 +93,13 @@ def _only_or_single_sid(sites: dict[int, dict]) -> int | None:
     return sids[0] if len(sids) == 1 else None
 
 
+def _raise_multiple_service_locations() -> None:
+    raise _service_validation_error(
+        "Multiple service locations detected. Provide 'service_location_id'.",
+        "multiple_service_locations",
+    )
+
+
 def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | None, int | None]:
     """Return (runtime, sid) based on optional config_entry_id + service_location_id.
 
@@ -129,9 +136,16 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
             return rt_for_sid, sid
         # sid unknown -> fall back to first runtime (invalid sid will be handled later)
 
-    rt = _first_runtime(hass)
-    if not rt:
+    loaded_entries = _iter_loaded_entries(hass)
+    if (
+        not isinstance(sid, int)
+        and sum(len(entry.runtime_data.sites or {}) for entry in loaded_entries) > 1
+    ):
+        _raise_multiple_service_locations()
+
+    if not loaded_entries:
         return None, None
+    rt = loaded_entries[0].runtime_data
     if isinstance(sid, int):
         return (rt, sid if sid in rt.sites else None)
     return rt, _only_or_single_sid(rt.sites)
@@ -248,10 +262,7 @@ async def async_handle_station_service(
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
     if rt and sid is None and len(rt.sites) > 1:
-        raise _service_validation_error(
-            "Multiple service locations detected. Provide 'service_location_id'.",
-            "multiple_service_locations",
-        )
+        _raise_multiple_service_locations()
     client = get_station_client(rt, sid)
     if not client:
         raise _service_validation_error(
@@ -288,10 +299,7 @@ async def async_handle_connector_service(
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
     if rt and sid is None and len(rt.sites) > 1:
-        raise _service_validation_error(
-            "Multiple service locations detected. Provide 'service_location_id'.",
-            "multiple_service_locations",
-        )
+        _raise_multiple_service_locations()
     connector_id = call.data.get("connector_id")
     client = get_connector_client(rt, sid, connector_id)
     if not client:
