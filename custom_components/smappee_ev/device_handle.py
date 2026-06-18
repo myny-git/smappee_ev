@@ -7,6 +7,8 @@ from typing import Any
 
 import aiohttp
 
+from .helpers import anonymize_uuid
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -43,11 +45,11 @@ class SmappeeDeviceHandle:
         # All dynamic values live in Coordinator/ConnectorState.
         self._callbacks: set[Callable[..., Any]] = set()  # kept for future hook use
 
-        _LOGGER.info(
+        _LOGGER.debug(
             "SmappeeDeviceHandle initialized "
             "(serial=%s, charging_station_serial=%s, connector=%s, station=%s)",
-            self.serial,
-            self.charging_station_serial,
+            anonymize_uuid(self.serial),
+            anonymize_uuid(self.charging_station_serial),
             self.connector_number,
             self.is_station,
         )
@@ -180,9 +182,9 @@ class SmappeeDeviceHandle:
         """Set charging mode via Dashboard v10.
 
         This matches the Smappee app mode buttons exactly:
-        - Standard button → setchargingmode = {"mode":"STANDARD"}  --> also matches the "resume" action when paused
-        - Smart button    → setchargingmode = {"mode":"SMART"}
-        - Solar button    → setchargingmode = {"mode":"SOLAR"}
+        - Standard button -> setchargingmode = {"mode":"STANDARD"}; also matches resume when paused
+        - Smart button    -> setchargingmode = {"mode":"SMART"}
+        - Solar button    -> setchargingmode = {"mode":"SOLAR"}
 
         No current/percentage limit is used here; use set_percentage_limit for speed control.
         """
@@ -257,7 +259,7 @@ class SmappeeDeviceHandle:
         """Set charging current in Ampere (1 decimal precision).
 
         Converts the requested current to the nearest integer percentage of the
-        configured min–max range and delegates to set_percentage_limit.
+        configured min-max range and delegates to set_percentage_limit.
         Returns (current_amps_float, percentage) so the caller can update
         ConnectorState immediately without waiting for the next poll.
         """
@@ -269,7 +271,7 @@ class SmappeeDeviceHandle:
             pct = int(round((val - min_current) / float(rng) * 100))
             pct = max(0, min(100, pct))
         _LOGGER.debug(
-            "set_current: %.1f A → %d%% (range %s–%s A)",
+            "set_current: %.1f A -> %d%% (range %s-%s A)",
             current,
             pct,
             min_current,

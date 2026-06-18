@@ -136,6 +136,7 @@ def make_connector_device_info(
 ) -> DeviceInfo:
     """Return Home Assistant device_info for a connector."""
     label = connector_label or connector_key
+    base = station_name or f"{MANUFACTURER} EV {charging_station_serial}"
     return cast(
         DeviceInfo,
         {
@@ -144,7 +145,7 @@ def make_connector_device_info(
                     site_sid, control_sid, charging_station_serial, connector_key
                 )
             },
-            "name": f"{station_name} | Connector {label}",
+            "name": f"{base} | Connector {label}",
             "manufacturer": MANUFACTURER,
             "configuration_url": CONFIGURATION_URL,
             "model": "Connector",

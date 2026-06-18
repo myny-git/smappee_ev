@@ -25,7 +25,8 @@
     },
     "error": {
       "auth_failed": "Authenticatie mislukt",
-      "cannot_connect": "Kan geen verbinding maken"
+      "cannot_connect": "Kan geen verbinding maken",
+      "unknown": "Onverwachte respons van Smappee Dashboard"
     }
   },
   "exceptions": {

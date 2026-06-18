@@ -25,7 +25,8 @@
     },
     "error": {
       "auth_failed": "Autorisation échouée",
-      "cannot_connect": "Connexion impossible"
+      "cannot_connect": "Connexion impossible",
+      "unknown": "Réponse inattendue du Smappee Dashboard"
     }
   },
   "exceptions": {

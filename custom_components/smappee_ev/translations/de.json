@@ -25,7 +25,8 @@
     },
     "error": {
       "auth_failed": "Autorisierung fehlgeschlagen",
-      "cannot_connect": "Verbindung fehlgeschlagen"
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "unknown": "Unerwartete Antwort vom Smappee Dashboard"
     }
   },
   "exceptions": {

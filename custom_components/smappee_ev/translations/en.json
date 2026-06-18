@@ -25,7 +25,8 @@
     },
     "error": {
       "auth_failed": "Authorization failed",
-      "cannot_connect": "Could not connect"
+      "cannot_connect": "Could not connect",
+      "unknown": "Unexpected response from Smappee Dashboard"
     }
   },
   "exceptions": {

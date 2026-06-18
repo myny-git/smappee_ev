@@ -108,7 +108,7 @@ async def test_current_slider_set_native_value(coordinator, api_client):
         station_uuid="station",
         connector_uuid="uuid",
     )
-    # Test normal range â€” mock returns (16.0, 50) simulating 50% of 6-32A range
+    # Test normal range - mock returns (16.0, 50) simulating 50% of 6-32A range
     state = slider._state()
     state.max_current = 32
     state.min_current = 6
@@ -119,7 +119,7 @@ async def test_current_slider_set_native_value(coordinator, api_client):
     assert state.selected_current_limit == 16.0
     assert state.selected_percentage_limit == 50
     coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
-    # Test fixed range â€” mock returns (6.0, 100) for 100% of fixed 6-6A range
+    # Test fixed range - mock returns (6.0, 100) for 100% of fixed 6-6A range
     coordinator.async_set_updated_data.reset_mock()
     state.max_current = 6
     state.min_current = 6

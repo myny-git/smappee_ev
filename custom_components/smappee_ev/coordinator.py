@@ -978,7 +978,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                     raise result
                 if isinstance(result, asyncio.CancelledError):
                     raise result
-                errors.append(f"load management {uuid}: {result}")
+                errors.append(f"load management {anonymize_uuid(uuid)}: {result}")
                 continue
             if isinstance(result, dict):
                 changed |= self._merge_dashboard_load_management(data.connectors[uuid], result)

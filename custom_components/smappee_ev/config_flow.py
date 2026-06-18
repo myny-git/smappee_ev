@@ -22,6 +22,9 @@ from .dashboard_client import SmappeeDashboardClient
 from .registry import async_remove_config_entry_registry_entries
 
 _LOGGER = logging.getLogger(__name__)
+ERROR_AUTH_FAILED = "auth_failed"
+ERROR_CANNOT_CONNECT = "cannot_connect"
+ERROR_UNKNOWN = "unknown"
 
 
 def _required_with_optional_default(key: str, defaults: Mapping[str, Any]) -> vol.Required:
@@ -44,8 +47,8 @@ def _credentials_schema(defaults: Mapping[str, Any] | None = None) -> vol.Schema
 
 async def _async_dashboard_auth_data(
     user_input: dict[str, Any], session: Any
-) -> dict[str, Any] | None:
-    """Authenticate against Dashboard and return config-entry data."""
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Authenticate against Dashboard and return config-entry data or a flow error."""
     dashboard_tokens: dict[str, object] = {}
     dashboard_client = SmappeeDashboardClient(
         username=user_input.get(CONF_USERNAME),
@@ -59,16 +62,27 @@ async def _async_dashboard_auth_data(
         if await dashboard_client.async_login():
             refresh_token = dashboard_tokens.get(CONF_DASHBOARD_REFRESH_TOKEN)
             if refresh_token:
-                return {
-                    CONF_USERNAME: user_input[CONF_USERNAME],
-                    CONF_PASSWORD: user_input[CONF_PASSWORD],
-                    CONF_DASHBOARD_REFRESH_TOKEN: refresh_token,
-                }
+                return (
+                    {
+                        CONF_USERNAME: user_input[CONF_USERNAME],
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                        CONF_DASHBOARD_REFRESH_TOKEN: refresh_token,
+                    },
+                    None,
+                )
+            _LOGGER.debug("Dashboard login response did not include a refresh token")
+            return None, ERROR_UNKNOWN
+        _LOGGER.debug("Dashboard login response did not include a usable access token")
+        return None, ERROR_UNKNOWN
     except ConfigEntryAuthFailed as err:
         _LOGGER.debug("Dashboard authentication rejected during setup: %s", err)
-    except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        return None, ERROR_AUTH_FAILED
+    except (aiohttp.ClientError, RuntimeError, TimeoutError) as err:
         _LOGGER.debug("Dashboard authentication unavailable during setup: %s", err)
-    return None
+        return None, ERROR_CANNOT_CONNECT
+    except (TypeError, ValueError) as err:
+        _LOGGER.debug("Dashboard authentication returned an unexpected response: %s", err)
+        return None, ERROR_UNKNOWN
 
 
 class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -95,13 +109,13 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(step_id=step_id, data_schema=data_schema)
 
         try:
-            data = await _async_dashboard_auth_data(user_input, session)
+            data, error = await _async_dashboard_auth_data(user_input, session)
         except Exception:
             _LOGGER.exception("Unexpected error during authentication")
-            errors["base"] = "cannot_connect"
+            errors["base"] = ERROR_UNKNOWN
             return self.async_show_form(step_id=step_id, data_schema=data_schema, errors=errors)
-        if data is None:
-            errors["base"] = "auth_failed"
+        if data is None or error is not None:
+            errors["base"] = error or ERROR_UNKNOWN
             return self.async_show_form(step_id=step_id, data_schema=data_schema, errors=errors)
 
         unique = f"smappee_ev:{user_input[CONF_USERNAME]}"
@@ -125,7 +139,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._abort_if_unique_id_configured()
 
-        return self.async_create_entry(title=f"Smappee EV — {user_input[CONF_USERNAME]}", data=data)
+        return self.async_create_entry(title=f"Smappee EV - {user_input[CONF_USERNAME]}", data=data)
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:  # type: ignore[override]
         """Begin re-authentication flow."""

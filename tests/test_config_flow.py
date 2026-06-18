@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import (
@@ -74,7 +75,7 @@ async def test_user_flow_success(hass):
         )
 
     assert result.get("type") == FlowResultType.CREATE_ENTRY
-    assert result.get("title") == "Smappee EV — test_user"
+    assert result.get("title") == "Smappee EV - test_user"
     data = result.get("data") or {}
     assert data == {
         CONF_USERNAME: "test_user",
@@ -91,7 +92,7 @@ async def test_user_flow_auth_failed(hass):
 
     with patch(
         "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
-        return_value=False,
+        side_effect=ConfigEntryAuthFailed("Dashboard credentials rejected"),
     ):
         result = await flow.async_step_user(
             {
@@ -105,7 +106,49 @@ async def test_user_flow_auth_failed(hass):
 
 
 @pytest.mark.asyncio
-async def test_user_flow_auth_unexpected_exception(hass):
+async def test_user_flow_cannot_connect_on_dashboard_api_failure(hass):
+    flow = SmappeeEvConfigFlow()
+    flow.hass = hass
+    flow.context = {}  # type: ignore[attr-defined]
+
+    with patch(
+        "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+        side_effect=RuntimeError("Dashboard login failed 503"),
+    ):
+        result = await flow.async_step_user(
+            {
+                CONF_USERNAME: "bad",
+                CONF_PASSWORD: "bad",
+            }
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    assert (result.get("errors") or {})["base"] == "cannot_connect"
+
+
+@pytest.mark.asyncio
+async def test_user_flow_unknown_on_unexpected_dashboard_response(hass):
+    flow = SmappeeEvConfigFlow()
+    flow.hass = hass
+    flow.context = {}  # type: ignore[attr-defined]
+
+    with patch(
+        "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+        return_value=False,
+    ):
+        result = await flow.async_step_user(
+            {
+                CONF_USERNAME: "bad",
+                CONF_PASSWORD: "bad",
+            }
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    assert (result.get("errors") or {})["base"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_user_flow_unknown_on_unexpected_exception(hass):
     flow = SmappeeEvConfigFlow()
     flow.hass = hass
     flow.context = {}  # type: ignore[attr-defined]
@@ -125,7 +168,7 @@ async def test_user_flow_auth_unexpected_exception(hass):
         )
 
     assert result.get("type") == FlowResultType.FORM
-    assert (result.get("errors") or {})["base"] == "cannot_connect"
+    assert (result.get("errors") or {})["base"] == "unknown"
     mock_exception.assert_called_once_with("Unexpected error during authentication")
 
 
@@ -282,7 +325,7 @@ async def test_reauth_flow_auth_failed(hass):
     with (
         patch(
             "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
-            return_value=False,
+            side_effect=ConfigEntryAuthFailed("Dashboard credentials rejected"),
         ),
         patch.object(hass.config_entries, "async_update_entry") as update_entry,
         patch.object(hass.config_entries, "async_schedule_reload") as schedule_reload,

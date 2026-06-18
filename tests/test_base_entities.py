@@ -64,6 +64,13 @@ def test_scoped_device_info_hierarchy():
     assert connector["via_device"] == (DOMAIN, "station:317418:317443:6230010364")
 
 
+def test_connector_device_info_uses_serial_fallback_without_station_name():
+    """Connector device names should not expose a missing station name as None."""
+    connector = make_connector_device_info(317418, 317443, "6230010364", "connector-uuid", "1")
+
+    assert connector["name"] == "Smappee EV 6230010364 | Connector 1"
+
+
 def test_station_serial_prefers_charging_station_serial():
     """Use the physical charger serial when the handle also has a gateway serial."""
     coordinator = SimpleNamespace(

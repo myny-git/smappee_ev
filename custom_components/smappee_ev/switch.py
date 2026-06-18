@@ -131,7 +131,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         """Set charging mode to STANDARD via the configured API path."""
         try:
             _LOGGER.debug(
-                "Charging switch ON â†’ STANDARD (sid=%s, uuid=%s)",
+                "Charging switch ON -> STANDARD (sid=%s, uuid=%s)",
                 self._sid,
                 anonymize_uuid(self.connector_uuid),
             )
@@ -148,7 +148,9 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         except asyncio.CancelledError:
             raise
         except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed, RuntimeError) as err:
-            _LOGGER.warning("Failed to start charging on %s: %s", self.connector_uuid, err)
+            _LOGGER.warning(
+                "Failed to start charging on %s: %s", anonymize_uuid(self.connector_uuid), err
+            )
             self.async_write_ha_state()
             raise
 
@@ -156,7 +158,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         """Pause charging via the configured API path."""
         try:
             _LOGGER.debug(
-                "Charging switch OFF â†’ pause (sid=%s, uuid=%s)",
+                "Charging switch OFF -> pause (sid=%s, uuid=%s)",
                 self._sid,
                 anonymize_uuid(self.connector_uuid),
             )
@@ -167,7 +169,9 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
         except asyncio.CancelledError:
             raise
         except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed, RuntimeError) as err:
-            _LOGGER.warning("Failed to pause charging on %s: %s", self.connector_uuid, err)
+            _LOGGER.warning(
+                "Failed to pause charging on %s: %s", anonymize_uuid(self.connector_uuid), err
+            )
             self.async_write_ha_state()
             raise
 

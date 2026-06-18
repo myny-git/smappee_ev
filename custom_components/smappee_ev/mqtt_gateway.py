@@ -221,7 +221,7 @@ class SmappeeMqtt:
                         self._log_mqtt_connection_transition(True)
                         self._notify_conn(True)
 
-                        # Success → reset backoff
+                        # Success -> reset backoff
                         backoff = MQTT_RECONNECT_INITIAL_BACKOFF
 
                         # (Re)subscribe all topics
@@ -407,7 +407,7 @@ class SmappeeMqtt:
             with suppress(TypeError, ValueError):
                 if isinstance(value, str):
                     value = int(value)
-            if not isinstance(value, (int, float)):
+            if not isinstance(value, int | float):
                 _LOGGER.debug(
                     "Heartbeat serviceLocationId not numeric (slu_id=%r); sending null", value
                 )

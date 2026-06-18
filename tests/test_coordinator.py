@@ -330,6 +330,22 @@ class TestSmappeeCoordinator:
             await coordinator._refresh_dashboard_load_management(coordinator.data)
 
     @pytest.mark.asyncio
+    async def test_dashboard_load_management_errors_mask_connector_uuid(self, coordinator):
+        """Load-management errors should not log raw connector UUIDs."""
+        dashboard = MagicMock()
+        dashboard.async_get_load_management = AsyncMock(side_effect=RuntimeError("boom"))
+        coordinator.dashboard_client = dashboard
+        coordinator.data.connectors["test_uuid"].dashboard_device_id = "device-1"
+
+        with patch("custom_components.smappee_ev.coordinator._LOGGER.warning") as warning:
+            changed = await coordinator._refresh_dashboard_load_management(coordinator.data)
+
+        assert not changed
+        message = warning.call_args.args[1]
+        assert "test****uuid" in message
+        assert "test_uuid" not in message
+
+    @pytest.mark.asyncio
     async def test_recent_session_refresh_is_throttled(self, coordinator, mock_connector_client):
         """Test recent session refresh cache and throttle."""
         mock_connector_client.async_get_recent_sessions.return_value = [{"energy": 1.2}]
