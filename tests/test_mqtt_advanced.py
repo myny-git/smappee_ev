@@ -153,10 +153,10 @@ async def test_subscriptions_and_message_parsing(monkeypatch):
     await stream.push(f"servicelocation/slu-1{MQTT_HEARTBEAT_TOPIC_SUFFIX}", hb_payload)
 
     await wait_until(
-        lambda: any(
-            d.get("power") == 100 and d.get("deviceUUID") == "dev-1" for _, d in topics_props
+        lambda: (
+            any(d.get("power") == 100 and d.get("deviceUUID") == "dev-1" for _, d in topics_props)
+            and any(t.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX) for t, _ in topics_props)
         )
-        and any(t.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX) for t, _ in topics_props)
     )
 
     # Stop
@@ -201,8 +201,10 @@ async def test_tracking_and_heartbeat_publish(monkeypatch):
     await mqtt.start()
 
     await wait_until(
-        lambda: any(t.endswith("/tracking") for t, _ in published)
-        and any(t.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX) for t, _ in published)
+        lambda: (
+            any(t.endswith("/tracking") for t, _ in published)
+            and any(t.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX) for t, _ in published)
+        )
     )
     await mqtt.stop()
 
