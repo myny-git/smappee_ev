@@ -13,6 +13,7 @@ from .const import DEFAULT_LED_BRIGHTNESS, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
+from .helpers import runtime_sites
 
 PARALLEL_UPDATES = 1
 
@@ -32,7 +33,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smappee EV light entities."""
     runtime = config_entry.runtime_data
-    sites = runtime.sites
+    sites = runtime_sites(runtime.sites)
 
     entities: list[LightEntity] = []
     for sid, site in (sites or {}).items():

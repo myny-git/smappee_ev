@@ -37,7 +37,6 @@ This custom integration unlocks **more control over your Smappee** charger and c
 - MQTT remains the live data source for power, current, energy and fast charger state.
 - Smappee Dashboard REST API v10/v11 is used for discovery, station details, charger configuration, capacity protection, overload protection, recent sessions and charger availability.
 - Dashboard v10/v11 calls are used for charging mode, start, pause, stop, percentage/current limit, LED brightness, min surplus percentage and availability.
-- Deprecated legacy service names are removed during setup when Home Assistant still has them registered from an older version.
 - Dashboard configuration data refreshes at most every 30 minutes, with a forced refresh shortly after supported dashboard writes.
 
 ### ✅ Charging Mode Control
@@ -50,7 +49,7 @@ This custom integration unlocks **more control over your Smappee** charger and c
 
 - Pause charging via **`smappee_ev.pause_charging`** (Dashboard v10 action)
 - Stop charging sessions from Home Assistant
-- Set fixed charging **currents** (in Amps)
+- Set fixed charging **currents** (in Amps, with one decimal step)
 - Change Wallbox availability (set available/unavailable)
 - Target a specific connector by selecting `service_location_id` and/or `connector_id`, which is especially useful in multi-station setups
 
@@ -124,7 +123,7 @@ All main UI controls (select, buttons, number slider, EVCC switch and LED light)
 
 This is the current version of the entities (for my EV Wall Home single connector)
 
-![Smappee EV entities overview](images/Sensors_sinceversion2026.6.5.png)
+![Smappee EV entities overview](images/Sensors_sinceversion2026.6.6.png)
 
 > ⚠️ **Note**  
 > The Smappee APP is sometimes not correct or responsive. Better to use the online Smappee Dashboard to check functionality.
@@ -195,7 +194,7 @@ I built this project because I own a **Smappee EV Wall Home** and wanted deeper 
 The goal is to offer reliable support for charging mode switching and eventually more smart charging controls.
 I am also looking into EVCC integration.
 
-Contributions, feedback, or bug reports are very welcome! I am not a programmer, but I'll do my best.  
+Contributions, feedback, or bug reports are very welcome! I am not a programmer, but I like it a lot.  
 If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)
 
 

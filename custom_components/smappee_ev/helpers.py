@@ -11,6 +11,11 @@ from homeassistant.helpers.entity import DeviceInfo
 from .const import CONFIGURATION_URL, DOMAIN, MANUFACTURER
 
 
+def runtime_sites(sites: Any) -> dict[Any, Any]:
+    """Return runtime sites only when they have the expected mapping shape."""
+    return sites if isinstance(sites, dict) else {}
+
+
 def site_device_identifier(site_sid: int | str) -> tuple[str, str]:
     """Return the registry identifier for a site/gateway device."""
     return (DOMAIN, f"site:{site_sid}")

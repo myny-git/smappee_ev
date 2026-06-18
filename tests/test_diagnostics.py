@@ -312,7 +312,20 @@ class TestDiagnostics:
             _client_id=secrets["username"],
             _serial=secrets["site_serial_number"],
             _slus=(secrets["serviceLocationUuid"],),
-            _mqtt_specs=(),
+            _mqtt_specs=(
+                SimpleNamespace(
+                    service_location_id=12345,
+                    role="grid",
+                    metric="activePower",
+                    topic=f"servicelocation/{secrets['serviceLocationUuid']}/power",
+                    username=secrets["username"],
+                    password=secrets["password"],
+                    aspect_paths=[
+                        f"station/{secrets['station_uuid']}",
+                        {"connector": f"device/{secrets['connector_uuid']}"},
+                    ],
+                ),
+            ),
         )
         runtime = make_runtime_data(
             api=SimpleNamespace(
@@ -372,3 +385,10 @@ class TestDiagnostics:
         assert diagnostics["sites_detail"][0]["serial"] == "SERI...3456"
         assert diagnostics["stations"][0]["station_uuid"] == "STAT...2468"
         assert diagnostics["connectors"][0]["connector_uuid"] == "CONN...1357"
+        spec = diagnostics["sites_detail"][0]["mqtt"]["specs"][0]
+        assert spec["username_present"] is True
+        assert spec["password_present"] is True
+        assert spec["aspect_paths"] == [
+            "station/**REDACTED**",
+            {"connector": "device/**REDACTED**"},
+        ]

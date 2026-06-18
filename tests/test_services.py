@@ -51,7 +51,7 @@ def mock_runtime_data(mock_api_client):
                 "station1": {
                     "station_client": mock_api_client,
                     "connector_clients": {
-                        1: mock_api_client  # Use integer key for connector_id
+                        "connector_uuid_1": mock_api_client,
                     },
                 }
             }
@@ -207,8 +207,8 @@ class TestServiceHelpers:
         assert rt is other_runtime
         assert sid == 67890
 
-    def test_resolve_sid_unknown_sid_returns_first_runtime_without_sid(
-        self, mock_hass_with_entries, mock_runtime_data
+    def test_resolve_sid_unknown_sid_raises_service_location_not_found(
+        self, mock_hass_with_entries
     ):
         call = ServiceCall(
             domain="smappee_ev",
@@ -217,10 +217,8 @@ class TestServiceHelpers:
             hass=mock_hass_with_entries,
         )
 
-        rt, sid = services._resolve_sid(mock_hass_with_entries, call)
-
-        assert rt is mock_runtime_data
-        assert sid is None
+        with pytest.raises(ServiceValidationError, match="was not found"):
+            services._resolve_sid(mock_hass_with_entries, call)
 
     def test_get_station_client(self, mock_runtime_data, mock_api_client):
         """Test getting station client."""
@@ -632,7 +630,7 @@ class TestServiceHandlers:
             data={"service_location_id": 99999},
             hass=mock_hass_with_entries,
         )
-        with pytest.raises(ServiceValidationError, match="No station client"):
+        with pytest.raises(ServiceValidationError, match="was not found"):
             await services.async_handle_station_service(
                 mock_hass_with_entries, call, "pause_charging"
             )

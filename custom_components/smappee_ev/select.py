@@ -10,6 +10,7 @@ from .const import CHARGING_MODES, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
+from .helpers import runtime_sites
 
 PARALLEL_UPDATES = 1
 MODES = [mode.lower() for mode in CHARGING_MODES]
@@ -29,7 +30,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     runtime = config_entry.runtime_data
-    sites = runtime.sites
+    sites = runtime_sites(runtime.sites)
 
     entities: list[SelectEntity] = []
     for sid, site in (sites or {}).items():

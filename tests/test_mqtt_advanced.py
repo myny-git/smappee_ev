@@ -4,24 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-import inspect
 import json
 from typing import Any
 
 import pytest
 
 from custom_components.smappee_ev.mqtt_gateway import MQTT_HEARTBEAT_TOPIC_SUFFIX, SmappeeMqtt
-
-
-async def wait_until(condition, *, timeout_seconds=2.0, interval=0.01):
-    async with asyncio.timeout(timeout_seconds):
-        while True:
-            result = condition()
-            if inspect.isawaitable(result):
-                result = await result
-            if result:
-                return
-            await asyncio.sleep(interval)
+from tests.helpers import wait_until
 
 
 class FakeMsg:

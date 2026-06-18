@@ -506,9 +506,6 @@ class TestPlatformErrors:
 
         async_add_entities = MagicMock()
 
-        # Should handle corrupted data gracefully by raising an error
-        with pytest.raises(AttributeError):
-            await button.async_setup_entry(hass, entry, async_add_entities)
+        await button.async_setup_entry(hass, entry, async_add_entities)
 
-        # async_add_entities should not be called when there's an error
-        async_add_entities.assert_not_called()
+        async_add_entities.assert_called_once_with([], False)

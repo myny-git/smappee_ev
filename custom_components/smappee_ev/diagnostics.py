@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from .data import RuntimeData, SmappeeEvConfigEntry
+from .helpers import runtime_sites
 
 REDACT_KEYS = {
     "access_token",
@@ -85,12 +86,65 @@ def _redact_text_values(text: object, values: list[object]) -> object:
     return redacted
 
 
+def _redact_nested_text_values(value: object, values: list[object]) -> object:
+    """Redact known sensitive values in nested JSON-ish diagnostics data."""
+    if isinstance(value, str):
+        return _redact_text_values(value, values)
+    if isinstance(value, list):
+        return [_redact_nested_text_values(item, values) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_nested_text_values(item, values) for item in value]
+    if isinstance(value, dict):
+        return {key: _redact_nested_text_values(item, values) for key, item in value.items()}
+    return value
+
+
 def _entry_sensitive_values(entry: SmappeeEvConfigEntry) -> list[object]:
     values: list[object] = []
     for source in (getattr(entry, "data", {}), getattr(entry, "options", {})):
         for key, value in dict(source).items():
             if key in REDACT_KEYS:
                 values.append(value)
+    return values
+
+
+def _runtime_sensitive_values(rt: RuntimeData | None) -> list[object]:
+    """Collect runtime identifiers that may be embedded in free-text fields."""
+    values: list[object] = []
+    if rt is None:
+        return values
+    sites = runtime_sites(getattr(rt, "sites", {}))
+    for site_id, site in sites.items():
+        values.append(site_id)
+        if not isinstance(site, dict):
+            continue
+        values.extend(
+            [
+                site.get("serviceLocationUuid"),
+                site.get("site_uuid"),
+                site.get("deviceSerialNumber"),
+                site.get("gateway_serial"),
+            ]
+        )
+        for station_uuid, bucket in (site.get("stations") or {}).items():
+            values.append(station_uuid)
+            if not isinstance(bucket, dict):
+                continue
+            connector_clients = bucket.get("connector_clients") or {}
+            clients = [bucket.get("station_client"), *connector_clients.values()]
+            for client in clients:
+                values.extend(
+                    getattr(client, attr, None)
+                    for attr in (
+                        "serial",
+                        "serial_id",
+                        "charging_station_serial",
+                        "smart_device_uuid",
+                        "smart_device_id",
+                        "dashboard_device_id",
+                    )
+                )
+            values.extend(connector_clients.keys())
     return values
 
 
@@ -116,8 +170,12 @@ def _handle_info(client: object | None) -> dict[str, Any]:
     }
 
 
-def _mqtt_info(mqtt_obj: object | None) -> dict[str, Any]:
+def _mqtt_info(
+    mqtt_obj: object | None,
+    sensitive_values: list[object] | None = None,
+) -> dict[str, Any]:
     """Return redacted MQTT client configuration details."""
+    sensitive_values = sensitive_values or []
     if mqtt_obj is None:
         return {"configured": False}
     if isinstance(mqtt_obj, list | tuple):
@@ -125,7 +183,7 @@ def _mqtt_info(mqtt_obj: object | None) -> dict[str, Any]:
         return {
             "configured": bool(clients),
             "client_count": len(clients),
-            "clients": [_mqtt_info(client) for client in clients],
+            "clients": [_mqtt_info(client, sensitive_values) for client in clients],
         }
     specs = getattr(mqtt_obj, "_mqtt_specs", None) or []
     return {
@@ -145,7 +203,10 @@ def _mqtt_info(mqtt_obj: object | None) -> dict[str, Any]:
                 "username_present": bool(getattr(spec, "username", None)),
                 "password_present": bool(getattr(spec, "password", None)),
                 "aspect_path_count": _safe_len(getattr(spec, "aspect_paths", None)),
-                "aspect_paths": getattr(spec, "aspect_paths", None) or [],
+                "aspect_paths": _redact_nested_text_values(
+                    getattr(spec, "aspect_paths", None) or [],
+                    sensitive_values,
+                ),
             }
             for spec in specs
         ],
@@ -191,7 +252,8 @@ async def async_get_config_entry_diagnostics(
     out: dict[str, Any] = {}
 
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
-    sites = getattr(rt, "sites", {}) if rt else {}
+    sites = runtime_sites(getattr(rt, "sites", {}) if rt else {})
+    sensitive_values = _entry_sensitive_values(entry) + _runtime_sensitive_values(rt)
     # Stable ordering for diffs / logs
     out["sites"] = sorted(sites.keys(), key=_sort_as_text)
 
@@ -215,7 +277,7 @@ async def async_get_config_entry_diagnostics(
 
     out["meta"] = {
         "entry_id": entry.entry_id,
-        "title": _redact_text_values(entry.title, _entry_sensitive_values(entry)),
+        "title": _redact_text_values(entry.title, sensitive_values),
         "state": state_name,
         "domain": entry.domain,
         "version_manifest": manifest_version,
@@ -264,7 +326,7 @@ async def async_get_config_entry_diagnostics(
                 "connector_count": connector_count,
                 "mqtt_configured": mqtt_obj is not None,
                 "mqtt_connected_any": mqtt_connected_any,
-                "mqtt": _mqtt_info(mqtt_obj),
+                "mqtt": _mqtt_info(mqtt_obj, sensitive_values),
             }
         )
         # per-station and connectors inside same site loop

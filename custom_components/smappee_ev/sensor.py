@@ -28,7 +28,7 @@ from .base_entities import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, S
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import format_as_hms, safe_sum, update_total_increasing
+from .helpers import format_as_hms, runtime_sites, safe_sum, update_total_increasing
 
 PARALLEL_UPDATES = 0
 
@@ -40,9 +40,7 @@ async def async_setup_entry(
 ) -> None:
     # Access runtime data directly (preferred over hass.data lookups)
     runtime = config_entry.runtime_data
-    sites = (
-        runtime.sites
-    )  # { sid: { "stations": { st_uuid: {coordinator, station_client, connector_clients} } } }
+    sites = runtime_sites(runtime.sites)
 
     entities: list[SensorEntity] = []
 

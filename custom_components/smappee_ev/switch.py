@@ -18,7 +18,7 @@ from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
-from .helpers import anonymize_uuid
+from .helpers import anonymize_uuid, runtime_sites
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -34,7 +34,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smappee EV switches (multi-station)."""
     runtime = config_entry.runtime_data
-    sites = runtime.sites
+    sites = runtime_sites(runtime.sites)
 
     entities: list[SwitchEntity] = []
     for sid, site in (sites or {}).items():

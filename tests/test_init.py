@@ -624,15 +624,24 @@ class TestDomainSetup:
 
     @pytest.mark.asyncio
     async def test_async_setup_entry_success(self, hass, mock_config_entry, mock_session):
-        """Test successful config entry setup."""
+        """Test successful setup builds the expected site-first runtime shape."""
         session, response = mock_session
 
-        # Mock station and MQTT client
+        site_coordinator = MagicMock()
+        station_coordinator = MagicMock()
+        station_client = MagicMock()
+        connector_1 = MagicMock()
+        connector_2 = MagicMock()
         stations = {
             "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {"connector1": MagicMock()},
-                "coordinator": MagicMock(),
+                "station_client": station_client,
+                "connector_clients": {
+                    "connector1": connector_1,
+                    "connector2": connector_2,
+                },
+                "coordinator": station_coordinator,
+                "site_coordinator": site_coordinator,
+                "highlevel_configs": {12345: {"channels": []}},
                 "mqtt": None,
             }
         }
@@ -652,22 +661,37 @@ class TestDomainSetup:
                 hass.config_entries, "async_forward_entry_setups", return_value=None
             ) as mock_setup,
         ):
-            # Call setup entry
             result = await async_setup_entry(hass, mock_config_entry)
 
-            # Verify success
             assert result is True
 
-            # Verify platforms were set up
-            mock_setup.assert_called_once()
+            mock_setup.assert_awaited_once()
+            assert mock_setup.await_args.args[0] is mock_config_entry
 
-            # Verify runtime data was stored
             assert hasattr(mock_config_entry, "runtime_data")
             runtime = mock_config_entry.runtime_data
             assert isinstance(runtime, RuntimeData)
-            assert runtime.sites[12345]["name"] == "Home"
             assert 12345 in runtime.mqtt
             assert runtime.mqtt[12345] == mqtt_client
+            assert runtime.mqtt == {12345: mqtt_client}
+            assert runtime.dashboard is runtime.api
+
+            site = runtime.sites[12345]
+            assert site["name"] == "Home"
+            assert site["site_name"] == "Home"
+            assert site["site_coordinator"] is site_coordinator
+            assert site["serviceLocationUuid"] == "sl_uuid_1"
+            assert site["controlLocationIds"] == [12345]
+            assert site["measurementLocationIds"] == [12345]
+            assert site["highlevel_configs"] == {12345: {"channels": []}}
+
+            station_bucket = site["stations"]["station1_uuid"]
+            assert station_bucket["station_client"] is station_client
+            assert station_bucket["coordinator"] is station_coordinator
+            assert station_bucket["connector_clients"] == {
+                "connector1": connector_1,
+                "connector2": connector_2,
+            }
 
     @pytest.mark.asyncio
     async def test_async_setup_entry_token_update_preserves_password(

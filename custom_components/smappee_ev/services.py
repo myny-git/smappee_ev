@@ -100,6 +100,14 @@ def _raise_multiple_service_locations() -> None:
     )
 
 
+def _raise_service_location_not_found(sid: int) -> None:
+    raise _service_validation_error(
+        f"service_location_id {sid} was not found in any loaded Smappee EV config entry",
+        "service_location_not_found",
+        service_location_id=sid,
+    )
+
+
 def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | None, int | None]:
     """Return (runtime, sid) based on optional config_entry_id + service_location_id.
 
@@ -134,7 +142,7 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
         rt_for_sid = _find_runtime_for_sid(hass, sid)
         if rt_for_sid:
             return rt_for_sid, sid
-        # sid unknown -> fall back to first runtime (invalid sid will be handled later)
+        _raise_service_location_not_found(sid)
 
     loaded_entries = _iter_loaded_entries(hass)
     if (

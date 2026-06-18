@@ -8,7 +8,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base_entities import SmappeeSiteEntity
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .data import SmappeeEvConfigEntry
-from .helpers import station_serial
+from .helpers import runtime_sites, station_serial
 
 PARALLEL_UPDATES = 0
 
@@ -23,7 +23,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     runtime = config_entry.runtime_data
-    sites = runtime.sites
+    sites = runtime_sites(runtime.sites)
 
     entities: list[SmappeeMqttConnectivity] = []
     for sid, site in (sites or {}).items():
