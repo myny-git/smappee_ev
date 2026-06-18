@@ -1,5 +1,5 @@
 # tests/test_services.py
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import ServiceCall
@@ -8,13 +8,15 @@ import pytest
 import voluptuous as vol
 
 from custom_components.smappee_ev import services
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
-    RuntimeData,
-    StationState,
-)
+from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from tests.factories import (
+    configure_loaded_entries,
+    make_connector_client,
+    make_loaded_config_entry,
+    make_runtime_data,
+    make_runtime_for_connector,
+)
 
 
 @pytest.fixture
@@ -31,104 +33,13 @@ def mock_hass():
 @pytest.fixture
 def mock_config_entry():
     """Create a mock ConfigEntry."""
-    entry = MagicMock()
-    entry.entry_id = "test_entry_id"
-    entry.state = ConfigEntryState.LOADED
-    entry.domain = "smappee_ev"
-    return entry
+    return make_loaded_config_entry()
 
 
 @pytest.fixture
 def mock_api_client():
     """Create a mock SmappeeDeviceHandle."""
-    client = MagicMock(spec=SmappeeDeviceHandle)
-    client.service_location_id = 12345
-    client.connector_number = 1
-    client.charging_station_serial = "SERIAL_A"
-    client.serial = "SERIAL_A"
-    client.smart_device_uuid = "connector_uuid_1"
-    client.min_current = 6
-    client.max_current = 32
-    client.start_charging = AsyncMock()
-    client.pause_charging = AsyncMock()
-    client.stop_charging = AsyncMock()
-    client.set_charging_mode = AsyncMock()
-    client.set_current = AsyncMock()
-    return client
-
-
-def make_connector_client(
-    *, service_location_id: int, connector_number: int, smart_device_uuid: str
-):
-    """Create a connector client mock with the service methods used by handlers."""
-    client = MagicMock(spec=SmappeeDeviceHandle)
-    client.service_location_id = service_location_id
-    client.connector_number = connector_number
-    client.charging_station_serial = f"SERIAL_{service_location_id}"
-    client.serial = f"SERIAL_{service_location_id}"
-    client.smart_device_uuid = smart_device_uuid
-    client.min_current = 6
-    client.max_current = 32
-    client.start_charging = AsyncMock()
-    client.pause_charging = AsyncMock()
-    client.stop_charging = AsyncMock()
-    client.set_charging_mode = AsyncMock()
-    client.set_current = AsyncMock()
-    return client
-
-
-def make_runtime_for_connector(site_id: int, connector_client) -> RuntimeData:
-    """Create a one-site runtime containing a single connector client."""
-    station_uuid = f"station_{site_id}"
-    connector_uuid = connector_client.smart_device_uuid
-    coord = MagicMock()
-    coord.data = IntegrationData(
-        station=StationState(),
-        connectors={
-            connector_uuid: ConnectorState(
-                connector_number=connector_client.connector_number,
-                min_current=connector_client.min_current,
-                max_current=connector_client.max_current,
-            )
-        },
-    )
-    return RuntimeData(
-        api=connector_client,
-        sites={
-            site_id: {
-                "stations": {
-                    station_uuid: {
-                        "coordinator": coord,
-                        "station_client": MagicMock(),
-                        "connector_clients": {connector_uuid: connector_client},
-                    }
-                }
-            }
-        },
-        mqtt={},
-    )
-
-
-def make_loaded_entry(entry_id: str, runtime: RuntimeData):
-    """Create a loaded config entry mock with runtime data."""
-    entry = MagicMock()
-    entry.entry_id = entry_id
-    entry.state = ConfigEntryState.LOADED
-    entry.domain = "smappee_ev"
-    entry.runtime_data = runtime
-    return entry
-
-
-def configure_loaded_entries(hass, entries):
-    hass.config_entries.async_entries.return_value = entries
-
-    def get_entry_by_id(entry_id):
-        for entry in entries:
-            if entry.entry_id == entry_id:
-                return entry
-        return None
-
-    hass.config_entries.async_get_entry = get_entry_by_id
+    return make_connector_client(serial="SERIAL_A")
 
 
 @pytest.fixture
@@ -146,7 +57,7 @@ def mock_runtime_data(mock_api_client):
             }
         }
     }
-    return RuntimeData(api=mock_api_client, sites=sites, mqtt=MagicMock())
+    return make_runtime_data(api=mock_api_client, sites=sites, mqtt=MagicMock())
 
 
 @pytest.fixture
@@ -277,15 +188,12 @@ class TestServiceHelpers:
     def test_resolve_sid_uses_runtime_containing_requested_sid(
         self, mock_hass, mock_loaded_entries, mock_api_client
     ):
-        other_runtime = RuntimeData(
+        other_runtime = make_runtime_data(
             api=mock_api_client,
             sites={67890: {"stations": {}}},
             mqtt=MagicMock(),
         )
-        other_entry = MagicMock()
-        other_entry.entry_id = "other"
-        other_entry.state = ConfigEntryState.LOADED
-        other_entry.runtime_data = other_runtime
+        other_entry = make_loaded_config_entry("other", other_runtime)
         mock_hass.config_entries.async_entries.return_value = [mock_loaded_entries[0], other_entry]
         call = ServiceCall(
             domain="smappee_ev",
@@ -370,7 +278,7 @@ class TestServiceHelpers:
             station=StationState(),
             connectors={"uuid": ConnectorState(connector_number=1, min_current=10, max_current=6)},
         )
-        runtime = RuntimeData(
+        runtime = make_runtime_data(
             api=mock_api_client,
             sites={12345: {"stations": {"station1": {"coordinator": coord}}}},
             mqtt=MagicMock(),
@@ -383,7 +291,7 @@ class TestServiceHelpers:
         assert services._connector_current_range(None, mock_api_client) == (6, 32)
 
         mock_api_client.smart_device_uuid = None
-        runtime = RuntimeData(
+        runtime = make_runtime_data(
             api=mock_api_client, sites={12345: {"stations": {}}}, mqtt=MagicMock()
         )
         assert services._connector_current_range(runtime, mock_api_client) == (6, 32)
@@ -580,8 +488,8 @@ class TestServiceHandlers:
             smart_device_uuid="connector-site-b",
         )
         entries = [
-            make_loaded_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
-            make_loaded_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
+            make_loaded_config_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
+            make_loaded_config_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
         ]
         configure_loaded_entries(mock_hass, entries)
         call = ServiceCall(
@@ -611,8 +519,8 @@ class TestServiceHandlers:
             smart_device_uuid="connector-site-b",
         )
         entries = [
-            make_loaded_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
-            make_loaded_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
+            make_loaded_config_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
+            make_loaded_config_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
         ]
         configure_loaded_entries(mock_hass, entries)
         call = ServiceCall(
@@ -643,8 +551,8 @@ class TestServiceHandlers:
             smart_device_uuid="connector-site-b",
         )
         entries = [
-            make_loaded_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
-            make_loaded_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
+            make_loaded_config_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
+            make_loaded_config_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
         ]
         configure_loaded_entries(mock_hass, entries)
         call = ServiceCall(
@@ -832,6 +740,44 @@ class TestServiceHandlers:
         )
         with pytest.raises(ServiceValidationError, match="out of range"):
             await services.handle_set_current(out_of_range_call)
+
+    @pytest.mark.asyncio
+    async def test_handle_set_current_refreshes_only_owning_coordinator(self, mock_hass):
+        """A connector write must refresh only the station that owns that connector."""
+        site_a_client = make_connector_client(
+            service_location_id=11111,
+            connector_number=1,
+            smart_device_uuid="connector-site-a",
+        )
+        site_b_client = make_connector_client(
+            service_location_id=22222,
+            connector_number=1,
+            smart_device_uuid="connector-site-b",
+        )
+        runtime_a = make_runtime_for_connector(11111, site_a_client)
+        runtime_b = make_runtime_for_connector(22222, site_b_client)
+        coord_a = next(iter(runtime_a.sites[11111]["stations"].values()))["coordinator"]
+        coord_b = next(iter(runtime_b.sites[22222]["stations"].values()))["coordinator"]
+        entries = [
+            make_loaded_config_entry("entry_a", runtime_a),
+            make_loaded_config_entry("entry_b", runtime_b),
+        ]
+        configure_loaded_entries(mock_hass, entries)
+        call = ServiceCall(
+            domain="smappee_ev",
+            service="set_current",
+            data={"config_entry_id": "entry_a", "connector_id": 1, "current": 17},
+            hass=mock_hass,
+        )
+
+        await services.handle_set_current(call)
+
+        site_a_client.set_current.assert_awaited_once_with(
+            current=17.0, min_current=6, max_current=32
+        )
+        coord_a.async_schedule_dashboard_refresh.assert_called_once()
+        coord_b.async_schedule_dashboard_refresh.assert_not_called()
+        site_b_client.set_current.assert_not_called()
 
 
 class TestServiceRegistration:

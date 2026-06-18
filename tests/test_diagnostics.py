@@ -4,16 +4,11 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from homeassistant.config_entries import ConfigEntry
 import pytest
 
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
-    RuntimeData,
-    StationState,
-)
+from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.diagnostics import REDACT_KEYS, async_get_config_entry_diagnostics
+from tests.factories import make_config_entry, make_runtime_data, make_site, make_station_bucket
 
 
 @pytest.fixture
@@ -27,31 +22,24 @@ def mock_integration():
 @pytest.fixture
 def mock_runtime_data():
     """Create mock runtime data with sites, mqtt, etc."""
-    runtime = MagicMock(spec=RuntimeData)
-
-    # Create mock sites
-    runtime.sites = {
-        12345: {
-            "name": "Test Site",
-            "serviceLocationUuid": "test-uuid",
-            "deviceSerialNumber": "SERIAL123",
-            "stations": {
-                "station-uuid-1": {
-                    "coordinator": MagicMock(),
-                    "station_client": MagicMock(serial_id="STATION001"),
-                    "connector_clients": {
-                        "connector-uuid-1": MagicMock(),
-                        "connector-uuid-2": MagicMock(),
-                    },
+    runtime = make_runtime_data(
+        api=None,
+        sites={
+            12345: make_site(
+                stations={
+                    "station-uuid-1": make_station_bucket(
+                        coordinator=MagicMock(),
+                        station_client=MagicMock(serial_id="STATION001"),
+                        connector_clients={
+                            "connector-uuid-1": MagicMock(),
+                            "connector-uuid-2": MagicMock(),
+                        },
+                    )
                 }
-            },
-        }
-    }
-
-    # Add mock MQTT client
-    runtime.mqtt = {12345: MagicMock()}
-    runtime.dashboard = None
-    runtime.api = None
+            )
+        },
+        mqtt={12345: MagicMock()},
+    )
 
     # Configure coordinator data
     station_data = MagicMock()
@@ -89,8 +77,7 @@ def mock_runtime_data():
 @pytest.fixture
 def mock_config_entry(mock_runtime_data):
     """Create mock config entry with runtime data."""
-    entry = MagicMock(spec=ConfigEntry)
-    entry.runtime_data = mock_runtime_data
+    entry = make_config_entry(runtime_data=mock_runtime_data)
     entry.data = {
         "username": "test_user",
         "password": "test_password",
@@ -217,8 +204,7 @@ class TestDiagnostics:
     @pytest.mark.asyncio
     async def test_diagnostics_with_empty_runtime(self, hass):
         """Test diagnostics with empty or missing runtime data."""
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = None
+        entry = make_config_entry(runtime_data=None)
         entry.data = {"username": "test_user"}
         entry.options = {}
         entry.entry_id = "entry_id_123"
@@ -248,7 +234,7 @@ class TestDiagnostics:
     @pytest.mark.asyncio
     async def test_diagnostics_with_partial_data(self, hass, mock_runtime_data):
         """Test diagnostics with partial station/connector data."""
-        entry = MagicMock(spec=ConfigEntry)
+        entry = make_config_entry()
 
         # Create runtime with incomplete data
         runtime = mock_runtime_data
@@ -328,7 +314,7 @@ class TestDiagnostics:
             _slus=(secrets["serviceLocationUuid"],),
             _mqtt_specs=(),
         )
-        runtime = RuntimeData(
+        runtime = make_runtime_data(
             api=SimpleNamespace(
                 username=secrets["username"],
                 password=secrets["password"],
@@ -354,8 +340,7 @@ class TestDiagnostics:
             },
             mqtt={12345: mqtt_client},
         )
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = runtime
+        entry = make_config_entry(runtime_data=runtime)
         entry.data = {
             "username": secrets["username"],
             "password": secrets["password"],

@@ -401,6 +401,42 @@ class TestMqttSetup:
             # Verify coordinator handles the connection state
             mock_coordinator.apply_mqtt_connection_change.assert_called_once_with(False)
 
+    @pytest.mark.asyncio
+    async def test_mqtt_disconnect_during_shutdown_skips_fallback_refresh(self, hass):
+        """Test disconnect fallback polling does not schedule work while shutting down."""
+        mock_coordinator = MagicMock(spec=SmappeeCoordinator)
+        mock_coordinator.update_interval = None
+        mock_coordinator._shutting_down = True
+        mock_coordinator.async_request_refresh = AsyncMock()
+        mock_coordinator.apply_mqtt_connection_change = MagicMock()
+        stations = {"station1_uuid": {"coordinator": mock_coordinator, "mqtt": None}}
+        background_tasks = set()
+
+        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+            mock_mqtt = MagicMock(spec=SmappeeMqtt)
+            mock_mqtt.start = AsyncMock()
+            mock_mqtt_class.return_value = mock_mqtt
+
+            _setup_mqtt(
+                hass,
+                "test-service-uuid",
+                "STATION-SERIAL",
+                12345,
+                stations,
+                "client-prefix",
+                UPDATE_INTERVAL_DEFAULT,
+                background_tasks=background_tasks,
+            )
+            await hass.async_block_till_done()
+
+            on_conn_callback = mock_mqtt_class.call_args.kwargs["on_connection_change"]
+            on_conn_callback(False)
+
+        assert mock_coordinator.update_interval == timedelta(seconds=UPDATE_INTERVAL_DEFAULT)
+        mock_coordinator.async_request_refresh.assert_not_called()
+        mock_coordinator.apply_mqtt_connection_change.assert_called_once_with(False)
+        assert background_tasks == set()
+
 
 class TestPrepareSite:
     """Test site preparation functions."""

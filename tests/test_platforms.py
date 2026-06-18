@@ -1,15 +1,15 @@
 # tests/test_platforms.py
-import contextlib
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 import pytest
 
-from custom_components.smappee_ev import button, light, sensor
+from custom_components.smappee_ev import button, light, sensor, switch
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.data import (
     IntegrationData,
@@ -18,8 +18,25 @@ from custom_components.smappee_ev.data import (
     SiteState,
     StationState,
 )
+from custom_components.smappee_ev.helpers import (
+    build_connector_label,
+    connector_device_identifier,
+    led_device_identifier,
+    make_device_info,
+    make_unique_id,
+    station_device_identifier,
+)
 from custom_components.smappee_ev.light import SmappeeLedLight
 from custom_components.smappee_ev.sensor import ConnectorPowerSensor, StationGridPower
+from tests.factories import (
+    make_config_entry,
+    make_connector_client,
+    make_runtime_data,
+    make_site,
+    make_station_bucket,
+    make_station_client,
+    make_station_coordinator,
+)
 
 
 @pytest.fixture
@@ -56,11 +73,7 @@ class TestButtonPlatform:
         """Test button platform setup."""
         async_add_entities = MagicMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            await button.async_setup_entry(hass, mock_config_entry, async_add_entities)
+        await button.async_setup_entry(hass, mock_config_entry, async_add_entities)
 
         # Verify entities were added
         async_add_entities.assert_called_once()
@@ -109,17 +122,7 @@ class TestSensorPlatform:
         """Test sensor platform setup."""
         async_add_entities = MagicMock()
 
-        with (
-            patch(
-                "custom_components.smappee_ev.helpers.make_unique_id",
-                return_value="test_unique_id",
-            ),
-            patch(
-                "custom_components.smappee_ev.helpers.make_device_info",
-                return_value={"identifiers": {("test", "device")}},
-            ),
-        ):
-            await sensor.async_setup_entry(hass, mock_config_entry, async_add_entities)
+        await sensor.async_setup_entry(hass, mock_config_entry, async_add_entities)
 
         # Verify entities were added
         async_add_entities.assert_called_once()
@@ -183,6 +186,63 @@ class TestSensorPlatform:
         entities = async_add_entities.call_args[0][0]
         assert sum(isinstance(entity, StationGridPower) for entity in entities) == 1
         assert sum(isinstance(entity, ConnectorPowerSensor) for entity in entities) == 2
+        unique_ids = [entity.unique_id for entity in entities]
+        assert len(unique_ids) == len(set(unique_ids))
+
+    @pytest.mark.asyncio
+    async def test_connector_sensor_metadata_uses_station_device_hierarchy(
+        self, hass: HomeAssistant
+    ):
+        """Protect HA device registry identifiers for connector entities."""
+        station_client = make_station_client()
+        connector_client = make_connector_client(
+            service_location_id=317443,
+            connector_number=1,
+            smart_device_uuid="connector-uuid",
+            serial="STATION123",
+        )
+        coordinator = make_station_coordinator(
+            station_client=station_client,
+            connectors={
+                "connector-uuid": MagicMock(
+                    connector_number=1,
+                    power_total=7200,
+                    api_available=True,
+                )
+            },
+        )
+        runtime = make_runtime_data(
+            sites={
+                317418: make_site(
+                    stations={
+                        "station-uuid": make_station_bucket(
+                            coordinator=coordinator,
+                            station_client=station_client,
+                            connector_clients={"connector-uuid": connector_client},
+                        )
+                    }
+                )
+            }
+        )
+        entry = make_config_entry(runtime_data=runtime)
+        async_add_entities = MagicMock()
+
+        await sensor.async_setup_entry(hass, entry, async_add_entities)
+
+        entities = async_add_entities.call_args[0][0]
+        power_sensor = next(
+            entity for entity in entities if isinstance(entity, ConnectorPowerSensor)
+        )
+        assert power_sensor.unique_id == (
+            "317418:STATION123:station-uuid:connector-uuid:sensor:power_total"
+        )
+        assert power_sensor.native_value == 7200.0
+        assert power_sensor.device_info["identifiers"] == {
+            connector_device_identifier(317418, 317443, "STATION123", "connector-uuid")
+        }
+        assert power_sensor.device_info["via_device"] == station_device_identifier(
+            317418, 317443, "STATION123"
+        )
 
 
 class TestLightPlatform:
@@ -216,6 +276,105 @@ class TestLightPlatform:
         await light.async_setup_entry(hass, entry, async_add_entities)
 
         async_add_entities.assert_called_once_with([], False)
+
+    @pytest.mark.asyncio
+    async def test_led_light_metadata_uses_led_device_hierarchy(self, hass: HomeAssistant):
+        """Protect HA device registry identifiers for LED controller entities."""
+        station_client = make_station_client()
+        station_client.set_brightness = AsyncMock()
+        connector_client = make_connector_client(
+            service_location_id=317443,
+            connector_number=1,
+            smart_device_uuid="connector-uuid",
+            serial="STATION123",
+        )
+        coordinator = make_station_coordinator(
+            station_client=station_client,
+            station_state=StationState(led_brightness=40, available=True),
+        )
+        runtime = make_runtime_data(
+            sites={
+                317418: make_site(
+                    stations={
+                        "station-uuid": make_station_bucket(
+                            coordinator=coordinator,
+                            station_client=station_client,
+                            connector_clients={"connector-uuid": connector_client},
+                            led_devices={"led-device-1": {"name": "LED Ring"}},
+                        )
+                    }
+                )
+            }
+        )
+        entry = make_config_entry(runtime_data=runtime)
+        async_add_entities = MagicMock()
+
+        await light.async_setup_entry(hass, entry, async_add_entities)
+
+        led_light = async_add_entities.call_args[0][0][0]
+        assert isinstance(led_light, SmappeeLedLight)
+        assert led_light.unique_id == "317418:STATION123:station-uuid:light:led"
+        assert led_light.is_on is True
+        assert led_light.brightness == 102
+        assert led_light.device_info["identifiers"] == {
+            led_device_identifier(317418, 317443, "STATION123", "led-device-1")
+        }
+        assert led_light.device_info["via_device"] == station_device_identifier(
+            317418, 317443, "STATION123"
+        )
+
+
+class TestSwitchPlatform:
+    """Test cases for switch platform metadata."""
+
+    @pytest.mark.asyncio
+    async def test_availability_switch_metadata_uses_station_device_hierarchy(
+        self, hass: HomeAssistant
+    ):
+        """Protect HA device registry identifiers for station switch entities."""
+        station_client = make_station_client()
+        connector_client = make_connector_client(
+            service_location_id=317443,
+            connector_number=1,
+            smart_device_uuid="connector-uuid",
+            serial="STATION123",
+        )
+        coordinator = make_station_coordinator(
+            station_client=station_client,
+            station_state=StationState(available=False),
+        )
+        runtime = make_runtime_data(
+            sites={
+                317418: make_site(
+                    stations={
+                        "station-uuid": make_station_bucket(
+                            coordinator=coordinator,
+                            station_client=station_client,
+                            connector_clients={"connector-uuid": connector_client},
+                        )
+                    }
+                )
+            }
+        )
+        entry = make_config_entry(runtime_data=runtime)
+        async_add_entities = MagicMock()
+
+        await switch.async_setup_entry(hass, entry, async_add_entities)
+
+        entities = async_add_entities.call_args[0][0]
+        assert all(isinstance(entity, SwitchEntity) for entity in entities)
+        availability_switch = next(
+            entity for entity in entities if isinstance(entity, switch.SmappeeAvailabilitySwitch)
+        )
+        assert availability_switch.unique_id == (
+            "317418:STATION123:station-uuid:switch:station_available"
+        )
+        assert availability_switch.is_on is False
+        assert availability_switch.device_info["identifiers"] == {
+            station_device_identifier(317418, 317443, "STATION123"),
+            ("smappee_ev", "317418:STATION123:station-uuid"),
+        }
+        assert availability_switch.device_info["via_device"] == ("smappee_ev", "site:317418")
 
 
 class TestSmappeeLedLight:
@@ -291,152 +450,50 @@ class TestSmappeeLedLight:
         assert coordinator.data.station.led_brightness == 0
 
 
-class TestEntityCreation:
-    """Test entity creation and configuration."""
-
-    def test_entity_attributes(self):
-        """Test entity attributes and properties."""
-        # Mock coordinator
-        coordinator = MagicMock(spec=SmappeeCoordinator)
-        coordinator.data = {
-            "station_uuid": {"connectors": {"connector_uuid": {"status": "AVAILABLE", "power": 0}}}
-        }
-
-        # Test that entity can access coordinator data
-        assert coordinator.data is not None
-        assert "station_uuid" in coordinator.data
-
-    @pytest.mark.asyncio
-    async def test_entity_updates(self):
-        """Test entity update handling."""
-        coordinator = MagicMock(spec=SmappeeCoordinator)
-        coordinator.async_add_listener = MagicMock()
-        coordinator.async_remove_listener = MagicMock()
-
-        # Simulate entity lifecycle
-        entity = MagicMock()
-        entity.coordinator = coordinator
-
-        # Test listener registration
-        coordinator.async_add_listener(entity.async_write_ha_state)
-        coordinator.async_add_listener.assert_called_once()
-
-        # Test listener removal
-        coordinator.async_remove_listener(entity.async_write_ha_state)
-        coordinator.async_remove_listener.assert_called_once()
-
-
 class TestPlatformHelpers:
     """Test platform helper functions."""
 
     def test_build_connector_label(self):
         """Test connector label building."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label", return_value="Connector 1"
-        ) as mock_label:
-            api_client = MagicMock()
-            connector_uuid = "test_uuid"
+        api_client = MagicMock()
+        api_client.connector_number = 1
 
-            result = mock_label(api_client, connector_uuid)
+        assert build_connector_label(api_client, "connector-test-uuid") == "Connector 1"
 
-            assert result == "Connector 1"
-            mock_label.assert_called_once_with(api_client, connector_uuid)
+        api_client.connector_number = None
+        assert build_connector_label(api_client, "connector-test-uuid") == "Connector uuid"
 
     def test_make_unique_id(self):
         """Test unique ID generation."""
-        with patch(
-            "custom_components.smappee_ev.helpers.make_unique_id", return_value="test_unique_id"
-        ) as mock_unique_id:
-            result = mock_unique_id("test", "entity")
-
-            assert result == "test_unique_id"
-            mock_unique_id.assert_called_once_with("test", "entity")
+        assert (
+            make_unique_id(12345, "SERIAL123", "station-uuid", "connector-uuid", "power")
+            == "12345:SERIAL123:station-uuid:connector-uuid:power"
+        )
+        assert (
+            make_unique_id(12345, "SERIAL123", "station-uuid", None, "grid_power")
+            == "12345:SERIAL123:station-uuid:grid_power"
+        )
 
     def test_make_device_info(self):
         """Test device info generation."""
-        with patch(
-            "custom_components.smappee_ev.helpers.make_device_info",
-            return_value={"identifiers": {("test", "device")}},
-        ) as mock_device_info:
-            result = mock_device_info("test_device")
+        result = make_device_info(
+            12345,
+            "SERIAL123",
+            "station-uuid",
+            station_name="Garage Charger",
+            station_model="EV Wall Business",
+        )
 
-            assert result["identifiers"] == {("test", "device")}
-            mock_device_info.assert_called_once_with("test_device")
-
-
-class TestEntityBehavior:
-    """Test entity behavior and state management."""
-
-    def test_entity_availability(self):
-        """Test entity availability logic."""
-        coordinator = MagicMock(spec=SmappeeCoordinator)
-
-        # Test available coordinator
-        coordinator.last_update_success = True
-        coordinator.available = True
-
-        # Mock entity
-        entity = MagicMock()
-        entity.coordinator = coordinator
-        entity.available = coordinator.available and coordinator.last_update_success
-
-        assert entity.available is True
-
-        # Test unavailable coordinator
-        coordinator.available = False
-        entity.available = coordinator.available and coordinator.last_update_success
-
-        assert entity.available is False
-
-    def test_entity_state_updates(self):
-        """Test entity state update behavior."""
-        coordinator = MagicMock(spec=SmappeeCoordinator)
-        coordinator.data = {
-            "station_uuid": {
-                "connectors": {"connector_uuid": {"status": "CHARGING", "power": 7200}}
-            }
+        assert result["identifiers"] == {
+            station_device_identifier(12345, 12345, "SERIAL123"),
+            ("smappee_ev", "12345:SERIAL123:station-uuid"),
         }
-
-        # Mock entity accessing coordinator data
-        entity = MagicMock()
-        entity.coordinator = coordinator
-
-        # Simulate state property access
-        state_data = entity.coordinator.data["station_uuid"]["connectors"]["connector_uuid"]
-
-        assert state_data["status"] == "CHARGING"
-        assert state_data["power"] == 7200
-
-    @pytest.mark.asyncio
-    async def test_entity_async_update(self):
-        """Test entity async update method."""
-        coordinator = MagicMock(spec=SmappeeCoordinator)
-        coordinator.async_request_refresh = AsyncMock()
-
-        # Mock entity
-        entity = MagicMock()
-        entity.coordinator = coordinator
-
-        # Simulate calling async_update
-        await entity.coordinator.async_request_refresh()
-
-        coordinator.async_request_refresh.assert_called_once()
+        assert result["name"] == "Garage Charger"
+        assert result["model"] == "EV Wall Business"
 
 
 class TestPlatformErrors:
     """Test platform error handling."""
-
-    @pytest.mark.asyncio
-    async def test_setup_with_missing_data(self, hass: HomeAssistant):
-        """Test platform setup with missing runtime data."""
-        entry = MagicMock(spec=ConfigEntry)
-        entry.runtime_data = None
-
-        async_add_entities = MagicMock()
-
-        # Should handle missing runtime data gracefully
-        with contextlib.suppress(AttributeError):
-            await button.async_setup_entry(hass, entry, async_add_entities)
 
     @pytest.mark.asyncio
     async def test_setup_with_corrupted_sites(self, hass: HomeAssistant):

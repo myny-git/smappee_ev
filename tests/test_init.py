@@ -860,6 +860,45 @@ class TestDomainSetup:
             assert DOMAIN not in hass.data
 
     @pytest.mark.asyncio
+    async def test_async_unload_entry_keeps_services_until_last_entry(
+        self, hass, mock_config_entry
+    ):
+        """Test services stay registered while another config entry is still loaded."""
+        mqtt_client = MagicMock()
+        mqtt_client.stop = MagicMock(return_value=None)
+        coordinator = MagicMock()
+        coordinator.async_shutdown = AsyncMock()
+        mock_config_entry.runtime_data = RuntimeData(
+            api=MagicMock(),
+            sites={
+                12345: {
+                    "stations": {
+                        "station1_uuid": {
+                            "coordinator": coordinator,
+                            "mqtt": None,
+                        }
+                    }
+                }
+            },
+            mqtt={12345: mqtt_client},
+        )
+        other_entry = MagicMock(spec=ConfigEntry)
+        other_entry.entry_id = "other_entry_id"
+        other_entry.state = ConfigEntryState.LOADED
+        hass.services.async_register(DOMAIN, "start_charging", MagicMock())
+
+        with (
+            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
+            patch("custom_components.smappee_ev.unregister_services", AsyncMock()) as unregister,
+            patch.object(hass.config_entries, "async_entries", return_value=[other_entry]),
+        ):
+            assert await async_unload_entry(hass, mock_config_entry) is True
+
+        mqtt_client.stop.assert_called_once()
+        coordinator.async_shutdown.assert_awaited_once()
+        unregister.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_remove_config_entry_device_rejects_current_station(
         self, hass, mock_config_entry
     ):
@@ -880,6 +919,33 @@ class TestDomainSetup:
         )
         device_entry = MagicMock()
         device_entry.identifiers = {(DOMAIN, "12345:STATION1:station1_uuid")}
+
+        assert (
+            await async_remove_config_entry_device(hass, mock_config_entry, device_entry) is False
+        )
+
+    @pytest.mark.asyncio
+    async def test_remove_config_entry_device_rejects_current_modern_station_identifier(
+        self, hass, mock_config_entry
+    ):
+        """Test modern station identifiers are treated as current registry devices."""
+        mock_config_entry.runtime_data = RuntimeData(
+            api=MagicMock(),
+            sites={
+                12345: {
+                    "stations": {
+                        "station1_uuid": {
+                            "serial": "STATION1",
+                            "control_location_id": 67890,
+                            "station_client": MagicMock(),
+                        }
+                    }
+                }
+            },
+            mqtt={},
+        )
+        device_entry = MagicMock()
+        device_entry.identifiers = {(DOMAIN, "station:12345:67890:STATION1")}
 
         assert (
             await async_remove_config_entry_device(hass, mock_config_entry, device_entry) is False
