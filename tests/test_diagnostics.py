@@ -1,11 +1,18 @@
 """Test the Smappee EV diagnostics."""
 
+import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from homeassistant.config_entries import ConfigEntry
 import pytest
 
-from custom_components.smappee_ev.data import RuntimeData
+from custom_components.smappee_ev.data import (
+    ConnectorState,
+    IntegrationData,
+    RuntimeData,
+    StationState,
+)
 from custom_components.smappee_ev.diagnostics import REDACT_KEYS, async_get_config_entry_diagnostics
 
 
@@ -24,7 +31,7 @@ def mock_runtime_data():
 
     # Create mock sites
     runtime.sites = {
-        "12345": {
+        12345: {
             "name": "Test Site",
             "serviceLocationUuid": "test-uuid",
             "deviceSerialNumber": "SERIAL123",
@@ -42,7 +49,7 @@ def mock_runtime_data():
     }
 
     # Add mock MQTT client
-    runtime.mqtt = {"12345": MagicMock()}
+    runtime.mqtt = {12345: MagicMock()}
     runtime.dashboard = None
     runtime.api = None
 
@@ -74,7 +81,7 @@ def mock_runtime_data():
         "connector-uuid-2": connector2_data,
     }
 
-    runtime.sites["12345"]["stations"]["station-uuid-1"]["coordinator"].data = coordinator_data
+    runtime.sites[12345]["stations"]["station-uuid-1"]["coordinator"].data = coordinator_data
 
     return runtime
 
@@ -131,7 +138,7 @@ class TestDiagnostics:
         assert "dashboard" in diagnostics
 
         # Check sites list
-        assert diagnostics["sites"] == ["12345"]
+        assert diagnostics["sites"] == [12345]
 
         # Verify sensitive data is redacted
         for key in REDACT_KEYS:
@@ -145,7 +152,7 @@ class TestDiagnostics:
 
         # Check meta
         assert diagnostics["meta"]["entry_id"] == "entry_id_123"
-        assert diagnostics["meta"]["title"] == "Smappee EV — test_user"
+        assert diagnostics["meta"]["title"] == "Smappee EV — **REDACTED**"
         assert diagnostics["meta"]["state"] == "loaded"
         assert diagnostics["meta"]["domain"] == "smappee_ev"
         assert diagnostics["meta"]["service_locations_total"] == 1
@@ -162,7 +169,7 @@ class TestDiagnostics:
         # Check site details
         assert len(diagnostics["sites_detail"]) == 1
         site_detail = diagnostics["sites_detail"][0]
-        assert site_detail["service_location_id"] == "12345"
+        assert site_detail["service_location_id"] == 12345
         assert site_detail["name_present"] is True
         assert site_detail["uuid"] == "test...uuid"
         assert site_detail["serial"] == "SERI...L123"
@@ -246,7 +253,7 @@ class TestDiagnostics:
         # Create runtime with incomplete data
         runtime = mock_runtime_data
         # Remove coordinator data
-        station = runtime.sites["12345"]["stations"]["station-uuid-1"]
+        station = runtime.sites[12345]["stations"]["station-uuid-1"]
         station["coordinator"].data = None
 
         entry.runtime_data = runtime
@@ -266,3 +273,117 @@ class TestDiagnostics:
         assert diagnostics["meta"]["connectors_total"] == 2
         assert diagnostics["meta"]["connector_states_total"] == 0
         assert diagnostics["meta"]["state"] is None
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_never_leaks_sensitive_entry_or_runtime_values(self, hass):
+        """Catch regressions where diagnostics expose credentials, serials, or UUIDs."""
+        secrets = {
+            "username": "USER_SECRET_ALPHA_1234",
+            "password": "PASS_SECRET_BRAVO_5678",
+            "dashboard_refresh_token": "REFRESH_SECRET_CHARLIE_9012",
+            "site_serial_number": "SERIAL_SECRET_DELTA_3456",
+            "serviceLocationUuid": "SITE_UUID_SECRET_ECHO_7890",
+            "station_uuid": "STATION_UUID_SECRET_FOXTROT_2468",
+            "connector_uuid": "CONNECTOR_UUID_SECRET_GOLF_1357",
+        }
+
+        station_client = SimpleNamespace(
+            service_location_id=12345,
+            serial=secrets["site_serial_number"],
+            serial_id=secrets["site_serial_number"],
+            charging_station_serial=secrets["site_serial_number"],
+            smart_device_uuid=secrets["station_uuid"],
+            smart_device_id=None,
+            dashboard_device_id=None,
+            connector_number=None,
+            is_station=True,
+        )
+        connector_client = SimpleNamespace(
+            service_location_id=12345,
+            serial=secrets["site_serial_number"],
+            serial_id=None,
+            charging_station_serial=secrets["site_serial_number"],
+            smart_device_uuid=secrets["connector_uuid"],
+            smart_device_id=None,
+            dashboard_device_id=None,
+            connector_number=1,
+            is_station=False,
+        )
+        coordinator = SimpleNamespace(
+            data=IntegrationData(
+                station=StationState(mqtt_connected=True),
+                connectors={
+                    secrets["connector_uuid"]: ConnectorState(
+                        connector_number=1,
+                        dashboard_device_uuid=secrets["connector_uuid"],
+                    )
+                },
+            )
+        )
+        mqtt_client = SimpleNamespace(
+            _slu=secrets["serviceLocationUuid"],
+            _slu_id=12345,
+            _client_id=secrets["username"],
+            _serial=secrets["site_serial_number"],
+            _slus=(secrets["serviceLocationUuid"],),
+            _mqtt_specs=(),
+        )
+        runtime = RuntimeData(
+            api=SimpleNamespace(
+                username=secrets["username"],
+                password=secrets["password"],
+                refresh_token=secrets["dashboard_refresh_token"],
+                _token="ACCESS_SECRET_HOTEL_8642",  # noqa: S106 - fake diagnostics token
+                _token_expires_at_ms=123,
+            ),
+            sites={
+                12345: {
+                    "name": "Sensitive Site",
+                    "serviceLocationUuid": secrets["serviceLocationUuid"],
+                    "deviceSerialNumber": secrets["site_serial_number"],
+                    "stations": {
+                        secrets["station_uuid"]: {
+                            "coordinator": coordinator,
+                            "station_client": station_client,
+                            "connector_clients": {
+                                secrets["connector_uuid"]: connector_client,
+                            },
+                        }
+                    },
+                }
+            },
+            mqtt={12345: mqtt_client},
+        )
+        entry = MagicMock(spec=ConfigEntry)
+        entry.runtime_data = runtime
+        entry.data = {
+            "username": secrets["username"],
+            "password": secrets["password"],
+            "dashboard_refresh_token": secrets["dashboard_refresh_token"],
+            "site_serial_number": secrets["site_serial_number"],
+            "serviceLocationUuid": secrets["serviceLocationUuid"],
+            "station_uuid": secrets["station_uuid"],
+            "connector_uuid": secrets["connector_uuid"],
+        }
+        entry.options = {
+            "refresh_token": "OPTIONS_REFRESH_SECRET_INDIA_9753",
+            "smart_device_uuid": secrets["connector_uuid"],
+        }
+        entry.entry_id = "entry_id_123"
+        entry.title = f"Smappee EV — {secrets['username']}"
+        entry.domain = "smappee_ev"
+        entry.state = None
+
+        diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+        serialized = json.dumps(diagnostics, sort_keys=True)
+        for secret in (*secrets.values(), "OPTIONS_REFRESH_SECRET_INDIA_9753"):
+            assert secret not in serialized
+        assert diagnostics["config_entry_data"]["username"] == "**REDACTED**"
+        assert diagnostics["config_entry_data"]["site_serial_number"] == "**REDACTED**"
+        assert diagnostics["options"]["smart_device_uuid"] == "**REDACTED**"
+        assert diagnostics["meta"]["title"] == "Smappee EV — **REDACTED**"
+        assert diagnostics["sites_detail"][0]["uuid"] == "SITE...7890"
+        assert diagnostics["sites_detail"][0]["serial"] == "SERI...3456"
+        assert diagnostics["stations"][0]["station_uuid"] == "STAT...2468"
+        assert diagnostics["connectors"][0]["connector_uuid"] == "CONN...1357"

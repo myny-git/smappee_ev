@@ -15,14 +15,31 @@ from .data import RuntimeData, SmappeeEvConfigEntry
 
 REDACT_KEYS = {
     "access_token",
+    "charging_station_serial",
     "client_id",
     "client_secret",
+    "connector_uuid",
     "dashboard_refresh_token",
+    "dashboard_device_id",
+    "dashboard_device_uuid",
+    "deviceSerialNumber",
+    "gateway_serial",
     "password",
     "refresh_token",
-    "username",
+    "serial",
+    "serial_id",
+    "serial_number",
+    "serviceLocationUuid",
+    "service_location_uuid",
+    "site_serial_number",
+    "site_uuid",
+    "smart_device_id",
+    "smart_device_uuid",
+    "station_serial",
+    "station_uuid",
     "token_type",
     "scope",
+    "username",
     "expires_in",
 }
 
@@ -52,6 +69,29 @@ def _safe_sorted(values: object) -> list[Any]:
     if not isinstance(values, list | tuple | set):
         return []
     return sorted(values, key=_sort_as_text)
+
+
+def _redact_text_values(text: object, values: list[object]) -> object:
+    """Redact known sensitive values that may be embedded in free text."""
+    if not isinstance(text, str):
+        return text
+    redacted = text
+    for value in values:
+        if value is None:
+            continue
+        secret = str(value)
+        if secret:
+            redacted = redacted.replace(secret, "**REDACTED**")
+    return redacted
+
+
+def _entry_sensitive_values(entry: SmappeeEvConfigEntry) -> list[object]:
+    values: list[object] = []
+    for source in (getattr(entry, "data", {}), getattr(entry, "options", {})):
+        for key, value in dict(source).items():
+            if key in REDACT_KEYS:
+                values.append(value)
+    return values
 
 
 def _sort_as_text(item: object) -> str:
@@ -175,7 +215,7 @@ async def async_get_config_entry_diagnostics(
 
     out["meta"] = {
         "entry_id": entry.entry_id,
-        "title": entry.title,
+        "title": _redact_text_values(entry.title, _entry_sensitive_values(entry)),
         "state": state_name,
         "domain": entry.domain,
         "version_manifest": manifest_version,

@@ -27,7 +27,7 @@ def mock_runtime_data():
     """Create mock runtime data."""
     runtime = MagicMock(spec=RuntimeData)
     runtime.sites = {
-        "12345": {
+        12345: {
             "stations": {
                 "station_uuid": {
                     "coordinator": MagicMock(spec=SmappeeCoordinator),
