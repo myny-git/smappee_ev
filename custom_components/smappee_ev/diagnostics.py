@@ -327,8 +327,7 @@ async def async_get_config_entry_diagnostics(
                 "service_location_id": site_id,
                 "service_location_id_obfuscated": _obfuscate(site_id),
                 "name_present": (
-                    runtime_value(site_obj, "name")
-                    or runtime_value(site_obj, "site_name")
+                    runtime_value(site_obj, "name") or runtime_value(site_obj, "site_name")
                 )
                 is not None,
                 "uuid": _obfuscate(
@@ -339,9 +338,7 @@ async def async_get_config_entry_diagnostics(
                     runtime_value(site_obj, "deviceSerialNumber")
                     or runtime_value(site_obj, "gateway_serial")
                 ),
-                "control_location_ids": _safe_sorted(
-                    runtime_value(site_obj, "controlLocationIds")
-                ),
+                "control_location_ids": _safe_sorted(runtime_value(site_obj, "controlLocationIds")),
                 "measurement_location_ids": _safe_sorted(
                     runtime_value(site_obj, "measurementLocationIds")
                     or runtime_value(site_obj, "measurement_location_ids")
