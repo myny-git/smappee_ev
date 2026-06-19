@@ -29,28 +29,34 @@ Please note that this project is released with a [Contributor Code of Conduct][c
    pip install -r requirements-test.txt
    ```
 
+4. Install pre-commit hooks:
+
+   ```bash
+   pip install pre-commit
+   pre-commit install
+   ```
+
 ## Submitting a pull request
 
 1. Create a new branch: `git checkout -b my-branch-name`
-2. Make your changes
-3. Lint and format your code:
+2. Make your changes. Your code will be automatically checked and formatted when you commit.
+*If you need to run the checks manually:*
 
    ```bash
-   ruff check --fix .
-   ruff format .
+   pre-commit run --all-files
    ```
 
-4. Run the tests:
+3. Run the tests:
 
    ```bash
    pytest
    ```
 
-5. Push to your fork and [submit a pull request][pr]
+4. Push to your fork and [submit a pull request][pr]
 
 Here are a few things you can do that will increase the likelihood of your pull request being accepted:
 
-- Make sure `ruff check` and `pytest` pass without errors.
+- Make sure the pre-commit hooks and `pytest` pass without errors.
 - Write and update tests.
 - Keep your change as focused as possible. If there are multiple changes you would like to make that are not dependent upon each other, consider submitting them as separate pull requests.
 - Write a [good commit message](http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html).
