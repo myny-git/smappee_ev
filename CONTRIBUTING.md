@@ -52,7 +52,7 @@ Please note that this project is released with a [Contributor Code of Conduct][c
    pytest
    ```
 
-4. Push to your fork and [submit a pull request](https://www.google.com/search?q=/compare)
+4. Push to your fork and [submit a pull request][pr]
 
 Here are a few things you can do that will increase the likelihood of your pull request being accepted:
 
