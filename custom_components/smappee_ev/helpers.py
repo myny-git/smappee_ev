@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from contextlib import suppress
 from datetime import timedelta
 from typing import Any, cast
@@ -14,6 +15,87 @@ from .const import CONFIGURATION_URL, DOMAIN, MANUFACTURER
 def runtime_sites(sites: Any) -> dict[Any, Any]:
     """Return runtime sites only when they have the expected mapping shape."""
     return sites if isinstance(sites, dict) else {}
+
+
+def runtime_value(container: object, key: str, default: Any = None) -> Any:
+    """Read a runtime field from the current dict shape or a future dataclass."""
+    if isinstance(container, Mapping):
+        return container.get(key, default)
+    return getattr(container, key, default)
+
+
+def _runtime_get(container: object, key: str, default: Any = None) -> Any:
+    """Read a runtime field from the current dict shape or a future dataclass."""
+    return runtime_value(container, key, default)
+
+
+def runtime_site(sites: Any, site_id: object) -> Any | None:
+    """Return one runtime site, accepting temporary int/string site-id drift."""
+    runtime = runtime_sites(sites)
+    if site_id in runtime:
+        return runtime[site_id]
+    text_id = str(site_id)
+    if text_id in runtime:
+        return runtime[text_id]
+    with suppress(TypeError, ValueError):
+        int_id = int(text_id)
+        if int_id in runtime:
+            return runtime[int_id]
+    return None
+
+
+def runtime_mqtt_for_site(mqtt_by_site: object, site_id: object) -> object | None:
+    """Return MQTT runtime for a site id, accepting temporary int/string key drift."""
+    if not isinstance(mqtt_by_site, Mapping):
+        return None
+    if site_id in mqtt_by_site:
+        return mqtt_by_site[site_id]
+    text_id = str(site_id)
+    if text_id in mqtt_by_site:
+        return mqtt_by_site[text_id]
+    with suppress(TypeError, ValueError):
+        return mqtt_by_site.get(int(text_id))
+    return None
+
+
+def site_runtime_stations(site: object | None) -> dict[str, Any]:
+    """Return station buckets from a runtime site."""
+    stations = _runtime_get(site or {}, "stations", {})
+    return stations if isinstance(stations, dict) else {}
+
+
+def site_runtime_coordinator(site: object | None) -> Any:
+    """Return the site-scoped coordinator from a runtime site."""
+    return _runtime_get(site or {}, "site_coordinator")
+
+
+def station_runtime_coordinator(station: object | None) -> Any:
+    """Return a station coordinator from a runtime station bucket."""
+    return _runtime_get(station or {}, "coordinator") or _runtime_get(
+        station or {}, "station_coordinator"
+    )
+
+
+def station_runtime_client(station: object | None) -> Any:
+    """Return the station command client from a runtime station bucket."""
+    return _runtime_get(station or {}, "station_client")
+
+
+def station_runtime_connector_clients(station: object | None) -> dict[str, Any]:
+    """Return connector clients from current dict buckets or future dataclass buckets."""
+    clients = _runtime_get(station or {}, "connector_clients", None)
+    if isinstance(clients, dict):
+        return clients
+
+    connectors = _runtime_get(station or {}, "connectors", {})
+    if not isinstance(connectors, dict):
+        return {}
+    resolved: dict[str, object] = {}
+    for key, connector in connectors.items():
+        client = _runtime_get(connector, "connector_client", None)
+        if client is not None:
+            resolved[str(key)] = client
+    return resolved
 
 
 def site_device_identifier(site_sid: int | str) -> tuple[str, str]:
@@ -307,7 +389,16 @@ __all__ = [
     "make_led_device_info",
     "make_connector_device_info",
     "make_unique_id",
+    "runtime_mqtt_for_site",
+    "runtime_site",
+    "runtime_sites",
+    "runtime_value",
+    "site_runtime_coordinator",
+    "site_runtime_stations",
     "station_serial",
+    "station_runtime_client",
+    "station_runtime_connector_clients",
+    "station_runtime_coordinator",
     "connector_state",
     "build_connector_label",
     "update_total_increasing",

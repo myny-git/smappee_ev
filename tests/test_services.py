@@ -8,12 +8,21 @@ import pytest
 import voluptuous as vol
 
 from custom_components.smappee_ev import services
-from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
+from custom_components.smappee_ev.data import (
+    ConnectorState,
+    IntegrationData,
+    RuntimeData,
+    SmappeeConnectorRuntime,
+    SmappeeSiteRuntime,
+    SmappeeStationRuntime,
+    StationState,
+)
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 from tests.factories import (
     configure_loaded_entries,
     make_connector_client,
     make_loaded_config_entry,
+    make_loaded_entry_for_connector,
     make_runtime_data,
     make_runtime_for_connector,
 )
@@ -445,8 +454,8 @@ class TestServiceHandlers:
             smart_device_uuid="connector-site-b",
         )
         entries = [
-            make_loaded_config_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
-            make_loaded_config_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
+            make_loaded_entry_for_connector("entry_a", 11111, site_a_client),
+            make_loaded_entry_for_connector("entry_b", 22222, site_b_client),
         ]
         configure_loaded_entries(mock_hass, entries)
         call = ServiceCall(
@@ -476,8 +485,8 @@ class TestServiceHandlers:
             smart_device_uuid="connector-site-b",
         )
         entries = [
-            make_loaded_config_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
-            make_loaded_config_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
+            make_loaded_entry_for_connector("entry_a", 11111, site_a_client),
+            make_loaded_entry_for_connector("entry_b", 22222, site_b_client),
         ]
         configure_loaded_entries(mock_hass, entries)
         call = ServiceCall(
@@ -493,6 +502,109 @@ class TestServiceHandlers:
         site_b_client.start_charging.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_multi_entry_connector_service_service_location_id_selects_target(
+        self, mock_hass
+    ):
+        """Ensure explicit service_location_id dispatches only to that site's connector."""
+        site_a_client = make_connector_client(
+            service_location_id=11111,
+            connector_number=1,
+            smart_device_uuid="connector-site-a",
+        )
+        site_b_client = make_connector_client(
+            service_location_id=22222,
+            connector_number=1,
+            smart_device_uuid="connector-site-b",
+        )
+        entries = [
+            make_loaded_entry_for_connector("entry_a", 11111, site_a_client),
+            make_loaded_entry_for_connector("entry_b", 22222, site_b_client, site_key="22222"),
+        ]
+        configure_loaded_entries(mock_hass, entries)
+        call = ServiceCall(
+            domain="smappee_ev",
+            service="start_charging",
+            data={"service_location_id": 22222, "connector_id": 1},
+            hass=mock_hass,
+        )
+
+        await services.handle_start_charging(call)
+
+        site_a_client.start_charging.assert_not_called()
+        site_b_client.start_charging.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
+    async def test_connector_service_resolves_dataclass_runtime_station(self, mock_hass):
+        """Services should resolve connector clients from typed runtime containers."""
+        connector_client = make_connector_client(
+            service_location_id=33333,
+            connector_number=1,
+            smart_device_uuid="connector-dataclass",
+        )
+        station_client = MagicMock(spec=SmappeeDeviceHandle)
+        coordinator = MagicMock()
+        coordinator.data = IntegrationData(
+            station=StationState(),
+            connectors={
+                "connector-dataclass": ConnectorState(
+                    connector_number=1,
+                    min_current=6,
+                    max_current=32,
+                )
+            },
+        )
+        runtime = RuntimeData(
+            api=connector_client,
+            mqtt={},
+            sites={
+                33333: SmappeeSiteRuntime(
+                    site_location_id=33333,
+                    site_name="Dataclass Site",
+                    site_function_type="SERVICELOCATION",
+                    site_uuid="site-dataclass",
+                    gateway_serial="GATEWAY-33333",
+                    gateway_type="Infinity",
+                    measurement_location_ids=[33333],
+                    stations={
+                        "station-dataclass": SmappeeStationRuntime(
+                            site_location_id=33333,
+                            control_location_id=33334,
+                            control_name="Dataclass Station",
+                            control_uuid="station-dataclass",
+                            control_function_type="CHARGINGSTATION",
+                            charging_station_serial="STATION-33333",
+                            charging_station_model="EV Wall",
+                            station_client=station_client,
+                            station_coordinator=coordinator,
+                            connectors={
+                                "connector-dataclass": SmappeeConnectorRuntime(
+                                    connector_key="connector-dataclass",
+                                    connector_uuid="connector-dataclass",
+                                    connector_position=1,
+                                    connector_client=connector_client,
+                                )
+                            },
+                        )
+                    },
+                )
+            },
+        )
+        configure_loaded_entries(mock_hass, [make_loaded_config_entry("entry_dc", runtime)])
+        call = ServiceCall(
+            domain="smappee_ev",
+            service="set_current",
+            data={"service_location_id": 33333, "connector_id": 1, "current": 16},
+            hass=mock_hass,
+        )
+
+        await services.handle_set_current(call)
+
+        connector_client.set_current.assert_awaited_once_with(
+            current=16.0, min_current=6, max_current=32
+        )
+        coordinator.async_schedule_dashboard_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_multi_entry_connector_service_rejects_mismatched_entry_and_site(self, mock_hass):
         """Reject mismatched selectors instead of falling back to another site."""
         site_a_client = make_connector_client(
@@ -506,8 +618,8 @@ class TestServiceHandlers:
             smart_device_uuid="connector-site-b",
         )
         entries = [
-            make_loaded_config_entry("entry_a", make_runtime_for_connector(11111, site_a_client)),
-            make_loaded_config_entry("entry_b", make_runtime_for_connector(22222, site_b_client)),
+            make_loaded_entry_for_connector("entry_a", 11111, site_a_client),
+            make_loaded_entry_for_connector("entry_b", 22222, site_b_client),
         ]
         configure_loaded_entries(mock_hass, entries)
         call = ServiceCall(

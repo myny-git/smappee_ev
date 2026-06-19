@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from homeassistant.config_entries import ConfigEntry
 
@@ -186,6 +186,49 @@ class SmappeeSiteRuntime:
     stations: dict[str, dict] = field(default_factory=dict)
 
 
+class StationRuntimeDict(TypedDict, total=False):
+    """Current runtime station bucket shape used by platforms."""
+
+    station_client: Any
+    connector_clients: dict[str, Any]
+    coordinator: Any
+    station_coordinator: Any
+    mqtt: Any
+    serial: str | None
+    site_location_id: int | str | None
+    control_location_id: int | str | None
+    site_name: str | None
+    gateway_serial: str | None
+    gateway_type: str | None
+    control_name: str | None
+    control_uuid: str | None
+    control_function_type: str | None
+    station_name: str | None
+    station_model: str | None
+    led_devices: dict[str, Any]
+    connectors: dict[str, Any]
+    site_coordinator: Any
+    highlevel_configs: dict[int, dict[str, Any]]
+
+
+class SiteRuntimeDict(TypedDict):
+    """Current runtime site bucket shape used by platforms."""
+
+    stations: dict[str, StationRuntimeDict]
+    name: NotRequired[str | None]
+    site_name: NotRequired[str | None]
+    site_function_type: NotRequired[str | None]
+    serviceLocationUuid: NotRequired[str | None]
+    site_uuid: NotRequired[str | None]
+    deviceSerialNumber: NotRequired[str | None]
+    gateway_serial: NotRequired[str | None]
+    gateway_type: NotRequired[str | None]
+    controlLocationIds: NotRequired[list[int | str]]
+    measurementLocationIds: NotRequired[list[int | str]]
+    site_coordinator: NotRequired[Any]
+    highlevel_configs: NotRequired[dict[int, dict[str, Any]]]
+
+
 @dataclass
 class RuntimeData:
     """Runtime storage placed on ConfigEntry.runtime_data.
@@ -194,7 +237,7 @@ class RuntimeData:
     """
 
     api: object  # Dashboard client (kept generic to avoid circular import in type checking)
-    sites: dict[int, dict]
+    sites: dict[Any, Any]
     mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt or list[SmappeeMqtt]
     dashboard: object | None = None
     background_tasks: set[asyncio.Task] = field(default_factory=set)

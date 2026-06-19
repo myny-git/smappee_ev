@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import cast
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -12,7 +12,14 @@ import voluptuous as vol
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import runtime_sites
+from .helpers import (
+    runtime_site,
+    runtime_sites,
+    site_runtime_stations,
+    station_runtime_client,
+    station_runtime_connector_clients,
+    station_runtime_coordinator,
+)
 
 _LOGGER = logging.getLogger(__name__)
 DASHBOARD_CHARGING_MODES = {mode.upper() for mode in CHARGING_MODES}
@@ -84,12 +91,12 @@ def _find_runtime_for_sid(hass: HomeAssistant, sid: int) -> RuntimeData | None:
     """Return the runtime_data whose sites contains sid (first match)."""
     for entry in _iter_loaded_entries(hass):
         rd = entry.runtime_data
-        if sid in runtime_sites(rd.sites):
+        if runtime_site(rd.sites, sid) is not None:
             return rd
     return None
 
 
-def _only_or_single_sid(sites: dict[int, dict]) -> int | None:
+def _only_or_single_sid(sites: dict[Any, Any]) -> int | None:
     sids = list(sites.keys())
     return sids[0] if len(sids) == 1 else None
 
@@ -129,7 +136,7 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
     if explicit_rt:
         explicit_sites = runtime_sites(explicit_rt.sites)
         if isinstance(sid, int):
-            if sid not in explicit_sites:
+            if runtime_site(explicit_sites, sid) is None:
                 raise _service_validation_error(
                     f"service_location_id {sid} does not belong to config_entry_id {entry_id}",
                     "service_location_not_in_entry",
@@ -158,24 +165,29 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
     rt = loaded_entries[0].runtime_data
     sites = runtime_sites(rt.sites)
     if isinstance(sid, int):
-        return (rt, sid if sid in sites else None)
+        return (rt, sid if runtime_site(sites, sid) is not None else None)
     return rt, _only_or_single_sid(sites)
 
 
 def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeDeviceHandle | None:
     if not rt or sid is None:
         return None
-    site = runtime_sites(rt.sites).get(sid) or {}
+    site = runtime_site(rt.sites, sid) or {}
     # site {"stations": {st_uuid: {"station_client":..., ...}}}
-    stations = (site.get("stations") or {}).values()
+    stations = site_runtime_stations(site).values()
     first = next(iter(stations), None)
-    return first.get("station_client") if first else None
+    return cast(SmappeeDeviceHandle | None, station_runtime_client(first))
 
 
-def _connector_clients_for_site(site: dict) -> list[SmappeeDeviceHandle]:
+def _connector_clients_for_site(site: object) -> list[SmappeeDeviceHandle]:
     conns: list[SmappeeDeviceHandle] = []
-    for bucket in (site.get("stations") or {}).values():
-        conns.extend(list((bucket.get("connector_clients") or {}).values()))
+    for bucket in site_runtime_stations(site).values():
+        conns.extend(
+            cast(
+                list[SmappeeDeviceHandle],
+                list(station_runtime_connector_clients(bucket).values()),
+            )
+        )
     return conns
 
 
@@ -184,7 +196,7 @@ def get_connector_client(
 ) -> SmappeeDeviceHandle | None:
     if not rt or sid is None:
         return None
-    site = runtime_sites(rt.sites).get(sid) or {}
+    site = runtime_site(rt.sites, sid) or {}
     conns = _connector_clients_for_site(site)
     if connector_id is not None:
         for client in conns:
@@ -206,8 +218,8 @@ def _get_connector_state(
     if not uuid:
         return None
     for site in runtime_sites(rt.sites).values():
-        for bucket in (site.get("stations") or {}).values():
-            coord = bucket.get("coordinator")
+        for bucket in site_runtime_stations(site).values():
+            coord = station_runtime_coordinator(bucket)
             if coord and coord.data:
                 conn = coord.data.connectors.get(uuid)
                 if conn is not None:
@@ -232,14 +244,14 @@ def _schedule_dashboard_refresh_for_client(
     client_uuid = getattr(client, "smart_device_uuid", None)
     for entry in _iter_loaded_entries(hass):
         for site in runtime_sites(entry.runtime_data.sites).values():
-            for bucket in (site.get("stations") or {}).values():
-                coord = bucket.get("coordinator")
+            for bucket in site_runtime_stations(site).values():
+                coord = station_runtime_coordinator(bucket)
                 if coord is None:
                     continue
-                if bucket.get("station_client") is client:
+                if station_runtime_client(bucket) is client:
                     coord.async_schedule_dashboard_refresh()
                     return
-                if client in (bucket.get("connector_clients") or {}).values():
+                if client in station_runtime_connector_clients(bucket).values():
                     coord.async_schedule_dashboard_refresh()
                     return
                 if client_uuid and client_uuid in getattr(coord.data, "connectors", {}):

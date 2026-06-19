@@ -1,5 +1,6 @@
 .venv/
 .vscode/
+.continue/  
 .ha-config/
 .ruff_cache/
 __pycache__/

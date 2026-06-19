@@ -141,9 +141,11 @@ def make_runtime_for_connector(
     connector_client: object,
     *,
     station_uuid: str | None = None,
+    site_key: int | str | None = None,
 ) -> RuntimeData:
     """Create a one-site runtime containing a single connector client."""
     station_uuid = station_uuid or f"station_{site_id}"
+    site_key = site_id if site_key is None else site_key
     connector_uuid = connector_client.smart_device_uuid
     coord = MagicMock()
     coord.data = IntegrationData(
@@ -159,7 +161,7 @@ def make_runtime_for_connector(
     return make_runtime_data(
         api=connector_client,
         sites={
-            site_id: make_site(
+            site_key: make_site(
                 stations={
                     station_uuid: make_station_bucket(
                         coordinator=coord,
@@ -168,6 +170,20 @@ def make_runtime_for_connector(
                 }
             )
         },
+    )
+
+
+def make_loaded_entry_for_connector(
+    entry_id: str,
+    site_id: int,
+    connector_client: object,
+    *,
+    site_key: int | str | None = None,
+) -> MagicMock:
+    """Create a loaded config entry with one connector runtime."""
+    return make_loaded_config_entry(
+        entry_id,
+        make_runtime_for_connector(site_id, connector_client, site_key=site_key),
     )
 
 

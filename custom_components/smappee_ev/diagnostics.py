@@ -12,7 +12,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from .data import RuntimeData, SmappeeEvConfigEntry
-from .helpers import runtime_sites
+from .helpers import (
+    runtime_mqtt_for_site,
+    runtime_sites,
+    runtime_value,
+    site_runtime_stations,
+    station_runtime_client,
+    station_runtime_connector_clients,
+    station_runtime_coordinator,
+)
 
 REDACT_KEYS = {
     "access_token",
@@ -126,12 +134,10 @@ def _runtime_sensitive_values(rt: RuntimeData | None) -> list[object]:
                 site.get("gateway_serial"),
             ]
         )
-        for station_uuid, bucket in (site.get("stations") or {}).items():
+        for station_uuid, bucket in site_runtime_stations(site).items():
             values.append(station_uuid)
-            if not isinstance(bucket, dict):
-                continue
-            connector_clients = bucket.get("connector_clients") or {}
-            clients = [bucket.get("station_client"), *connector_clients.values()]
+            connector_clients = station_runtime_connector_clients(bucket)
+            clients = [station_runtime_client(bucket), *connector_clients.values()]
             for client in clients:
                 values.extend(
                     getattr(client, attr, None)
@@ -296,8 +302,8 @@ async def async_get_config_entry_diagnostics(
     connectors_out: list[dict[str, Any]] = []
     sites_detail: list[dict[str, Any]] = []
 
-    def _station_connected(bucket: dict) -> bool:
-        coord = bucket.get("coordinator")
+    def _station_connected(bucket: object) -> bool:
+        coord = station_runtime_coordinator(bucket)
         if not coord or not getattr(coord, "data", None):
             return False
         st = getattr(coord.data, "station", None)
@@ -305,13 +311,13 @@ async def async_get_config_entry_diagnostics(
 
     for site_id, site in (sites or {}).items():
         site_obj = site or {}
-        stations = site_obj.get("stations", {})
+        stations = site_runtime_stations(site_obj)
         # Defensive: RuntimeData.mqtt may contain one or more SmappeeMqtt clients per site.
-        mqtt_obj = (getattr(rt, "mqtt", {}) or {}).get(site_id) if rt else None
+        mqtt_obj = runtime_mqtt_for_site(getattr(rt, "mqtt", {}) if rt else {}, site_id)
         # Aggregate counts
         station_count = len(stations)
         connector_count = sum(
-            len((b or {}).get("connector_clients", {})) for b in stations.values()
+            len(station_runtime_connector_clients(bucket)) for bucket in stations.values()
         )
         # derive mqtt_connected aggregate (any station shows connected)
         mqtt_connected_any = any(_station_connected(b) for b in (stations or {}).values())
@@ -320,11 +326,26 @@ async def async_get_config_entry_diagnostics(
             {
                 "service_location_id": site_id,
                 "service_location_id_obfuscated": _obfuscate(site_id),
-                "name_present": site_obj.get("name") is not None,
-                "uuid": _obfuscate(site_obj.get("serviceLocationUuid")),
-                "serial": _obfuscate(site_obj.get("deviceSerialNumber")),
-                "control_location_ids": _safe_sorted(site_obj.get("controlLocationIds")),
-                "measurement_location_ids": _safe_sorted(site_obj.get("measurementLocationIds")),
+                "name_present": (
+                    runtime_value(site_obj, "name")
+                    or runtime_value(site_obj, "site_name")
+                )
+                is not None,
+                "uuid": _obfuscate(
+                    runtime_value(site_obj, "serviceLocationUuid")
+                    or runtime_value(site_obj, "site_uuid")
+                ),
+                "serial": _obfuscate(
+                    runtime_value(site_obj, "deviceSerialNumber")
+                    or runtime_value(site_obj, "gateway_serial")
+                ),
+                "control_location_ids": _safe_sorted(
+                    runtime_value(site_obj, "controlLocationIds")
+                ),
+                "measurement_location_ids": _safe_sorted(
+                    runtime_value(site_obj, "measurementLocationIds")
+                    or runtime_value(site_obj, "measurement_location_ids")
+                ),
                 "station_count": station_count,
                 "connector_count": connector_count,
                 "mqtt_configured": mqtt_obj is not None,
@@ -334,9 +355,9 @@ async def async_get_config_entry_diagnostics(
         )
         # per-station and connectors inside same site loop
         for st_uuid, bucket in (stations or {}).items():
-            coord = bucket.get("coordinator")
-            st_client = bucket.get("station_client")
-            connector_clients = bucket.get("connector_clients") or {}
+            coord = station_runtime_coordinator(bucket)
+            st_client = station_runtime_client(bucket)
+            connector_clients = station_runtime_connector_clients(bucket)
             data = getattr(coord, "data", None) if coord else None
             st = data.station if data else None
             stations_out.append(
@@ -449,8 +470,8 @@ async def async_get_config_entry_diagnostics(
     if rt:
         recent_sessions = []
         for site in (sites or {}).values():
-            for bucket in ((site or {}).get("stations") or {}).values():
-                coord = (bucket or {}).get("coordinator")
+            for bucket in site_runtime_stations(site).values():
+                coord = station_runtime_coordinator(bucket)
                 data = getattr(coord, "data", None) if coord else None
                 if data and isinstance(getattr(data, "recent_sessions", None), list):
                     recent_sessions.extend(data.recent_sessions)

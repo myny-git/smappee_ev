@@ -6,7 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
+from custom_components.smappee_ev.data import (
+    ConnectorState,
+    IntegrationData,
+    RuntimeData,
+    SmappeeConnectorRuntime,
+    SmappeeSiteRuntime,
+    SmappeeStationRuntime,
+    StationState,
+)
 from custom_components.smappee_ev.diagnostics import REDACT_KEYS, async_get_config_entry_diagnostics
 from tests.factories import make_config_entry, make_runtime_data, make_site, make_station_bucket
 
@@ -407,3 +415,240 @@ class TestDiagnostics:
             "station/**REDACTED**",
             {"connector": "device/**REDACTED**"},
         ]
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_redacts_multi_site_runtime_with_mixed_site_key_types(self, hass):
+        """Keep redaction intact for multi-site runtimes with int/string site ids."""
+        site_a_uuid = "SITE_A_UUID_SECRET_1111"
+        site_b_uuid = "SITE_B_UUID_SECRET_2222"
+        station_a_uuid = "STATION_A_UUID_SECRET_3333"
+        station_b_uuid = "STATION_B_UUID_SECRET_4444"
+        connector_a_uuid = "CONNECTOR_A_UUID_SECRET_5555"
+        connector_b_uuid = "CONNECTOR_B_UUID_SECRET_6666"
+        serial_a = "SERIAL_A_SECRET_7777"
+        serial_b = "SERIAL_B_SECRET_8888"
+
+        def _site_runtime(
+            *,
+            service_location_id: int,
+            site_uuid: str,
+            station_uuid: str,
+            connector_uuid: str,
+            serial: str,
+        ) -> dict:
+            station_client = SimpleNamespace(
+                service_location_id=service_location_id,
+                serial=serial,
+                serial_id=serial,
+                charging_station_serial=serial,
+                smart_device_uuid=station_uuid,
+                smart_device_id=f"STATION_DEVICE_{service_location_id}",
+                dashboard_device_id=f"STATION_DASH_{service_location_id}",
+                connector_number=None,
+                is_station=True,
+            )
+            connector_client = SimpleNamespace(
+                service_location_id=service_location_id,
+                serial=serial,
+                serial_id=serial,
+                charging_station_serial=serial,
+                smart_device_uuid=connector_uuid,
+                smart_device_id=f"CONNECTOR_DEVICE_{service_location_id}",
+                dashboard_device_id=f"CONNECTOR_DASH_{service_location_id}",
+                connector_number=1,
+                is_station=False,
+            )
+            coordinator = SimpleNamespace(
+                data=IntegrationData(
+                    station=StationState(mqtt_connected=True),
+                    connectors={
+                        connector_uuid: ConnectorState(
+                            connector_number=1,
+                            dashboard_device_id=f"CONNECTOR_DASH_{service_location_id}",
+                            dashboard_device_uuid=connector_uuid,
+                        )
+                    },
+                )
+            )
+            return make_site(
+                service_location_uuid=site_uuid,
+                device_serial_number=serial,
+                stations={
+                    station_uuid: make_station_bucket(
+                        coordinator=coordinator,
+                        station_client=station_client,
+                        connector_clients={connector_uuid: connector_client},
+                    )
+                },
+            )
+
+        mqtt_a = SimpleNamespace(
+            _slu=site_a_uuid,
+            _slu_id=11111,
+            _client_id="CLIENT_A_SECRET_9999",
+            _serial=serial_a,
+            _slus=(site_a_uuid,),
+            _mqtt_specs=(),
+        )
+        mqtt_b = SimpleNamespace(
+            _slu=site_b_uuid,
+            _slu_id=22222,
+            _client_id="CLIENT_B_SECRET_0000",
+            _serial=serial_b,
+            _slus=(site_b_uuid,),
+            _mqtt_specs=(),
+        )
+        runtime = make_runtime_data(
+            sites={
+                11111: _site_runtime(
+                    service_location_id=11111,
+                    site_uuid=site_a_uuid,
+                    station_uuid=station_a_uuid,
+                    connector_uuid=connector_a_uuid,
+                    serial=serial_a,
+                ),
+                "22222": _site_runtime(
+                    service_location_id=22222,
+                    site_uuid=site_b_uuid,
+                    station_uuid=station_b_uuid,
+                    connector_uuid=connector_b_uuid,
+                    serial=serial_b,
+                ),
+            },
+            mqtt={11111: mqtt_a, 22222: mqtt_b},
+        )
+        entry = make_config_entry(runtime_data=runtime)
+        entry.data = {"username": "USER_MULTI_SECRET_1234"}
+        entry.options = {}
+        entry.title = "Smappee EV"
+
+        diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+        assert diagnostics["summary"]["service_location_ids_count"] == 2
+        assert diagnostics["meta"]["mqtt_clients_total"] == 2
+        assert [site["mqtt_configured"] for site in diagnostics["sites_detail"]] == [True, True]
+        serialized = json.dumps(diagnostics, sort_keys=True)
+        for secret in (
+            site_a_uuid,
+            site_b_uuid,
+            station_a_uuid,
+            station_b_uuid,
+            connector_a_uuid,
+            connector_b_uuid,
+            serial_a,
+            serial_b,
+            "CLIENT_A_SECRET_9999",
+            "CLIENT_B_SECRET_0000",
+        ):
+            assert secret not in serialized
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_redacts_dataclass_runtime(self, hass):
+        """Diagnostics should read and redact typed runtime containers."""
+        site_uuid = "SITE_DATACLASS_SECRET_1111"
+        station_uuid = "STATION_DATACLASS_SECRET_2222"
+        connector_uuid = "CONNECTOR_DATACLASS_SECRET_3333"
+        serial = "SERIAL_DATACLASS_SECRET_4444"
+        connector_client = SimpleNamespace(
+            service_location_id=44444,
+            serial=serial,
+            serial_id=serial,
+            charging_station_serial=serial,
+            smart_device_uuid=connector_uuid,
+            smart_device_id="CONNECTOR_DEVICE_DATACLASS_SECRET_5555",
+            dashboard_device_id="CONNECTOR_DASH_DATACLASS_SECRET_6666",
+            connector_number=1,
+            is_station=False,
+        )
+        station_client = SimpleNamespace(
+            service_location_id=44444,
+            serial=serial,
+            serial_id=serial,
+            charging_station_serial=serial,
+            smart_device_uuid=station_uuid,
+            smart_device_id="STATION_DEVICE_DATACLASS_SECRET_7777",
+            dashboard_device_id="STATION_DASH_DATACLASS_SECRET_8888",
+            connector_number=None,
+            is_station=True,
+        )
+        coordinator = SimpleNamespace(
+            data=IntegrationData(
+                station=StationState(mqtt_connected=True),
+                connectors={
+                    connector_uuid: ConnectorState(
+                        connector_number=1,
+                        dashboard_device_id="CONNECTOR_DASH_DATACLASS_SECRET_6666",
+                        dashboard_device_uuid=connector_uuid,
+                    )
+                },
+            )
+        )
+        mqtt_client = SimpleNamespace(
+            _slu=site_uuid,
+            _slu_id=44444,
+            _client_id="CLIENT_DATACLASS_SECRET_9999",
+            _serial=serial,
+            _slus=(site_uuid,),
+            _mqtt_specs=(),
+        )
+        runtime = RuntimeData(
+            api=None,
+            mqtt={44444: mqtt_client},
+            sites={
+                44444: SmappeeSiteRuntime(
+                    site_location_id=44444,
+                    site_name="Dataclass Site",
+                    site_function_type="SERVICELOCATION",
+                    site_uuid=site_uuid,
+                    gateway_serial=serial,
+                    gateway_type="Infinity",
+                    measurement_location_ids=[44444],
+                    mqtt_clients=mqtt_client,
+                    stations={
+                        station_uuid: SmappeeStationRuntime(
+                            site_location_id=44444,
+                            control_location_id=44445,
+                            control_name="Dataclass Station",
+                            control_uuid=station_uuid,
+                            control_function_type="CHARGINGSTATION",
+                            charging_station_serial=serial,
+                            charging_station_model="EV Wall",
+                            station_client=station_client,
+                            station_coordinator=coordinator,
+                            connectors={
+                                connector_uuid: SmappeeConnectorRuntime(
+                                    connector_key=connector_uuid,
+                                    connector_uuid=connector_uuid,
+                                    connector_position=1,
+                                    connector_client=connector_client,
+                                )
+                            },
+                        )
+                    },
+                )
+            },
+        )
+        entry = make_config_entry(runtime_data=runtime)
+        entry.data = {}
+        entry.options = {}
+        entry.title = "Smappee EV"
+
+        diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+        assert diagnostics["meta"]["service_locations_total"] == 1
+        assert diagnostics["meta"]["stations_total"] == 1
+        assert diagnostics["meta"]["connectors_total"] == 1
+        assert diagnostics["sites_detail"][0]["uuid"] == "SITE...1111"
+        assert diagnostics["sites_detail"][0]["serial"] == "SERI...4444"
+        assert diagnostics["stations"][0]["station_uuid"] == "STAT...2222"
+        assert diagnostics["connectors"][0]["connector_uuid"] == "CONN...3333"
+        serialized = json.dumps(diagnostics, sort_keys=True)
+        for secret in (
+            site_uuid,
+            station_uuid,
+            connector_uuid,
+            serial,
+            "CLIENT_DATACLASS_SECRET_9999",
+            "CONNECTOR_DASH_DATACLASS_SECRET_6666",
+        ):
+            assert secret not in serialized
