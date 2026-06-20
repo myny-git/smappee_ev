@@ -8,7 +8,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base_entities import SmappeeSiteEntity
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .data import SmappeeEvConfigEntry
-from .helpers import runtime_sites, station_serial
+from .helpers import station_serial
 
 PARALLEL_UPDATES = 0
 
@@ -23,17 +23,16 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     runtime = config_entry.runtime_data
-    sites = runtime_sites(runtime.sites)
 
     entities: list[SmappeeMqttConnectivity] = []
-    for sid, site in (sites or {}).items():
-        coord: SmappeeSiteCoordinator | None = (site or {}).get("site_coordinator")
+    for sid, site in (runtime.sites or {}).items():
+        sid_int = int(sid)
+        coord: SmappeeSiteCoordinator | None = site.site_coordinator
         if coord is None:
-            stations = (site or {}).get("stations", {})
-            first_bucket = next(iter((stations or {}).values()), None)
-            coord = first_bucket.get("coordinator") if isinstance(first_bucket, dict) else None
+            first_bucket = next(iter(site.stations.values()), None)
+            coord = first_bucket.station_coordinator if first_bucket else None
         if coord is not None:
-            entities.append(SmappeeMqttConnectivity(coord, sid))
+            entities.append(SmappeeMqttConnectivity(coord, sid_int))
 
     async_add_entities(entities, False)
 

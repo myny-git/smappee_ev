@@ -19,25 +19,40 @@ from custom_components.smappee_ev.data import (
     RuntimeData,
     StationState,
 )
+from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 
 @pytest.fixture
 def mock_runtime_data():
     """Create mock runtime data."""
     runtime = MagicMock(spec=RuntimeData)
+    connector_1 = MagicMock()
+    connector_2 = MagicMock()
     runtime.sites = {
-        12345: {
-            "stations": {
-                "station_uuid": {
-                    "coordinator": MagicMock(spec=SmappeeCoordinator),
-                    "station_client": MagicMock(),
-                    "connector_clients": {
-                        "connector_uuid1": MagicMock(),
-                        "connector_uuid2": MagicMock(),
+        12345: make_site_runtime(
+            site_location_id=12345,
+            stations={
+                "station_uuid": make_station_runtime(
+                    site_location_id=12345,
+                    control_location_id=12345,
+                    station_uuid="station_uuid",
+                    coordinator=MagicMock(spec=SmappeeCoordinator),
+                    station_client=MagicMock(),
+                    connectors={
+                        "connector_uuid1": make_connector_runtime(
+                            connector_key="connector_uuid1",
+                            connector_uuid="connector_uuid1",
+                            connector_client=connector_1,
+                        ),
+                        "connector_uuid2": make_connector_runtime(
+                            connector_key="connector_uuid2",
+                            connector_uuid="connector_uuid2",
+                            connector_client=connector_2,
+                        ),
                     },
-                }
-            }
-        }
+                )
+            },
+        )
     }
     return runtime
 
@@ -120,7 +135,7 @@ class TestSwitchPlatform:
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant):
         """Test switch platform setup with no sites."""
         runtime = MagicMock(spec=RuntimeData)
-        runtime.sites = None
+        runtime.sites = {}
 
         entry = MagicMock(spec=ConfigEntry)
         entry.runtime_data = runtime

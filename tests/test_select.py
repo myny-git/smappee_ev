@@ -17,6 +17,7 @@ from custom_components.smappee_ev.data import (
     StationState,
 )
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 
 @pytest.fixture
@@ -65,15 +66,25 @@ def mock_runtime_data(mock_coordinator, mock_api_client):
     """Create mock runtime data."""
     runtime = MagicMock(spec=RuntimeData)
     runtime.sites = {
-        12345: {
-            "stations": {
-                "station_uuid_123": {
-                    "coordinator": mock_coordinator,
-                    "station_client": MagicMock(),
-                    "connector_clients": {"connector_uuid_123": mock_api_client},
-                }
-            }
-        }
+        12345: make_site_runtime(
+            site_location_id=12345,
+            stations={
+                "station_uuid_123": make_station_runtime(
+                    site_location_id=12345,
+                    control_location_id=12345,
+                    station_uuid="station_uuid_123",
+                    coordinator=mock_coordinator,
+                    station_client=MagicMock(),
+                    connectors={
+                        "connector_uuid_123": make_connector_runtime(
+                            connector_key="connector_uuid_123",
+                            connector_uuid="connector_uuid_123",
+                            connector_client=mock_api_client,
+                        )
+                    },
+                )
+            },
+        )
     }
     return runtime
 
@@ -110,7 +121,7 @@ class TestSelectPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant, mock_config_entry):
         """Test select platform setup with no sites."""
-        mock_config_entry.runtime_data.sites = None
+        mock_config_entry.runtime_data.sites = {}
         async_add_entities = MagicMock()
 
         await select.async_setup_entry(hass, mock_config_entry, async_add_entities)
@@ -134,9 +145,7 @@ class TestSelectPlatform:
         self, hass: HomeAssistant, mock_config_entry
     ):
         """Test select platform setup with no connector clients."""
-        mock_config_entry.runtime_data.sites[12345]["stations"]["station_uuid_123"].pop(
-            "connector_clients"
-        )
+        mock_config_entry.runtime_data.sites[12345].stations["station_uuid_123"].connectors.clear()
         async_add_entities = MagicMock()
 
         await select.async_setup_entry(hass, mock_config_entry, async_add_entities)

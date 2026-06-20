@@ -12,6 +12,7 @@ from custom_components.smappee_ev.button import (
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.data import ConnectorState, RuntimeData
+from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 
 @pytest.fixture
@@ -23,23 +24,29 @@ def mock_config_entry():
 
     # Create runtime data with sites and stations
     runtime = MagicMock(spec=RuntimeData)
-    runtime.sites = {
-        1: {
-            "stations": {
-                "station1": {
-                    "coordinator": MagicMock(spec=SmappeeCoordinator),
-                    "station_client": MagicMock(),
-                    "connector_clients": {
-                        "conn1": MagicMock(),
-                    },
-                }
-            }
-        }
-    }
-
-    # Setup mock client for connector
-    client = runtime.sites[1]["stations"]["station1"]["connector_clients"]["conn1"]
+    client = MagicMock()
     client.get_connector_details.return_value = {"name": "Connector 1"}
+    runtime.sites = {
+        1: make_site_runtime(
+            site_location_id=1,
+            stations={
+                "station1": make_station_runtime(
+                    site_location_id=1,
+                    control_location_id=1,
+                    station_uuid="station1",
+                    coordinator=MagicMock(spec=SmappeeCoordinator),
+                    station_client=MagicMock(),
+                    connectors={
+                        "conn1": make_connector_runtime(
+                            connector_key="conn1",
+                            connector_uuid="conn1",
+                            connector_client=client,
+                        )
+                    },
+                )
+            },
+        )
+    }
 
     entry.runtime_data = runtime
     return entry

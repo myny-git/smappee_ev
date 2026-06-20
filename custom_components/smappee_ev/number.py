@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import ClientError
 from homeassistant.components.number import (
@@ -22,7 +22,6 @@ from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
-from .helpers import runtime_sites
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -33,12 +32,10 @@ def _active_or_true(value: bool | None) -> bool:
     return bool(value) if value is not None else True
 
 
-def _dashboard_coord_for_site(site: dict[str, Any]) -> SmappeeCoordinator | None:
+def _dashboard_coord_for_site(site) -> SmappeeCoordinator | None:
     """Return a station coordinator that can serve site-scoped Dashboard settings."""
-    for bucket in ((site or {}).get("stations") or {}).values():
-        if not isinstance(bucket, dict):
-            continue
-        coord: SmappeeCoordinator | None = bucket.get("coordinator")
+    for bucket in site.stations.values():
+        coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
         if coord is not None and getattr(coord, "dashboard_client", None) is not None:
             return coord
     return None
@@ -51,40 +48,45 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smappee EV number entities (multi-station)."""
     runtime = config_entry.runtime_data
-    sites = runtime_sites(runtime.sites)
 
     entities: list[NumberEntity] = []
-    for sid, site in (sites or {}).items():
-        stations = (site or {}).get("stations", {})
-        dashboard_coord = _dashboard_coord_for_site(site or {})
+    for sid, site in (runtime.sites or {}).items():
+        sid_int = int(sid)
+        dashboard_coord = _dashboard_coord_for_site(site)
         if dashboard_coord is not None:
             entities.append(
                 SmappeeCapacityMaximumPowerNumber(
                     coordinator=dashboard_coord,
-                    sid=sid,
+                    sid=sid_int,
                 )
             )
             entities.append(
                 SmappeeOverloadMaximumLoadNumber(
                     coordinator=dashboard_coord,
-                    sid=sid,
+                    sid=sid_int,
                 )
             )
 
-        for st_uuid, bucket in (stations or {}).items():
-            coord: SmappeeCoordinator = bucket["coordinator"]
-            conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
+        for st_uuid, bucket in site.stations.items():
+            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+            if coord is None:
+                continue
+            conns = cast(
+                dict[str, SmappeeDeviceHandle],
+                {key: conn.connector_client for key, conn in bucket.connectors.items()},
+            )
 
             if getattr(coord, "dashboard_client", None) is not None:
-                st_client: SmappeeDeviceHandle | None = bucket.get("station_client") or getattr(
-                    coord, "station_client", None
+                st_client = cast(
+                    SmappeeDeviceHandle | None,
+                    bucket.station_client or getattr(coord, "station_client", None),
                 )
                 if st_client is not None:
                     entities.append(
                         SmappeeOfflineFailsafeCurrentNumber(
                             coordinator=coord,
                             api_client=st_client,
-                            sid=sid,
+                            sid=sid_int,
                             station_uuid=st_uuid,
                         )
                     )
@@ -95,7 +97,7 @@ async def async_setup_entry(
                     SmappeeCombinedCurrentSlider(
                         coordinator=coord,
                         api_client=client,
-                        sid=sid,
+                        sid=sid_int,
                         station_uuid=st_uuid,
                         connector_uuid=cuuid,
                     )
@@ -104,7 +106,7 @@ async def async_setup_entry(
                     SmappeeConnectorMaxCurrentNumber(
                         coordinator=coord,
                         api_client=client,
-                        sid=sid,
+                        sid=sid_int,
                         station_uuid=st_uuid,
                         connector_uuid=cuuid,
                     )
@@ -113,7 +115,7 @@ async def async_setup_entry(
                     SmappeeMinSurplusPctNumber(
                         coordinator=coord,
                         api_client=client,
-                        sid=sid,
+                        sid=sid_int,
                         station_uuid=st_uuid,
                         connector_uuid=cuuid,
                     )

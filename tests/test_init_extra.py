@@ -15,6 +15,7 @@ from custom_components.smappee_ev import (
 from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
 from custom_components.smappee_ev.discovery import MqttChannelSpec
 from custom_components.smappee_ev.mqtt_gateway import SmappeeMqtt
+from tests.factories import make_connector_runtime, make_station_runtime
 
 
 @pytest.fixture
@@ -63,12 +64,23 @@ class TestCoordinatorCreation:
         """Test creating coordinators for stations."""
         # Create test stations data
         stations = {
-            "station1_uuid": {
-                "station_client": mock_station_client,
-                "connector_clients": {"connector1_uuid": mock_connector_client},
-                "coordinator": None,
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=mock_station_client,
+                coordinator=None,
+                site_name=None,
+                gateway_serial=None,
+                gateway_type=None,
+                station_name=None,
+                station_model=None,
+                connectors={
+                    "connector1_uuid": make_connector_runtime(
+                        connector_key="connector1_uuid",
+                        connector_uuid="connector1_uuid",
+                        connector_client=mock_connector_client,
+                    )
+                },
+            )
         }
 
         # Mock SmappeeCoordinator
@@ -96,7 +108,7 @@ class TestCoordinatorCreation:
             mock_coordinator.async_config_entry_first_refresh.assert_called_once()
 
             # Verify coordinator was assigned to station
-            assert stations["station1_uuid"]["coordinator"] == mock_coordinator
+            assert stations["station1_uuid"].station_coordinator == mock_coordinator
 
     @pytest.mark.asyncio
     async def test_create_coordinators_with_config_entry(
@@ -105,12 +117,23 @@ class TestCoordinatorCreation:
         """Test creating coordinators with config entry."""
         # Create test stations data
         stations = {
-            "station1_uuid": {
-                "station_client": mock_station_client,
-                "connector_clients": {"connector1_uuid": mock_connector_client},
-                "coordinator": None,
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=mock_station_client,
+                coordinator=None,
+                site_name=None,
+                gateway_serial=None,
+                gateway_type=None,
+                station_name=None,
+                station_model=None,
+                connectors={
+                    "connector1_uuid": make_connector_runtime(
+                        connector_key="connector1_uuid",
+                        connector_uuid="connector1_uuid",
+                        connector_client=mock_connector_client,
+                    )
+                },
+            )
         }
 
         # Create a mock config entry
@@ -146,19 +169,20 @@ class TestMqttSetup:
     def test_setup_mqtt_with_valid_uuid(self, hass, mock_station_client):
         """Test setting up MQTT with a valid service location UUID."""
         # Create test stations data
+        mock_coordinator = MagicMock(spec=SmappeeCoordinator)
         stations = {
-            "station1_uuid": {
-                "station_client": mock_station_client,
-                "connector_clients": {},
-                "coordinator": MagicMock(spec=SmappeeCoordinator),
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=mock_station_client,
+                coordinator=mock_coordinator,
+                connectors={},
+            )
         }
 
         # Add data property to coordinator
-        stations["station1_uuid"]["coordinator"].data = MagicMock()
-        stations["station1_uuid"]["coordinator"].data.station = MagicMock()
-        stations["station1_uuid"]["coordinator"].update_interval = UPDATE_INTERVAL_DEFAULT
+        mock_coordinator.data = MagicMock()
+        mock_coordinator.data.station = MagicMock()
+        mock_coordinator.update_interval = UPDATE_INTERVAL_DEFAULT
 
         # Mock SmappeeMqtt
         with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
@@ -194,7 +218,7 @@ class TestMqttSetup:
             # We can't verify if async_create_task was called since hass in pytest is a real object, not a mock
 
             # Polling remains enabled until MQTT actually connects.
-            coord = stations["station1_uuid"]["coordinator"]
+            coord = stations["station1_uuid"].station_coordinator
             assert coord.update_interval == UPDATE_INTERVAL_DEFAULT
 
             on_conn_callback = mock_mqtt_class.call_args[1]["on_connection_change"]
@@ -210,18 +234,19 @@ class TestMqttSetup:
     def test_setup_mqtt_with_no_uuid(self, hass, mock_station_client):
         """Test setting up MQTT with no service location UUID."""
         # Create test stations data
+        mock_coordinator = MagicMock(spec=SmappeeCoordinator)
         stations = {
-            "station1_uuid": {
-                "station_client": mock_station_client,
-                "connector_clients": {},
-                "coordinator": MagicMock(spec=SmappeeCoordinator),
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=mock_station_client,
+                coordinator=mock_coordinator,
+                connectors={},
+            )
         }
 
         # Add data property to coordinator
-        stations["station1_uuid"]["coordinator"].data = MagicMock()
-        stations["station1_uuid"]["coordinator"].data.station = MagicMock()
+        mock_coordinator.data = MagicMock()
+        mock_coordinator.data.station = MagicMock()
 
         # Mock SmappeeMqtt
         with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
@@ -245,12 +270,12 @@ class TestMqttSetup:
     def test_setup_mqtt_groups_same_credentials_into_one_client(self, hass, mock_station_client):
         """Test MQTT specs with equal credentials use one MQTT client."""
         stations = {
-            "station1_uuid": {
-                "station_client": mock_station_client,
-                "connector_clients": {},
-                "coordinator": MagicMock(spec=SmappeeCoordinator),
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=mock_station_client,
+                coordinator=MagicMock(spec=SmappeeCoordinator),
+                connectors={},
+            )
         }
         specs = [
             MqttChannelSpec(1, "grid", "activePower", "servicelocation/site-a/power", "u", "p", []),
@@ -288,12 +313,12 @@ class TestMqttSetup:
     ):
         """Test MQTT specs with different credentials use separate MQTT clients."""
         stations = {
-            "station1_uuid": {
-                "station_client": mock_station_client,
-                "connector_clients": {},
-                "coordinator": MagicMock(spec=SmappeeCoordinator),
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=mock_station_client,
+                coordinator=MagicMock(spec=SmappeeCoordinator),
+                connectors={},
+            )
         }
         specs = [
             MqttChannelSpec(
@@ -336,7 +361,13 @@ class TestMqttSetup:
         mock_coordinator.apply_mqtt_properties = MagicMock()
         mock_coordinator.async_set_updated_data = MagicMock()
 
-        stations = {"station1_uuid": {"coordinator": mock_coordinator, "mqtt": None}}
+        stations = {
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                coordinator=mock_coordinator,
+                connectors={},
+            )
+        }
 
         # Mock SmappeeMqtt to capture the callback
         with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
@@ -368,7 +399,13 @@ class TestMqttSetup:
         # Create test stations data with coordinator
         mock_coordinator = MagicMock(spec=SmappeeCoordinator)
 
-        stations = {"station1_uuid": {"coordinator": mock_coordinator, "mqtt": None}}
+        stations = {
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                coordinator=mock_coordinator,
+                connectors={},
+            )
+        }
 
         # Mock SmappeeMqtt to capture the callback
         with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
@@ -409,7 +446,13 @@ class TestMqttSetup:
         mock_coordinator._shutting_down = True
         mock_coordinator.async_request_refresh = AsyncMock()
         mock_coordinator.apply_mqtt_connection_change = MagicMock()
-        stations = {"station1_uuid": {"coordinator": mock_coordinator, "mqtt": None}}
+        stations = {
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                coordinator=mock_coordinator,
+                connectors={},
+            )
+        }
         background_tasks = set()
 
         with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
@@ -493,13 +536,13 @@ class TestPrepareSite:
             }
         ]
         stations = {
-            "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {},
-                "coordinator": None,
-                "mqtt": None,
-                "serial": "STATION1",
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=MagicMock(),
+                coordinator=None,
+                serial="STATION1",
+                connectors={},
+            )
         }
 
         with (
@@ -663,13 +706,19 @@ class TestPrepareSite:
 
         # Create stations data
         stations = {
-            "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {"connector1_uuid": MagicMock()},
-                "coordinator": MagicMock(),
-                "mqtt": None,
-                "serial": "STATION1",
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=MagicMock(),
+                coordinator=MagicMock(),
+                serial="STATION1",
+                connectors={
+                    "connector1_uuid": make_connector_runtime(
+                        connector_key="connector1_uuid",
+                        connector_uuid="connector1_uuid",
+                        connector_client=MagicMock(),
+                    )
+                },
+            )
         }
 
         # Mock the required functions
@@ -706,7 +755,7 @@ class TestPrepareSite:
 
             # Verify stations have MQTT reference
             for station in stations.values():
-                assert station["mqtt"] is not None
+                assert station.mqtt is not None
 
     @pytest.mark.asyncio
     async def test_prepare_site_with_station_filter(
@@ -751,13 +800,13 @@ class TestPrepareSite:
 
         # Create stations data
         stations = {
-            "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {},
-                "coordinator": None,
-                "mqtt": None,
-                "serial": "STATION1",
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=MagicMock(),
+                coordinator=None,
+                serial="STATION1",
+                connectors={},
+            )
         }
 
         # Mock the required functions
@@ -873,11 +922,11 @@ class TestPrepareSite:
         assert result is not None
         assert set(result) == {"REAL-STATION"}
         bucket = result["REAL-STATION"]
-        assert bucket["serial"] == "REAL-STATION"
-        assert set(bucket["connector_clients"]) == {"mqtt_connector_uuid"}
-        assert bucket["connector_clients"]["mqtt_connector_uuid"].charging_station_serial == (
-            "REAL-STATION"
-        )
+        assert bucket.charging_station_serial == "REAL-STATION"
+        assert set(bucket.connectors) == {"mqtt_connector_uuid"}
+        assert bucket.connectors[
+            "mqtt_connector_uuid"
+        ].connector_client.charging_station_serial == ("REAL-STATION")
 
     @pytest.mark.asyncio
     async def test_prepare_site_rebuilds_empty_station_buckets_from_mapping(
@@ -955,9 +1004,11 @@ class TestPrepareSite:
         assert result is not None
         assert set(result) == {"REAL-STATION"}
         bucket = result["REAL-STATION"]
-        assert bucket["serial"] == "REAL-STATION"
-        assert set(bucket["connector_clients"]) == {"aa6a3217-cc6a-44a8-8ff9-1ea67618ec15"}
-        connector_client = bucket["connector_clients"]["aa6a3217-cc6a-44a8-8ff9-1ea67618ec15"]
+        assert bucket.charging_station_serial == "REAL-STATION"
+        assert set(bucket.connectors) == {"aa6a3217-cc6a-44a8-8ff9-1ea67618ec15"}
+        connector_client = bucket.connectors[
+            "aa6a3217-cc6a-44a8-8ff9-1ea67618ec15"
+        ].connector_client
         assert connector_client.charging_station_serial == "REAL-STATION"
 
     @pytest.mark.asyncio
@@ -1037,8 +1088,8 @@ class TestPrepareSite:
         assert result is not None
         assert set(result) == {"SITE-SERIAL"}
         bucket = result["SITE-SERIAL"]
-        assert bucket["serial"] == "SITE-SERIAL"
-        assert set(bucket["connector_clients"]) == {"aa6a3217-cc6a-44a8-8ff9-1ea67618ec15"}
+        assert bucket.charging_station_serial == "SITE-SERIAL"
+        assert set(bucket.connectors) == {"aa6a3217-cc6a-44a8-8ff9-1ea67618ec15"}
 
     @pytest.mark.asyncio
     async def test_prepare_site_treats_empty_metering_mapping_as_monitor_only(
@@ -1069,13 +1120,13 @@ class TestPrepareSite:
             }
         ]
         stations = {
-            "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {},
-                "coordinator": None,
-                "mqtt": None,
-                "serial": "STATION1",
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=MagicMock(),
+                coordinator=None,
+                serial="STATION1",
+                connectors={},
+            )
         }
 
         with (
@@ -1105,7 +1156,7 @@ class TestPrepareSite:
 
         assert result is stations
         assert mqtt is None
-        assert stations["station1_uuid"]["connector_clients"] == {}
+        assert stations["station1_uuid"].connectors == {}
 
     @pytest.mark.asyncio
     async def test_prepare_site_skips_fallback_for_unassigned_multi_station_mapping(
@@ -1145,20 +1196,20 @@ class TestPrepareSite:
             "STATION1": {"connectors": {"connector1_uuid": {"id": "unknown", "position": 1}}}
         }
         stations = {
-            "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {},
-                "coordinator": None,
-                "mqtt": None,
-                "serial": "STATION1",
-            },
-            "station2_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {},
-                "coordinator": None,
-                "mqtt": None,
-                "serial": "STATION2",
-            },
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=MagicMock(),
+                coordinator=None,
+                serial="STATION1",
+                connectors={},
+            ),
+            "station2_uuid": make_station_runtime(
+                station_uuid="station2_uuid",
+                station_client=MagicMock(),
+                coordinator=None,
+                serial="STATION2",
+                connectors={},
+            ),
         }
 
         with (
@@ -1191,4 +1242,4 @@ class TestPrepareSite:
         assert mqtt is None
         assign_connectors.assert_called_once()
         fallback_assign.assert_not_called()
-        assert all(bucket["connector_clients"] == {} for bucket in stations.values())
+        assert all(bucket.connectors == {} for bucket in stations.values())

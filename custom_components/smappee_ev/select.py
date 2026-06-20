@@ -1,3 +1,5 @@
+from typing import cast
+
 from aiohttp import ClientError
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
@@ -10,7 +12,6 @@ from .const import CHARGING_MODES, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import runtime_sites
 
 PARALLEL_UPDATES = 1
 MODES = [mode.lower() for mode in CHARGING_MODES]
@@ -30,21 +31,25 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     runtime = config_entry.runtime_data
-    sites = runtime_sites(runtime.sites)
 
     entities: list[SelectEntity] = []
-    for sid, site in (sites or {}).items():
-        stations = (site or {}).get("stations", {})
-        for st_uuid, bucket in (stations or {}).items():
-            coord: SmappeeCoordinator = bucket["coordinator"]
-            conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
+    for sid, site in (runtime.sites or {}).items():
+        sid_int = int(sid)
+        for st_uuid, bucket in site.stations.items():
+            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+            if coord is None:
+                continue
+            conns = cast(
+                dict[str, SmappeeDeviceHandle],
+                {key: conn.connector_client for key, conn in bucket.connectors.items()},
+            )
 
             for cuuid, client in (conns or {}).items():
                 entities.append(
                     SmappeeModeSelect(
                         coordinator=coord,
                         api_client=client,
-                        sid=sid,
+                        sid=sid_int,
                         station_uuid=st_uuid,
                         connector_uuid=cuuid,
                     )

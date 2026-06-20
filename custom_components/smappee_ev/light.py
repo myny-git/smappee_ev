@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import ClientError
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
@@ -13,7 +13,6 @@ from .const import DEFAULT_LED_BRIGHTNESS, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
-from .helpers import runtime_sites
 
 PARALLEL_UPDATES = 1
 
@@ -33,23 +32,25 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smappee EV light entities."""
     runtime = config_entry.runtime_data
-    sites = runtime_sites(runtime.sites)
 
     entities: list[LightEntity] = []
-    for sid, site in (sites or {}).items():
-        stations = (site or {}).get("stations", {})
-        for st_uuid, bucket in (stations or {}).items():
-            if bucket.get("connector_clients"):
-                led_devices = bucket.get("led_devices") or {}
-                led_key, led_info = next(iter(led_devices.items()), (None, {}))
+    for sid, site in (runtime.sites or {}).items():
+        sid_int = int(sid)
+        for st_uuid, bucket in site.stations.items():
+            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+            st_client = cast(SmappeeDeviceHandle | None, bucket.station_client)
+            if coord is None or st_client is None:
+                continue
+            if bucket.connectors:
+                led_key, led_info = next(iter(bucket.led_devices.items()), (None, None))
                 entities.append(
                     SmappeeLedLight(
-                        coordinator=bucket["coordinator"],
-                        api_client=bucket["station_client"],
-                        sid=sid,
+                        coordinator=coord,
+                        api_client=st_client,
+                        sid=sid_int,
                         station_uuid=st_uuid,
                         led_device_id=led_key,
-                        led_name=led_info.get("name") if isinstance(led_info, dict) else None,
+                        led_name=led_info.led_device_name if led_info else None,
                     )
                 )
 

@@ -18,7 +18,7 @@ from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
-from .helpers import anonymize_uuid, runtime_sites
+from .helpers import anonymize_uuid
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -34,23 +34,24 @@ async def async_setup_entry(
 ) -> None:
     """Set up Smappee EV switches (multi-station)."""
     runtime = config_entry.runtime_data
-    sites = runtime_sites(runtime.sites)
 
     entities: list[SwitchEntity] = []
-    for sid, site in (sites or {}).items():
-        stations = (site or {}).get("stations", {})
-        for st_uuid, bucket in (stations or {}).items():
-            coord: SmappeeCoordinator = bucket["coordinator"]
-            st_client: SmappeeDeviceHandle = bucket["station_client"]
-            conns: dict[str, SmappeeDeviceHandle] = bucket.get("connector_clients", {})
+    for sid, site in (runtime.sites or {}).items():
+        sid_int = int(sid)
+        for st_uuid, bucket in site.stations.items():
+            coord: SmappeeCoordinator | None = bucket.station_coordinator
+            st_client: SmappeeDeviceHandle | None = bucket.station_client
+            conns: dict[str, SmappeeDeviceHandle] = {
+                key: conn.connector_client for key, conn in bucket.connectors.items()
+            }
 
-            if conns:
+            if coord is not None and st_client is not None and conns:
                 # Station-level switch
                 entities.append(
                     SmappeeAvailabilitySwitch(
                         coordinator=coord,
                         api_client=st_client,
-                        sid=sid,
+                        sid=sid_int,
                         station_uuid=st_uuid,
                     )
                 )
@@ -58,7 +59,7 @@ async def async_setup_entry(
                     SmappeeOfflineChargingSwitch(
                         coordinator=coord,
                         api_client=st_client,
-                        sid=sid,
+                        sid=sid_int,
                         station_uuid=st_uuid,
                     )
                 )
@@ -69,7 +70,7 @@ async def async_setup_entry(
                         SmappeeChargingSwitch(
                             coordinator=coord,
                             api_client=client,
-                            sid=sid,
+                            sid=sid_int,
                             station_uuid=st_uuid,
                             connector_uuid=cuuid,
                         )

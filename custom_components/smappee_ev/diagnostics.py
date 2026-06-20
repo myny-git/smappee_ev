@@ -11,16 +11,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
-from .data import RuntimeData, SmappeeEvConfigEntry
-from .helpers import (
-    runtime_mqtt_for_site,
-    runtime_sites,
-    runtime_value,
-    site_runtime_stations,
-    station_runtime_client,
-    station_runtime_connector_clients,
-    station_runtime_coordinator,
-)
+from .data import RuntimeData, SmappeeEvConfigEntry, SmappeeStationRuntime
 
 REDACT_KEYS = {
     "access_token",
@@ -121,23 +112,20 @@ def _runtime_sensitive_values(rt: RuntimeData | None) -> list[object]:
     values: list[object] = []
     if rt is None:
         return values
-    sites = runtime_sites(getattr(rt, "sites", {}))
-    for site_id, site in sites.items():
+    for site_id, site in rt.sites.items():
         values.append(site_id)
-        if not isinstance(site, dict):
-            continue
         values.extend(
             [
-                site.get("serviceLocationUuid"),
-                site.get("site_uuid"),
-                site.get("deviceSerialNumber"),
-                site.get("gateway_serial"),
+                site.site_uuid,
+                site.gateway_serial,
             ]
         )
-        for station_uuid, bucket in site_runtime_stations(site).items():
+        for station_uuid, bucket in site.stations.items():
             values.append(station_uuid)
-            connector_clients = station_runtime_connector_clients(bucket)
-            clients = [station_runtime_client(bucket), *connector_clients.values()]
+            connector_clients = {
+                key: connector.connector_client for key, connector in bucket.connectors.items()
+            }
+            clients = [bucket.station_client, *connector_clients.values()]
             for client in clients:
                 values.extend(
                     getattr(client, attr, None)
@@ -258,9 +246,7 @@ async def async_get_config_entry_diagnostics(
     out: dict[str, Any] = {}
 
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
-    raw_sites = getattr(rt, "sites", {}) if rt else {}
-    sites_valid = isinstance(raw_sites, dict)
-    sites = runtime_sites(raw_sites)
+    sites = rt.sites if rt else {}
     sensitive_values = _entry_sensitive_values(entry) + _runtime_sensitive_values(rt)
     # Stable ordering for diffs / logs
     out["sites"] = sorted(sites.keys(), key=_sort_as_text)
@@ -289,7 +275,6 @@ async def async_get_config_entry_diagnostics(
         "state": state_name,
         "domain": entry.domain,
         "version_manifest": manifest_version,
-        "runtime_sites_valid": sites_valid,
         "service_locations_total": len(sites or {}),
         "mqtt_clients_total": _mqtt_client_count(getattr(rt, "mqtt", {}) if rt else {}),
         "stations_total": 0,  # filled later
@@ -302,23 +287,20 @@ async def async_get_config_entry_diagnostics(
     connectors_out: list[dict[str, Any]] = []
     sites_detail: list[dict[str, Any]] = []
 
-    def _station_connected(bucket: object) -> bool:
-        coord = station_runtime_coordinator(bucket)
+    def _station_connected(bucket: SmappeeStationRuntime) -> bool:
+        coord = bucket.station_coordinator
         if not coord or not getattr(coord, "data", None):
             return False
         st = getattr(coord.data, "station", None)
         return bool(getattr(st, "mqtt_connected", False))
 
     for site_id, site in (sites or {}).items():
-        site_obj = site or {}
-        stations = site_runtime_stations(site_obj)
+        stations = site.stations
         # Defensive: RuntimeData.mqtt may contain one or more SmappeeMqtt clients per site.
-        mqtt_obj = runtime_mqtt_for_site(getattr(rt, "mqtt", {}) if rt else {}, site_id)
+        mqtt_obj = rt.mqtt.get(site_id) if rt else None
         # Aggregate counts
         station_count = len(stations)
-        connector_count = sum(
-            len(station_runtime_connector_clients(bucket)) for bucket in stations.values()
-        )
+        connector_count = sum(len(bucket.connectors) for bucket in stations.values())
         # derive mqtt_connected aggregate (any station shows connected)
         mqtt_connected_any = any(_station_connected(b) for b in (stations or {}).values())
 
@@ -326,23 +308,11 @@ async def async_get_config_entry_diagnostics(
             {
                 "service_location_id": site_id,
                 "service_location_id_obfuscated": _obfuscate(site_id),
-                "name_present": (
-                    runtime_value(site_obj, "name") or runtime_value(site_obj, "site_name")
-                )
-                is not None,
-                "uuid": _obfuscate(
-                    runtime_value(site_obj, "serviceLocationUuid")
-                    or runtime_value(site_obj, "site_uuid")
-                ),
-                "serial": _obfuscate(
-                    runtime_value(site_obj, "deviceSerialNumber")
-                    or runtime_value(site_obj, "gateway_serial")
-                ),
-                "control_location_ids": _safe_sorted(runtime_value(site_obj, "controlLocationIds")),
-                "measurement_location_ids": _safe_sorted(
-                    runtime_value(site_obj, "measurementLocationIds")
-                    or runtime_value(site_obj, "measurement_location_ids")
-                ),
+                "name_present": site.site_name is not None,
+                "uuid": _obfuscate(site.site_uuid),
+                "serial": _obfuscate(site.gateway_serial),
+                "control_location_ids": _safe_sorted(site.control_location_ids),
+                "measurement_location_ids": _safe_sorted(site.measurement_location_ids),
                 "station_count": station_count,
                 "connector_count": connector_count,
                 "mqtt_configured": mqtt_obj is not None,
@@ -352,9 +322,11 @@ async def async_get_config_entry_diagnostics(
         )
         # per-station and connectors inside same site loop
         for st_uuid, bucket in (stations or {}).items():
-            coord = station_runtime_coordinator(bucket)
-            st_client = station_runtime_client(bucket)
-            connector_clients = station_runtime_connector_clients(bucket)
+            coord = bucket.station_coordinator
+            st_client = bucket.station_client
+            connector_clients = {
+                key: connector.connector_client for key, connector in bucket.connectors.items()
+            }
             data = getattr(coord, "data", None) if coord else None
             st = data.station if data else None
             stations_out.append(
@@ -467,8 +439,8 @@ async def async_get_config_entry_diagnostics(
     if rt:
         recent_sessions = []
         for site in (sites or {}).values():
-            for bucket in site_runtime_stations(site).values():
-                coord = station_runtime_coordinator(bucket)
+            for bucket in site.stations.values():
+                coord = bucket.station_coordinator
                 data = getattr(coord, "data", None) if coord else None
                 if data and isinstance(getattr(data, "recent_sessions", None), list):
                     recent_sessions.extend(data.recent_sessions)

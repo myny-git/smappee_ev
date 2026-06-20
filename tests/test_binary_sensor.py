@@ -12,6 +12,7 @@ from custom_components.smappee_ev.binary_sensor import SmappeeMqttConnectivity
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.data import IntegrationData, RuntimeData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from tests.factories import make_site_runtime, make_station_runtime
 
 
 @pytest.fixture
@@ -57,14 +58,19 @@ def mock_runtime_data(mock_coordinator, mock_api_client):
     """Create mock runtime data."""
     runtime = MagicMock(spec=RuntimeData)
     runtime.sites = {
-        12345: {
-            "stations": {
-                "station_uuid_123": {
-                    "coordinator": mock_coordinator,
-                    "station_client": mock_api_client,
-                }
-            }
-        }
+        12345: make_site_runtime(
+            site_location_id=12345,
+            stations={
+                "station_uuid_123": make_station_runtime(
+                    site_location_id=12345,
+                    control_location_id=12345,
+                    station_uuid="station_uuid_123",
+                    coordinator=mock_coordinator,
+                    station_client=mock_api_client,
+                    connectors={},
+                )
+            },
+        )
     }
     return runtime
 
@@ -98,7 +104,7 @@ class TestBinarySensorPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant, mock_config_entry):
         """Test binary_sensor platform setup with no sites."""
-        mock_config_entry.runtime_data.sites = None
+        mock_config_entry.runtime_data.sites = {}
         async_add_entities = MagicMock()
 
         await binary_sensor.async_setup_entry(hass, mock_config_entry, async_add_entities)
@@ -120,7 +126,7 @@ class TestBinarySensorPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_empty_stations(self, hass: HomeAssistant, mock_config_entry):
         """Test binary_sensor platform setup with empty stations."""
-        mock_config_entry.runtime_data.sites = {12345: {"stations": {}}}
+        mock_config_entry.runtime_data.sites = {12345: make_site_runtime(stations={})}
         async_add_entities = MagicMock()
 
         await binary_sensor.async_setup_entry(hass, mock_config_entry, async_add_entities)
@@ -131,7 +137,7 @@ class TestBinarySensorPlatform:
     @pytest.mark.asyncio
     async def test_async_setup_entry_no_stations(self, hass: HomeAssistant, mock_config_entry):
         """Test binary_sensor platform setup with no stations."""
-        mock_config_entry.runtime_data.sites = {12345: {}}
+        mock_config_entry.runtime_data.sites = {12345: make_site_runtime(stations={})}
         async_add_entities = MagicMock()
 
         await binary_sensor.async_setup_entry(hass, mock_config_entry, async_add_entities)

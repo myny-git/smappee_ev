@@ -6,17 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
-    RuntimeData,
-    SmappeeConnectorRuntime,
-    SmappeeSiteRuntime,
-    SmappeeStationRuntime,
-    StationState,
-)
+from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.diagnostics import REDACT_KEYS, async_get_config_entry_diagnostics
-from tests.factories import make_config_entry, make_runtime_data, make_site, make_station_bucket
+from tests.factories import (
+    make_config_entry,
+    make_connector_runtime,
+    make_runtime_data,
+    make_site_runtime,
+    make_station_runtime,
+)
 
 
 @pytest.fixture
@@ -30,20 +28,37 @@ def mock_integration():
 @pytest.fixture
 def mock_runtime_data():
     """Create mock runtime data with sites, mqtt, etc."""
+    coordinator = MagicMock()
     runtime = make_runtime_data(
         api=None,
         sites={
-            12345: make_site(
+            12345: make_site_runtime(
+                site_location_id=12345,
+                site_uuid="test-uuid",
+                gateway_serial="SERIAL123",
                 stations={
-                    "station-uuid-1": make_station_bucket(
-                        coordinator=MagicMock(),
+                    "station-uuid-1": make_station_runtime(
+                        site_location_id=12345,
+                        control_location_id=12345,
+                        station_uuid="station-uuid-1",
+                        coordinator=coordinator,
                         station_client=MagicMock(serial_id="STATION001"),
-                        connector_clients={
-                            "connector-uuid-1": MagicMock(),
-                            "connector-uuid-2": MagicMock(),
+                        connectors={
+                            "connector-uuid-1": make_connector_runtime(
+                                connector_key="connector-uuid-1",
+                                connector_uuid="connector-uuid-1",
+                                connector_position=1,
+                                connector_client=MagicMock(),
+                            ),
+                            "connector-uuid-2": make_connector_runtime(
+                                connector_key="connector-uuid-2",
+                                connector_uuid="connector-uuid-2",
+                                connector_position=2,
+                                connector_client=MagicMock(),
+                            ),
                         },
                     )
-                }
+                },
             )
         },
         mqtt={12345: MagicMock()},
@@ -77,7 +92,7 @@ def mock_runtime_data():
         "connector-uuid-2": connector2_data,
     }
 
-    runtime.sites[12345]["stations"]["station-uuid-1"]["coordinator"].data = coordinator_data
+    coordinator.data = coordinator_data
 
     return runtime
 
@@ -150,7 +165,6 @@ class TestDiagnostics:
         assert diagnostics["meta"]["title"] == "Smappee EV — **REDACTED**"
         assert diagnostics["meta"]["state"] == "loaded"
         assert diagnostics["meta"]["domain"] == "smappee_ev"
-        assert diagnostics["meta"]["runtime_sites_valid"] is True
         assert diagnostics["meta"]["service_locations_total"] == 1
         assert diagnostics["meta"]["stations_total"] == 1
         assert diagnostics["meta"]["connectors_total"] == 2
@@ -239,20 +253,6 @@ class TestDiagnostics:
         assert diagnostics["meta"]["connectors_total"] == 0
         assert diagnostics["summary"]["service_location_ids_count"] == 0
         assert diagnostics["meta"]["version_manifest"] is None
-        assert diagnostics["meta"]["runtime_sites_valid"] is True
-
-    @pytest.mark.asyncio
-    async def test_diagnostics_reports_invalid_runtime_sites(self, hass):
-        """Expose corrupted runtime site shape instead of only showing zero sites."""
-        runtime = make_runtime_data()
-        runtime.sites = "invalid_data"
-        entry = make_config_entry(runtime_data=runtime)
-
-        diagnostics = await async_get_config_entry_diagnostics(hass, entry)
-
-        assert diagnostics["sites"] == []
-        assert diagnostics["meta"]["runtime_sites_valid"] is False
-        assert diagnostics["meta"]["service_locations_total"] == 0
 
     @pytest.mark.asyncio
     async def test_diagnostics_with_partial_data(self, hass, mock_runtime_data):
@@ -262,8 +262,8 @@ class TestDiagnostics:
         # Create runtime with incomplete data
         runtime = mock_runtime_data
         # Remove coordinator data
-        station = runtime.sites[12345]["stations"]["station-uuid-1"]
-        station["coordinator"].data = None
+        station = runtime.sites[12345].stations["station-uuid-1"]
+        station.station_coordinator.data = None
 
         entry.runtime_data = runtime
         entry.data = {"username": "test_user"}
@@ -359,20 +359,30 @@ class TestDiagnostics:
                 _token_expires_at_ms=123,
             ),
             sites={
-                12345: {
-                    "name": "Sensitive Site",
-                    "serviceLocationUuid": secrets["serviceLocationUuid"],
-                    "deviceSerialNumber": secrets["site_serial_number"],
-                    "stations": {
-                        secrets["station_uuid"]: {
-                            "coordinator": coordinator,
-                            "station_client": station_client,
-                            "connector_clients": {
-                                secrets["connector_uuid"]: connector_client,
+                12345: make_site_runtime(
+                    site_location_id=12345,
+                    site_name="Sensitive Site",
+                    site_uuid=secrets["serviceLocationUuid"],
+                    gateway_serial=secrets["site_serial_number"],
+                    stations={
+                        secrets["station_uuid"]: make_station_runtime(
+                            site_location_id=12345,
+                            control_location_id=12345,
+                            station_uuid=secrets["station_uuid"],
+                            serial=secrets["site_serial_number"],
+                            coordinator=coordinator,
+                            station_client=station_client,
+                            connectors={
+                                secrets["connector_uuid"]: make_connector_runtime(
+                                    connector_key=secrets["connector_uuid"],
+                                    connector_uuid=secrets["connector_uuid"],
+                                    connector_position=1,
+                                    connector_client=connector_client,
+                                )
                             },
-                        }
+                        )
                     },
-                }
+                )
             },
             mqtt={12345: mqtt_client},
         )
@@ -417,8 +427,8 @@ class TestDiagnostics:
         ]
 
     @pytest.mark.asyncio
-    async def test_diagnostics_redacts_multi_site_runtime_with_mixed_site_key_types(self, hass):
-        """Keep redaction intact for multi-site runtimes with int/string site ids."""
+    async def test_diagnostics_redacts_multi_site_runtime(self, hass):
+        """Keep redaction intact for multi-site runtimes."""
         site_a_uuid = "SITE_A_UUID_SECRET_1111"
         site_b_uuid = "SITE_B_UUID_SECRET_2222"
         station_a_uuid = "STATION_A_UUID_SECRET_3333"
@@ -435,7 +445,7 @@ class TestDiagnostics:
             station_uuid: str,
             connector_uuid: str,
             serial: str,
-        ) -> dict:
+        ):
             station_client = SimpleNamespace(
                 service_location_id=service_location_id,
                 serial=serial,
@@ -470,14 +480,26 @@ class TestDiagnostics:
                     },
                 )
             )
-            return make_site(
-                service_location_uuid=site_uuid,
-                device_serial_number=serial,
+            return make_site_runtime(
+                site_location_id=service_location_id,
+                site_uuid=site_uuid,
+                gateway_serial=serial,
                 stations={
-                    station_uuid: make_station_bucket(
+                    station_uuid: make_station_runtime(
+                        site_location_id=service_location_id,
+                        control_location_id=service_location_id,
+                        station_uuid=station_uuid,
+                        serial=serial,
                         coordinator=coordinator,
                         station_client=station_client,
-                        connector_clients={connector_uuid: connector_client},
+                        connectors={
+                            connector_uuid: make_connector_runtime(
+                                connector_key=connector_uuid,
+                                connector_uuid=connector_uuid,
+                                connector_position=1,
+                                connector_client=connector_client,
+                            )
+                        },
                     )
                 },
             )
@@ -507,7 +529,7 @@ class TestDiagnostics:
                     connector_uuid=connector_a_uuid,
                     serial=serial_a,
                 ),
-                "22222": _site_runtime(
+                22222: _site_runtime(
                     service_location_id=22222,
                     site_uuid=site_b_uuid,
                     station_uuid=station_b_uuid,
@@ -591,11 +613,11 @@ class TestDiagnostics:
             _slus=(site_uuid,),
             _mqtt_specs=(),
         )
-        runtime = RuntimeData(
+        runtime = make_runtime_data(
             api=None,
             mqtt={44444: mqtt_client},
             sites={
-                44444: SmappeeSiteRuntime(
+                44444: make_site_runtime(
                     site_location_id=44444,
                     site_name="Dataclass Site",
                     site_function_type="SERVICELOCATION",
@@ -605,18 +627,15 @@ class TestDiagnostics:
                     measurement_location_ids=[44444],
                     mqtt_clients=mqtt_client,
                     stations={
-                        station_uuid: SmappeeStationRuntime(
+                        station_uuid: make_station_runtime(
                             site_location_id=44444,
                             control_location_id=44445,
-                            control_name="Dataclass Station",
-                            control_uuid=station_uuid,
-                            control_function_type="CHARGINGSTATION",
-                            charging_station_serial=serial,
-                            charging_station_model="EV Wall",
+                            station_uuid=station_uuid,
+                            serial=serial,
                             station_client=station_client,
-                            station_coordinator=coordinator,
+                            coordinator=coordinator,
                             connectors={
-                                connector_uuid: SmappeeConnectorRuntime(
+                                connector_uuid: make_connector_runtime(
                                     connector_key=connector_uuid,
                                     connector_uuid=connector_uuid,
                                     connector_position=1,

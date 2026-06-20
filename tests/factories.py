@@ -13,6 +13,10 @@ from custom_components.smappee_ev.data import (
     ConnectorState,
     IntegrationData,
     RuntimeData,
+    SmappeeConnectorRuntime,
+    SmappeeLedRuntime,
+    SmappeeSiteRuntime,
+    SmappeeStationRuntime,
     StationState,
 )
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
@@ -82,44 +86,130 @@ def make_station_coordinator(
     return coordinator
 
 
-def make_station_bucket(
+def make_connector_runtime(
     *,
-    coordinator: object | None = None,
+    connector_key: str = "connector_uuid_1",
+    connector_uuid: str | None = None,
+    connector_position: int | None = 1,
+    connector_client: object | None = None,
+) -> SmappeeConnectorRuntime:
+    """Create a typed connector runtime container."""
+    connector_uuid = connector_uuid or connector_key
+    connector_client = connector_client or make_connector_client(
+        connector_number=connector_position or 1,
+        smart_device_uuid=connector_uuid,
+    )
+    return SmappeeConnectorRuntime(
+        connector_key=connector_key,
+        connector_uuid=connector_uuid,
+        connector_position=connector_position,
+        connector_client=connector_client,
+    )
+
+
+def make_led_runtime(
+    *,
+    led_key: str = "led-device-1",
+    led_device_id: str | None = None,
+    led_device_uuid: str | None = None,
+    led_device_name: str | None = "LED Ring",
+) -> SmappeeLedRuntime:
+    """Create a typed LED runtime container."""
+    return SmappeeLedRuntime(
+        led_key=led_key,
+        led_device_id=led_device_id or led_key,
+        led_device_uuid=led_device_uuid,
+        led_device_name=led_device_name,
+    )
+
+
+def make_station_runtime(
+    *,
+    site_location_id: int = 317418,
+    control_location_id: int = 317443,
+    station_uuid: str = "station-uuid",
+    serial: str = "STATION123",
     station_client: object | None = None,
-    connector_clients: dict[Any, object] | None = None,
-    **extra: Any,
-) -> dict[str, Any]:
-    """Create a station bucket in the runtime-data shape platforms expect."""
-    return {
-        "coordinator": coordinator,
-        "station_client": station_client or MagicMock(),
-        "connector_clients": connector_clients or {},
-        **extra,
-    }
+    coordinator: object = _DEFAULT_API,
+    connectors: dict[str, SmappeeConnectorRuntime] | None = None,
+    led_devices: dict[str, SmappeeLedRuntime] | None = None,
+    site_coordinator: object | None = None,
+    highlevel_configs: dict[int, dict[str, Any]] | None = None,
+    site_name: str | None = "Typed Site",
+    gateway_serial: str | None = "GATEWAY123",
+    gateway_type: str | None = "Infinity",
+    control_name: str | None = "Typed Station",
+    control_function_type: str | None = "CHARGINGSTATION",
+    station_name: str | None = "Typed Station",
+    station_model: str | None = "EV Wall",
+) -> SmappeeStationRuntime:
+    """Create a typed station runtime container."""
+    station_client = station_client or make_station_client(
+        service_location_id=control_location_id,
+        serial=serial,
+    )
+    if coordinator is _DEFAULT_API:
+        coordinator = make_station_coordinator(
+            station_client=station_client,
+            connectors={},
+        )
+    return SmappeeStationRuntime(
+        site_location_id=site_location_id,
+        control_location_id=control_location_id,
+        site_name=site_name,
+        gateway_serial=gateway_serial,
+        gateway_type=gateway_type,
+        control_name=control_name,
+        control_uuid=station_uuid,
+        control_function_type=control_function_type,
+        station_name=station_name,
+        charging_station_serial=serial,
+        charging_station_model=station_model,
+        station_client=station_client,
+        station_coordinator=coordinator,
+        site_coordinator=site_coordinator,
+        highlevel_configs=highlevel_configs or {},
+        led_devices=led_devices or {},
+        connectors=connectors or {},
+    )
 
 
-def make_site(
+def make_site_runtime(
     *,
-    stations: dict[str, dict[str, Any]] | None = None,
-    name: str = "Test Site",
-    service_location_uuid: str = "test-uuid",
-    device_serial_number: str = "SERIAL123",
-    **extra: Any,
-) -> dict[str, Any]:
-    """Create a site dictionary matching RuntimeData.sites values."""
-    return {
-        "name": name,
-        "serviceLocationUuid": service_location_uuid,
-        "deviceSerialNumber": device_serial_number,
-        "stations": stations or {},
-        **extra,
-    }
+    site_location_id: int = 317418,
+    site_name: str = "Typed Site",
+    site_function_type: str | None = "SERVICELOCATION",
+    site_uuid: str | None = "site-uuid",
+    gateway_serial: str | None = "GATEWAY123",
+    gateway_type: str | None = "Infinity",
+    control_location_ids: list[int | str] | None = None,
+    measurement_location_ids: list[int | str] | None = None,
+    mqtt_clients: object | None = None,
+    site_coordinator: object | None = None,
+    highlevel_configs: dict[int, dict[str, Any]] | None = None,
+    stations: dict[str, SmappeeStationRuntime] | None = None,
+) -> SmappeeSiteRuntime:
+    """Create a typed site runtime container."""
+    return SmappeeSiteRuntime(
+        site_location_id=site_location_id,
+        site_name=site_name,
+        site_function_type=site_function_type,
+        site_uuid=site_uuid,
+        gateway_serial=gateway_serial,
+        gateway_type=gateway_type,
+        control_location_ids=control_location_ids or [site_location_id],
+        measurement_location_ids=measurement_location_ids or [site_location_id],
+        highlevel_configs=highlevel_configs or {},
+        mqtt_clients=mqtt_clients,
+        site_coordinator=site_coordinator,
+        stations=stations or {},
+    )
 
 
 def make_runtime_data(
     *,
     api: object = _DEFAULT_API,
-    sites: dict[int, dict[str, Any]] | None = None,
+    sites: dict[int, object] | None = None,
     mqtt: dict[int, object] | None = None,
     dashboard: object | None = None,
     background_tasks: set | None = None,
@@ -141,11 +231,9 @@ def make_runtime_for_connector(
     connector_client: object,
     *,
     station_uuid: str | None = None,
-    site_key: int | str | None = None,
 ) -> RuntimeData:
     """Create a one-site runtime containing a single connector client."""
     station_uuid = station_uuid or f"station_{site_id}"
-    site_key = site_id if site_key is None else site_key
     connector_uuid = connector_client.smart_device_uuid
     coord = MagicMock()
     coord.data = IntegrationData(
@@ -161,13 +249,25 @@ def make_runtime_for_connector(
     return make_runtime_data(
         api=connector_client,
         sites={
-            site_key: make_site(
+            site_id: make_site_runtime(
+                site_location_id=site_id,
                 stations={
-                    station_uuid: make_station_bucket(
+                    station_uuid: make_station_runtime(
+                        site_location_id=site_id,
+                        control_location_id=site_id,
+                        station_uuid=station_uuid,
+                        station_client=make_station_client(service_location_id=site_id),
                         coordinator=coord,
-                        connector_clients={connector_uuid: connector_client},
+                        connectors={
+                            connector_uuid: make_connector_runtime(
+                                connector_key=connector_uuid,
+                                connector_uuid=connector_uuid,
+                                connector_position=connector_client.connector_number,
+                                connector_client=connector_client,
+                            )
+                        },
                     )
-                }
+                },
             )
         },
     )
@@ -177,13 +277,11 @@ def make_loaded_entry_for_connector(
     entry_id: str,
     site_id: int,
     connector_client: object,
-    *,
-    site_key: int | str | None = None,
 ) -> MagicMock:
     """Create a loaded config entry with one connector runtime."""
     return make_loaded_config_entry(
         entry_id,
-        make_runtime_for_connector(site_id, connector_client, site_key=site_key),
+        make_runtime_for_connector(site_id, connector_client),
     )
 
 

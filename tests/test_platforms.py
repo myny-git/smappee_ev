@@ -8,9 +8,23 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 import pytest
 
-from custom_components.smappee_ev import button, light, sensor, switch
+from custom_components.smappee_ev import (
+    binary_sensor,
+    button,
+    light,
+    number,
+    select,
+    sensor,
+    switch,
+)
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import IntegrationData, SiteData, SiteState, StationState
+from custom_components.smappee_ev.data import (
+    ConnectorState,
+    IntegrationData,
+    SiteData,
+    SiteState,
+    StationState,
+)
 from custom_components.smappee_ev.helpers import (
     build_connector_label,
     connector_device_identifier,
@@ -24,11 +38,13 @@ from custom_components.smappee_ev.sensor import ConnectorPowerSensor, StationGri
 from tests.factories import (
     make_config_entry,
     make_connector_client,
+    make_connector_runtime,
+    make_led_runtime,
     make_runtime_data,
-    make_site,
-    make_station_bucket,
+    make_site_runtime,
     make_station_client,
     make_station_coordinator,
+    make_station_runtime,
 )
 
 
@@ -37,14 +53,24 @@ def mock_runtime_data():
     """Create mock runtime data."""
     return make_runtime_data(
         sites={
-            12345: make_site(
+            12345: make_site_runtime(
+                site_location_id=12345,
                 stations={
-                    "station_uuid": make_station_bucket(
+                    "station_uuid": make_station_runtime(
+                        site_location_id=12345,
+                        control_location_id=12345,
+                        station_uuid="station_uuid",
                         coordinator=MagicMock(spec=SmappeeCoordinator),
                         station_client=MagicMock(),
-                        connector_clients={"connector_uuid": MagicMock()},
+                        connectors={
+                            "connector_uuid": make_connector_runtime(
+                                connector_key="connector_uuid",
+                                connector_uuid="connector_uuid",
+                                connector_client=MagicMock(),
+                            )
+                        },
                     )
-                }
+                },
             )
         }
     )
@@ -54,6 +80,91 @@ def mock_runtime_data():
 def mock_config_entry(mock_runtime_data):
     """Create mock config entry."""
     return make_config_entry(runtime_data=mock_runtime_data)
+
+
+def _typed_runtime_data():
+    """Create typed runtime containers for platform setup regression coverage."""
+    station_client = make_station_client(service_location_id=317443, serial="STATION123")
+    station_client.set_brightness = AsyncMock()
+    connector_client = make_connector_client(
+        service_location_id=317443,
+        connector_number=1,
+        smart_device_uuid="connector-uuid",
+        serial="STATION123",
+    )
+    coordinator = make_station_coordinator(
+        station_client=station_client,
+        station_state=StationState(led_brightness=40, mqtt_connected=True),
+        connectors={"connector-uuid": ConnectorState(connector_number=1)},
+    )
+    coordinator.dashboard_client = None
+
+    return make_runtime_data(
+        sites={
+            317418: make_site_runtime(
+                site_location_id=317418,
+                site_name="Typed Site",
+                site_function_type="SERVICELOCATION",
+                site_uuid="site-uuid",
+                gateway_serial="GATEWAY123",
+                gateway_type="Infinity",
+                measurement_location_ids=[317418],
+                stations={
+                    "station-uuid": make_station_runtime(
+                        site_location_id=317418,
+                        control_location_id=317443,
+                        station_uuid="station-uuid",
+                        serial="STATION123",
+                        station_client=station_client,
+                        coordinator=coordinator,
+                        led_devices={
+                            "led-device-1": make_led_runtime(
+                                led_key="led-device-1",
+                                led_device_id="led-device-1",
+                                led_device_name="LED Ring",
+                            )
+                        },
+                        connectors={
+                            "connector-uuid": make_connector_runtime(
+                                connector_key="connector-uuid",
+                                connector_uuid="connector-uuid",
+                                connector_position=1,
+                                connector_client=connector_client,
+                            )
+                        },
+                    )
+                },
+            )
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_platform_setup_accepts_typed_runtime_containers(hass: HomeAssistant):
+    """Ensure platforms can set up from dataclass runtime containers."""
+    entry = make_config_entry(runtime_data=_typed_runtime_data())
+
+    expectations = [
+        (button, 5),
+        (binary_sensor, 1),
+        (light, 1),
+        (number, 3),
+        (select, 1),
+        (switch, 3),
+    ]
+    for platform, expected_count in expectations:
+        async_add_entities = MagicMock()
+        await platform.async_setup_entry(hass, entry, async_add_entities)
+
+        entities = async_add_entities.call_args.args[0]
+        assert len(entities) == expected_count
+
+    async_add_entities = MagicMock()
+    await sensor.async_setup_entry(hass, entry, async_add_entities)
+
+    entities = async_add_entities.call_args.args[0]
+    assert sum(isinstance(entity, StationGridPower) for entity in entities) == 1
+    assert sum(isinstance(entity, ConnectorPowerSensor) for entity in entities) == 1
 
 
 class TestButtonPlatform:
@@ -76,7 +187,7 @@ class TestButtonPlatform:
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant):
         """Test button platform setup with no sites."""
         runtime = make_runtime_data()
-        runtime.sites = None
+        runtime.sites = {}
 
         entry = make_config_entry(runtime_data=runtime)
 
@@ -121,7 +232,7 @@ class TestSensorPlatform:
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant):
         """Test sensor platform setup with no sites."""
         runtime = make_runtime_data()
-        runtime.sites = None
+        runtime.sites = {}
 
         entry = make_config_entry(runtime_data=runtime)
 
@@ -147,20 +258,39 @@ class TestSensorPlatform:
 
         runtime = make_runtime_data(
             sites={
-                317418: make_site(
+                317418: make_site_runtime(
+                    site_location_id=317418,
+                    site_coordinator=site_coord,
                     stations={
-                        "station-a": make_station_bucket(
+                        "station-a": make_station_runtime(
+                            site_location_id=317418,
+                            control_location_id=317443,
+                            station_uuid="station-a",
                             coordinator=station_coord_1,
                             station_client=MagicMock(),
-                            connector_clients={"connector-a": MagicMock()},
+                            connectors={
+                                "connector-a": make_connector_runtime(
+                                    connector_key="connector-a",
+                                    connector_uuid="connector-a",
+                                    connector_client=MagicMock(),
+                                )
+                            },
                         ),
-                        "station-b": make_station_bucket(
+                        "station-b": make_station_runtime(
+                            site_location_id=317418,
+                            control_location_id=317443,
+                            station_uuid="station-b",
                             coordinator=station_coord_2,
                             station_client=MagicMock(),
-                            connector_clients={"connector-b": MagicMock()},
+                            connectors={
+                                "connector-b": make_connector_runtime(
+                                    connector_key="connector-b",
+                                    connector_uuid="connector-b",
+                                    connector_client=MagicMock(),
+                                )
+                            },
                         ),
                     },
-                    site_coordinator=site_coord,
                 )
             }
         )
@@ -199,14 +329,26 @@ class TestSensorPlatform:
         )
         runtime = make_runtime_data(
             sites={
-                317418: make_site(
+                317418: make_site_runtime(
+                    site_location_id=317418,
                     stations={
-                        "station-uuid": make_station_bucket(
+                        "station-uuid": make_station_runtime(
+                            site_location_id=317418,
+                            control_location_id=317443,
+                            station_uuid="station-uuid",
+                            serial="STATION123",
                             coordinator=coordinator,
                             station_client=station_client,
-                            connector_clients={"connector-uuid": connector_client},
+                            connectors={
+                                "connector-uuid": make_connector_runtime(
+                                    connector_key="connector-uuid",
+                                    connector_uuid="connector-uuid",
+                                    connector_position=1,
+                                    connector_client=connector_client,
+                                )
+                            },
                         )
-                    }
+                    },
                 )
             }
         )
@@ -252,7 +394,7 @@ class TestLightPlatform:
     async def test_async_setup_entry_no_sites(self, hass: HomeAssistant):
         """Test light platform setup with no sites."""
         runtime = make_runtime_data()
-        runtime.sites = None
+        runtime.sites = {}
 
         entry = make_config_entry(runtime_data=runtime)
 
@@ -279,15 +421,32 @@ class TestLightPlatform:
         )
         runtime = make_runtime_data(
             sites={
-                317418: make_site(
+                317418: make_site_runtime(
+                    site_location_id=317418,
                     stations={
-                        "station-uuid": make_station_bucket(
+                        "station-uuid": make_station_runtime(
+                            site_location_id=317418,
+                            control_location_id=317443,
+                            station_uuid="station-uuid",
+                            serial="STATION123",
                             coordinator=coordinator,
                             station_client=station_client,
-                            connector_clients={"connector-uuid": connector_client},
-                            led_devices={"led-device-1": {"name": "LED Ring"}},
+                            connectors={
+                                "connector-uuid": make_connector_runtime(
+                                    connector_key="connector-uuid",
+                                    connector_uuid="connector-uuid",
+                                    connector_position=1,
+                                    connector_client=connector_client,
+                                )
+                            },
+                            led_devices={
+                                "led-device-1": make_led_runtime(
+                                    led_key="led-device-1",
+                                    led_device_name="LED Ring",
+                                )
+                            },
                         )
-                    }
+                    },
                 )
             }
         )
@@ -330,14 +489,26 @@ class TestSwitchPlatform:
         )
         runtime = make_runtime_data(
             sites={
-                317418: make_site(
+                317418: make_site_runtime(
+                    site_location_id=317418,
                     stations={
-                        "station-uuid": make_station_bucket(
+                        "station-uuid": make_station_runtime(
+                            site_location_id=317418,
+                            control_location_id=317443,
+                            station_uuid="station-uuid",
+                            serial="STATION123",
                             coordinator=coordinator,
                             station_client=station_client,
-                            connector_clients={"connector-uuid": connector_client},
+                            connectors={
+                                "connector-uuid": make_connector_runtime(
+                                    connector_key="connector-uuid",
+                                    connector_uuid="connector-uuid",
+                                    connector_position=1,
+                                    connector_client=connector_client,
+                                )
+                            },
                         )
-                    }
+                    },
                 )
             }
         )
@@ -475,21 +646,3 @@ class TestPlatformHelpers:
         }
         assert result["name"] == "Garage Charger"
         assert result["model"] == "EV Wall Business"
-
-
-class TestPlatformErrors:
-    """Test platform error handling."""
-
-    @pytest.mark.asyncio
-    async def test_setup_with_corrupted_sites(self, hass: HomeAssistant):
-        """Test platform setup with corrupted sites data."""
-        runtime = make_runtime_data()
-        runtime.sites = "invalid_data"  # Should be dict, not string
-
-        entry = make_config_entry(runtime_data=runtime)
-
-        async_add_entities = MagicMock()
-
-        await button.async_setup_entry(hass, entry, async_add_entities)
-
-        async_add_entities.assert_called_once_with([], False)

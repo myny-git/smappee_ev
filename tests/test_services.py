@@ -8,23 +8,18 @@ import pytest
 import voluptuous as vol
 
 from custom_components.smappee_ev import services
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
-    RuntimeData,
-    SmappeeConnectorRuntime,
-    SmappeeSiteRuntime,
-    SmappeeStationRuntime,
-    StationState,
-)
+from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 from tests.factories import (
     configure_loaded_entries,
     make_connector_client,
+    make_connector_runtime,
     make_loaded_config_entry,
     make_loaded_entry_for_connector,
     make_runtime_data,
     make_runtime_for_connector,
+    make_site_runtime,
+    make_station_runtime,
 )
 
 
@@ -55,16 +50,25 @@ def mock_api_client():
 def mock_runtime_data(mock_api_client):
     """Create a mock RuntimeData."""
     sites = {
-        12345: {
-            "stations": {
-                "station1": {
-                    "station_client": mock_api_client,
-                    "connector_clients": {
-                        "connector_uuid_1": mock_api_client,
+        12345: make_site_runtime(
+            site_location_id=12345,
+            stations={
+                "station1": make_station_runtime(
+                    site_location_id=12345,
+                    control_location_id=12345,
+                    station_uuid="station1",
+                    station_client=mock_api_client,
+                    connectors={
+                        "connector_uuid_1": make_connector_runtime(
+                            connector_key="connector_uuid_1",
+                            connector_uuid="connector_uuid_1",
+                            connector_position=1,
+                            connector_client=mock_api_client,
+                        )
                     },
-                }
-            }
-        }
+                )
+            },
+        )
     }
     return make_runtime_data(api=mock_api_client, sites=sites, mqtt=MagicMock())
 
@@ -199,7 +203,7 @@ class TestServiceHelpers:
     ):
         other_runtime = make_runtime_data(
             api=mock_api_client,
-            sites={67890: {"stations": {}}},
+            sites={67890: make_site_runtime(site_location_id=67890)},
             mqtt=MagicMock(),
         )
         other_entry = make_loaded_config_entry("other", other_runtime)
@@ -244,7 +248,10 @@ class TestServiceHelpers:
     def test_get_station_client_without_site_or_station(self, mock_runtime_data):
         """Test station client lookup when site data is missing or empty."""
         assert services.get_station_client(mock_runtime_data, 99999) is None
-        mock_runtime_data.sites[12345] = {"stations": {}}
+        mock_runtime_data.sites[12345] = make_site_runtime(
+            site_location_id=12345,
+            stations={},
+        )
         assert services.get_station_client(mock_runtime_data, 12345) is None
 
     def test_get_connector_client_by_id(self, mock_runtime_data, mock_api_client):
@@ -269,8 +276,13 @@ class TestServiceHelpers:
         """Test connector lookup refuses to guess when multiple connectors exist."""
         other_client = MagicMock(spec=SmappeeDeviceHandle)
         other_client.connector_number = 2
-        mock_runtime_data.sites[12345]["stations"]["station1"]["connector_clients"][2] = (
-            other_client
+        mock_runtime_data.sites[12345].stations["station1"].connectors["connector_uuid_2"] = (
+            make_connector_runtime(
+                connector_key="connector_uuid_2",
+                connector_uuid="connector_uuid_2",
+                connector_position=2,
+                connector_client=other_client,
+            )
         )
 
         result = services.get_connector_client(mock_runtime_data, 12345, None)
@@ -287,7 +299,19 @@ class TestServiceHelpers:
         )
         runtime = make_runtime_data(
             api=mock_api_client,
-            sites={12345: {"stations": {"station1": {"coordinator": coord}}}},
+            sites={
+                12345: make_site_runtime(
+                    site_location_id=12345,
+                    stations={
+                        "station1": make_station_runtime(
+                            site_location_id=12345,
+                            control_location_id=12345,
+                            station_uuid="station1",
+                            coordinator=coord,
+                        )
+                    },
+                )
+            },
             mqtt=MagicMock(),
         )
 
@@ -299,7 +323,9 @@ class TestServiceHelpers:
 
         mock_api_client.smart_device_uuid = None
         runtime = make_runtime_data(
-            api=mock_api_client, sites={12345: {"stations": {}}}, mqtt=MagicMock()
+            api=mock_api_client,
+            sites={12345: make_site_runtime(site_location_id=12345)},
+            mqtt=MagicMock(),
         )
         assert services._connector_current_range(runtime, mock_api_client) == (6, 32)
 
@@ -372,7 +398,7 @@ class TestServiceHandlers:
                 )
             },
         )
-        mock_runtime_data.sites[12345]["stations"]["station1"]["coordinator"] = coord
+        mock_runtime_data.sites[12345].stations["station1"].station_coordinator = coord
         call = ServiceCall(
             domain="smappee_ev",
             service="resume_charging",
@@ -518,7 +544,7 @@ class TestServiceHandlers:
         )
         entries = [
             make_loaded_entry_for_connector("entry_a", 11111, site_a_client),
-            make_loaded_entry_for_connector("entry_b", 22222, site_b_client, site_key="22222"),
+            make_loaded_entry_for_connector("entry_b", 22222, site_b_client),
         ]
         configure_loaded_entries(mock_hass, entries)
         call = ServiceCall(
@@ -553,11 +579,11 @@ class TestServiceHandlers:
                 )
             },
         )
-        runtime = RuntimeData(
+        runtime = make_runtime_data(
             api=connector_client,
             mqtt={},
             sites={
-                33333: SmappeeSiteRuntime(
+                33333: make_site_runtime(
                     site_location_id=33333,
                     site_name="Dataclass Site",
                     site_function_type="SERVICELOCATION",
@@ -566,18 +592,15 @@ class TestServiceHandlers:
                     gateway_type="Infinity",
                     measurement_location_ids=[33333],
                     stations={
-                        "station-dataclass": SmappeeStationRuntime(
+                        "station-dataclass": make_station_runtime(
                             site_location_id=33333,
                             control_location_id=33334,
-                            control_name="Dataclass Station",
-                            control_uuid="station-dataclass",
-                            control_function_type="CHARGINGSTATION",
-                            charging_station_serial="STATION-33333",
-                            charging_station_model="EV Wall",
+                            station_uuid="station-dataclass",
+                            serial="STATION-33333",
                             station_client=station_client,
-                            station_coordinator=coordinator,
+                            coordinator=coordinator,
                             connectors={
-                                "connector-dataclass": SmappeeConnectorRuntime(
+                                "connector-dataclass": make_connector_runtime(
                                     connector_key="connector-dataclass",
                                     connector_uuid="connector-dataclass",
                                     connector_position=1,
@@ -822,8 +845,8 @@ class TestServiceHandlers:
         )
         runtime_a = make_runtime_for_connector(11111, site_a_client)
         runtime_b = make_runtime_for_connector(22222, site_b_client)
-        coord_a = next(iter(runtime_a.sites[11111]["stations"].values()))["coordinator"]
-        coord_b = next(iter(runtime_b.sites[22222]["stations"].values()))["coordinator"]
+        coord_a = next(iter(runtime_a.sites[11111].stations.values())).station_coordinator
+        coord_b = next(iter(runtime_b.sites[22222].stations.values())).station_coordinator
         entries = [
             make_loaded_config_entry("entry_a", runtime_a),
             make_loaded_config_entry("entry_b", runtime_b),

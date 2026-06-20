@@ -26,6 +26,7 @@ from custom_components.smappee_ev.number import (
     SmappeeOverloadMaximumLoadNumber,
     async_setup_entry,
 )
+from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 
 @pytest.fixture
@@ -393,15 +394,25 @@ async def test_async_setup_entry_adds_connector_numbers(hass, coordinator, api_c
     station_client.connector_number = None
     runtime = MagicMock(spec=RuntimeData)
     runtime.sites = {
-        1: {
-            "stations": {
-                "station": {
-                    "coordinator": coordinator,
-                    "station_client": station_client,
-                    "connector_clients": {"uuid": api_client},
-                }
-            }
-        }
+        1: make_site_runtime(
+            site_location_id=1,
+            stations={
+                "station": make_station_runtime(
+                    site_location_id=1,
+                    control_location_id=1,
+                    station_uuid="station",
+                    coordinator=coordinator,
+                    station_client=station_client,
+                    connectors={
+                        "uuid": make_connector_runtime(
+                            connector_key="uuid",
+                            connector_uuid="uuid",
+                            connector_client=api_client,
+                        )
+                    },
+                )
+            },
+        )
     }
     entry = MagicMock(spec=ConfigEntry)
     entry.runtime_data = runtime
@@ -439,12 +450,25 @@ async def test_async_setup_entry_adds_site_dashboard_numbers_once(hass, dashboar
 
     runtime = MagicMock(spec=RuntimeData)
     runtime.sites = {
-        317418: {
-            "stations": {
-                "station-a": {"coordinator": site_coordinator, "connector_clients": {}},
-                "station-b": {"coordinator": other_coordinator, "connector_clients": {}},
-            }
-        }
+        317418: make_site_runtime(
+            site_location_id=317418,
+            stations={
+                "station-a": make_station_runtime(
+                    site_location_id=317418,
+                    control_location_id=317443,
+                    station_uuid="station-a",
+                    coordinator=site_coordinator,
+                    connectors={},
+                ),
+                "station-b": make_station_runtime(
+                    site_location_id=317418,
+                    control_location_id=317444,
+                    station_uuid="station-b",
+                    coordinator=other_coordinator,
+                    connectors={},
+                ),
+            },
+        )
     }
     entry = MagicMock(spec=ConfigEntry)
     entry.runtime_data = runtime
@@ -464,7 +488,7 @@ async def test_async_setup_entry_adds_site_dashboard_numbers_once(hass, dashboar
 @pytest.mark.asyncio
 async def test_async_setup_entry_handles_empty_sites(hass):
     runtime = MagicMock(spec=RuntimeData)
-    runtime.sites = None
+    runtime.sites = {}
     entry = MagicMock(spec=ConfigEntry)
     entry.runtime_data = runtime
     async_add_entities = MagicMock()

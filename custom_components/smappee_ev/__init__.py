@@ -1,6 +1,7 @@
 """Set up and manage runtime data for the Smappee EV integration."""
 
 import asyncio
+from collections.abc import Mapping
 from contextlib import suppress
 from datetime import timedelta
 from inspect import isawaitable
@@ -28,7 +29,14 @@ from .const import (
 )
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .dashboard_client import SmappeeDashboardClient
-from .data import RuntimeData, SmappeeEvConfigEntry
+from .data import (
+    RuntimeData,
+    SmappeeConnectorRuntime,
+    SmappeeEvConfigEntry,
+    SmappeeLedRuntime,
+    SmappeeSiteRuntime,
+    SmappeeStationRuntime,
+)
 from .device_handle import SmappeeDeviceHandle
 from .discovery import (
     MqttChannelSpec,
@@ -441,13 +449,13 @@ def _split_highlevel_configs_by_scope(
 def _build_mqtt_routes(
     mqtt_specs: list[MqttChannelSpec] | None,
     site_coordinator: SmappeeSiteCoordinator | None,
-    stations: dict[str, dict],
+    stations: dict[str, SmappeeStationRuntime],
 ) -> dict[str, list[MqttRouteTarget]]:
     """Build explicit MQTT topic routes for site and station coordinators."""
     routes: dict[str, list[MqttRouteTarget]] = {}
     station_coordinators: list[MqttRouteTarget] = []
     for bucket in stations.values():
-        coordinator = bucket.get("coordinator")
+        coordinator = bucket.station_coordinator
         if coordinator is not None:
             station_coordinators.append(cast(MqttRouteTarget, coordinator))
     for spec in mqtt_specs or []:
@@ -728,6 +736,83 @@ def _derive_service_serial(sl: dict[str, Any], station_devs: list[dict]) -> str 
     return None
 
 
+def _make_led_runtimes(led_devices: object) -> dict[str, SmappeeLedRuntime]:
+    """Convert Dashboard LED metadata into typed runtime containers."""
+    if not isinstance(led_devices, dict):
+        return {}
+
+    runtimes: dict[str, SmappeeLedRuntime] = {}
+    for led_key, led in led_devices.items():
+        key = str(led_key)
+        led_id = led.get("id", key) if isinstance(led, dict) else key
+        led_uuid = led.get("uuid") if isinstance(led, dict) else None
+        led_name = led.get("name") if isinstance(led, dict) else None
+        runtimes[key] = SmappeeLedRuntime(
+            led_key=key,
+            led_device_id=led_id,
+            led_device_uuid=led_uuid,
+            led_device_name=led_name,
+        )
+    return runtimes
+
+
+def _add_connector_runtime(
+    station: SmappeeStationRuntime,
+    *,
+    connector_key: str,
+    connector_uuid: str | None,
+    connector_position: int | None,
+    connector_client: SmappeeDeviceHandle,
+) -> None:
+    """Attach a connector client to a typed station runtime."""
+    station.connectors[connector_key] = SmappeeConnectorRuntime(
+        connector_key=connector_key,
+        connector_uuid=connector_uuid,
+        connector_position=connector_position,
+        connector_client=connector_client,
+    )
+
+
+def _log_station_runtime_shape(context: str, stations: Mapping[str, object]) -> None:
+    """Log the station runtime container shape without exposing raw identifiers."""
+    station_count = len(stations)
+    connector_count = sum(
+        len(station.connectors)
+        for station in stations.values()
+        if isinstance(station, SmappeeStationRuntime)
+    )
+    runtime_type = type(next(iter(stations.values()))).__name__ if stations else "none"
+    _LOGGER.debug(
+        "Prepared Smappee EV %s runtime: station_runtime=%s, stations=%d, connectors=%d",
+        context,
+        runtime_type,
+        station_count,
+        connector_count,
+    )
+
+
+def _log_stored_runtime_shape(runtime: RuntimeData) -> None:
+    """Log the stored RuntimeData shape without exposing raw identifiers."""
+    site_count = len(runtime.sites or {})
+    site_types = sorted({type(site).__name__ for site in (runtime.sites or {}).values()}) or [
+        "none"
+    ]
+    stations = [
+        bucket for site in (runtime.sites or {}).values() for bucket in site.stations.values()
+    ]
+    station_types = sorted({type(bucket).__name__ for bucket in stations}) or ["none"]
+    connector_count = sum(len(bucket.connectors) for bucket in stations)
+    _LOGGER.debug(
+        "Stored Smappee EV runtime_data: sites=%d, site_runtime_types=%s, "
+        "station_runtime_types=%s, stations=%d, connectors=%d",
+        site_count,
+        ",".join(site_types),
+        ",".join(station_types),
+        len(stations),
+        connector_count,
+    )
+
+
 def _make_station_clients(
     serial_str,
     sid,
@@ -741,8 +826,8 @@ def _make_station_clients(
     control_uuid: str | None = None,
     control_function_type: str | None = None,
     station_metadata: dict[str, dict] | None = None,
-) -> dict[str, dict]:
-    stations: dict[str, dict] = {}
+) -> dict[str, SmappeeStationRuntime]:
+    stations: dict[str, SmappeeStationRuntime] = {}
     station_metadata = station_metadata or {}
     for sd in station_devs:
         st_uuid = _device_uuid(sd)
@@ -762,25 +847,22 @@ def _make_station_clients(
             site_location_id=site_location_id or sid,
             charging_station_model=metadata.get("station_model"),
         )
-        stations[st_uuid] = {
-            "station_client": st_client,
-            "connector_clients": {},
-            "coordinator": None,
-            "station_coordinator": None,
-            "mqtt": None,
-            "serial": st_serial,
-            "site_location_id": site_location_id or sid,
-            "control_location_id": sid,
-            "site_name": site_name,
-            "gateway_serial": gateway_serial,
-            "gateway_type": gateway_type,
-            "control_name": control_name,
-            "control_uuid": control_uuid,
-            "control_function_type": control_function_type,
-            "station_name": metadata.get("station_name") or control_name,
-            "station_model": metadata.get("station_model"),
-            "led_devices": metadata.get("led_devices", {}),
-        }
+        stations[st_uuid] = SmappeeStationRuntime(
+            site_location_id=site_location_id or sid,
+            control_location_id=sid,
+            site_name=site_name,
+            gateway_serial=gateway_serial,
+            gateway_type=gateway_type,
+            control_name=control_name,
+            control_uuid=control_uuid,
+            control_function_type=control_function_type,
+            station_name=metadata.get("station_name") or control_name,
+            charging_station_serial=st_serial,
+            charging_station_model=metadata.get("station_model"),
+            station_client=st_client,
+            station_coordinator=None,
+            led_devices=_make_led_runtimes(metadata.get("led_devices", {})),
+        )
     return stations
 
 
@@ -791,7 +873,7 @@ def _make_station_clients_with_mapping_fallback(
     station_serial_to_connectors: dict[str, dict],
     has_connector_mapping: bool,
     **metadata: Any,
-) -> dict[str, dict]:
+) -> dict[str, SmappeeStationRuntime]:
     stations = _make_station_clients(serial_str, sid, station_devs, **metadata)
     if stations or not has_connector_mapping:
         return stations
@@ -809,9 +891,11 @@ def _make_station_clients_with_mapping_fallback(
     return _make_station_clients(serial_str, sid, mapping_station_devs, **metadata)
 
 
-def _assign_connectors(stations, car_devs, mapping, serial_str, sid):
+def _assign_connectors(
+    stations: dict[str, SmappeeStationRuntime], car_devs, mapping, serial_str, sid
+) -> None:
     for bucket in stations.values():
-        st_serial = bucket.get("serial")
+        st_serial = bucket.charging_station_serial
         if not st_serial or st_serial not in mapping:
             continue
         for cuuid, info in mapping[st_serial]["connectors"].items():
@@ -823,73 +907,70 @@ def _assign_connectors(stations, car_devs, mapping, serial_str, sid):
             if not src:
                 continue
             cid = _safe_str(src.get("id")) or info.get("id") or cuuid
-            handle_kwargs = {
-                "connector_number": info.get("position")
-                or src.get("connectorNumber")
-                or src.get("position")
-                or 1,
-                "charging_station_serial": st_serial,
-            }
-            if bucket.get("site_location_id") is not None:
-                handle_kwargs["site_location_id"] = bucket.get("site_location_id")
-            bucket["connector_clients"][cuuid] = SmappeeDeviceHandle(
+            site_location_id = bucket.site_location_id
+            position = (
+                info.get("position") or src.get("connectorNumber") or src.get("position") or 1
+            )
+            connector_client = SmappeeDeviceHandle(
                 serial_str,
                 cuuid,
                 cid,
                 sid,
-                **handle_kwargs,
+                connector_number=position,
+                charging_station_serial=st_serial,
+                site_location_id=site_location_id,
             )
-            bucket.setdefault("connectors", {})[cuuid] = {
-                "connector_key": cuuid,
-                "connector_uuid": cuuid,
-                "connector_position": info.get("position")
-                or src.get("connectorNumber")
-                or src.get("position")
-                or 1,
-            }
+            _add_connector_runtime(
+                bucket,
+                connector_key=cuuid,
+                connector_uuid=cuuid,
+                connector_position=position,
+                connector_client=connector_client,
+            )
 
 
-def _fallback_assign(stations, car_devs, serial_str, sid):
-    total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
+def _fallback_assign(stations: dict[str, SmappeeStationRuntime], car_devs, serial_str, sid):
+    total_assigned = sum(len(b.connectors) for b in stations.values())
     if total_assigned > 0:
         return
     first_uuid = next(iter(stations.keys()), None)
     if not first_uuid:
         return
-    st_serial = stations.get(first_uuid, {}).get("serial")
+    first_bucket = stations.get(first_uuid)
+    if first_bucket is None:
+        return
+    st_serial = first_bucket.charging_station_serial
     _LOGGER.warning(
         "Could not map connectors to stations at %s; assigning all to first station", sid
     )
-    subset = {}
     for d in car_devs:
         cuuid = _connector_uuid(d)
         cid = _safe_str(d.get("id")) or cuuid
         if not cuuid or not cid:
             continue
-        handle_kwargs = {
-            "connector_number": d.get("connectorNumber") or d.get("position") or 1,
-            "charging_station_serial": st_serial,
-        }
-        if stations.get(first_uuid, {}).get("site_location_id") is not None:
-            handle_kwargs["site_location_id"] = stations[first_uuid]["site_location_id"]
-        subset[cuuid] = SmappeeDeviceHandle(
+        site_location_id = first_bucket.site_location_id
+        position = d.get("connectorNumber") or d.get("position") or 1
+        connector_client = SmappeeDeviceHandle(
             serial_str,
             cuuid,
             cid,
             sid,
-            **handle_kwargs,
+            connector_number=position,
+            charging_station_serial=st_serial,
+            site_location_id=site_location_id,
         )
-        stations[first_uuid].setdefault("connectors", {})[cuuid] = {
-            "connector_key": cuuid,
-            "connector_uuid": cuuid,
-            "connector_position": d.get("connectorNumber") or d.get("position") or 1,
-        }
-    stations[first_uuid]["connector_clients"] = subset
+        _add_connector_runtime(
+            first_bucket,
+            connector_key=cuuid,
+            connector_uuid=cuuid,
+            connector_position=position,
+            connector_client=connector_client,
+        )
 
 
 async def _create_coordinators(
     hass,
-    stations,
+    stations: dict[str, SmappeeStationRuntime],
     update_interval,
     config_entry=None,
     dashboard_client=None,
@@ -897,8 +978,10 @@ async def _create_coordinators(
 ):
     for bucket in stations.values():
         kwargs = {
-            "station_client": bucket["station_client"],
-            "connector_clients": bucket["connector_clients"],
+            "station_client": bucket.station_client,
+            "connector_clients": {
+                key: connector.connector_client for key, connector in bucket.connectors.items()
+            },
             "update_interval": update_interval,
             "config_entry": config_entry,
         }
@@ -913,12 +996,14 @@ async def _create_coordinators(
             "station_name",
             "station_model",
         ):
-            if bucket.get(key) is not None:
-                kwargs[key] = bucket[key]
+            value = (
+                bucket.charging_station_model if key == "station_model" else getattr(bucket, key)
+            )
+            if value is not None:
+                kwargs[key] = value
         coord = SmappeeCoordinator(hass, **kwargs)
         await coord.async_config_entry_first_refresh()
-        bucket["coordinator"] = coord
-        bucket["station_coordinator"] = coord
+        bucket.station_coordinator = coord
         coord.async_start_session_tracking()
 
 
@@ -1046,7 +1131,7 @@ def _handle_mqtt_refresh_done(
 def _handle_mqtt_connection_change(
     up: bool,
     site_coordinator: SmappeeSiteCoordinator | None,
-    stations: dict[str, dict],
+    stations: dict[str, SmappeeStationRuntime],
     update_interval: int,
     schedule_refresh,
 ) -> None:
@@ -1054,7 +1139,7 @@ def _handle_mqtt_connection_change(
     if site_coordinator is not None:
         site_coordinator.apply_mqtt_connection_change(up)
     for bucket in stations.values():
-        coord = bucket.get("coordinator")
+        coord = bucket.station_coordinator
         if coord:
             if up:
                 coord.update_interval = None
@@ -1087,9 +1172,9 @@ def _setup_mqtt(
             if site_coordinator is not None and topic.endswith("/power") and not mqtt_specs:
                 targets.append(site_coordinator)
             targets.extend(
-                bucket.get("coordinator")
+                bucket.station_coordinator
                 for bucket in stations.values()
-                if bucket.get("coordinator") is not None
+                if bucket.station_coordinator is not None
             )
         for coord in targets:
             if coord:
@@ -1173,9 +1258,9 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
     rd = entry.runtime_data
     for site_sid, site in (rd.sites or {}).items():
         site_identifier = site_device_identifier(site_sid)
-        site_name = site.get("site_name") or site.get("name") or f"Smappee {site_sid}"
-        gateway_serial = site.get("gateway_serial") or site.get("deviceSerialNumber")
-        gateway_type = site.get("gateway_type")
+        site_name = site.site_name or f"Smappee {site_sid}"
+        gateway_serial = site.gateway_serial
+        gateway_type = site.gateway_type
         registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={site_identifier},
@@ -1185,28 +1270,28 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
             serial_number=str(gateway_serial) if gateway_serial else None,
         )
 
-        for station_uuid, bucket in (site.get("stations") or {}).items():
-            station_serial = bucket.get("serial")
+        for station_uuid, bucket in site.stations.items():
+            station_serial = bucket.charging_station_serial
             if not station_serial:
                 continue
-            control_sid = bucket.get("control_location_id") or site_sid
+            control_sid = bucket.control_location_id or site_sid
             station_identifier = station_device_identifier(site_sid, control_sid, station_serial)
             station_identifiers = {station_identifier}
-            station_client = bucket.get("station_client")
+            station_client = bucket.station_client
             legacy_serial = getattr(station_client, "serial_id", None) or station_serial
             station_identifiers.add((DOMAIN, f"{site_sid}:{legacy_serial}:{station_uuid}"))
             registry.async_get_or_create(
                 config_entry_id=entry.entry_id,
                 identifiers=station_identifiers,
                 manufacturer=MANUFACTURER,
-                name=bucket.get("station_name") or f"Smappee EV {station_serial}",
-                model=bucket.get("station_model") or "EV Wall",
+                name=bucket.station_name or f"Smappee EV {station_serial}",
+                model=bucket.charging_station_model or "EV Wall",
                 serial_number=str(station_serial),
                 via_device=site_identifier,
             )
 
-            for led_key, led in (bucket.get("led_devices") or {}).items():
-                led_id = led.get("id") if isinstance(led, dict) else led_key
+            for led_key, led in bucket.led_devices.items():
+                led_id = led.led_device_id or led_key
                 if not led_id:
                     continue
                 registry.async_get_or_create(
@@ -1215,19 +1300,14 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
                         led_device_identifier(site_sid, control_sid, station_serial, led_id)
                     },
                     manufacturer=MANUFACTURER,
-                    name=(led.get("name") if isinstance(led, dict) else None)
-                    or f"Smappee EV {station_serial} LED controller",
+                    name=led.led_device_name or f"Smappee EV {station_serial} LED controller",
                     model="LED Controller",
                     via_device=station_identifier,
                 )
 
-            connector_clients = bucket.get("connector_clients") or {}
-            connectors = bucket.get("connectors") or {}
-            for connector_uuid, client in connector_clients.items():
-                info = connectors.get(connector_uuid) or {}
-                position = info.get("connector_position") or getattr(
-                    client, "connector_number", None
-                )
+            for connector_uuid, info in bucket.connectors.items():
+                client = info.connector_client
+                position = info.connector_position or getattr(client, "connector_number", None)
                 connector_key = connector_uuid or (
                     f"position:{position}" if position else "unknown"
                 )
@@ -1254,7 +1334,7 @@ async def _prepare_site(
     client_id_prefix: str,
     config_entry: SmappeeEvConfigEntry | None = None,
     dashboard_client: SmappeeDashboardClient | None = None,
-) -> tuple[dict[str, dict] | None, MqttRuntimeValue]:
+) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
     """Build coordinators, station/connector clients and MQTT for one service location."""
     try:
         return await _async_prepare_site(
@@ -1281,7 +1361,7 @@ async def _async_prepare_site(
     client_id_prefix: str,
     config_entry: SmappeeEvConfigEntry | None = None,
     dashboard_client: SmappeeDashboardClient | None = None,
-) -> tuple[dict[str, dict] | None, MqttRuntimeValue]:
+) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
     """Build coordinators, station/connector clients and MQTT for one service location."""
 
     sid = sl["serviceLocationId"]
@@ -1384,7 +1464,7 @@ async def _async_prepare_site(
     # fill connector buckets / fallback only when connector mapping exists
     if has_connector_mapping:
         _assign_connectors(stations, car_devs, station_serial_to_connectors, serial_str, sid)
-        total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
+        total_assigned = sum(len(b.connectors) for b in stations.values())
         if total_assigned == 0 and len(stations) == 1:
             _fallback_assign(stations, car_devs, serial_str, sid)
         elif total_assigned == 0:
@@ -1394,6 +1474,7 @@ async def _async_prepare_site(
                 sid,
                 len(stations),
             )
+    _log_station_runtime_shape("service-location", stations)
 
     # create coordinators per station
     await _create_coordinators(
@@ -1409,7 +1490,7 @@ async def _async_prepare_site(
 
     # put mqtt ref in each bucket
     for b in stations.values():
-        b["mqtt"] = mqtt
+        b.mqtt = mqtt
 
     return stations, mqtt
 
@@ -1422,7 +1503,7 @@ async def _prepare_topology(
     config_entry: SmappeeEvConfigEntry | None = None,
     dashboard_client: SmappeeDashboardClient | None = None,
     background_tasks: set[asyncio.Task] | None = None,
-) -> tuple[dict[str, dict] | None, MqttRuntimeValue]:
+) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
     """Prepare one site-first Dashboard topology."""
 
     site_sid = topology.site_location_id
@@ -1531,7 +1612,7 @@ async def _prepare_topology(
             serial_str,
             control_sid,
         )
-        total_assigned = sum(len(b["connector_clients"]) for b in stations.values())
+        total_assigned = sum(len(b.connectors) for b in stations.values())
         if total_assigned == 0 and len(stations) == 1:
             _fallback_assign(stations, car_devs, serial_str, control_sid)
         elif total_assigned == 0:
@@ -1541,6 +1622,7 @@ async def _prepare_topology(
                 control_sid,
                 len(stations),
             )
+    _log_station_runtime_shape("site-topology", stations)
 
     site_coordinator = await _create_site_coordinator(
         hass,
@@ -1573,9 +1655,9 @@ async def _prepare_topology(
     )
 
     for bucket in stations.values():
-        bucket["mqtt"] = mqtt
-        bucket["site_coordinator"] = site_coordinator
-        bucket["highlevel_configs"] = highlevel_configs
+        bucket.mqtt = mqtt
+        bucket.site_coordinator = site_coordinator
+        bucket.highlevel_configs = highlevel_configs
 
     return stations, mqtt
 
@@ -1643,7 +1725,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:  # noqa: C901
     """Set up a Smappee EV account entry that discovers all service locations with a charger."""
     _LOGGER.debug("Setting up Smappee EV account entry: %s", entry.title)
 
@@ -1664,7 +1746,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     # 1) Discover site-first topologies
     topologies = await _load_dashboard_topologies(dashboard_client)
 
-    sites: dict[int, dict] = {}
+    sites: dict[int, SmappeeSiteRuntime] = {}
     mqtt_clients: dict[int, object] = {}
     background_tasks: set[asyncio.Task] = set()
 
@@ -1701,33 +1783,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
                 mqtt_clients[sid] = mqtt
             if not stations_map:
                 continue
-            site = sites.setdefault(
-                sid,
-                {
-                    "stations": {},
-                    "name": topology.site_name,
-                    "site_name": topology.site_name,
-                    "site_function_type": topology.site_function_type,
-                    "serviceLocationUuid": topology.site_location_uuid,
-                    "site_uuid": topology.site_location_uuid,
-                    "deviceSerialNumber": topology.site_gateway_serial,
-                    "gateway_serial": topology.site_gateway_serial,
-                    "gateway_type": topology.site_gateway_type,
-                    "controlLocationIds": [],
-                    "measurementLocationIds": [],
-                    "site_coordinator": None,
-                    "highlevel_configs": {},
-                },
+            site = sites.get(sid)
+            if site is None:
+                site = SmappeeSiteRuntime(
+                    site_location_id=sid,
+                    site_name=topology.site_name,
+                    site_function_type=topology.site_function_type,
+                    site_uuid=topology.site_location_uuid,
+                    gateway_serial=topology.site_gateway_serial,
+                    gateway_type=topology.site_gateway_type,
+                )
+                sites[sid] = site
+            first_bucket: SmappeeStationRuntime | None = next(iter(stations_map.values()), None)
+            if site.site_coordinator is None:
+                site.site_coordinator = first_bucket.site_coordinator if first_bucket else None
+            site.stations.update(cast(dict[str, SmappeeStationRuntime], stations_map))
+            site.control_location_ids = list(
+                dict.fromkeys([*site.control_location_ids, topology.control_location_id])
             )
-            first_bucket = next(iter(stations_map.values()), {})
-            if site.get("site_coordinator") is None:
-                site["site_coordinator"] = first_bucket.get("site_coordinator")
-            site["stations"].update(stations_map)
-            site["controlLocationIds"].append(topology.control_location_id)
-            site["measurementLocationIds"] = list(
-                dict.fromkeys(site["measurementLocationIds"] + topology.measurement_location_ids)
+            site.measurement_location_ids = list(
+                dict.fromkeys([*site.measurement_location_ids, *topology.measurement_location_ids])
             )
-            site["highlevel_configs"].update(first_bucket.get("highlevel_configs") or {})
+            if first_bucket is not None:
+                site.highlevel_configs.update(first_bucket.highlevel_configs)
 
         if hard_error is not None:
             raise hard_error
@@ -1756,6 +1834,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         background_tasks=background_tasks,
     )
     entry.runtime_data = runtime
+    _log_stored_runtime_shape(runtime)
     try:
         _register_runtime_devices(hass, entry)
 
@@ -1787,9 +1866,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     return True
 
 
-async def _shutdown_site_coordinator(site: dict[str, Any]) -> None:
+async def _shutdown_site_coordinator(site: SmappeeSiteRuntime) -> None:
     """Shutdown a site coordinator if present."""
-    site_coord = site.get("site_coordinator")
+    site_coord = site.site_coordinator
     if site_coord and hasattr(site_coord, "async_shutdown"):
         try:
             await site_coord.async_shutdown()
@@ -1805,8 +1884,8 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
     # disconnect callbacks can otherwise schedule fallback refreshes.
     for site in (rd.sites or {}).values():
         await _shutdown_site_coordinator(site)
-        for bucket in site.get("stations", {}).values():
-            coord = bucket.get("coordinator")
+        for bucket in site.stations.values():
+            coord = bucket.station_coordinator
             if coord and hasattr(coord, "async_shutdown"):
                 try:
                     await coord.async_shutdown()
@@ -1880,17 +1959,17 @@ def _current_station_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]
 
     identifiers: set[str] = set()
     for sid, site in (rd.sites or {}).items():
-        for station_uuid, bucket in (site.get("stations") or {}).items():
-            serial = bucket.get("serial")
+        for station_uuid, bucket in site.stations.items():
+            serial: Any = bucket.charging_station_serial
             if not serial:
-                station_client = bucket.get("station_client")
+                station_client = bucket.station_client
                 serial = getattr(station_client, "serial_id", None) or getattr(
                     station_client, "serial", None
                 )
             if serial:
-                control_sid = bucket.get("control_location_id") or sid
+                control_sid = bucket.control_location_id or sid
                 identifiers.add(f"station:{sid}:{control_sid}:{serial}")
-                legacy_serial = getattr(bucket.get("station_client"), "serial_id", None)
+                legacy_serial = getattr(bucket.station_client, "serial_id", None)
                 if not isinstance(legacy_serial, str) or not legacy_serial.strip():
                     legacy_serial = serial
                 identifiers.add(f"{sid}:{legacy_serial}:{station_uuid}")

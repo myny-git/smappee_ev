@@ -17,6 +17,7 @@ from custom_components.smappee_ev import (
 from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
 from custom_components.smappee_ev.data import RuntimeData
 from custom_components.smappee_ev.mqtt_gateway import SmappeeMqtt
+from tests.factories import make_site_runtime, make_station_runtime
 
 
 @pytest.fixture
@@ -98,7 +99,13 @@ class TestErrorHandling:
         _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
 
         # Create stations with no matching serial
-        stations = {"station1_uuid": {"serial": "STATION1", "connector_clients": {}}}
+        stations = {
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                serial="STATION1",
+                connectors={},
+            )
+        }
         mapping = {
             "STATION2": {  # Different serial, no match
                 "connectors": {"connector1_uuid": {"id": "conn1_id", "position": 1}}
@@ -107,13 +114,19 @@ class TestErrorHandling:
 
         # Should not modify the stations dict
         _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
-        assert stations["station1_uuid"]["connector_clients"] == {}
+        assert stations["station1_uuid"].connectors == {}
 
     @pytest.mark.asyncio
     async def test_assign_connectors_no_matching_car(self):
         """Test _assign_connectors with no matching car devices."""
         # Create stations with a serial that matches the mapping
-        stations = {"station1_uuid": {"serial": "STATION1", "connector_clients": {}}}
+        stations = {
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                serial="STATION1",
+                connectors={},
+            )
+        }
 
         # Create car devices with non-matching UUID
         car_devs = [
@@ -137,7 +150,7 @@ class TestErrorHandling:
 
         # Should not modify the stations dict
         _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
-        assert stations["station1_uuid"]["connector_clients"] == {}
+        assert stations["station1_uuid"].connectors == {}
 
     @pytest.mark.asyncio
     async def test_prepare_site_exception_handling(self, hass, mock_dashboard_handle, mock_session):
@@ -277,7 +290,16 @@ class TestErrorHandling:
         # Create runtime data with the problematic coordinator
         runtime = RuntimeData(
             api=MagicMock(),
-            sites={12345: {"stations": {"station1_uuid": {"coordinator": coordinator}}}},
+            sites={
+                12345: make_site_runtime(
+                    stations={
+                        "station1_uuid": make_station_runtime(
+                            station_uuid="station1_uuid",
+                            coordinator=coordinator,
+                        )
+                    }
+                )
+            },
             mqtt={},
         )
 
@@ -308,7 +330,13 @@ class TestErrorHandling:
         mock_coordinator.apply_mqtt_properties = MagicMock(side_effect=Exception("Callback error"))
         mock_coordinator.async_set_updated_data = MagicMock()
 
-        stations = {"station1_uuid": {"coordinator": mock_coordinator, "mqtt": None}}
+        stations = {
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                coordinator=mock_coordinator,
+                connectors={},
+            )
+        }
 
         # Mock SmappeeMqtt to capture the callback and the logger
         with (

@@ -37,6 +37,7 @@ from custom_components.smappee_ev.const import (
 )
 from custom_components.smappee_ev.data import RuntimeData
 from custom_components.smappee_ev.discovery import MqttChannelSpec, SmappeeLocationTopology
+from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 
 class MockResponseContext:
@@ -77,7 +78,11 @@ def test_mqtt_routes_parent_power_to_site_and_child_power_to_station():
         ),
     ]
 
-    routes = _build_mqtt_routes(specs, site_coord, {"station": {"coordinator": station_coord}})
+    routes = _build_mqtt_routes(
+        specs,
+        site_coord,
+        {"station": make_station_runtime(coordinator=station_coord)},
+    )
 
     assert routes["servicelocation/uuid317418/power"] == [site_coord]
     assert routes["servicelocation/uuid317443/power"] == [station_coord]
@@ -97,7 +102,11 @@ def test_mqtt_routes_shared_power_topic_to_site_and_station_once():
         MqttChannelSpec(123, "consumption", "consumption", topic, None, None, []),
     ]
 
-    routes = _build_mqtt_routes(specs, site_coord, {"station": {"coordinator": station_coord}})
+    routes = _build_mqtt_routes(
+        specs,
+        site_coord,
+        {"station": make_station_runtime(coordinator=station_coord)},
+    )
 
     assert routes[topic] == [station_coord, site_coord]
 
@@ -501,18 +510,24 @@ class TestSitePreparation:
             assert "station2_uuid" in result
 
             # Check station client properties
-            assert result["station1_uuid"]["serial"] == "STATION1"
-            assert "station_client" in result["station1_uuid"]
-            assert isinstance(result["station1_uuid"]["connector_clients"], dict)
-            assert result["station1_uuid"]["coordinator"] is None
-            assert result["station1_uuid"]["mqtt"] is None
+            assert result["station1_uuid"].charging_station_serial == "STATION1"
+            assert result["station1_uuid"].station_client is not None
+            assert isinstance(result["station1_uuid"].connectors, dict)
+            assert result["station1_uuid"].station_coordinator is None
+            assert result["station1_uuid"].mqtt is None
 
     def test_assign_connectors(self):
         """Test connector assignment to stations."""
         # Mock SmappeeDeviceHandle
         with patch("custom_components.smappee_ev.SmappeeDeviceHandle") as mock_api_client_class:
             # Create stations
-            stations = {"station1_uuid": {"serial": "STATION1", "connector_clients": {}}}
+            stations = {
+                "station1_uuid": make_station_runtime(
+                    station_uuid="station1_uuid",
+                    serial="STATION1",
+                    connectors={},
+                )
+            }
 
             # Create car devices
             car_devs = [{"uuid": "connector1_uuid", "id": "connector1_id", "position": 1}]
@@ -527,7 +542,7 @@ class TestSitePreparation:
             _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
 
             # Check that connector was assigned to station
-            assert "connector1_uuid" in stations["station1_uuid"]["connector_clients"]
+            assert "connector1_uuid" in stations["station1_uuid"].connectors
 
             # Check that API client was created with correct parameters
             mock_api_client_class.assert_called_once_with(
@@ -537,6 +552,7 @@ class TestSitePreparation:
                 12345,
                 connector_number=2,  # Should use position from mapping
                 charging_station_serial="STATION1",
+                site_location_id=317418,
             )
 
     def test_fallback_assign(self):
@@ -544,7 +560,13 @@ class TestSitePreparation:
         # Mock SmappeeDeviceHandle
         with patch("custom_components.smappee_ev.SmappeeDeviceHandle") as mock_api_client_class:
             # Create stations with no connectors
-            stations = {"station1_uuid": {"serial": "STATION1", "connector_clients": {}}}
+            stations = {
+                "station1_uuid": make_station_runtime(
+                    station_uuid="station1_uuid",
+                    serial="STATION1",
+                    connectors={},
+                )
+            }
 
             # Create car devices
             car_devs = [
@@ -555,9 +577,9 @@ class TestSitePreparation:
             _fallback_assign(stations, car_devs, "SITE_SERIAL", 12345)
 
             # Check that connectors were assigned to the first station
-            assert len(stations["station1_uuid"]["connector_clients"]) == 2
-            assert "connector1_uuid" in stations["station1_uuid"]["connector_clients"]
-            assert "connector2_uuid" in stations["station1_uuid"]["connector_clients"]
+            assert len(stations["station1_uuid"].connectors) == 2
+            assert "connector1_uuid" in stations["station1_uuid"].connectors
+            assert "connector2_uuid" in stations["station1_uuid"].connectors
 
             # Check correct position values were used
             assert mock_api_client_class.call_count == 2
@@ -633,17 +655,25 @@ class TestDomainSetup:
         connector_1 = MagicMock()
         connector_2 = MagicMock()
         stations = {
-            "station1_uuid": {
-                "station_client": station_client,
-                "connector_clients": {
-                    "connector1": connector_1,
-                    "connector2": connector_2,
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=station_client,
+                coordinator=station_coordinator,
+                connectors={
+                    "connector1": make_connector_runtime(
+                        connector_key="connector1",
+                        connector_uuid="connector1",
+                        connector_client=connector_1,
+                    ),
+                    "connector2": make_connector_runtime(
+                        connector_key="connector2",
+                        connector_uuid="connector2",
+                        connector_client=connector_2,
+                    ),
                 },
-                "coordinator": station_coordinator,
-                "site_coordinator": site_coordinator,
-                "highlevel_configs": {12345: {"channels": []}},
-                "mqtt": None,
-            }
+                site_coordinator=site_coordinator,
+                highlevel_configs={12345: {"channels": []}},
+            )
         }
         mqtt_client = MagicMock()
 
@@ -677,18 +707,20 @@ class TestDomainSetup:
             assert runtime.dashboard is runtime.api
 
             site = runtime.sites[12345]
-            assert site["name"] == "Home"
-            assert site["site_name"] == "Home"
-            assert site["site_coordinator"] is site_coordinator
-            assert site["serviceLocationUuid"] == "sl_uuid_1"
-            assert site["controlLocationIds"] == [12345]
-            assert site["measurementLocationIds"] == [12345]
-            assert site["highlevel_configs"] == {12345: {"channels": []}}
+            assert site.site_name == "Home"
+            assert site.site_coordinator is site_coordinator
+            assert site.site_uuid == "sl_uuid_1"
+            assert site.control_location_ids == [12345]
+            assert site.measurement_location_ids == [12345]
+            assert site.highlevel_configs == {12345: {"channels": []}}
 
-            station_bucket = site["stations"]["station1_uuid"]
-            assert station_bucket["station_client"] is station_client
-            assert station_bucket["coordinator"] is station_coordinator
-            assert station_bucket["connector_clients"] == {
+            station_bucket = site.stations["station1_uuid"]
+            assert station_bucket.station_client is station_client
+            assert station_bucket.station_coordinator is station_coordinator
+            assert {
+                key: connector.connector_client
+                for key, connector in station_bucket.connectors.items()
+            } == {
                 "connector1": connector_1,
                 "connector2": connector_2,
             }
@@ -706,12 +738,18 @@ class TestDomainSetup:
         }
 
         stations = {
-            "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {"connector1": MagicMock()},
-                "coordinator": MagicMock(),
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=MagicMock(),
+                coordinator=MagicMock(),
+                connectors={
+                    "connector1": make_connector_runtime(
+                        connector_key="connector1",
+                        connector_uuid="connector1",
+                        connector_client=MagicMock(),
+                    )
+                },
+            )
         }
 
         with (
@@ -792,12 +830,18 @@ class TestDomainSetup:
         """Test successful topology resources are cleaned if another topology auth-fails."""
         session, response = mock_session
         stations = {
-            "station1_uuid": {
-                "station_client": MagicMock(),
-                "connector_clients": {"connector1": MagicMock()},
-                "coordinator": MagicMock(),
-                "mqtt": None,
-            }
+            "station1_uuid": make_station_runtime(
+                station_uuid="station1_uuid",
+                station_client=MagicMock(),
+                coordinator=MagicMock(),
+                connectors={
+                    "connector1": make_connector_runtime(
+                        connector_key="connector1",
+                        connector_uuid="connector1",
+                        connector_client=MagicMock(),
+                    )
+                },
+            )
         }
         mqtt_client = MagicMock()
 
@@ -825,7 +869,7 @@ class TestDomainSetup:
         shutdown.assert_awaited_once()
         temp_runtime = shutdown.await_args.args[0]
         assert isinstance(temp_runtime, RuntimeData)
-        assert temp_runtime.sites[12345]["stations"] == stations
+        assert temp_runtime.sites[12345].stations == stations
         assert temp_runtime.mqtt[12345] == mqtt_client
         assert mock_config_entry.runtime_data is None
 
@@ -839,7 +883,16 @@ class TestDomainSetup:
         coordinator = MagicMock()
         coordinator.async_shutdown = AsyncMock()
 
-        sites = {12345: {"stations": {"station1_uuid": {"coordinator": coordinator, "mqtt": None}}}}
+        sites = {
+            12345: make_site_runtime(
+                stations={
+                    "station1_uuid": make_station_runtime(
+                        station_uuid="station1_uuid",
+                        coordinator=coordinator,
+                    )
+                }
+            )
+        }
 
         runtime = RuntimeData(api=MagicMock(), sites=sites, mqtt={12345: mqtt_client})
 
@@ -895,14 +948,14 @@ class TestDomainSetup:
         mock_config_entry.runtime_data = RuntimeData(
             api=MagicMock(),
             sites={
-                12345: {
-                    "stations": {
-                        "station1_uuid": {
-                            "coordinator": coordinator,
-                            "mqtt": None,
-                        }
+                12345: make_site_runtime(
+                    stations={
+                        "station1_uuid": make_station_runtime(
+                            station_uuid="station1_uuid",
+                            coordinator=coordinator,
+                        )
                     }
-                }
+                )
             },
             mqtt={12345: mqtt_client},
         )
@@ -930,14 +983,15 @@ class TestDomainSetup:
         mock_config_entry.runtime_data = RuntimeData(
             api=MagicMock(),
             sites={
-                12345: {
-                    "stations": {
-                        "station1_uuid": {
-                            "serial": "STATION1",
-                            "station_client": MagicMock(),
-                        }
+                12345: make_site_runtime(
+                    stations={
+                        "station1_uuid": make_station_runtime(
+                            station_uuid="station1_uuid",
+                            serial="STATION1",
+                            station_client=MagicMock(),
+                        )
                     }
-                }
+                )
             },
             mqtt={},
         )
@@ -956,15 +1010,16 @@ class TestDomainSetup:
         mock_config_entry.runtime_data = RuntimeData(
             api=MagicMock(),
             sites={
-                12345: {
-                    "stations": {
-                        "station1_uuid": {
-                            "serial": "STATION1",
-                            "control_location_id": 67890,
-                            "station_client": MagicMock(),
-                        }
+                12345: make_site_runtime(
+                    stations={
+                        "station1_uuid": make_station_runtime(
+                            station_uuid="station1_uuid",
+                            serial="STATION1",
+                            control_location_id=67890,
+                            station_client=MagicMock(),
+                        )
                     }
-                }
+                )
             },
             mqtt={},
         )
@@ -981,14 +1036,15 @@ class TestDomainSetup:
         mock_config_entry.runtime_data = RuntimeData(
             api=MagicMock(),
             sites={
-                12345: {
-                    "stations": {
-                        "station1_uuid": {
-                            "serial": "STATION1",
-                            "station_client": MagicMock(),
-                        }
+                12345: make_site_runtime(
+                    stations={
+                        "station1_uuid": make_station_runtime(
+                            station_uuid="station1_uuid",
+                            serial="STATION1",
+                            station_client=MagicMock(),
+                        )
                     }
-                }
+                )
             },
             mqtt={},
         )

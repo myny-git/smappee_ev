@@ -29,6 +29,12 @@ from custom_components.smappee_ev import (
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.data import RuntimeData
 from custom_components.smappee_ev.discovery import MqttChannelSpec, SmappeeLocationTopology
+from tests.factories import (
+    make_connector_runtime,
+    make_led_runtime,
+    make_site_runtime,
+    make_station_runtime,
+)
 
 
 def _configured_dashboard(**methods):
@@ -369,11 +375,11 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
     assert mqtt_result is mqtt
     assert list(stations) == ["STATION-1"]
     bucket = stations["STATION-1"]
-    assert bucket["site_location_id"] == 100
-    assert bucket["control_location_id"] == 200
-    assert bucket["serial"] == "STATION-1"
-    assert bucket["site_coordinator"] is site_coord
-    assert bucket["highlevel_configs"].keys() == {100, 200}
+    assert bucket.site_location_id == 100
+    assert bucket.control_location_id == 200
+    assert bucket.charging_station_serial == "STATION-1"
+    assert bucket.site_coordinator is site_coord
+    assert bucket.highlevel_configs.keys() == {100, 200}
     assert create_site.await_args.kwargs["highlevel_configs"]
     assert create_stations.await_args.kwargs["highlevel_configs"]
     assert setup_mqtt.call_args.kwargs["mqtt_specs"]
@@ -435,8 +441,8 @@ async def test_prepare_site_uses_service_serial_when_dashboard_has_only_connecto
     assert mqtt_result is mqtt
     assert list(stations) == ["GATEWAY-1"]
     bucket = stations["GATEWAY-1"]
-    assert bucket["serial"] == "GATEWAY-1"
-    assert set(bucket["connector_clients"]) == {"conn-uuid"}
+    assert bucket.charging_station_serial == "GATEWAY-1"
+    assert set(bucket.connectors) == {"conn-uuid"}
     create_coords.assert_awaited_once()
     setup_mqtt.assert_called_once()
 
@@ -531,23 +537,32 @@ def test_register_runtime_devices_creates_site_station_led_and_connector_devices
         api=MagicMock(),
         mqtt={},
         sites={
-            100: {
-                "site_name": "Home",
-                "gateway_serial": "GATEWAY-1",
-                "gateway_type": "Genius",
-                "stations": {
-                    "station-uuid": {
-                        "serial": "STATION-1",
-                        "control_location_id": 200,
-                        "station_client": station_client,
-                        "station_name": "Garage Charger",
-                        "station_model": "EV Wall",
-                        "led_devices": {"led-id": {"id": "led-id", "name": "LED Ring"}},
-                        "connector_clients": {"conn-uuid": connector_client},
-                        "connectors": {"conn-uuid": {"connector_position": 2}},
-                    }
+            100: make_site_runtime(
+                site_location_id=100,
+                site_name="Home",
+                gateway_serial="GATEWAY-1",
+                gateway_type="Genius",
+                stations={
+                    "station-uuid": make_station_runtime(
+                        site_location_id=100,
+                        control_location_id=200,
+                        station_uuid="station-uuid",
+                        serial="STATION-1",
+                        station_client=station_client,
+                        station_name="Garage Charger",
+                        station_model="EV Wall",
+                        led_devices={"led-id": make_led_runtime(led_key="led-id")},
+                        connectors={
+                            "conn-uuid": make_connector_runtime(
+                                connector_key="conn-uuid",
+                                connector_uuid="conn-uuid",
+                                connector_position=2,
+                                connector_client=connector_client,
+                            )
+                        },
+                    )
                 },
-            }
+            )
         },
     )
     registry = MagicMock()
@@ -581,10 +596,10 @@ async def test_shutdown_runtime_resources_stops_mqtt_and_cancels_background_task
         api=MagicMock(),
         mqtt={100: [async_mqtt, failing_mqtt]},
         sites={
-            100: {
-                "site_coordinator": site_coord,
-                "stations": {"station": {"coordinator": station_coord}},
-            }
+            100: make_site_runtime(
+                site_coordinator=site_coord,
+                stations={"station": make_station_runtime(coordinator=station_coord)},
+            )
         },
         background_tasks={pending},
     )
@@ -645,15 +660,18 @@ async def test_async_remove_config_entry_device_allows_only_stale_station_device
         api=MagicMock(),
         mqtt={},
         sites={
-            10: {
-                "stations": {
-                    "station-uuid": {
-                        "serial": None,
-                        "control_location_id": 20,
-                        "station_client": station_client,
-                    }
-                }
-            }
+            10: make_site_runtime(
+                site_location_id=10,
+                stations={
+                    "station-uuid": make_station_runtime(
+                        site_location_id=10,
+                        control_location_id=20,
+                        station_uuid="station-uuid",
+                        serial="",
+                        station_client=station_client,
+                    )
+                },
+            )
         },
     )
 
