@@ -16,5 +16,5 @@
   "requirements": [
     "aiomqtt>=2.5.0,<3.0.0"
   ],
-  "version": "2026.6.6-beta.3"
+  "version": "2026.6.6-beta.4"
 }
