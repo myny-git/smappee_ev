@@ -13,6 +13,12 @@ if TYPE_CHECKING:
     from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
     from .device_handle import SmappeeDeviceHandle
 
+type DashboardObject = dict[str, Any]
+type DashboardObjectList = list[DashboardObject]
+type HighLevelConfigMap = dict[int, DashboardObject]
+type MqttPayload = dict[str, Any]
+type RecentSession = DashboardObject
+
 
 @dataclass
 class SiteState:
@@ -98,7 +104,7 @@ class StationState:
     capacity_maximum_power_kw: float | None = None
     overload_protection_active: bool | None = None
     overload_maximum_load_a: int | None = None
-    dashboard_charging_station_details: dict[str, Any] | None = None
+    dashboard_charging_station_details: DashboardObject | None = None
 
     mqtt_connected: bool | None = None
     last_mqtt_rx: float | None = None
@@ -126,7 +132,7 @@ class IntegrationData:
 
     station: StationState
     connectors: dict[str, ConnectorState]  # keyed by UUID
-    recent_sessions: list[dict] = field(default_factory=list)
+    recent_sessions: list[RecentSession] = field(default_factory=list)
 
 
 @dataclass
@@ -175,7 +181,7 @@ class SmappeeStationRuntime:
     station_coordinator: SmappeeStationCoordinator | None
     mqtt: Any | None = None
     site_coordinator: SmappeeSiteCoordinator | None = None
-    highlevel_configs: dict[int, dict[str, Any]] = field(default_factory=dict)
+    highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
     led_devices: dict[str, SmappeeLedRuntime] = field(default_factory=dict)
     connectors: dict[str, SmappeeConnectorRuntime] = field(default_factory=dict)
 
@@ -192,7 +198,7 @@ class SmappeeSiteRuntime:
     gateway_type: str | None
     control_location_ids: list[int] = field(default_factory=list)
     measurement_location_ids: list[int] = field(default_factory=list)
-    highlevel_configs: dict[int, dict[str, Any]] = field(default_factory=dict)
+    highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
     mqtt_clients: Any | None = None
     site_coordinator: SmappeeSiteCoordinator | None = None
     stations: dict[str, SmappeeStationRuntime] = field(default_factory=dict)

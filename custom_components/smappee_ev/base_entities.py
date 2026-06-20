@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -12,6 +12,8 @@ from .helpers import build_connector_id, make_device_info, make_unique_id, stati
 
 if TYPE_CHECKING:
     from homeassistant.helpers.entity import DeviceInfo
+
+    from .data import ConnectorState
 
 __all__ = [
     "SmappeeBaseEntity",
@@ -35,8 +37,10 @@ def _text_attr(obj: object, name: str) -> str | None:
 
 
 def _is_int_like(value: object) -> bool:
+    if not isinstance(value, int | str):
+        return False
     with suppress(TypeError, ValueError):
-        int(cast(Any, value))
+        int(value)
         return True
     return False
 
@@ -285,7 +289,7 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
         return bool(getattr(conn, "api_available", True))
 
     @property
-    def _conn_state(self) -> Any | None:
+    def _conn_state(self) -> ConnectorState | None:
         data = getattr(self.coordinator, "data", None)
         if not data:
             return None

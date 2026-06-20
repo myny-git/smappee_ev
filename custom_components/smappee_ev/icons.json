@@ -1,0 +1,89 @@
+{
+  "entity": {
+    "button": {
+      "pause_charging": {
+        "default": "mdi:pause-circle"
+      },
+      "resume_charging": {
+        "default": "mdi:play-pause"
+      },
+      "start_charging": {
+        "default": "mdi:play-circle"
+      },
+      "stop_charging": {
+        "default": "mdi:stop-circle"
+      }
+    },
+    "light": {
+      "led": {
+        "default": "mdi:led-on"
+      }
+    },
+    "number": {
+      "capacity_maximum_power": {
+        "default": "mdi:transmission-tower"
+      },
+      "connector_max_current": {
+        "default": "mdi:current-ac"
+      },
+      "max_charging_speed": {
+        "default": "mdi:current-ac"
+      },
+      "min_surpluspct": {
+        "default": "mdi:solar-power"
+      },
+      "offline_failsafe_current": {
+        "default": "mdi:cloud-alert"
+      },
+      "overload_maximum_load": {
+        "default": "mdi:current-ac"
+      }
+    },
+    "select": {
+      "charging_mode": {
+        "default": "mdi:ev-station",
+        "state": {
+          "smart": "mdi:brain",
+          "solar": "mdi:solar-power",
+          "standard": "mdi:lightning-bolt"
+        }
+      }
+    },
+    "sensor": {
+      "charging_state": {
+        "default": "mdi:ev-station"
+      },
+      "evcc_state": {
+        "default": "mdi:connection"
+      },
+      "evse_status": {
+        "default": "mdi:ev-plug-type2"
+      },
+      "mqtt_last_seen": {
+        "default": "mdi:clock-check"
+      },
+      "support_grid": {
+        "default": "mdi:transmission-tower-export"
+      }
+    },
+    "switch": {
+      "evcc_charging": {
+        "default": "mdi:ev-station"
+      },
+      "offline_charging": {
+        "default": "mdi:cloud-off-outline",
+        "state": {
+          "off": "mdi:cloud-off-outline",
+          "on": "mdi:cloud-outline"
+        }
+      },
+      "station_available": {
+        "default": "mdi:ev-station-disabled",
+        "state": {
+          "off": "mdi:ev-station-disabled",
+          "on": "mdi:ev-station"
+        }
+      }
+    }
+  }
+}

@@ -6,6 +6,10 @@
         "data": {
           "username": "Votre nom d'utilisateur sur le tableau de bord Smappee",
           "password": "Votre mot de passe sur le tableau de bord Smappee"
+        },
+        "data_description": {
+          "username": "Le nom d'utilisateur utilise pour se connecter au Smappee Dashboard.",
+          "password": "Le mot de passe utilise pour se connecter au Smappee Dashboard."
         }
       },
       "reauth_confirm": {
@@ -13,6 +17,10 @@
         "data": {
           "username": "Votre nom d'utilisateur sur le tableau de bord Smappee",
           "password": "Votre mot de passe sur le tableau de bord Smappee"
+        },
+        "data_description": {
+          "username": "Le nom d'utilisateur de la config entry Smappee EV existante.",
+          "password": "Le mot de passe Smappee Dashboard mis a jour."
         }
       },
       "reconfigure": {
@@ -20,6 +28,10 @@
         "data": {
           "username": "Votre nom d'utilisateur sur le tableau de bord Smappee",
           "password": "Votre mot de passe sur le tableau de bord Smappee"
+        },
+        "data_description": {
+          "username": "Le nom d'utilisateur de la config entry Smappee EV existante.",
+          "password": "Le mot de passe Smappee Dashboard a enregistrer pour cette config entry."
         }
       }
     },
@@ -27,6 +39,9 @@
       "auth_failed": "Autorisation échouée",
       "cannot_connect": "Connexion impossible",
       "unknown": "Réponse inattendue du Smappee Dashboard"
+    },
+    "abort": {
+      "wrong_account": "Les identifiants appartiennent a un autre compte Smappee."
     }
   },
   "exceptions": {

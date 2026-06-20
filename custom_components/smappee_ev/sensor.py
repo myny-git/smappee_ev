@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import contextlib
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from homeassistant.components.sensor import (
     RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
+    SensorExtraStoredData,
     SensorStateClass,
 )
 from homeassistant.const import (
@@ -119,6 +119,22 @@ def _safe_write_ha_state(entity: SensorEntity) -> None:
         entity.async_write_ha_state()
 
 
+def _coerce_float(value: object) -> float | None:
+    if isinstance(value, bool | None):
+        return None
+    if isinstance(value, int | float | str):
+        with suppress(TypeError, ValueError):
+            return float(value)
+    return None
+
+
+class _RestoredTotalSensor(Protocol):
+    _last_value: float | None
+
+    async def async_get_last_sensor_data(self) -> SensorExtraStoredData | None:
+        """Return restored sensor data."""
+
+
 class StationGridPower(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -200,30 +216,28 @@ class StationPvPower(SmappeeSiteEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-def _total_increasing_value(entity: object, candidate: object) -> float | None:
+def _total_increasing_value(entity: _RestoredTotalSensor, candidate: object) -> float | None:
     """Protect total-increasing sensors from decreasing across restarts."""
-    last = getattr(entity, "_last_value", None)
-    raw_value: float | None = None
-    if not isinstance(candidate, bool) and candidate is not None:
-        with contextlib.suppress(TypeError, ValueError):
-            raw_value = float(candidate)  # type: ignore[arg-type]
+    last = entity._last_value
+    raw_value = _coerce_float(candidate)
     value = update_total_increasing(last, raw_value)
-    entity._last_value = value  # type: ignore[attr-defined]
+    entity._last_value = value
     return value
 
 
-async def _async_restore_last_total_value(sensor: RestoreSensor) -> None:
+async def _async_restore_last_total_value(sensor: _RestoredTotalSensor) -> None:
     last = await sensor.async_get_last_sensor_data()
     if last is None or last.native_value is None:
         return
-    if isinstance(last.native_value, int | float | str):
-        with contextlib.suppress(TypeError, ValueError):
-            sensor._last_value = float(last.native_value)  # type: ignore[attr-defined]
+    restored_value = _coerce_float(last.native_value)
+    if restored_value is not None:
+        sensor._last_value = restored_value
 
 
 class RestoredEnergyStationSensor(SmappeeSiteEntity, RestoreSensor):
     """Station energy sensor with restore support and coordinator lifecycle."""
 
+    _last_value: float | None = None
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -239,6 +253,7 @@ class RestoredEnergyStationSensor(SmappeeSiteEntity, RestoreSensor):
 class RestoredEnergyConnectorSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     """Connector energy sensor with restore support and coordinator lifecycle."""
 
+    _last_value: float | None = None
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -465,7 +480,6 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
-    _attr_icon = "mdi:transmission-tower-export"
     _attr_translation_key = "support_grid"
 
     def __init__(
@@ -839,7 +853,6 @@ class StationGridVoltageL3(SmappeeSiteEntity, SensorEntity):
 
 class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:ev-station"
     _attr_translation_key = "charging_state"
 
     def __init__(
@@ -868,7 +881,6 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
 
 class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:connection"
     _attr_translation_key = "evcc_state"
 
     def __init__(
@@ -941,7 +953,6 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
 
 class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:ev-plug-type2"
     _attr_translation_key = "evse_status"
 
     def __init__(
@@ -987,7 +998,6 @@ class SmappeeMqttLastSeenSensor(SmappeeSiteEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False  # Disable by default in UI
-    _attr_icon = "mdi:clock-check"
 
     def __init__(
         self,
@@ -1017,9 +1027,7 @@ class SmappeeMqttLastSeenSensor(SmappeeSiteEntity, SensorEntity):
 
 def _session_ts_to_datetime(value: object) -> datetime | None:
     """Convert session timestamps that may be seconds or milliseconds."""
-    ts = None
-    with suppress(TypeError, ValueError):
-        ts = float(value)  # type: ignore[arg-type]
+    ts = _coerce_float(value)
     if ts is None:
         return None
     if abs(ts) > 10_000_000_000:

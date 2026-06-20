@@ -507,13 +507,3 @@ async def register_services(hass: HomeAssistant) -> None:
         DOMAIN, "set_charging_mode", handle_set_charging_mode, SET_MODE_SCHEMA
     )
     hass.services.async_register(DOMAIN, "set_current", handle_set_current, SET_CURRENT_SCHEMA)
-
-
-async def unregister_services(hass: HomeAssistant) -> None:
-    _LOGGER.info("Unregistering Smappee EV services")
-    hass.services.async_remove(DOMAIN, "start_charging")
-    hass.services.async_remove(DOMAIN, "pause_charging")
-    hass.services.async_remove(DOMAIN, "stop_charging")
-    hass.services.async_remove(DOMAIN, "resume_charging")
-    hass.services.async_remove(DOMAIN, "set_charging_mode")
-    hass.services.async_remove(DOMAIN, "set_current")

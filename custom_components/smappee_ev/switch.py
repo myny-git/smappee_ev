@@ -89,7 +89,6 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
 
     _attr_has_entity_name = True
     _attr_translation_key = "evcc_charging"
-    _attr_icon = "mdi:ev-station"
 
     def __init__(
         self,
@@ -214,10 +213,6 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
         st = self._station_state()
         return bool(getattr(st, "available", True)) if st else True
 
-    @property
-    def icon(self) -> str:
-        return "mdi:ev-station" if self.is_on else "mdi:ev-station-disabled"
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_available(True)
 
@@ -301,10 +296,6 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
     def is_on(self) -> bool:
         st = self._station_state()
         return bool(getattr(st, "offline_charging_enabled", False)) if st else False
-
-    @property
-    def icon(self) -> str:
-        return "mdi:cloud-outline" if self.is_on else "mdi:cloud-off-outline"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_offline_charging(True)

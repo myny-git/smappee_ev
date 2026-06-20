@@ -10,7 +10,7 @@ import re
 from typing import Any, cast
 
 from aiohttp import ClientError, ClientSession
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -30,6 +30,10 @@ from .const import (
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .dashboard_client import SmappeeDashboardClient
 from .data import (
+    DashboardObject,
+    DashboardObjectList,
+    HighLevelConfigMap,
+    MqttPayload,
     RuntimeData,
     SmappeeConnectorRuntime,
     SmappeeEvConfigEntry,
@@ -51,7 +55,7 @@ from .helpers import (
     station_device_identifier,
 )
 from .mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
-from .services import register_services, unregister_services
+from .services import register_services
 
 _LOGGER = logging.getLogger(__name__)
 _SERVICE_REGISTRATION_SENTINEL = "start_charging"
@@ -122,7 +126,7 @@ def _find_in(dev: dict, *keys: str) -> str | None:
     return None
 
 
-def _uuid_from_dashboard_channel(smart_device: dict[str, Any]) -> str | None:
+def _uuid_from_dashboard_channel(smart_device: DashboardObject) -> str | None:
     car_charger = smart_device.get("carCharger")
     if not isinstance(car_charger, dict):
         return None
@@ -139,7 +143,7 @@ def _uuid_from_dashboard_channel(smart_device: dict[str, Any]) -> str | None:
     return channel_name.split(marker, 1)[1].split("/", 1)[0] or None
 
 
-def _device_uuid(dev: dict[str, Any]) -> str | None:
+def _device_uuid(dev: DashboardObject) -> str | None:
     return (
         _safe_str(dev.get("uuid"))
         or _safe_str(dev.get("smartDeviceUuid"))
@@ -147,11 +151,11 @@ def _device_uuid(dev: dict[str, Any]) -> str | None:
     )
 
 
-def _connector_uuid(dev: dict[str, Any]) -> str | None:
+def _connector_uuid(dev: DashboardObject) -> str | None:
     return _uuid_from_dashboard_channel(dev) or _device_uuid(dev)
 
 
-def _station_serial(dev: dict[str, Any]) -> str | None:
+def _station_serial(dev: DashboardObject) -> str | None:
     return _find_in(dev, "serialNumber", "serial") or _device_uuid(dev)
 
 
@@ -244,7 +248,7 @@ def _dashboard_client_configured(dashboard_client: SmappeeDashboardClient | None
     )
 
 
-def _charging_station_from_service_location(item: dict[str, Any]) -> dict[str, Any]:
+def _charging_station_from_service_location(item: DashboardObject) -> DashboardObject:
     charging_station = item.get("chargingStation")
     if not isinstance(charging_station, dict):
         charging_station = item.get("chargingstation")
@@ -258,8 +262,8 @@ def _charging_station_from_service_location(item: dict[str, Any]) -> dict[str, A
 
 
 def _normalize_dashboard_service_location(
-    item: dict[str, Any], *, allow_non_charging_function_type: bool = False
-) -> dict[str, Any] | None:
+    item: DashboardObject, *, allow_non_charging_function_type: bool = False
+) -> DashboardObject | None:
     function_type = _safe_str(item.get("functionType"))
     charging_station = _charging_station_from_service_location(item)
     if (
@@ -293,7 +297,7 @@ def _normalize_dashboard_service_location(
 
 async def _dashboard_discover_service_locations(
     dashboard_client: SmappeeDashboardClient | None,
-) -> list[dict[str, Any]] | None:
+) -> DashboardObjectList | None:
     if not _dashboard_client_configured(dashboard_client):
         return None
     if dashboard_client is None:
@@ -371,7 +375,7 @@ async def _dashboard_discover_topologies(
 
 async def _dashboard_fetch_devices(
     dashboard_client: SmappeeDashboardClient | None, sid: int | str
-) -> list[dict[str, Any]] | None:
+) -> DashboardObjectList | None:
     if not _dashboard_client_configured(dashboard_client):
         return None
     if dashboard_client is None:
@@ -389,12 +393,12 @@ async def _dashboard_fetch_devices(
 async def _dashboard_fetch_highlevel_configs(
     dashboard_client: SmappeeDashboardClient | None,
     measurement_sids: list[int],
-) -> dict[int, dict[str, Any]]:
+) -> HighLevelConfigMap:
     """Fetch highlevelconfiguration for all measurement service locations."""
     if not _dashboard_client_configured(dashboard_client) or dashboard_client is None:
         return {}
 
-    configs: dict[int, dict[str, Any]] = {}
+    configs: HighLevelConfigMap = {}
     for sid in dict.fromkeys(measurement_sids):
         try:
             cfg = await dashboard_client.async_get_highlevel_configuration(sid)
@@ -408,7 +412,7 @@ async def _dashboard_fetch_highlevel_configs(
     return configs
 
 
-def _mqtt_specs_from_highlevel_configs(configs: dict[int, dict[str, Any]]) -> list[MqttChannelSpec]:
+def _mqtt_specs_from_highlevel_configs(configs: HighLevelConfigMap) -> list[MqttChannelSpec]:
     """Return all highlevel MQTT specs.
 
     Multiple logical measurements can share one physical MQTT topic. Keep every
@@ -432,11 +436,11 @@ def _mqtt_specs_from_highlevel_configs(configs: dict[int, dict[str, Any]]) -> li
 
 
 def _split_highlevel_configs_by_scope(
-    configs: dict[int, dict[str, Any]],
-) -> tuple[dict[int, dict[str, Any]], dict[int, dict[str, Any]]]:
+    configs: HighLevelConfigMap,
+) -> tuple[HighLevelConfigMap, HighLevelConfigMap]:
     """Return ``(site_configs, station_configs)`` based on highlevel MQTT roles."""
-    site_configs: dict[int, dict[str, Any]] = {}
-    station_configs: dict[int, dict[str, Any]] = {}
+    site_configs: HighLevelConfigMap = {}
+    station_configs: HighLevelConfigMap = {}
     for sid, cfg in configs.items():
         specs = parse_mqtt_channel_specs_from_highlevel(sid, cfg)
         if any(spec.role in {"grid", "production", "consumption", "always_on"} for spec in specs):
@@ -699,7 +703,7 @@ def _normalize_connector_mapping_station_keys(
     return normalized
 
 
-def _station_devices_from_connector_mapping(mapping: dict[str, dict]) -> list[dict[str, Any]]:
+def _station_devices_from_connector_mapping(mapping: dict[str, dict]) -> DashboardObjectList:
     return [
         {
             "uuid": station_serial,
@@ -712,7 +716,7 @@ def _station_devices_from_connector_mapping(mapping: dict[str, dict]) -> list[di
     ]
 
 
-def _derive_service_serial(sl: dict[str, Any], station_devs: list[dict]) -> str | None:
+def _derive_service_serial(sl: DashboardObject, station_devs: list[dict]) -> str | None:
     """Return the best serial to use for site-level handles and MQTT."""
     serial = _safe_str(sl.get("deviceSerialNumber")) or _safe_str(sl.get("serialNumber"))
     if serial:
@@ -975,7 +979,7 @@ async def _create_coordinators(
     update_interval,
     config_entry=None,
     dashboard_client=None,
-    highlevel_configs: dict[int, dict[str, Any]] | None = None,
+    highlevel_configs: HighLevelConfigMap | None = None,
 ):
     for bucket in stations.values():
         kwargs = {
@@ -1014,7 +1018,7 @@ async def _create_site_coordinator(
     topology: SmappeeLocationTopology,
     update_interval: int,
     config_entry=None,
-    highlevel_configs: dict[int, dict[str, Any]] | None = None,
+    highlevel_configs: HighLevelConfigMap | None = None,
 ) -> SmappeeSiteCoordinator:
     """Create the site-scoped coordinator for grid/PV/house data."""
     coord = SmappeeSiteCoordinator(
@@ -1143,9 +1147,9 @@ def _handle_mqtt_connection_change(
         coord = bucket.station_coordinator
         if coord:
             if up:
-                cast(Any, coord).update_interval = None
+                object.__setattr__(coord, "update_interval", None)
             elif coord.update_interval is None:
-                cast(Any, coord).update_interval = timedelta(seconds=update_interval)
+                object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
                 schedule_refresh(coord)
             coord.apply_mqtt_connection_change(up)
 
@@ -1166,7 +1170,7 @@ def _setup_mqtt(
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
         return None
 
-    def _on_props(topic: str, payload: dict) -> None:
+    def _on_props(topic: str, payload: MqttPayload) -> None:
         targets = mqtt_routes.get(topic)
         if targets is None:
             targets = []
@@ -1684,7 +1688,7 @@ def _create_dashboard_client(
 
 async def _load_dashboard_service_locations(
     dashboard_client: SmappeeDashboardClient,
-) -> list[dict[str, Any]]:
+) -> DashboardObjectList:
     try:
         locations = await _dashboard_discover_service_locations(dashboard_client)
     except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
@@ -1726,7 +1730,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:  # noqa: C901
+async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Set up a Smappee EV account entry that discovers all service locations with a charger."""
     _LOGGER.debug("Setting up Smappee EV account entry: %s", entry.title)
 
@@ -1843,20 +1847,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
         # Services already registered domain-wide in async_setup
-
-        for _svc in (
-            "set_available",
-            "set_unavailable",
-            "set_min_surpluspct",
-            "pause_charging_chargingstations",
-            "set_charging_mode_chargingstations",
-        ):
-            try:
-                if hass.services.has_service(DOMAIN, _svc):
-                    hass.services.async_remove(DOMAIN, _svc)
-                    _LOGGER.info("Removed deprecated service %s.%s", DOMAIN, _svc)
-            except (RuntimeError, ValueError) as err:
-                _LOGGER.debug("While removing deprecated service %s: %s", _svc, err)
     except asyncio.CancelledError:
         await _async_shutdown_runtime_resources(runtime)
         raise
@@ -1936,17 +1926,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
                 entry.entry_id,
             )
 
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        # If no other loaded entries, unregister services
-        active_entries = [
-            e
-            for e in hass.config_entries.async_entries(DOMAIN)
-            if e.state is ConfigEntryState.LOADED
-        ]
-        if not active_entries and hass.services.has_service(DOMAIN, _SERVICE_REGISTRATION_SENTINEL):
-            await unregister_services(hass)
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 def _current_station_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]:

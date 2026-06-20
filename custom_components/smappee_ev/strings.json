@@ -6,6 +6,10 @@
         "data": {
           "username": "Your username on Smappee dashboard",
           "password": "Your password on Smappee dashboard"
+        },
+        "data_description": {
+          "username": "The username used to sign in to the Smappee Dashboard.",
+          "password": "The password used to sign in to the Smappee Dashboard."
         }
       },
       "reauth_confirm": {
@@ -13,6 +17,10 @@
         "data": {
           "username": "Your username on Smappee dashboard",
           "password": "Your password on Smappee dashboard"
+        },
+        "data_description": {
+          "username": "The username used by the existing Smappee EV config entry.",
+          "password": "The updated Smappee Dashboard password."
         }
       },
       "reconfigure": {
@@ -20,6 +28,10 @@
         "data": {
           "username": "Your username on Smappee dashboard",
           "password": "Your password on Smappee dashboard"
+        },
+        "data_description": {
+          "username": "The username used by the existing Smappee EV config entry.",
+          "password": "The Smappee Dashboard password to save for this config entry."
         }
       }
     },
@@ -27,6 +39,9 @@
       "auth_failed": "Authorization failed",
       "cannot_connect": "Could not connect",
       "unknown": "Unexpected response from Smappee Dashboard"
+    },
+    "abort": {
+      "wrong_account": "The credentials belong to a different Smappee account."
     }
   },
   "exceptions": {
@@ -161,7 +176,7 @@
         },
         "current": {
           "name": "Current (A)",
-          "description": "Charging current in Ampere (1 decimal, e.g. 11.4). Clamped to the connector's configured min\u2013max range."
+          "description": "Charging current in Ampere (1 decimal, e.g. 11.4). Rejected when outside the connector's configured min-max range."
         }
       }
     },

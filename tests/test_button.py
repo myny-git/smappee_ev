@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.exceptions import HomeAssistantError
 import pytest
 
 from custom_components.smappee_ev.button import (
@@ -133,6 +134,50 @@ async def test_station_button_press_restart_charging_station(mock_coordinator):
     mock_coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
+async def test_station_button_restart_raises_translated_error(mock_coordinator):
+    """Test station restart errors are surfaced through HA translation metadata."""
+    api_client = MagicMock()
+    api_client.restart_charging_station = AsyncMock(side_effect=RuntimeError("offline"))
+
+    button = SmappeeStationActionButton(
+        coordinator=mock_coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station1",
+        action="restart_charging_station",
+    )
+
+    with pytest.raises(HomeAssistantError) as err:
+        await button.async_press()
+
+    assert err.value.translation_key == "station_service_failed"
+    assert err.value.translation_placeholders == {
+        "method_name": "restart_charging_station",
+        "error": "offline",
+    }
+    mock_coordinator.async_schedule_dashboard_refresh.assert_not_called()
+
+
+async def test_station_button_unknown_action_logs_debug(mock_coordinator):
+    """Test unknown station actions do not call the API."""
+    api_client = MagicMock()
+    api_client.restart_charging_station = AsyncMock()
+
+    button = SmappeeStationActionButton(
+        coordinator=mock_coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station1",
+        action="unknown_station_action",
+    )
+
+    with patch("custom_components.smappee_ev.button._LOGGER.debug") as debug:
+        await button.async_press()
+
+    debug.assert_called_once_with("Unknown station action for button: %s", "unknown_station_action")
+    api_client.restart_charging_station.assert_not_awaited()
+
+
 async def test_button_press_start_charging(mock_coordinator):
     """Test pressing the start charging button."""
     api_client = MagicMock()
@@ -223,6 +268,42 @@ async def test_button_press_start_charging_no_coordinator_data(mock_coordinator)
     await button.async_press()
 
     api_client.start_charging.assert_awaited_once_with()
+
+
+@pytest.mark.parametrize(
+    ("action", "method_name", "client_method"),
+    [
+        ("start_charging", "start_charging", "start_charging"),
+        ("pause_charging", "pause_charging", "pause_charging"),
+        ("stop_charging", "stop_charging", "stop_charging"),
+        ("resume_charging", "set_charging_mode", "set_charging_mode"),
+    ],
+)
+async def test_connector_button_api_errors_are_translated(
+    mock_coordinator, action, method_name, client_method
+):
+    """Test connector button API errors include the failing Dashboard action."""
+    api_client = MagicMock()
+    setattr(api_client, client_method, AsyncMock(side_effect=RuntimeError("boom")))
+
+    button = SmappeeActionButton(
+        coordinator=mock_coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station1",
+        connector_uuid="conn1",
+        action=action,
+    )
+
+    with pytest.raises(HomeAssistantError) as err:
+        await button.async_press()
+
+    assert err.value.translation_key == "connector_service_failed"
+    assert err.value.translation_placeholders == {
+        "method_name": method_name,
+        "error": "boom",
+    }
+    mock_coordinator.async_schedule_dashboard_refresh.assert_not_called()
 
 
 async def test_button_press_pause_charging():

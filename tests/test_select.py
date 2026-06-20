@@ -351,6 +351,40 @@ class TestSmappeeModeSelect:
         entity.async_write_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_async_added_to_hass_keeps_live_mode_and_writes_state_when_platform_ready(
+        self, hass, mock_coordinator, mock_api_client, mock_connector_state
+    ):
+        """Test restore does not overwrite a live mode already provided by the coordinator."""
+        with patch(
+            "custom_components.smappee_ev.helpers.build_connector_label",
+            return_value="Connector 1",
+        ):
+            entity = select.SmappeeModeSelect(
+                coordinator=mock_coordinator,
+                api_client=mock_api_client,
+                sid=12345,
+                station_uuid="station_uuid_123",
+                connector_uuid="connector_uuid_123",
+            )
+
+        entity.hass = hass
+        entity.platform = object()
+        entity.async_write_ha_state = MagicMock()
+        mock_coordinator.async_set_updated_data = MagicMock()
+        mock_connector_state.selected_mode = "standard"
+        mock_last_state = State("select.charging_mode_1", "smart")
+
+        with patch(
+            "homeassistant.helpers.restore_state.RestoreEntity.async_get_last_state",
+            return_value=mock_last_state,
+        ):
+            await entity.async_added_to_hass()
+
+        assert mock_connector_state.selected_mode == "standard"
+        mock_coordinator.async_set_updated_data.assert_not_called()
+        entity.async_write_ha_state.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_async_select_option_rolls_back_on_api_error(
         self, mock_coordinator, mock_api_client, mock_connector_state
     ):

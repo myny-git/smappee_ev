@@ -902,15 +902,10 @@ class TestDomainSetup:
         # Setup registered service sentinel
         hass.services.async_register(DOMAIN, "start_charging", MagicMock())
 
-        # No other active entries
-        mock_entries = []
-
         with (
             patch.object(
                 hass.config_entries, "async_unload_platforms", return_value=True
             ) as mock_unload,
-            patch("custom_components.smappee_ev.unregister_services") as mock_unregister,
-            patch.object(hass.config_entries, "async_entries", return_value=mock_entries),
         ):
             # Call unload
             result = await async_unload_entry(hass, mock_config_entry)
@@ -930,17 +925,15 @@ class TestDomainSetup:
             # Leave ConfigEntry.runtime_data lifecycle to Home Assistant
             assert mock_config_entry.runtime_data is runtime
 
-            # Verify services were unregistered
-            mock_unregister.assert_called_once()
+            # Services remain registered domain-wide across entry unload/reload cycles
+            assert hass.services.has_service(DOMAIN, "start_charging")
 
             # Runtime data lives on ConfigEntry, not hass.data
             assert DOMAIN not in hass.data
 
     @pytest.mark.asyncio
-    async def test_async_unload_entry_keeps_services_until_last_entry(
-        self, hass, mock_config_entry
-    ):
-        """Test services stay registered while another config entry is still loaded."""
+    async def test_async_unload_entry_keeps_services_registered(self, hass, mock_config_entry):
+        """Test services stay registered after unloading an entry."""
         mqtt_client = MagicMock()
         mqtt_client.stop = MagicMock(return_value=None)
         coordinator = MagicMock()
@@ -959,21 +952,14 @@ class TestDomainSetup:
             },
             mqtt={12345: mqtt_client},
         )
-        other_entry = MagicMock(spec=ConfigEntry)
-        other_entry.entry_id = "other_entry_id"
-        other_entry.state = ConfigEntryState.LOADED
         hass.services.async_register(DOMAIN, "start_charging", MagicMock())
 
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
-            patch("custom_components.smappee_ev.unregister_services", AsyncMock()) as unregister,
-            patch.object(hass.config_entries, "async_entries", return_value=[other_entry]),
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
             assert await async_unload_entry(hass, mock_config_entry) is True
 
         mqtt_client.stop.assert_called_once()
         coordinator.async_shutdown.assert_awaited_once()
-        unregister.assert_not_awaited()
+        assert hass.services.has_service(DOMAIN, "start_charging")
 
     @pytest.mark.asyncio
     async def test_remove_config_entry_device_rejects_current_station(

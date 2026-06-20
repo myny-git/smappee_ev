@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import ConfigEntryNotReady
 import pytest
 
@@ -620,35 +619,19 @@ async def test_async_unload_entry_handles_missing_invalid_and_active_runtime(has
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
     hass.services.async_register(DOMAIN, "start_charging", MagicMock())
 
-    with (
-        patch.object(hass.config_entries, "async_entries", return_value=[]),
-        patch("custom_components.smappee_ev.unregister_services", AsyncMock()) as unregister,
-    ):
-        assert await async_unload_entry(hass, EntryWithoutRuntime()) is True
-    unregister.assert_awaited_once_with(hass)
+    assert await async_unload_entry(hass, EntryWithoutRuntime()) is True
+    assert hass.services.has_service(DOMAIN, "start_charging")
 
     invalid_entry = MagicMock()
     invalid_entry.entry_id = "invalid-runtime"
     invalid_entry.runtime_data = object()
 
-    with (
-        patch.object(
-            hass.config_entries,
-            "async_entries",
-            return_value=[MagicMock(state=ConfigEntryState.LOADED)],
-        ),
-        patch("custom_components.smappee_ev.unregister_services", AsyncMock()) as unregister,
-    ):
-        assert await async_unload_entry(hass, invalid_entry) is True
-    unregister.assert_not_awaited()
+    assert await async_unload_entry(hass, invalid_entry) is True
+    assert hass.services.has_service(DOMAIN, "start_charging")
 
     hass.config_entries.async_unload_platforms.return_value = False
-    with (
-        patch.object(hass.config_entries, "async_entries", return_value=[]),
-        patch("custom_components.smappee_ev.unregister_services", AsyncMock()) as unregister,
-    ):
-        assert await async_unload_entry(hass, invalid_entry) is False
-    unregister.assert_not_awaited()
+    assert await async_unload_entry(hass, invalid_entry) is False
+    assert hass.services.has_service(DOMAIN, "start_charging")
 
 
 @pytest.mark.asyncio

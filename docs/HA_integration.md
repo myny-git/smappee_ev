@@ -6,6 +6,21 @@ This integration exposes entities, buttons and services to control and monitor a
 
 Live state data is received from `mqtt.smappee.net`. Therefore, internet is required for this integration. Control and configuration are handled through the Smappee Dashboard REST API v10/v11.
 
+## Configuration
+
+Add the integration from **Settings -> Devices & services -> Add integration** and search for **Smappee EV**.
+
+The config flow asks for these Smappee Dashboard credentials:
+
+| Field | Required | Purpose |
+|---|---:|---|
+| Username | Yes | The username used to sign in to the Smappee Dashboard. |
+| Password | Yes | The Smappee Dashboard password. It is used to obtain and refresh Dashboard API tokens. |
+
+The integration stores the Dashboard refresh token after a successful login. If the token is rejected later, Home Assistant starts the reauthentication flow and asks for fresh Dashboard credentials.
+
+Use **Configure** on the integration entry to update the saved Dashboard credentials. Reconfiguration validates that the credentials still belong to the same Smappee account before updating the entry.
+
 ## API Usage
 
 The integration uses Dashboard v10/v11 only for active control:
@@ -20,6 +35,16 @@ The integration uses Dashboard v10/v11 only for active control:
 ## Services
 
 These services can be called from automations, scripts or Developer Tools -> Actions.
+
+All services accept the same optional target fields:
+
+| Field | Required | Purpose |
+|---|---:|---|
+| `config_entry_id` | No | Select a specific Smappee EV config entry when more than one account is configured. |
+| `service_location_id` | No | Select a specific Smappee service location/site. Required when the target cannot be inferred safely. |
+| `connector_id` | No | Select a connector number, for example `1` or `2`. Required when a station has multiple connectors and the service acts on a connector. |
+
+If the target is ambiguous, the service raises a Home Assistant validation error instead of guessing. If the selected entry/site/connector is not loaded or cannot be found, the service fails with a translated Home Assistant error.
 
 ### `smappee_ev.set_charging_mode`
 
@@ -64,6 +89,8 @@ The MQTT topic observation for stopping charging is: `stopcharging = {}`.
 ### `smappee_ev.set_current`
 
 Sets the charging current in Ampere with 1 decimal precision. The value is translated to the nearest integer percentage of the connector's configured minimum and maximum current range and sent via Dashboard v10.
+
+The requested current must be inside the connector's configured minimum and maximum current range. Values outside that range are rejected instead of being silently changed.
 
 The MQTT topic observation for setting the current is: `setpercentage = {"percentageLimit":27}`.
 
@@ -170,3 +197,35 @@ These values are populated from MQTT. Depending on your installation, some senso
 | `pv_current` | Total PV current; phase currents are exposed as attributes. |
 | `pv_energy_import` | Total PV energy import. |
 | `pv_power` | Live PV power. |
+
+## Removing the Integration
+
+1. In Home Assistant, go to **Settings -> Devices & services**.
+2. Open the **Smappee EV** integration entry.
+3. Choose **Delete** and confirm.
+4. Restart Home Assistant if Home Assistant asks for it, or when you want to make sure all custom integration code has been unloaded.
+
+Deleting the config entry unloads the platforms and runtime clients. Service actions remain registered for the Home Assistant session, as expected by Home Assistant service-action setup rules, and validate at call time whether a loaded Smappee EV config entry is available.
+
+When removing the integration manually, also remove `custom_components/smappee_ev` from your Home Assistant configuration directory after deleting the config entry.
+
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| Setup says authentication failed | Verify the same username and password in the online Smappee Dashboard. If the account has changed, reconfigure or reauthenticate the integration. |
+| Entities are unavailable | Check internet access, Smappee cloud availability, Dashboard credentials and whether `binary_sensor.*_mqtt_connected` is on. |
+| MQTT values are stale | Check the `mqtt_last_seen` diagnostic sensor and confirm that `mqtt.smappee.net` is reachable from Home Assistant. |
+| A service action asks for `service_location_id` or `connector_id` | The integration found multiple possible targets. Provide the site or connector explicitly in the service call. |
+| `set_current` is rejected | The requested current is outside the connector's configured min/max current range. Check the connector max current and use a value inside the allowed range. |
+| The mobile app shows different information | The Smappee mobile app may lag behind. Use the online Dashboard and Home Assistant entity history when verifying recent changes. |
+| Reauthentication appears | The saved Dashboard refresh token was rejected or expired. Enter fresh Dashboard credentials for the same Smappee account. |
+
+## Known Limitations
+
+- Internet access is required. Live data comes from `mqtt.smappee.net`; discovery and control use Smappee Dashboard API endpoints.
+- Supported behavior depends on the Dashboard API data exposed for the charger model and firmware. Some configuration entities may stay unavailable when Smappee does not expose the matching endpoint or device id.
+- Dynamic addition or removal of chargers/connectors during a Home Assistant session is still a phase-2 review item. Restart or reload the integration after changing the physical Smappee topology.
+- The integration validates reauth/reconfigure credentials against the existing Smappee account. Credentials for another account are rejected.
+- Session energy is based on Smappee cloud session data and may update later than live MQTT power/current values.
+- The old Modbus-oriented path is not used for active control by this integration.

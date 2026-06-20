@@ -30,7 +30,6 @@ def mock_hass():
     hass.config_entries.async_entries.return_value = []
     hass.config_entries.async_get_entry.return_value = None
     hass.services.async_register = MagicMock()
-    hass.services.async_remove = MagicMock()
     return hass
 
 
@@ -946,25 +945,6 @@ class TestServiceRegistration:
 
         # Check specific service registrations
         calls = mock_hass.services.async_register.call_args_list
-        service_names = [call[0][1] for call in calls]
-
-        assert "start_charging" in service_names
-        assert "pause_charging" in service_names
-        assert "stop_charging" in service_names
-        assert "resume_charging" in service_names
-        assert "set_charging_mode" in service_names
-        assert "set_current" in service_names
-
-    @pytest.mark.asyncio
-    async def test_unregister_services(self, mock_hass):
-        """Test service unregistration."""
-        await services.unregister_services(mock_hass)
-
-        # Check that all services were removed
-        assert mock_hass.services.async_remove.call_count == 6
-
-        # Check specific service removals
-        calls = mock_hass.services.async_remove.call_args_list
         service_names = [call[0][1] for call in calls]
 
         assert "start_charging" in service_names

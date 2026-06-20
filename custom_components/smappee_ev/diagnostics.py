@@ -5,6 +5,7 @@ Provides redacted runtime information for troubleshooting via HA UI.
 
 from __future__ import annotations
 
+from collections.abc import Sized
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -58,10 +59,9 @@ def _obfuscate(value: object, *, keep: int = 4) -> str | None:
 
 def _safe_len(value: object) -> int:
     """Return len(value) for containers, otherwise 0."""
-    try:
-        return len(value) if value is not None else 0  # type: ignore[arg-type]
-    except TypeError:
-        return 0
+    if isinstance(value, Sized):
+        return len(value)
+    return 0
 
 
 def _safe_sorted(values: object) -> list[Any]:

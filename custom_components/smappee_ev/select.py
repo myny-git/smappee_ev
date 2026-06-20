@@ -134,15 +134,3 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         if not updated_data:
             if getattr(self, "platform", None) is not None:
                 self.async_write_ha_state()
-
-    @property
-    def icon(self) -> str:
-        """Return a custom icon matching the active operational strategy context."""
-        mode = self.current_option
-        if mode == "solar":
-            return "mdi:solar-power"
-        if mode == "smart":
-            return "mdi:brain"
-        if mode == "standard":
-            return "mdi:lightning-bolt"
-        return "mdi:ev-station"

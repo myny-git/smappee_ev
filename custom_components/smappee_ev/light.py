@@ -62,7 +62,6 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
 
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-    _attr_icon = "mdi:led-on"
     _attr_translation_key = "led"
 
     def __init__(

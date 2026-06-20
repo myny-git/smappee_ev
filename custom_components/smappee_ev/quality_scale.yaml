@@ -8,17 +8,15 @@ rules:
   appropriate-polling:
     status: in_progress
     comment: Live charger data is primarily event-driven via MQTT, but Dashboard/API refresh intervals and fallback polling behavior should still be documented and reviewed.
-  brands: todo
+  brands: done
   common-modules: done
   config-flow: done
   config-flow-test-coverage: done
   dependency-transparency: done
-  docs-actions:
-    status: in_progress
-    comment: Service actions are documented, but the documentation should be reviewed against the official quality-scale requirement and made complete for all actions, parameters, and expected behavior.
+  docs-actions: done
   docs-high-level-description: done
   docs-installation-instructions: done
-  docs-removal-instructions: todo
+  docs-removal-instructions: done
   entity-event-setup:
     status: in_progress
     comment: Entity lifecycle and subscription cleanup should be reviewed to ensure all MQTT/event subscriptions are created and removed in the correct Home Assistant lifecycle methods.
@@ -32,9 +30,7 @@ rules:
   # Silver.
   action-exceptions: done
   config-entry-unloading: done
-  docs-configuration-parameters:
-    status: in_progress
-    comment: Configuration parameters are partly documented, but all config flow fields, options, defaults, and user-visible implications should be described explicitly.
+  docs-configuration-parameters: done
   docs-installation-parameters: done
   entity-unavailable: done
   integration-owner:
@@ -47,7 +43,7 @@ rules:
   reauthentication-flow: done
   test-coverage:
     status: in_progress
-    comment: The official Silver requirement is above 95% coverage for all integration modules. The integration is close, but exact coverage should come from the current CI or local coverage report.
+    comment: Local coverage on Python 3.14 is 92.54% overall with 496 passing tests. The official Silver requirement remains above 95% coverage for integration modules, so this needs behavior-focused tests for remaining gaps.
 
   # Gold.
   devices: done
@@ -58,24 +54,18 @@ rules:
   discovery-update-info: todo
   docs-data-update: done
   docs-examples: done
-  docs-known-limitations:
-    status: in_progress
-    comment: Known limitations should be documented explicitly, including API limitations, supported charger models, data freshness, and any behavior that depends on Smappee cloud or MQTT availability.
+  docs-known-limitations: done
   docs-supported-devices: done
   docs-supported-functions: done
-  docs-troubleshooting:
-    status: in_progress
-    comment: Troubleshooting information exists or is partly covered, but it should be expanded with common setup, authentication, MQTT, charging control, and unavailable-entity issues.
+  docs-troubleshooting: done
   docs-use-cases: done
   dynamic-devices: todo
   entity-category: done
   entity-device-class: done
-  entity-disabled-by-default:
-    status: in_progress
-    comment: Review whether noisy, diagnostic, advanced, or rarely used entities should be disabled by default using entity registry defaults.
+  entity-disabled-by-default: done
   entity-translations: done
   exception-translations: done
-  icon-translations: todo
+  icon-translations: done
   reconfiguration-flow: done
   repair-issues:
     status: exempt
@@ -87,7 +77,7 @@ rules:
   inject-websession: done
   strict-typing:
     status: in_progress
-    comment: The codebase is typed and mypy is used, but full strict typing is not yet achieved. Remaining untyped or partially typed helpers should be cleaned up first.
+    comment: Mypy is clean and the obvious Any escapes have been reduced. Dashboard/MQTT payload aliases are in place, but full strict typing still needs narrower TypedDicts for stable API shapes.
   # Internal roadmap items.
   centralized-constants: done
   code-structure-entity-base: done

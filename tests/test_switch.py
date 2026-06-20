@@ -602,15 +602,13 @@ class TestSmappeeOfflineChargingSwitch:
         )
         return offline_switch, coordinator, api_client
 
-    def test_is_on_and_icon(self, mock_integration_data):
+    def test_is_on(self, mock_integration_data):
         offline_switch, _, _ = self._make_switch(mock_integration_data)
 
         assert offline_switch.is_on is False
-        assert offline_switch.icon == "mdi:cloud-off-outline"
 
         mock_integration_data.station.offline_charging_enabled = True
         assert offline_switch.is_on is True
-        assert offline_switch.icon == "mdi:cloud-outline"
 
         offline_switch.coordinator.data = None
         assert offline_switch.is_on is False

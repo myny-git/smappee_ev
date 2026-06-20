@@ -139,7 +139,6 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
     """Combined slider showing current (A), with percentage in attributes."""
 
     _attr_device_class = NumberDeviceClass.CURRENT
-    _attr_icon = "mdi:current-ac"
     _attr_translation_key = "max_charging_speed"
 
     def __init__(
@@ -294,7 +293,6 @@ class SmappeeConnectorMaxCurrentNumber(SmappeeConnectorEntity, _BaseNumber):
 
     _attr_device_class = NumberDeviceClass.CURRENT
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:current-ac"
     _attr_translation_key = "connector_max_current"
 
     def __init__(
@@ -369,7 +367,6 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     """Min Surplus Percentage (connector-level)."""
 
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:solar-power"
     _attr_translation_key = "min_surpluspct"
 
     def __init__(
@@ -452,7 +449,6 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
 
     _attr_device_class = NumberDeviceClass.POWER
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:transmission-tower"
     _attr_translation_key = "capacity_maximum_power"
 
     def __init__(
@@ -512,7 +508,6 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
 
     _attr_device_class = NumberDeviceClass.CURRENT
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:current-ac"
     _attr_translation_key = "overload_maximum_load"
 
     def __init__(
@@ -572,7 +567,6 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
 
     _attr_device_class = NumberDeviceClass.CURRENT
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:cloud-alert"
     _attr_translation_key = "offline_failsafe_current"
 
     def __init__(

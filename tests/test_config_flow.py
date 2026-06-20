@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import AbortFlow, FlowResultType
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 import pytest
@@ -49,6 +49,10 @@ def _assert_schema(result):
 
 async def _dashboard_login_success(self):
     self._token_update_callback({CONF_DASHBOARD_REFRESH_TOKEN: "dashboard_refresh"})
+    return True
+
+
+async def _dashboard_login_success_without_refresh_token(self):
     return True
 
 
@@ -135,6 +139,48 @@ async def test_user_flow_unknown_on_unexpected_dashboard_response(hass):
     with patch(
         "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
         return_value=False,
+    ):
+        result = await flow.async_step_user(
+            {
+                CONF_USERNAME: "bad",
+                CONF_PASSWORD: "bad",
+            }
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    assert (result.get("errors") or {})["base"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_user_flow_unknown_when_refresh_token_missing(hass):
+    flow = SmappeeEvConfigFlow()
+    flow.hass = hass
+    flow.context = {}  # type: ignore[attr-defined]
+
+    with patch(
+        "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+        _dashboard_login_success_without_refresh_token,
+    ):
+        result = await flow.async_step_user(
+            {
+                CONF_USERNAME: "bad",
+                CONF_PASSWORD: "bad",
+            }
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    assert (result.get("errors") or {})["base"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_user_flow_unknown_on_malformed_dashboard_response(hass):
+    flow = SmappeeEvConfigFlow()
+    flow.hass = hass
+    flow.context = {}  # type: ignore[attr-defined]
+
+    with patch(
+        "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+        side_effect=ValueError("malformed dashboard response"),
     ):
         result = await flow.async_step_user(
             {
@@ -251,6 +297,45 @@ async def test_reauth_flow_success(hass):
         CONF_DASHBOARD_REFRESH_TOKEN: "dashboard_refresh",
     }
     schedule_reload.assert_called_once_with(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_reauth_flow_aborts_on_unique_id_mismatch(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_USERNAME: "test_user",
+            CONF_DASHBOARD_REFRESH_TOKEN: "old_dashboard_refresh",
+        },
+        unique_id="smappee_ev:test_user",
+    )
+    entry.add_to_hass(hass)
+    flow = SmappeeEvConfigFlow()
+    flow.hass = hass
+    flow.context = {"entry_id": entry.entry_id}  # type: ignore[attr-defined]
+
+    first = await flow.async_step_reauth(dict(entry.data))
+    assert first.get("type") == FlowResultType.FORM
+
+    with (
+        patch(
+            "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+            _dashboard_login_success,
+        ),
+        patch.object(hass.config_entries, "async_update_entry") as update_entry,
+        patch.object(hass.config_entries, "async_schedule_reload") as schedule_reload,
+        pytest.raises(AbortFlow) as abort,
+    ):
+        await flow.async_step_reauth_confirm(
+            {
+                CONF_USERNAME: "other_user",
+                CONF_PASSWORD: "fresh",
+            }
+        )
+
+    assert abort.value.reason == "wrong_account"
+    update_entry.assert_not_called()
+    schedule_reload.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -396,3 +481,79 @@ async def test_reconfigure_flow_success(hass):
         CONF_DASHBOARD_REFRESH_TOKEN: "dashboard_refresh",
     }
     schedule_reload.assert_called_once_with(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_flow_aborts_on_unique_id_mismatch(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_USERNAME: "test_user",
+            CONF_DASHBOARD_REFRESH_TOKEN: "old_dashboard_refresh",
+        },
+        unique_id="smappee_ev:test_user",
+    )
+    entry.add_to_hass(hass)
+    flow = SmappeeEvConfigFlow()
+    flow.hass = hass
+    flow.context = {"entry_id": entry.entry_id}
+
+    first = await flow.async_step_reconfigure()
+    assert first.get("type") == FlowResultType.FORM
+
+    with (
+        patch(
+            "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+            _dashboard_login_success,
+        ),
+        patch.object(hass.config_entries, "async_update_entry") as update_entry,
+        patch.object(hass.config_entries, "async_schedule_reload") as schedule_reload,
+        pytest.raises(AbortFlow) as abort,
+    ):
+        await flow.async_step_reconfigure(
+            {
+                CONF_USERNAME: "other_user",
+                CONF_PASSWORD: "updated_pass",
+            }
+        )
+
+    assert abort.value.reason == "wrong_account"
+    update_entry.assert_not_called()
+    schedule_reload.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_flow_auth_failed(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_USERNAME: "test_user"},
+        unique_id="smappee_ev:test_user",
+    )
+    entry.add_to_hass(hass)
+    flow = SmappeeEvConfigFlow()
+    flow.hass = hass
+    flow.context = {"entry_id": entry.entry_id}
+
+    first = await flow.async_step_reconfigure()
+    assert first.get("type") == FlowResultType.FORM
+
+    with (
+        patch(
+            "custom_components.smappee_ev.config_flow.SmappeeDashboardClient.async_login",
+            side_effect=ConfigEntryAuthFailed("Dashboard credentials rejected"),
+        ),
+        patch.object(hass.config_entries, "async_update_entry") as update_entry,
+        patch.object(hass.config_entries, "async_schedule_reload") as schedule_reload,
+    ):
+        result = await flow.async_step_reconfigure(
+            {
+                CONF_USERNAME: "test_user",
+                CONF_PASSWORD: "wrong",
+            }
+        )
+
+    assert result.get("type") == FlowResultType.FORM
+    assert result.get("step_id") == "reconfigure"
+    assert (result.get("errors") or {})["base"] == "auth_failed"
+    update_entry.assert_not_called()
+    schedule_reload.assert_not_called()

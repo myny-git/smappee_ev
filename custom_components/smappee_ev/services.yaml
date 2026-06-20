@@ -20,7 +20,7 @@ set_current:
         number:
           min: 1
     current:
-      description: "Charging current in Ampere (1 decimal place, e.g. 11.4). Clamped to the connector's configured min–max range."
+      description: "Charging current in Ampere (1 decimal place, e.g. 11.4). Rejected when outside the connector's configured min-max range."
       required: true
       example: 11.4
       selector:

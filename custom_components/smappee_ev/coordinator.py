@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Iterable, Sequence
 from contextlib import suppress
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from inspect import iscoroutinefunction
 import logging
 import re
@@ -28,7 +28,11 @@ from .const import (
 from .dashboard_client import SmappeeDashboardClient
 from .data import (
     ConnectorState,
+    DashboardObject,
+    HighLevelConfigMap,
     IntegrationData,
+    MqttPayload,
+    RecentSession,
     SiteData,
     SiteState,
     SmappeeEvConfigEntry,
@@ -52,10 +56,12 @@ _SESSION_STOPPED_STATES = {"STOPPED", "CHARGING_FINISHED", "FINISHED", "COMPLETE
 _MQTT_PATH_RE = re.compile(r"\$\.([A-Za-z0-9_]+)\[(\d+)\]")
 
 
-def _to_int(value: Any, default: int = 0) -> int:
+def _to_int(value: object, default: int = 0) -> int:
     """Convert a value to int safely, fallback to default on error."""
+    if not isinstance(value, int | float | str):
+        return default
     with suppress(TypeError, ValueError):
-        return int(value)  # type: ignore[arg-type]
+        return int(value)
     return default
 
 
@@ -78,7 +84,7 @@ def _volts_from_dv(dv: list[int]) -> list[int]:
     return [round(x / 10) for x in dv] if dv else []
 
 
-def _indexes_from_aspect_paths(channel: dict[str, Any] | None, field: str) -> list[int]:
+def _indexes_from_aspect_paths(channel: DashboardObject | None, field: str) -> list[int]:
     """Extract MQTT array indexes from Dashboard aspect paths."""
     if not isinstance(channel, dict):
         return []
@@ -93,7 +99,7 @@ def _indexes_from_aspect_paths(channel: dict[str, Any] | None, field: str) -> li
 
 
 def _indexes_and_field_from_aspect_paths(
-    channel: dict[str, Any] | None, *fields: str
+    channel: DashboardObject | None, *fields: str
 ) -> tuple[list[int], str | None]:
     """Extract MQTT array indexes and remember which array field they belong to."""
     if not isinstance(channel, dict):
@@ -119,7 +125,7 @@ def _indexes_and_field_from_aspect_paths(
     return indexes, selected_field
 
 
-def _active_power_values(payload: dict[str, Any], field: str | None = None) -> list[Any]:
+def _active_power_values(payload: MqttPayload, field: str | None = None) -> list[Any]:
     """Return active power values from the Dashboard-indicated MQTT array field."""
     if field:
         values = payload.get(field)
@@ -140,7 +146,7 @@ def _empty_power_topic_map() -> dict[str, Any]:
     }
 
 
-def _mqtt_channel_topic(channel: dict[str, Any] | None) -> str | None:
+def _mqtt_channel_topic(channel: DashboardObject | None) -> str | None:
     """Return the MQTT topic advertised by a highlevel channel."""
     if not isinstance(channel, dict):
         return None
@@ -164,7 +170,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         gateway_type: str | None,
         update_interval: int,
         config_entry: SmappeeEvConfigEntry | None = None,
-        highlevel_configs: dict[int, dict[str, Any]] | None = None,
+        highlevel_configs: HighLevelConfigMap | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -179,7 +185,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         self.gateway_serial = gateway_serial
         self.gateway_type = gateway_type
         self._highlevel_configs = highlevel_configs or {}
-        self._power_index_maps_by_topic: dict[str, dict[str, Any]] | None = None
+        self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
 
     async def _async_update_data(self) -> SiteData:
         await self._ensure_power_index_map()
@@ -195,9 +201,9 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
             self._power_index_maps_by_topic = mapping
 
     def _build_measurement_index_maps_by_topic_from_highlevel_configs(
-        self, configs: dict[int, dict[str, Any]]
-    ) -> dict[str, dict[str, Any]] | None:
-        maps_by_topic: dict[str, dict[str, Any]] = {}
+        self, configs: HighLevelConfigMap
+    ) -> dict[str, DashboardObject] | None:
+        maps_by_topic: dict[str, DashboardObject] = {}
         for cfg in configs.values():
             mapping = self._build_measurement_index_maps_by_topic_from_highlevel(cfg)
             if not mapping:
@@ -212,9 +218,9 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         return maps_by_topic or None
 
     def _build_measurement_index_maps_by_topic_from_highlevel(
-        self, cfg: dict[str, Any]
-    ) -> dict[str, dict[str, Any]] | None:
-        maps_by_topic: dict[str, dict[str, Any]] = {}
+        self, cfg: DashboardObject
+    ) -> dict[str, DashboardObject] | None:
+        maps_by_topic: dict[str, DashboardObject] = {}
         for meas in cfg.get("measurements") or []:
             if not isinstance(meas, dict):
                 continue
@@ -406,7 +412,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         update_interval: int,
         config_entry: SmappeeEvConfigEntry | None = None,
         dashboard_client: SmappeeDashboardClient | None = None,
-        highlevel_configs: dict[int, dict[str, Any]] | None = None,
+        highlevel_configs: HighLevelConfigMap | None = None,
         site_name: str | None = None,
         gateway_serial: str | None = None,
         gateway_type: str | None = None,
@@ -432,7 +438,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         self.station_client.dashboard_client = dashboard_client
         for client in self.connector_clients.values():
             client.dashboard_client = dashboard_client
-        self._power_index_maps_by_topic: dict[str, dict[str, Any]] | None = None
+        self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
         self._connector_session_available: dict[str, bool] = {}
@@ -622,10 +628,10 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             self._power_index_maps_by_topic = mapping
 
     def _build_measurement_index_maps_by_topic_from_highlevel_configs(
-        self, configs: dict[int, dict[str, Any]]
-    ) -> dict[str, dict[str, Any]] | None:
+        self, configs: HighLevelConfigMap
+    ) -> dict[str, DashboardObject] | None:
         """Build MQTT index mappings grouped by exact power topic."""
-        maps_by_topic: dict[str, dict[str, Any]] = {}
+        maps_by_topic: dict[str, DashboardObject] = {}
         for cfg in configs.values():
             mapping = self._build_measurement_index_maps_by_topic_from_highlevel(cfg)
             if not mapping:
@@ -642,10 +648,10 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         return maps_by_topic or None
 
     def _build_measurement_index_maps_by_topic_from_highlevel(
-        self, cfg: dict[str, Any]
-    ) -> dict[str, dict[str, Any]] | None:
+        self, cfg: DashboardObject
+    ) -> dict[str, DashboardObject] | None:
         """Build MQTT index mappings from Dashboard v10 highlevelconfiguration."""
-        maps_by_topic: dict[str, dict[str, Any]] = {}
+        maps_by_topic: dict[str, DashboardObject] = {}
 
         for meas in cfg.get("measurements") or []:
             if not isinstance(meas, dict):
@@ -726,7 +732,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         return maps_by_topic or None
 
-    def _connector_uuid_for_highlevel_measurement(self, meas: dict[str, Any]) -> str | None:
+    def _connector_uuid_for_highlevel_measurement(self, meas: DashboardObject) -> str | None:
         """Match a Dashboard highlevel APPLIANCE measurement to a connector UUID."""
         direct_values = [
             meas.get("uuid"),
@@ -758,7 +764,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         return None
 
     @staticmethod
-    def _connector_position_from_measurement(meas: dict[str, Any]) -> int | None:
+    def _connector_position_from_measurement(meas: DashboardObject) -> int | None:
         for key in ("position", "connectorNumber"):
             value = meas.get(key)
             if value is not None:
@@ -987,9 +993,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             self._log_dashboard_refresh_errors(errors)
         return changed
 
-    def _merge_dashboard_load_management(
-        self, conn: ConnectorState, payload: dict[str, Any]
-    ) -> bool:
+    def _merge_dashboard_load_management(self, conn: ConnectorState, payload: MqttPayload) -> bool:
         changed = False
         strategy = self._as_str(payload.get("optimizationStrategy"))
         if strategy:
@@ -1049,7 +1053,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 self._dashboard_refresh_task = None
 
     def _merge_dashboard_station_details(
-        self, data: IntegrationData, details: dict[str, Any]
+        self, data: IntegrationData, details: DashboardObject
     ) -> bool:
         station = data.station
         changed = False
@@ -1083,7 +1087,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         return changed
 
-    def _merge_dashboard_module(self, data: IntegrationData, module: dict[str, Any]) -> bool:
+    def _merge_dashboard_module(self, data: IntegrationData, module: DashboardObject) -> bool:
         smart_device = module.get("smartDevice")
         if not isinstance(smart_device, dict):
             return False
@@ -1135,7 +1139,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         return changed
 
-    def _merge_dashboard_led(self, station: StationState, smart_device: dict[str, Any]) -> bool:
+    def _merge_dashboard_led(self, station: StationState, smart_device: DashboardObject) -> bool:
         changed = self._set_if_changed(
             station, "dashboard_led_device_id", self._as_str(smart_device.get("id"))
         )
@@ -1149,8 +1153,8 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
     def _dashboard_connector_for_module(
         self,
         data: IntegrationData,
-        module: dict[str, Any],
-        smart_device: dict[str, Any],
+        module: DashboardObject,
+        smart_device: DashboardObject,
     ) -> ConnectorState | None:
         candidates = {
             self._as_str(smart_device.get("uuid")),
@@ -1169,7 +1173,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         return None
 
     def _merge_dashboard_car_charger_fallback(
-        self, conn: ConnectorState, car_charger: dict[str, Any]
+        self, conn: ConnectorState, car_charger: DashboardObject
     ) -> bool:
         changed = False
         changed |= self._set_if_empty(
@@ -1251,7 +1255,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         return None
 
     @staticmethod
-    def _device_uuid_from_dashboard_channel(smart_device: dict[str, Any]) -> str | None:
+    def _device_uuid_from_dashboard_channel(smart_device: DashboardObject) -> str | None:
         car_charger = smart_device.get("carCharger")
         if not isinstance(car_charger, dict):
             return None
@@ -1266,7 +1270,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             return None
         return name.split(marker, 1)[1].split("/", 1)[0] or None
 
-    def _merge_dashboard_capacity(self, station: StationState, payload: dict[str, Any]) -> bool:
+    def _merge_dashboard_capacity(self, station: StationState, payload: DashboardObject) -> bool:
         changed = False
         changed |= self._set_if_changed(
             station, "capacity_protection_active", self._as_bool(payload.get("active"))
@@ -1279,7 +1283,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                 )
         return changed
 
-    def _merge_dashboard_overload(self, station: StationState, payload: dict[str, Any]) -> bool:
+    def _merge_dashboard_overload(self, station: StationState, payload: DashboardObject) -> bool:
         changed = False
         changed |= self._set_if_changed(
             station, "overload_protection_active", self._as_bool(payload.get("active"))
@@ -1322,9 +1326,11 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         return rest.split("/", 1)[0] if rest else None
 
     @staticmethod
-    def _as_int(v: Any, default: int | None = None) -> int | None:
+    def _as_int(v: object, default: int | None = None) -> int | None:
+        if not isinstance(v, int | float | str):
+            return default
         with suppress(TypeError, ValueError):
-            return int(v)  # type: ignore[arg-type]
+            return int(v)
         return default
 
     # UI mappings
@@ -1691,7 +1697,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         self._session_active_loop_interval = interval
 
-        async def _refresh_active_session(_now: Any) -> None:
+        async def _refresh_active_session(_now: datetime) -> None:
             if self._shutting_down:
                 self._cancel_active_session_loop()
                 return
@@ -1737,7 +1743,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             unsub_holder: dict[str, CALLBACK_TYPE] = {}
 
             async def _refresh(
-                _now: Any,
+                _now: datetime,
                 delay: int = delay,
                 unsub_holder: dict[str, CALLBACK_TYPE] = unsub_holder,
             ) -> None:
@@ -1771,7 +1777,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         self._cancel_session_refresh()
 
-        async def _refresh(_now: Any) -> None:
+        async def _refresh(_now: datetime) -> None:
             self._session_refresh_unsub = None
 
             if self._shutting_down:
@@ -1781,7 +1787,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
         self._session_refresh_unsub = async_call_later(self.hass, delay, _refresh)
 
-    async def _async_get_recent_sessions(self) -> list[dict[str, Any]]:
+    async def _async_get_recent_sessions(self) -> list[RecentSession]:
         """Fetch recent charging sessions from the connector endpoints."""
         pairs = list(self.connector_clients.items())
         if not pairs:
@@ -1792,7 +1798,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             *(client.async_get_recent_sessions() for _, client in pairs),
             return_exceptions=True,
         )
-        sessions: list[dict[str, Any]] = []
+        sessions: list[RecentSession] = []
         errors: list[tuple[str, Exception]] = []
 
         for (connector_uuid, _client), result in zip(pairs, results, strict=True):

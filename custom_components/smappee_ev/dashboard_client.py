@@ -17,6 +17,7 @@ from .const import (
     HTTP_CONNECT_TIMEOUT,
     HTTP_TOTAL_TIMEOUT,
 )
+from .data import DashboardObject, DashboardObjectList, RecentSession
 
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_RENEW_SKEW_MS = 60_000
@@ -51,7 +52,7 @@ class SmappeeDashboardClient:
             and self._token_expires_at_ms > int(time.time() * 1000) + _TOKEN_RENEW_SKEW_MS
         )
 
-    def _update_token_data(self, data: dict[str, Any]) -> None:
+    def _update_token_data(self, data: DashboardObject) -> None:
         token = data.get("token")
         refresh_token = data.get("refreshToken")
         expires_at = data.get("tokenExpirationTimestamp")
@@ -148,7 +149,7 @@ class SmappeeDashboardClient:
         path: str,
         *,
         json: Any | None = None,
-        params: dict[str, Any] | None = None,
+        params: DashboardObject | None = None,
         expected: tuple[int, ...] = (200,),
         return_json: bool = False,
         retry_auth: bool = True,
@@ -207,7 +208,7 @@ class SmappeeDashboardClient:
                 return await resp.json()
             return None
 
-    async def async_get_service_locations_full_details(self) -> list[dict[str, Any]] | None:
+    async def async_get_service_locations_full_details(self) -> DashboardObjectList | None:
         data = await self._request(
             "GET", "v11/user/servicelocations?fullDetails=true", return_json=True
         )
@@ -215,7 +216,7 @@ class SmappeeDashboardClient:
 
     async def async_get_highlevel_configuration(
         self, service_location_id: int | str
-    ) -> dict[str, Any] | None:
+    ) -> DashboardObject | None:
         data = await self._request(
             "GET",
             f"v10/servicelocation/{service_location_id}/highlevelconfiguration",
@@ -225,13 +226,13 @@ class SmappeeDashboardClient:
 
     async def async_get_appliances(
         self, service_location_id: int | str
-    ) -> list[dict[str, Any]] | None:
+    ) -> DashboardObjectList | None:
         data = await self._request(
             "GET", f"v10/servicelocation/{service_location_id}/appliances", return_json=True
         )
         return data if isinstance(data, list) else None
 
-    async def async_get_charging_station_details(self, serial: str) -> dict[str, Any] | None:
+    async def async_get_charging_station_details(self, serial: str) -> DashboardObject | None:
         data = await self._request(
             "GET", f"v10/chargingstations/{serial}?includeDetails=true", return_json=True
         )
@@ -239,7 +240,7 @@ class SmappeeDashboardClient:
 
     async def async_get_smart_devices(
         self, service_location_id: int | str
-    ) -> list[dict[str, Any]] | None:
+    ) -> DashboardObjectList | None:
         data = await self._request(
             "GET",
             f"v10/servicelocation/{service_location_id}/homecontrol/smart/devices",
@@ -250,7 +251,7 @@ class SmappeeDashboardClient:
 
     async def async_get_load_management(
         self, service_location_id: int | str, device_id: str
-    ) -> dict[str, Any] | None:
+    ) -> DashboardObject | None:
         data = await self._request(
             "GET",
             f"v10/servicelocation/{service_location_id}/homecontrol/smart/devices/{device_id}/loadmanagement",
@@ -258,7 +259,7 @@ class SmappeeDashboardClient:
         )
         return data if isinstance(data, dict) else None
 
-    async def async_get_recent_sessions(self, serial: str) -> list[dict[str, Any]]:
+    async def async_get_recent_sessions(self, serial: str) -> list[RecentSession]:
         now_ms = int(time.time() * 1000)
         from_ms = now_ms - (7 * 24 * 60 * 60 * 1000)
         data = await self._request(
@@ -271,7 +272,7 @@ class SmappeeDashboardClient:
 
     async def async_get_capacity_protection(
         self, service_location_id: int | str
-    ) -> dict[str, Any] | None:
+    ) -> DashboardObject | None:
         data = await self._request(
             "GET",
             f"v10/servicelocation/{service_location_id}/homecontrol/smart/capacityprotection",
@@ -301,7 +302,7 @@ class SmappeeDashboardClient:
 
     async def async_get_overload_protection(
         self, service_location_id: int | str
-    ) -> dict[str, Any] | None:
+    ) -> DashboardObject | None:
         data = await self._request(
             "GET",
             f"v10/servicelocation/{service_location_id}/homecontrol/smart/overloadprotection",
@@ -365,7 +366,7 @@ class SmappeeDashboardClient:
         service_location_id: int | str,
         device_id: str,
         action_name: str,
-        payload: list[dict[str, Any]],
+        payload: DashboardObjectList,
     ) -> bool:
         return bool(
             await self._request(
@@ -381,7 +382,7 @@ class SmappeeDashboardClient:
         service_location_id: int | str,
         device_id: str,
         property_name: str,
-        value_dict: dict[str, Any],
+        value_dict: DashboardObject,
     ) -> bool:
         payload = {
             "configurationProperties": [{"spec": {"name": property_name}, "values": [value_dict]}]

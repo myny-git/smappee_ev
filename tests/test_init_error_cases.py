@@ -3,7 +3,6 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.config_entries import ConfigEntryState
 import pytest
 
 from custom_components.smappee_ev import (
@@ -210,10 +209,7 @@ class TestErrorHandling:
         entry.runtime_data = runtime
 
         # Mock config entry unload
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
-            patch("custom_components.smappee_ev.unregister_services"),
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
             # Call unload_entry - should handle the MQTT stop exception
             result = await async_unload_entry(hass, entry)
 
@@ -245,10 +241,7 @@ class TestErrorHandling:
         entry.runtime_data = runtime
 
         # Mock config entry unload
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
-            patch("custom_components.smappee_ev.unregister_services"),
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
             # Call unload_entry - should await the coroutine
             result = await async_unload_entry(hass, entry)
 
@@ -307,10 +300,7 @@ class TestErrorHandling:
         entry.runtime_data = runtime
 
         # Mock config entry unload
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
-            patch("custom_components.smappee_ev.unregister_services"),
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
             # Call unload_entry - should handle the coordinator shutdown exception
             result = await async_unload_entry(hass, entry)
 
@@ -381,10 +371,7 @@ class TestErrorHandling:
         entry.entry_id = "test_entry_id"
 
         # Mock config entry unload
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
-            patch("custom_components.smappee_ev.unregister_services"),
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
             # Call unload_entry - should handle the missing runtime_data gracefully
             result = await async_unload_entry(hass, entry)
 
@@ -400,10 +387,7 @@ class TestErrorHandling:
         entry.runtime_data = "not_a_runtime_data_instance"  # String, not RuntimeData
 
         # Mock config entry unload
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
-            patch("custom_components.smappee_ev.unregister_services"),
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
             # Call unload_entry - should handle the invalid runtime_data gracefully
             result = await async_unload_entry(hass, entry)
 
@@ -419,18 +403,12 @@ class TestErrorHandling:
         entry.runtime_data = RuntimeData(api=MagicMock(), sites={}, mqtt={})
 
         # Mock config entry unload to fail
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=False),
-            patch("custom_components.smappee_ev.unregister_services") as mock_unregister,
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=False):
             # Call unload_entry
             result = await async_unload_entry(hass, entry)
 
             # Should return False
             assert result is False
-
-            # Verify services were not unregistered
-            mock_unregister.assert_not_called()
 
             # Verify runtime_data was not removed
             assert hasattr(entry, "runtime_data")
@@ -443,15 +421,8 @@ class TestErrorHandling:
         entry.entry_id = "test_entry_id"
         entry.runtime_data = RuntimeData(api=MagicMock(), sites={}, mqtt={})
 
-        # Create a list of active entries (including our test entry)
-        active_entries = [MagicMock(state=ConfigEntryState.LOADED, entry_id="other_entry"), entry]
-
         # Mock config entry unload
-        with (
-            patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
-            patch("custom_components.smappee_ev.unregister_services") as mock_unregister,
-            patch.object(hass.config_entries, "async_entries", return_value=active_entries),
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", return_value=True):
             # Setup registered service sentinel
             hass.services.async_register("smappee_ev", "start_charging", MagicMock())
 
@@ -461,8 +432,5 @@ class TestErrorHandling:
             # Should return True
             assert result is True
 
-            # Verify services were not unregistered since there's another active entry
-            mock_unregister.assert_not_called()
-
-            # Verify services were not unregistered since there's another active entry
+            # Verify services remain registered domain-wide after unload.
             assert hass.services.has_service("smappee_ev", "start_charging")

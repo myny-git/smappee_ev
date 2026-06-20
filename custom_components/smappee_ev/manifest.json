@@ -8,10 +8,12 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/myny-git/smappee_ev",
+  "integration_type": "hub",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/myny-git/smappee_ev/issues",
   "loggers": [
-    "custom_components.smappee_ev"
+    "custom_components.smappee_ev",
+    "mqtt"
   ],
   "requirements": [
     "aiomqtt>=2.5.0,<3.0.0"

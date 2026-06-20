@@ -9,6 +9,7 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 import voluptuous as vol
 
 from .const import (
@@ -39,8 +40,10 @@ def _credentials_schema(defaults: Mapping[str, Any] | None = None) -> vol.Schema
     defaults = defaults or {}
     return vol.Schema(
         {
-            _required_with_optional_default(CONF_USERNAME, defaults): str,
-            vol.Required(CONF_PASSWORD): str,
+            _required_with_optional_default(CONF_USERNAME, defaults): TextSelector(),
+            vol.Required(CONF_PASSWORD): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.PASSWORD)
+            ),
         }
     )
 
@@ -124,7 +127,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self.source == config_entries.SOURCE_REAUTH:
             entry = self._get_reauth_entry()
             if entry.unique_id:
-                self._abort_if_unique_id_mismatch()
+                self._abort_if_unique_id_mismatch(reason="wrong_account")
             if entry.data.get(CONF_NEEDS_DASHBOARD_REAUTH):
                 async_remove_config_entry_registry_entries(self.hass, entry)
             return self.async_update_reload_and_abort(entry, unique_id=unique, data=data)
@@ -132,7 +135,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self.source == config_entries.SOURCE_RECONFIGURE:
             entry = self._get_reconfigure_entry()
             if entry.unique_id:
-                self._abort_if_unique_id_mismatch()
+                self._abort_if_unique_id_mismatch(reason="wrong_account")
             return self.async_update_reload_and_abort(
                 entry, unique_id=unique, data=data, options={}
             )
@@ -141,7 +144,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_create_entry(title=f"Smappee EV - {user_input[CONF_USERNAME]}", data=data)
 
-    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:  # type: ignore[override]
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Begin re-authentication flow."""
         self.context["source"] = config_entries.SOURCE_REAUTH
         return await self.async_step_reauth_confirm()

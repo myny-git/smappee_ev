@@ -281,14 +281,14 @@ def update_total_increasing(last: float | None, candidate: float | None) -> floa
     return candidate
 
 
-def safe_sum(values) -> float | None:
+def safe_sum(values: object) -> float | None:
     """
     Best effort sum of an iterable of numeric-like values, returning float or None.
 
     Accepts any list/tuple of values coercible to float. Returns None if empty or any
     element cannot be converted.
     """
-    if not isinstance(values, list | tuple) or not values:  # type: ignore[arg-type]
+    if not isinstance(values, list | tuple) or not values:
         return None
     with suppress(TypeError, ValueError):
         return float(sum(float(v) for v in values))

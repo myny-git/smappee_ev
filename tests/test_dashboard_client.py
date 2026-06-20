@@ -581,10 +581,55 @@ async def test_dashboard_request_non_json_body_returns_none():
 @pytest.mark.asyncio
 async def test_dashboard_list_and_dict_methods_ignore_malformed_response_shapes():
     client = _client()
-    client._request = AsyncMock(side_effect=({"unexpected": "dict"}, ["unexpected-list"]))
+    client._request = AsyncMock(
+        side_effect=[
+            {"unexpected": "dict"},
+            ["unexpected-list"],
+            {"unexpected": "dict"},
+            ["unexpected-list"],
+            {"unexpected": "dict"},
+            ["unexpected-list"],
+            {"unexpected": "dict"},
+            ["unexpected-list"],
+            ["unexpected-list"],
+        ]
+    )
 
     assert await client.async_get_service_locations_full_details() is None
+    assert await client.async_get_highlevel_configuration(236259) is None
+    assert await client.async_get_appliances(236259) is None
     assert await client.async_get_charging_station_details("SERIAL") is None
+    assert await client.async_get_smart_devices(236259) is None
+    assert await client.async_get_load_management(236259, "device-1") is None
+    assert await client.async_get_recent_sessions("SERIAL") == []
+    assert await client.async_get_capacity_protection(236259) is None
+    assert await client.async_get_overload_protection(236259) is None
+
+
+@pytest.mark.asyncio
+async def test_dashboard_ensure_auth_logs_missing_credentials_once():
+    client = _client()
+
+    assert await client.async_ensure_auth() is False
+    assert await client.async_ensure_auth() is False
+
+    assert client._missing_credentials_logged is True
+
+
+@pytest.mark.asyncio
+async def test_dashboard_refresh_rejects_bad_token_and_bad_payload():
+    rejected = _client(
+        _Session(posts=[_Response(403, text="forbidden")]),
+        refresh_token="old-refresh",  # noqa: S106 - fake refresh token
+    )
+    with pytest.raises(ConfigEntryAuthFailed, match="Dashboard refresh token rejected"):
+        await rejected.async_refresh()
+
+    malformed = _client(
+        _Session(posts=[_Response(200, {"refreshToken": "new-only"})]),
+        refresh_token="old-refresh",  # noqa: S106 - fake refresh token
+    )
+    assert await malformed.async_refresh() is False
 
 
 @pytest.mark.asyncio

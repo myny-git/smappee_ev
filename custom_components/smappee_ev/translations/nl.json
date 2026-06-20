@@ -6,6 +6,10 @@
         "data": {
           "username": "Je gebruikersnaam op het Smappee-dashboard",
           "password": "Je wachtwoord op het Smappee-dashboard"
+        },
+        "data_description": {
+          "username": "De gebruikersnaam waarmee je aanmeldt bij het Smappee Dashboard.",
+          "password": "Het wachtwoord waarmee je aanmeldt bij het Smappee Dashboard."
         }
       },
       "reauth_confirm": {
@@ -13,6 +17,10 @@
         "data": {
           "username": "Je gebruikersnaam op het Smappee-dashboard",
           "password": "Je wachtwoord op het Smappee-dashboard"
+        },
+        "data_description": {
+          "username": "De gebruikersnaam van de bestaande Smappee EV config entry.",
+          "password": "Het bijgewerkte Smappee Dashboard-wachtwoord."
         }
       },
       "reconfigure": {
@@ -20,6 +28,10 @@
         "data": {
           "username": "Je gebruikersnaam op het Smappee-dashboard",
           "password": "Je wachtwoord op het Smappee-dashboard"
+        },
+        "data_description": {
+          "username": "De gebruikersnaam van de bestaande Smappee EV config entry.",
+          "password": "Het Smappee Dashboard-wachtwoord dat voor deze config entry wordt opgeslagen."
         }
       }
     },
@@ -27,6 +39,9 @@
       "auth_failed": "Authenticatie mislukt",
       "cannot_connect": "Kan geen verbinding maken",
       "unknown": "Onverwachte respons van Smappee Dashboard"
+    },
+    "abort": {
+      "wrong_account": "De inloggegevens horen bij een ander Smappee-account."
     }
   },
   "exceptions": {

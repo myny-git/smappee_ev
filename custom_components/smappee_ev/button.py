@@ -4,7 +4,7 @@ import logging
 from typing import cast
 
 from aiohttp import ClientError
-from homeassistant.components.button import ButtonEntity
+from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -17,14 +17,6 @@ from .device_handle import SmappeeDeviceHandle
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
-
-ACTION_ICONS = {
-    "start_charging": "mdi:play-circle",
-    "pause_charging": "mdi:pause-circle",
-    "stop_charging": "mdi:stop-circle",
-    "resume_charging": "mdi:play-pause",
-    "restart_charging_station": "mdi:restart",
-}
 
 
 def _connector_action_error(method_name: str, err: BaseException) -> HomeAssistantError:
@@ -131,6 +123,8 @@ async def async_setup_entry(
 class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
     """Generic action button for a station using shared base entity."""
 
+    _attr_device_class = ButtonDeviceClass.RESTART
+
     def __init__(
         self,
         *,
@@ -153,7 +147,6 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
             self._attr_name = name
         self.api_client = api_client
         self._action = action
-        self._attr_icon = ACTION_ICONS.get(action)
 
     async def async_press(self) -> None:
         """Execute the action on press."""
@@ -196,7 +189,6 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
             self._attr_name = name
         self.api_client = api_client
         self._action = action
-        self._attr_icon = ACTION_ICONS.get(action)
 
     async def async_press(self) -> None:
         """Execute the action on press."""
