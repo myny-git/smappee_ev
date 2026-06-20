@@ -30,10 +30,6 @@ from .const import (
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .dashboard_client import SmappeeDashboardClient
 from .data import (
-    DashboardObject,
-    DashboardObjectList,
-    HighLevelConfigMap,
-    MqttPayload,
     RuntimeData,
     SmappeeConnectorRuntime,
     SmappeeEvConfigEntry,
@@ -55,6 +51,7 @@ from .helpers import (
     station_device_identifier,
 )
 from .mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
+from .payload_types import DashboardObject, DashboardObjectList, HighLevelConfigMap, MqttPayload
 from .services import register_services
 
 _LOGGER = logging.getLogger(__name__)

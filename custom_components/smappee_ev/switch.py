@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
@@ -39,7 +39,7 @@ async def async_setup_entry(
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
         for st_uuid, bucket in site.stations.items():
-            coord: SmappeeCoordinator | None = bucket.station_coordinator
+            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
             st_client: SmappeeDeviceHandle | None = bucket.station_client
             conns: dict[str, SmappeeDeviceHandle] = {
                 key: conn.connector_client for key, conn in bucket.connectors.items()

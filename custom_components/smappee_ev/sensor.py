@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -45,10 +45,13 @@ async def async_setup_entry(
 
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
-        site_coord: SmappeeSiteCoordinator | SmappeeCoordinator | None = site.site_coordinator
+        site_coord = cast(SmappeeSiteCoordinator | SmappeeCoordinator | None, site.site_coordinator)
         if site_coord is None:
             first_bucket = next(iter(site.stations.values()), None)
-            site_coord = first_bucket.station_coordinator if first_bucket else None
+            site_coord = cast(
+                SmappeeSiteCoordinator | SmappeeCoordinator | None,
+                first_bucket.station_coordinator if first_bucket else None,
+            )
         if site_coord is not None:
             entities.append(SmappeeMqttLastSeenSensor(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationGridPower(site_coord, None, sid_int, f"site-{sid}"))
@@ -70,7 +73,7 @@ async def async_setup_entry(
             entities.append(StationGridVoltageL3(site_coord, None, sid_int, f"site-{sid}"))
 
         for st_uuid, bucket in site.stations.items():
-            coord: SmappeeCoordinator | None = bucket.station_coordinator
+            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
             if coord is None:
                 continue
             conns: dict[str, SmappeeDeviceHandle] = {

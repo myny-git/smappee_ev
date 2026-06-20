@@ -3,21 +3,16 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any, Protocol
 
 from homeassistant.config_entries import ConfigEntry
 
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
+from .payload_types import DashboardObject, HighLevelConfigMap, RecentSession
 
 if TYPE_CHECKING:
-    from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
     from .device_handle import SmappeeDeviceHandle
-
-type DashboardObject = dict[str, Any]
-type DashboardObjectList = list[DashboardObject]
-type HighLevelConfigMap = dict[int, DashboardObject]
-type MqttPayload = dict[str, Any]
-type RecentSession = DashboardObject
 
 
 @dataclass
@@ -142,6 +137,35 @@ class SiteData:
     site: SiteState
 
 
+class SmappeeSiteCoordinatorRuntime(Protocol):
+    """Runtime shape used by site-scoped setup and cleanup code."""
+
+    @property
+    def data(self) -> SiteData | None: ...
+
+    def apply_mqtt_connection_change(self, up: bool) -> None: ...
+
+    async def async_shutdown(self) -> None: ...
+
+
+class SmappeeStationCoordinatorRuntime(Protocol):
+    """Runtime shape used by station-scoped setup and cleanup code."""
+
+    @property
+    def data(self) -> IntegrationData | None: ...
+
+    @property
+    def update_interval(self) -> timedelta | None: ...
+
+    def apply_mqtt_connection_change(self, up: bool) -> None: ...
+
+    def async_schedule_dashboard_refresh(self, delay: float = ...) -> None: ...
+
+    async def async_request_refresh(self) -> None: ...
+
+    async def async_shutdown(self) -> None: ...
+
+
 @dataclass
 class SmappeeConnectorRuntime:
     """Runtime objects for one connector."""
@@ -178,9 +202,9 @@ class SmappeeStationRuntime:
     charging_station_serial: str
     charging_station_model: str | None
     station_client: SmappeeDeviceHandle
-    station_coordinator: SmappeeStationCoordinator | None
+    station_coordinator: SmappeeStationCoordinatorRuntime | None
     mqtt: Any | None = None
-    site_coordinator: SmappeeSiteCoordinator | None = None
+    site_coordinator: SmappeeSiteCoordinatorRuntime | None = None
     highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
     led_devices: dict[str, SmappeeLedRuntime] = field(default_factory=dict)
     connectors: dict[str, SmappeeConnectorRuntime] = field(default_factory=dict)
@@ -200,7 +224,7 @@ class SmappeeSiteRuntime:
     measurement_location_ids: list[int] = field(default_factory=list)
     highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
     mqtt_clients: Any | None = None
-    site_coordinator: SmappeeSiteCoordinator | None = None
+    site_coordinator: SmappeeSiteCoordinatorRuntime | None = None
     stations: dict[str, SmappeeStationRuntime] = field(default_factory=dict)
 
 

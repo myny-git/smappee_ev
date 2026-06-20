@@ -17,7 +17,7 @@ from .const import (
     HTTP_CONNECT_TIMEOUT,
     HTTP_TOTAL_TIMEOUT,
 )
-from .data import DashboardObject, DashboardObjectList, RecentSession
+from .payload_types import DashboardObject, DashboardObjectList, RecentSession
 
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_RENEW_SKEW_MS = 60_000

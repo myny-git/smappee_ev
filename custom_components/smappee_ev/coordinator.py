@@ -28,11 +28,7 @@ from .const import (
 from .dashboard_client import SmappeeDashboardClient
 from .data import (
     ConnectorState,
-    DashboardObject,
-    HighLevelConfigMap,
     IntegrationData,
-    MqttPayload,
-    RecentSession,
     SiteData,
     SiteState,
     SmappeeEvConfigEntry,
@@ -41,6 +37,7 @@ from .data import (
 from .device_handle import SmappeeDeviceHandle
 from .helpers import anonymize_uuid
 from .mqtt_gateway import redact_mqtt_topic
+from .payload_types import DashboardObject, HighLevelConfigMap, MqttPayload, RecentSession
 
 _LOGGER = logging.getLogger(__name__)
 
