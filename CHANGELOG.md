@@ -21,7 +21,7 @@ References:
 
 ## [2026.6.4] - 2026-06-07
 
-- Promoted recent June testing work to a stable release.
+- Promoted the June 2026 testing work to a stable release.
 - Added charging current control with 0.1 A precision.
 - Added the `set_current` action to set charging current directly in Ampere.
 - Cleaned up Smappee API endpoint handling for smartdevices and chargingstations.
