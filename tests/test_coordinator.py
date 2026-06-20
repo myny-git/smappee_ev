@@ -15,12 +15,7 @@ from custom_components.smappee_ev.coordinator import (
     _pick,
     _to_int,
 )
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
-    RuntimeData,
-    StationState,
-)
+from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.sensor import ConnectorSessionEnergySensor
 
@@ -72,15 +67,6 @@ def mock_config_entry():
     entry.state = "loaded"
     entry.domain = "smappee_ev"
     return entry
-
-
-@pytest.fixture
-def mock_runtime_data():
-    """Create a mock RuntimeData."""
-    api_client = MagicMock(spec=SmappeeDeviceHandle)
-    mqtt_client = MagicMock()
-    sites = {12345: {"stations": {"station1": {"station_client": api_client}}}}
-    return RuntimeData(api=api_client, sites=sites, mqtt=mqtt_client)
 
 
 @pytest.fixture

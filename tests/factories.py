@@ -182,8 +182,8 @@ def make_site_runtime(
     site_uuid: str | None = "site-uuid",
     gateway_serial: str | None = "GATEWAY123",
     gateway_type: str | None = "Infinity",
-    control_location_ids: list[int | str] | None = None,
-    measurement_location_ids: list[int | str] | None = None,
+    control_location_ids: list[int] | None = None,
+    measurement_location_ids: list[int] | None = None,
     mqtt_clients: object | None = None,
     site_coordinator: object | None = None,
     highlevel_configs: dict[int, dict[str, Any]] | None = None,
@@ -209,7 +209,7 @@ def make_site_runtime(
 def make_runtime_data(
     *,
     api: object = _DEFAULT_API,
-    sites: dict[int, object] | None = None,
+    sites: dict[int, SmappeeSiteRuntime] | None = None,
     mqtt: dict[int, object] | None = None,
     dashboard: object | None = None,
     background_tasks: set | None = None,
@@ -247,7 +247,6 @@ def make_runtime_for_connector(
         },
     )
     return make_runtime_data(
-        api=connector_client,
         sites={
             site_id: make_site_runtime(
                 site_location_id=site_id,

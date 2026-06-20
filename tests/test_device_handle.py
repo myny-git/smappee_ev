@@ -25,42 +25,42 @@ class RecordingDashboard:
         return self.success
 
     async def async_set_charging_mode(
-        self, service_location_id: str, device_id: str, mode: str
+        self, service_location_id: int, device_id: str, mode: str
     ) -> bool:
         return await self._record("async_set_charging_mode", service_location_id, device_id, mode)
 
-    async def async_start_charging(self, service_location_id: str, device_id: str) -> bool:
+    async def async_start_charging(self, service_location_id: int, device_id: str) -> bool:
         return await self._record("async_start_charging", service_location_id, device_id)
 
-    async def async_pause_charging(self, service_location_id: str, device_id: str) -> bool:
+    async def async_pause_charging(self, service_location_id: int, device_id: str) -> bool:
         return await self._record("async_pause_charging", service_location_id, device_id)
 
-    async def async_stop_charging(self, service_location_id: str, device_id: str) -> bool:
+    async def async_stop_charging(self, service_location_id: int, device_id: str) -> bool:
         return await self._record("async_stop_charging", service_location_id, device_id)
 
     async def async_set_led_brightness(
-        self, service_location_id: str, device_id: str, brightness: int
+        self, service_location_id: int, device_id: str, brightness: int
     ) -> bool:
         return await self._record(
             "async_set_led_brightness", service_location_id, device_id, brightness
         )
 
     async def async_set_min_surpluspct(
-        self, service_location_id: str, device_id: str, min_surpluspct: int
+        self, service_location_id: int, device_id: str, min_surpluspct: int
     ) -> bool:
         return await self._record(
             "async_set_min_surpluspct", service_location_id, device_id, min_surpluspct
         )
 
     async def async_set_connector_max_current(
-        self, service_location_id: str, device_id: str, max_current_a: int
+        self, service_location_id: int, device_id: str, max_current_a: int
     ) -> bool:
         return await self._record(
             "async_set_connector_max_current", service_location_id, device_id, max_current_a
         )
 
     async def async_set_percentage_limit(
-        self, service_location_id: str, device_id: str, percentage: int
+        self, service_location_id: int, device_id: str, percentage: int
     ) -> bool:
         return await self._record(
             "async_set_percentage_limit", service_location_id, device_id, percentage
@@ -77,7 +77,7 @@ class RecordingDashboard:
     ) -> bool:
         return await self._record("async_set_offline_charging", serial, enabled, failsafe_amps)
 
-    async def async_get_smart_devices(self, service_location_id: str) -> list[dict[str, Any]]:
+    async def async_get_smart_devices(self, service_location_id: int) -> list[dict[str, Any]]:
         self.calls.append(("async_get_smart_devices", (service_location_id,)))
         return self.smart_devices
 
@@ -92,7 +92,7 @@ def make_client(
     station_serial: str | None = None,
     uuid: str = "DEVUUID",
     dev_id: str = "1",
-    loc: str = "100",
+    loc: int = 100,
     connector: int | None = 1,
     is_station: bool = False,
     dashboard: RecordingDashboard | None = None,
@@ -142,7 +142,7 @@ async def test_smartdevices_use_dashboard_and_single_lookup():
         {"id": "OTHER", "uuid": "OTHER_UUID"},
         {"id": "DEVICE_ID", "uuid": "DEVICE_UUID"},
     ]
-    client = make_client(loc="500", dashboard=dashboard)
+    client = make_client(loc=500, dashboard=dashboard)
 
     devices = await client.async_get_smartdevices()
     device = await client.async_get_smartdevice("DEVICE_UUID")
@@ -150,8 +150,8 @@ async def test_smartdevices_use_dashboard_and_single_lookup():
     assert devices == dashboard.smart_devices
     assert device == {"id": "DEVICE_ID", "uuid": "DEVICE_UUID"}
     assert dashboard.calls == [
-        ("async_get_smart_devices", ("500",)),
-        ("async_get_smart_devices", ("500",)),
+        ("async_get_smart_devices", (500,)),
+        ("async_get_smart_devices", (500,)),
     ]
 
 
@@ -190,7 +190,7 @@ async def test_dashboard_action_error_paths_and_missing_methods():
 @pytest.mark.asyncio
 async def test_set_charging_mode_dashboard_only():
     dashboard = RecordingDashboard()
-    client = make_client(loc="236259", dashboard=dashboard)
+    client = make_client(loc=236259, dashboard=dashboard)
 
     assert await client.set_charging_mode("SMART") is True
     assert await client.set_charging_mode("STANDARD") is True
@@ -198,9 +198,9 @@ async def test_set_charging_mode_dashboard_only():
     assert await client.set_charging_mode("NORMAL") is False
 
     assert dashboard.calls == [
-        ("async_set_charging_mode", ("236259", "DASHBOARD_DEVICE", "SMART")),
-        ("async_set_charging_mode", ("236259", "DASHBOARD_DEVICE", "STANDARD")),
-        ("async_set_charging_mode", ("236259", "DASHBOARD_DEVICE", "SOLAR")),
+        ("async_set_charging_mode", (236259, "DASHBOARD_DEVICE", "SMART")),
+        ("async_set_charging_mode", (236259, "DASHBOARD_DEVICE", "STANDARD")),
+        ("async_set_charging_mode", (236259, "DASHBOARD_DEVICE", "SOLAR")),
     ]
 
 
@@ -278,7 +278,7 @@ async def test_start_charging_sends_start_action():
 
     await client.start_charging()
 
-    assert dashboard.calls == [("async_start_charging", ("100", "DASHBOARD_DEVICE"))]
+    assert dashboard.calls == [("async_start_charging", (100, "DASHBOARD_DEVICE"))]
 
 
 @pytest.mark.asyncio
@@ -292,8 +292,8 @@ async def test_set_percentage_limit_and_current_use_dashboard():
     assert (current, pct) == (19, 50)
     assert (current_from_amps, pct_from_amps) == (16.4, 40)
     assert dashboard.calls == [
-        ("async_set_percentage_limit", ("100", "DASHBOARD_DEVICE", 50)),
-        ("async_set_percentage_limit", ("100", "DASHBOARD_DEVICE", 40)),
+        ("async_set_percentage_limit", (100, "DASHBOARD_DEVICE", 50)),
+        ("async_set_percentage_limit", (100, "DASHBOARD_DEVICE", 40)),
     ]
 
 
@@ -319,11 +319,11 @@ async def test_pause_stop_brightness_and_surplus_use_dashboard():
     await client.set_connector_max_current(16)
 
     assert dashboard.calls == [
-        ("async_pause_charging", ("100", "DASHBOARD_DEVICE")),
-        ("async_stop_charging", ("100", "DASHBOARD_DEVICE")),
-        ("async_set_led_brightness", ("100", "DASHBOARD_DEVICE", 42)),
-        ("async_set_min_surpluspct", ("100", "DASHBOARD_DEVICE", 17)),
-        ("async_set_connector_max_current", ("100", "DASHBOARD_DEVICE", 16)),
+        ("async_pause_charging", (100, "DASHBOARD_DEVICE")),
+        ("async_stop_charging", (100, "DASHBOARD_DEVICE")),
+        ("async_set_led_brightness", (100, "DASHBOARD_DEVICE", 42)),
+        ("async_set_min_surpluspct", (100, "DASHBOARD_DEVICE", 17)),
+        ("async_set_connector_max_current", (100, "DASHBOARD_DEVICE", 16)),
     ]
 
 

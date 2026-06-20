@@ -156,8 +156,8 @@ class SmappeeLedRuntime:
 class SmappeeStationRuntime:
     """Runtime objects for one charging station."""
 
-    site_location_id: int | str
-    control_location_id: int | str
+    site_location_id: int
+    control_location_id: int
     site_name: str | None
     gateway_serial: str | None
     gateway_type: str | None
@@ -180,14 +180,14 @@ class SmappeeStationRuntime:
 class SmappeeSiteRuntime:
     """Runtime objects for one site/service location."""
 
-    site_location_id: int | str
+    site_location_id: int
     site_name: str | None
     site_function_type: str | None
     site_uuid: str | None
     gateway_serial: str | None
     gateway_type: str | None
-    control_location_ids: list[int | str] = field(default_factory=list)
-    measurement_location_ids: list[int | str] = field(default_factory=list)
+    control_location_ids: list[int] = field(default_factory=list)
+    measurement_location_ids: list[int] = field(default_factory=list)
     highlevel_configs: dict[int, dict[str, Any]] = field(default_factory=dict)
     mqtt_clients: Any | None = None
     site_coordinator: Any | None = None

@@ -20,12 +20,12 @@ class SmappeeDeviceHandle:
         serial: str,
         smart_device_uuid: str,
         smart_device_id: str,
-        service_location_id: str,
+        service_location_id: int,
         *,
         connector_number: int | None = None,
         is_station: bool = False,
         charging_station_serial: str | None = None,
-        site_location_id: int | str | None = None,
+        site_location_id: int | None = None,
         charging_station_model: str | None = None,
     ):
         self.serial = serial

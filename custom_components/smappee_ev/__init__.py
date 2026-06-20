@@ -815,10 +815,10 @@ def _log_stored_runtime_shape(runtime: RuntimeData) -> None:
 
 def _make_station_clients(
     serial_str,
-    sid,
+    sid: int,
     station_devs: list[dict],
     *,
-    site_location_id: int | str | None = None,
+    site_location_id: int | None = None,
     site_name: str | None = None,
     gateway_serial: str | None = None,
     gateway_type: str | None = None,
@@ -868,7 +868,7 @@ def _make_station_clients(
 
 def _make_station_clients_with_mapping_fallback(
     serial_str: str,
-    sid: int | str,
+    sid: int,
     station_devs: list[dict],
     station_serial_to_connectors: dict[str, dict],
     has_connector_mapping: bool,
@@ -892,7 +892,7 @@ def _make_station_clients_with_mapping_fallback(
 
 
 def _assign_connectors(
-    stations: dict[str, SmappeeStationRuntime], car_devs, mapping, serial_str, sid
+    stations: dict[str, SmappeeStationRuntime], car_devs, mapping, serial_str, sid: int
 ) -> None:
     for bucket in stations.values():
         st_serial = bucket.charging_station_serial
@@ -929,7 +929,7 @@ def _assign_connectors(
             )
 
 
-def _fallback_assign(stations: dict[str, SmappeeStationRuntime], car_devs, serial_str, sid):
+def _fallback_assign(stations: dict[str, SmappeeStationRuntime], car_devs, serial_str, sid: int):
     total_assigned = sum(len(b.connectors) for b in stations.values())
     if total_assigned > 0:
         return

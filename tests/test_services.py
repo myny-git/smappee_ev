@@ -161,12 +161,15 @@ class TestServiceHelpers:
 
     def test_only_or_single_sid(self):
         """Test getting single service location ID."""
-        sites = {12345: {"test": "data"}}
+        sites = {12345: make_site_runtime(site_location_id=12345)}
         result = services._only_or_single_sid(sites)
         assert result == 12345
 
         # Multiple sites should return None
-        sites = {12345: {"test": "data"}, 67890: {"test": "data2"}}
+        sites = {
+            12345: make_site_runtime(site_location_id=12345),
+            67890: make_site_runtime(site_location_id=67890),
+        }
         result = services._only_or_single_sid(sites)
         assert result is None
 
@@ -457,8 +460,7 @@ class TestServiceHandlers:
     @pytest.mark.asyncio
     async def test_handle_service_multi_site_no_id(self, mock_hass, mock_loaded_entries):
         """Test service call with multiple sites but no service_location_id."""
-        # Add another site to mock runtime data
-        mock_loaded_entries[0].runtime_data.sites[67890] = {"test": "data"}
+        mock_loaded_entries[0].runtime_data.sites[67890] = make_site_runtime(site_location_id=67890)
         mock_hass.config_entries.async_entries.return_value = mock_loaded_entries
 
         call = ServiceCall(domain="smappee_ev", service="start_charging", data={}, hass=mock_hass)
@@ -496,6 +498,68 @@ class TestServiceHandlers:
 
         site_a_client.start_charging.assert_not_called()
         site_b_client.start_charging.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_resume_charging_multi_site_entry_requires_service_location_id(self, mock_hass):
+        """Resume charging should report the shared multi-site ambiguity error."""
+        site_a_client = make_connector_client(
+            service_location_id=11111,
+            connector_number=1,
+            smart_device_uuid="connector-site-a",
+        )
+        site_b_client = make_connector_client(
+            service_location_id=22222,
+            connector_number=1,
+            smart_device_uuid="connector-site-b",
+        )
+        runtime_a = make_runtime_for_connector(11111, site_a_client)
+        runtime_b = make_runtime_for_connector(22222, site_b_client)
+        runtime = make_runtime_data(sites={**runtime_a.sites, **runtime_b.sites})
+        configure_loaded_entries(mock_hass, [make_loaded_config_entry("entry_a", runtime)])
+        call = ServiceCall(
+            domain="smappee_ev",
+            service="resume_charging",
+            data={"config_entry_id": "entry_a", "connector_id": 1},
+            hass=mock_hass,
+        )
+
+        with pytest.raises(ServiceValidationError) as exc:
+            await services.handle_resume_charging(call)
+
+        assert exc.value.translation_key == "multiple_service_locations"
+        site_a_client.set_charging_mode.assert_not_called()
+        site_b_client.set_charging_mode.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_current_multi_site_entry_requires_service_location_id(self, mock_hass):
+        """Set current should report the shared multi-site ambiguity error."""
+        site_a_client = make_connector_client(
+            service_location_id=11111,
+            connector_number=1,
+            smart_device_uuid="connector-site-a",
+        )
+        site_b_client = make_connector_client(
+            service_location_id=22222,
+            connector_number=1,
+            smart_device_uuid="connector-site-b",
+        )
+        runtime_a = make_runtime_for_connector(11111, site_a_client)
+        runtime_b = make_runtime_for_connector(22222, site_b_client)
+        runtime = make_runtime_data(sites={**runtime_a.sites, **runtime_b.sites})
+        configure_loaded_entries(mock_hass, [make_loaded_config_entry("entry_a", runtime)])
+        call = ServiceCall(
+            domain="smappee_ev",
+            service="set_current",
+            data={"config_entry_id": "entry_a", "connector_id": 1, "current": 16},
+            hass=mock_hass,
+        )
+
+        with pytest.raises(ServiceValidationError) as exc:
+            await services.handle_set_current(call)
+
+        assert exc.value.translation_key == "multiple_service_locations"
+        site_a_client.set_current.assert_not_called()
+        site_b_client.set_current.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_multi_entry_connector_service_config_entry_id_selects_target(self, mock_hass):
@@ -701,7 +765,7 @@ class TestServiceHandlers:
         self, mock_hass_with_entries, mock_loaded_entries
     ):
         """Test station service validation for ambiguous, missing, and unknown methods."""
-        mock_loaded_entries[0].runtime_data.sites[67890] = {"stations": {}}
+        mock_loaded_entries[0].runtime_data.sites[67890] = make_site_runtime(site_location_id=67890)
         call = ServiceCall(
             domain="smappee_ev",
             service="station",
@@ -769,7 +833,7 @@ class TestServiceHandlers:
         self, mock_hass_with_entries, mock_loaded_entries
     ):
         """Test generic connector service validation for ambiguity and missing client."""
-        mock_loaded_entries[0].runtime_data.sites[67890] = {"stations": {}}
+        mock_loaded_entries[0].runtime_data.sites[67890] = make_site_runtime(site_location_id=67890)
         call = ServiceCall(
             domain="smappee_ev",
             service="connector",

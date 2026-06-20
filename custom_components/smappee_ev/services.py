@@ -100,6 +100,11 @@ def _raise_multiple_service_locations() -> None:
     )
 
 
+def _raise_if_ambiguous_service_location(rt: RuntimeData | None, sid: int | None) -> None:
+    if rt is not None and sid is None and len(rt.sites) > 1:
+        _raise_multiple_service_locations()
+
+
 def _raise_service_location_not_found(sid: int) -> None:
     raise _service_validation_error(
         f"service_location_id {sid} was not found in any loaded Smappee EV config entry",
@@ -277,8 +282,7 @@ async def async_handle_station_service(
     extra_args: dict | None = None,
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
-    if rt and sid is None and len(rt.sites) > 1:
-        _raise_multiple_service_locations()
+    _raise_if_ambiguous_service_location(rt, sid)
     client = get_station_client(rt, sid)
     if not client:
         raise _service_validation_error(
@@ -314,8 +318,7 @@ async def async_handle_connector_service(
     extra_args: dict | None = None,
 ) -> None:
     rt, sid = _resolve_sid(hass, call)
-    if rt and sid is None and len(rt.sites) > 1:
-        _raise_multiple_service_locations()
+    _raise_if_ambiguous_service_location(rt, sid)
     connector_id = call.data.get("connector_id")
     client = get_connector_client(rt, sid, connector_id)
     if not client:
@@ -368,6 +371,7 @@ async def handle_stop_charging(call: ServiceCall) -> None:
 async def handle_resume_charging(call: ServiceCall) -> None:
     connector_id = call.data.get("connector_id")
     rt, sid = _resolve_sid(call.hass, call)
+    _raise_if_ambiguous_service_location(rt, sid)
     client = get_connector_client(rt, sid, connector_id)
     if not client:
         raise _service_validation_error(
@@ -405,6 +409,7 @@ async def handle_set_current(call: ServiceCall) -> None:
     current = round(float(call.data["current"]), 1)
     connector_id = call.data.get("connector_id")
     rt, sid = _resolve_sid(call.hass, call)
+    _raise_if_ambiguous_service_location(rt, sid)
     client = get_connector_client(rt, sid, connector_id)
     if not client:
         raise _service_validation_error(
