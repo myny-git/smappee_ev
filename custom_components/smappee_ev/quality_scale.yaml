@@ -102,7 +102,7 @@ rules:
   state-restoration: done
   test-coverage-91:
     status: done
-    comment: The test suite currently passes with 483 tests, 0 xfailed tests, and 91.54% coverage.
+    comment: The integration has broad passing test coverage; use the current CI or local coverage report for exact test and coverage numbers.
 
   translation-en: done
   translation-nl: done

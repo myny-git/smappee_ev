@@ -37,8 +37,9 @@ def make_connector_client(
     client = MagicMock(spec=SmappeeDeviceHandle)
     client.service_location_id = service_location_id
     client.connector_number = connector_number
-    client.charging_station_serial = serial or f"SERIAL_{service_location_id}"
-    client.serial = serial or f"SERIAL_{service_location_id}"
+    resolved_serial = serial if serial is not None else f"SERIAL_{service_location_id}"
+    client.charging_station_serial = resolved_serial
+    client.serial = resolved_serial
     client.smart_device_uuid = smart_device_uuid
     client.min_current = min_current
     client.max_current = max_current
@@ -81,7 +82,7 @@ def make_station_coordinator(
     coordinator.last_update_success = True
     coordinator.data = IntegrationData(
         station=station_state or StationState(mqtt_connected=True),
-        connectors=connectors or {},
+        connectors=connectors if connectors is not None else {},
     )
     return coordinator
 
@@ -94,14 +95,15 @@ def make_connector_runtime(
     connector_client: object | None = None,
 ) -> SmappeeConnectorRuntime:
     """Create a typed connector runtime container."""
-    connector_uuid = connector_uuid or connector_key
-    connector_client = connector_client or make_connector_client(
-        connector_number=connector_position or 1,
-        smart_device_uuid=connector_uuid,
-    )
+    resolved_connector_uuid = connector_uuid if connector_uuid is not None else connector_key
+    if connector_client is None:
+        connector_client = make_connector_client(
+            connector_number=connector_position if connector_position is not None else 1,
+            smart_device_uuid=resolved_connector_uuid,
+        )
     return SmappeeConnectorRuntime(
         connector_key=connector_key,
-        connector_uuid=connector_uuid,
+        connector_uuid=resolved_connector_uuid,
         connector_position=connector_position,
         connector_client=connector_client,
     )
@@ -117,7 +119,7 @@ def make_led_runtime(
     """Create a typed LED runtime container."""
     return SmappeeLedRuntime(
         led_key=led_key,
-        led_device_id=led_device_id or led_key,
+        led_device_id=led_device_id if led_device_id is not None else led_key,
         led_device_uuid=led_device_uuid,
         led_device_name=led_device_name,
     )
@@ -144,10 +146,11 @@ def make_station_runtime(
     station_model: str | None = "EV Wall",
 ) -> SmappeeStationRuntime:
     """Create a typed station runtime container."""
-    station_client = station_client or make_station_client(
-        service_location_id=control_location_id,
-        serial=serial,
-    )
+    if station_client is None:
+        station_client = make_station_client(
+            service_location_id=control_location_id,
+            serial=serial,
+        )
     if coordinator is _DEFAULT_SENTINEL:
         coordinator = make_station_coordinator(
             station_client=station_client,
@@ -168,9 +171,9 @@ def make_station_runtime(
         station_client=station_client,
         station_coordinator=coordinator,
         site_coordinator=site_coordinator,
-        highlevel_configs=highlevel_configs or {},
-        led_devices=led_devices or {},
-        connectors=connectors or {},
+        highlevel_configs=highlevel_configs if highlevel_configs is not None else {},
+        led_devices=led_devices if led_devices is not None else {},
+        connectors=connectors if connectors is not None else {},
     )
 
 
@@ -197,12 +200,16 @@ def make_site_runtime(
         site_uuid=site_uuid,
         gateway_serial=gateway_serial,
         gateway_type=gateway_type,
-        control_location_ids=control_location_ids or [site_location_id],
-        measurement_location_ids=measurement_location_ids or [site_location_id],
-        highlevel_configs=highlevel_configs or {},
+        control_location_ids=control_location_ids
+        if control_location_ids is not None
+        else [site_location_id],
+        measurement_location_ids=measurement_location_ids
+        if measurement_location_ids is not None
+        else [site_location_id],
+        highlevel_configs=highlevel_configs if highlevel_configs is not None else {},
         mqtt_clients=mqtt_clients,
         site_coordinator=site_coordinator,
-        stations=stations or {},
+        stations=stations if stations is not None else {},
     )
 
 
@@ -217,8 +224,8 @@ def make_runtime_data(
     """Create RuntimeData with the integration's current schema."""
     runtime = RuntimeData(
         api=MagicMock() if api is _DEFAULT_SENTINEL else api,
-        sites=sites or {},
-        mqtt=mqtt or {},
+        sites=sites if sites is not None else {},
+        mqtt=mqtt if mqtt is not None else {},
     )
     runtime.dashboard = dashboard
     if background_tasks is not None:
@@ -233,7 +240,7 @@ def make_runtime_for_connector(
     station_uuid: str | None = None,
 ) -> RuntimeData:
     """Create a one-site runtime containing a single connector client."""
-    station_uuid = station_uuid or f"station_{site_id}"
+    station_uuid = station_uuid if station_uuid is not None else f"station_{site_id}"
     connector_uuid = connector_client.smart_device_uuid
     coord = MagicMock()
     coord.data = IntegrationData(
@@ -297,8 +304,8 @@ def make_config_entry(
     """Create a ConfigEntry-like mock with commonly used attributes."""
     entry = MagicMock(spec=ConfigEntry)
     entry.runtime_data = runtime_data
-    entry.data = data or {}
-    entry.options = options or {}
+    entry.data = data if data is not None else {}
+    entry.options = options if options is not None else {}
     entry.entry_id = entry_id
     entry.title = title
     entry.domain = domain

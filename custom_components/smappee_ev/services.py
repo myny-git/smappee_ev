@@ -165,6 +165,11 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
 
 
 def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeDeviceHandle | None:
+    """Return the first station client for a site.
+
+    Station-level services historically target the first station bucket. Keep that policy
+    explicit so multi-station behavior is reviewed before changing it.
+    """
     if not rt or sid is None:
         return None
     site = rt.sites.get(sid)
@@ -178,12 +183,7 @@ def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeDevice
 def _connector_clients_for_site(site: SmappeeSiteRuntime) -> list[SmappeeDeviceHandle]:
     conns: list[SmappeeDeviceHandle] = []
     for bucket in site.stations.values():
-        conns.extend(
-            cast(
-                list[SmappeeDeviceHandle],
-                [connector.connector_client for connector in bucket.connectors.values()],
-            )
-        )
+        conns.extend(connector.connector_client for connector in bucket.connectors.values())
     return conns
 
 
@@ -330,6 +330,18 @@ async def async_handle_connector_service(
             connector_id=connector_id,
         )
 
+    await _async_call_connector_client(hass, client, method_name, extra_args)
+
+    # Mode reset handled by coordinator state logic; client is stateless now.
+
+
+async def _async_call_connector_client(
+    hass: HomeAssistant,
+    client: SmappeeDeviceHandle,
+    method_name: str,
+    extra_args: dict | None = None,
+) -> None:
+    """Call a connector method on an already resolved client."""
     method = getattr(client, method_name, None)
     if not method:
         raise _service_validation_error(
@@ -347,8 +359,6 @@ async def async_handle_connector_service(
             error=err,
         ) from err
     _schedule_dashboard_refresh_for_client(hass, client)
-
-    # Mode reset handled by coordinator state logic; client is stateless now.
 
 
 # ----------------------------
@@ -388,9 +398,9 @@ async def handle_resume_charging(call: ServiceCall) -> None:
             or "STANDARD"
         )
 
-    await async_handle_connector_service(
+    await _async_call_connector_client(
         call.hass,
-        call,
+        client,
         "set_charging_mode",
         {"mode": mode},
     )
@@ -429,9 +439,9 @@ async def handle_set_current(call: ServiceCall) -> None:
             min_current=min_c,
             max_current=max_c,
         )
-    await async_handle_connector_service(
+    await _async_call_connector_client(
         call.hass,
-        call,
+        client,
         "set_current",
         {"current": current, "min_current": min_c, "max_current": max_c},
     )

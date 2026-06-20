@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
+
+if TYPE_CHECKING:
+    from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
+    from .device_handle import SmappeeDeviceHandle
 
 
 @dataclass
@@ -139,7 +143,7 @@ class SmappeeConnectorRuntime:
     connector_key: str
     connector_uuid: str | None
     connector_position: int | None
-    connector_client: Any
+    connector_client: SmappeeDeviceHandle
 
 
 @dataclass
@@ -167,10 +171,10 @@ class SmappeeStationRuntime:
     station_name: str | None
     charging_station_serial: str
     charging_station_model: str | None
-    station_client: Any
-    station_coordinator: Any | None
+    station_client: SmappeeDeviceHandle
+    station_coordinator: SmappeeStationCoordinator | None
     mqtt: Any | None = None
-    site_coordinator: Any | None = None
+    site_coordinator: SmappeeSiteCoordinator | None = None
     highlevel_configs: dict[int, dict[str, Any]] = field(default_factory=dict)
     led_devices: dict[str, SmappeeLedRuntime] = field(default_factory=dict)
     connectors: dict[str, SmappeeConnectorRuntime] = field(default_factory=dict)
@@ -190,7 +194,7 @@ class SmappeeSiteRuntime:
     measurement_location_ids: list[int] = field(default_factory=list)
     highlevel_configs: dict[int, dict[str, Any]] = field(default_factory=dict)
     mqtt_clients: Any | None = None
-    site_coordinator: Any | None = None
+    site_coordinator: SmappeeSiteCoordinator | None = None
     stations: dict[str, SmappeeStationRuntime] = field(default_factory=dict)
 
 

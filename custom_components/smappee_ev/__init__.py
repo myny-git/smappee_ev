@@ -1142,9 +1142,9 @@ def _handle_mqtt_connection_change(
         coord = bucket.station_coordinator
         if coord:
             if up:
-                coord.update_interval = None
+                cast(Any, coord).update_interval = None
             elif coord.update_interval is None:
-                coord.update_interval = timedelta(seconds=update_interval)
+                cast(Any, coord).update_interval = timedelta(seconds=update_interval)
                 schedule_refresh(coord)
             coord.apply_mqtt_connection_change(up)
 

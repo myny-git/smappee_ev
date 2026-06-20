@@ -27,7 +27,7 @@ async def async_setup_entry(
     entities: list[SmappeeMqttConnectivity] = []
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
-        coord: SmappeeSiteCoordinator | None = site.site_coordinator
+        coord: SmappeeSiteCoordinator | SmappeeCoordinator | None = site.site_coordinator
         if coord is None:
             first_bucket = next(iter(site.stations.values()), None)
             coord = first_bucket.station_coordinator if first_bucket else None
@@ -44,7 +44,7 @@ class SmappeeMqttConnectivity(SmappeeSiteEntity, BinarySensorEntity):
 
     def __init__(
         self,
-        coordinator: SmappeeSiteCoordinator,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
         sid: int,
         api_client: object | None = None,
         station_uuid: str | None = None,

@@ -45,7 +45,7 @@ async def async_setup_entry(
 
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
-        site_coord: SmappeeSiteCoordinator | None = site.site_coordinator
+        site_coord: SmappeeSiteCoordinator | SmappeeCoordinator | None = site.site_coordinator
         if site_coord is None:
             first_bucket = next(iter(site.stations.values()), None)
             site_coord = first_bucket.station_coordinator if first_bucket else None

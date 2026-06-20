@@ -34,7 +34,9 @@ class SmappeeDeviceHandle:
         self.smart_device_uuid = smart_device_uuid
         self.smart_device_id = smart_device_id
         self.service_location_id = service_location_id
-        self.site_location_id = site_location_id or service_location_id
+        self.site_location_id = (
+            site_location_id if site_location_id is not None else service_location_id
+        )
         self.connector_number = connector_number
 
         self.is_station = is_station
