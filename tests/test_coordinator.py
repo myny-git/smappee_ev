@@ -430,6 +430,34 @@ class TestSmappeeCoordinator:
         assert coordinator._session_active_loop_unsub is None
 
     @pytest.mark.asyncio
+    async def test_async_shutdown_cancels_all_tracked_timers_and_tasks(self, coordinator):
+        """Unload cleanup should cancel all coordinator event callbacks and tasks."""
+        session_unsub = MagicMock()
+        active_loop_unsub = MagicMock()
+        final_unsubs = [MagicMock(), MagicMock()]
+        dashboard_task = asyncio.create_task(asyncio.sleep(60))
+        coordinator._session_refresh_unsub = session_unsub
+        coordinator._session_active_loop_unsub = active_loop_unsub
+        coordinator._session_active_loop_interval = 300
+        coordinator._session_final_refresh_unsubs = final_unsubs.copy()
+        coordinator._dashboard_refresh_task = dashboard_task
+
+        await coordinator.async_shutdown()
+
+        session_unsub.assert_called_once()
+        active_loop_unsub.assert_called_once()
+        for unsub in final_unsubs:
+            unsub.assert_called_once()
+        assert dashboard_task.cancelled()
+        assert coordinator._session_refresh_unsub is None
+        assert coordinator._session_active_loop_unsub is None
+        assert coordinator._session_active_loop_interval is None
+        assert coordinator._session_final_refresh_unsubs == []
+
+        coordinator._schedule_session_refresh("after shutdown", delay=0)
+        assert coordinator._session_refresh_unsub is None
+
+    @pytest.mark.asyncio
     async def test_active_session_loop_reschedules_when_session_becomes_paused(self, coordinator):
         """Active-session polling should slow down when the only active session is paused."""
         scheduled = []

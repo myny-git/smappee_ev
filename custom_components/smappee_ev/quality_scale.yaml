@@ -18,8 +18,8 @@ rules:
   docs-installation-instructions: done
   docs-removal-instructions: done
   entity-event-setup:
-    status: in_progress
-    comment: Entity lifecycle and subscription cleanup should be reviewed to ensure all MQTT/event subscriptions are created and removed in the correct Home Assistant lifecycle methods.
+    status: done
+    comment: MQTT subscriptions, coordinator timers, and background refresh tasks are tied to config entry setup and are cleaned up during unload/reload, with lifecycle tests covering shutdown behavior.
   entity-unique-id: done
   has-entity-name: done
   runtime-data: done

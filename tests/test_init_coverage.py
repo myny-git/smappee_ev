@@ -582,14 +582,31 @@ def test_register_runtime_devices_creates_site_station_led_and_connector_devices
 
 @pytest.mark.asyncio
 async def test_shutdown_runtime_resources_stops_mqtt_and_cancels_background_tasks():
+    events: list[str] = []
+
+    async def site_shutdown():
+        events.append("site-shutdown")
+        raise RuntimeError("site shutdown warning")
+
+    async def station_shutdown():
+        events.append("station-shutdown")
+
+    async def mqtt_stop():
+        events.append("mqtt-stop")
+        assert station_coord.async_shutdown.await_count == 1
+
+    def failing_mqtt_stop():
+        events.append("failing-mqtt-stop")
+        raise OSError("already closed")
+
     site_coord = MagicMock()
-    site_coord.async_shutdown = AsyncMock(side_effect=RuntimeError("site shutdown warning"))
+    site_coord.async_shutdown = AsyncMock(side_effect=site_shutdown)
     station_coord = MagicMock()
-    station_coord.async_shutdown = AsyncMock()
+    station_coord.async_shutdown = AsyncMock(side_effect=station_shutdown)
     async_mqtt = MagicMock()
-    async_mqtt.stop = AsyncMock()
+    async_mqtt.stop = AsyncMock(side_effect=mqtt_stop)
     failing_mqtt = MagicMock()
-    failing_mqtt.stop.side_effect = OSError("already closed")
+    failing_mqtt.stop.side_effect = failing_mqtt_stop
     pending = asyncio.create_task(asyncio.sleep(60))
     runtime = RuntimeData(
         api=MagicMock(),
@@ -607,6 +624,12 @@ async def test_shutdown_runtime_resources_stops_mqtt_and_cancels_background_task
 
     station_coord.async_shutdown.assert_awaited_once()
     async_mqtt.stop.assert_awaited_once()
+    assert events == [
+        "site-shutdown",
+        "station-shutdown",
+        "mqtt-stop",
+        "failing-mqtt-stop",
+    ]
     assert pending.cancelled()
     assert runtime.background_tasks == set()
 
