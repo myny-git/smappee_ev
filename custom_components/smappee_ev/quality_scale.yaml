@@ -11,9 +11,7 @@ rules:
   brands: todo
   common-modules: done
   config-flow: done
-  config-flow-test-coverage:
-    status: in_progress
-    comment: The main config flow, reauthentication, and reconfiguration paths are tested, but duplicate setup behavior should be verified through the Home Assistant flow manager.
+  config-flow-test-coverage: done
   dependency-transparency: done
   docs-actions:
     status: in_progress
@@ -29,9 +27,7 @@ rules:
   runtime-data: done
   test-before-configure: done
   test-before-setup: done
-  unique-config-entry:
-    status: in_progress
-    comment: The implementation uses a unique ID to prevent duplicates, but duplicate setup behavior should still be verified through the Home Assistant flow manager.
+  unique-config-entry: done
 
   # Silver.
   action-exceptions: done
@@ -106,7 +102,7 @@ rules:
   state-restoration: done
   test-coverage-91:
     status: done
-    comment: The test suite currently passes with 474 tests, 0 xfailed tests, and 91.54% coverage.
+    comment: The test suite currently passes with 483 tests, 0 xfailed tests, and 91.54% coverage.
 
   translation-en: done
   translation-nl: done

@@ -70,7 +70,7 @@ def mock_runtime_data(mock_api_client):
             },
         )
     }
-    return make_runtime_data(api=mock_api_client, sites=sites, mqtt=MagicMock())
+    return make_runtime_data(sites=sites, mqtt={})
 
 
 @pytest.fixture
