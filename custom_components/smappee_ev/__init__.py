@@ -837,6 +837,7 @@ def _make_station_clients(
 
         st_serial = _station_serial(sd) or st_uuid
         metadata = station_metadata.get(st_serial, {})
+        resolved_site_location_id = site_location_id if site_location_id is not None else sid
         st_client = SmappeeDeviceHandle(
             serial_str,
             st_uuid,
@@ -844,11 +845,11 @@ def _make_station_clients(
             sid,
             is_station=True,
             charging_station_serial=st_serial,
-            site_location_id=site_location_id or sid,
+            site_location_id=resolved_site_location_id,
             charging_station_model=metadata.get("station_model"),
         )
         stations[st_uuid] = SmappeeStationRuntime(
-            site_location_id=site_location_id or sid,
+            site_location_id=resolved_site_location_id,
             control_location_id=sid,
             site_name=site_name,
             gateway_serial=gateway_serial,
@@ -1274,7 +1275,7 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
             station_serial = bucket.charging_station_serial
             if not station_serial:
                 continue
-            control_sid = bucket.control_location_id or site_sid
+            control_sid = bucket.control_location_id
             station_identifier = station_device_identifier(site_sid, control_sid, station_serial)
             station_identifiers = {station_identifier}
             station_client = bucket.station_client

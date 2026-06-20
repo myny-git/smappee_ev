@@ -47,7 +47,7 @@ rules:
   reauthentication-flow: done
   test-coverage:
     status: in_progress
-    comment: The official Silver requirement is above 95% coverage for all integration modules. Current coverage is 91.54% with all tests passing, so this is close but not yet complete.
+    comment: The official Silver requirement is above 95% coverage for all integration modules. The integration is close, but exact coverage should come from the current CI or local coverage report.
 
   # Gold.
   devices: done
