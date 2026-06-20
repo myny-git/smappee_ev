@@ -21,7 +21,7 @@ from custom_components.smappee_ev.data import (
 )
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 
-_DEFAULT_API = object()
+_DEFAULT_SENTINEL = object()
 
 
 def make_connector_client(
@@ -130,7 +130,7 @@ def make_station_runtime(
     station_uuid: str = "station-uuid",
     serial: str = "STATION123",
     station_client: object | None = None,
-    coordinator: object = _DEFAULT_API,
+    coordinator: object = _DEFAULT_SENTINEL,
     connectors: dict[str, SmappeeConnectorRuntime] | None = None,
     led_devices: dict[str, SmappeeLedRuntime] | None = None,
     site_coordinator: object | None = None,
@@ -148,7 +148,7 @@ def make_station_runtime(
         service_location_id=control_location_id,
         serial=serial,
     )
-    if coordinator is _DEFAULT_API:
+    if coordinator is _DEFAULT_SENTINEL:
         coordinator = make_station_coordinator(
             station_client=station_client,
             connectors={},
@@ -208,7 +208,7 @@ def make_site_runtime(
 
 def make_runtime_data(
     *,
-    api: object = _DEFAULT_API,
+    api: object = _DEFAULT_SENTINEL,
     sites: dict[int, SmappeeSiteRuntime] | None = None,
     mqtt: dict[int, object] | None = None,
     dashboard: object | None = None,
@@ -216,7 +216,7 @@ def make_runtime_data(
 ) -> RuntimeData:
     """Create RuntimeData with the integration's current schema."""
     runtime = RuntimeData(
-        api=MagicMock() if api is _DEFAULT_API else api,
+        api=MagicMock() if api is _DEFAULT_SENTINEL else api,
         sites=sites or {},
         mqtt=mqtt or {},
     )
