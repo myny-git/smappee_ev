@@ -11,6 +11,7 @@ from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.entity import (
     SmappeeBaseEntity,
     SmappeeConnectorEntity,
+    SmappeeConnectorMqttEntity,
     SmappeeStationEntity,
     SmappeeStationRestEntity,
 )
@@ -264,4 +265,25 @@ class TestSmappeeConnectorEntity:
             "Test Connector",
         )
 
+        assert entity.available is False
+
+    def test_mqtt_entity_availability_uses_mqtt_state_not_connector_api(self, mock_coordinator):
+        """Test MQTT-backed connector entities follow MQTT reachability."""
+        mock_coordinator.data.station = StationState(mqtt_connected=True)
+        mock_coordinator.data.connectors["connector-uuid"] = ConnectorState(
+            connector_number=1,
+            api_available=False,
+        )
+        entity = SmappeeConnectorMqttEntity(
+            mock_coordinator,
+            12345,
+            "station-uuid",
+            "connector-uuid",
+            "mqtt-power",
+            "Power",
+        )
+
+        assert entity.available is True
+
+        mock_coordinator.data.station.mqtt_connected = False
         assert entity.available is False

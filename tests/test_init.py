@@ -21,6 +21,7 @@ from custom_components.smappee_ev import (
     _is_station,
     _make_station_clients,
     _mqtt_specs_from_highlevel_configs,
+    _normalize_connector_mapping_station_keys,
     _normalize_dashboard_service_location,
     _safe_str,
     _split_devices,
@@ -492,6 +493,70 @@ class TestSitePreparation:
         result = await _fetch_dashboard_connector_mapping(dashboard_client, station_devs)
 
         assert result == {}
+
+    def test_normalize_connector_mapping_preserves_station_metadata(self):
+        """Test connector mapping normalization keeps station metadata."""
+        mapping = {
+            "6220017988": {
+                "station_name": "Garage charger",
+                "station_model": "Smappee EV Wall",
+                "led_serial": "5130086592",
+                "connectors": {
+                    1: {"uuid": "connector-uuid"},
+                },
+            }
+        }
+
+        result = _normalize_connector_mapping_station_keys(mapping, None)
+
+        assert result["6220017988"]["station_name"] == "Garage charger"
+        assert result["6220017988"]["station_model"] == "Smappee EV Wall"
+        assert result["6220017988"]["led_serial"] == "5130086592"
+        assert result["6220017988"]["connectors"][1]["uuid"] == "connector-uuid"
+
+    def test_normalize_connector_mapping_preserves_orphan_metadata_on_fallback(self):
+        """Test orphan connector mapping metadata moves to the fallback station."""
+        mapping = {
+            "": {
+                "station_name": "Fallback charger",
+                "station_model": "Smappee EV Wall",
+                "connectors": {
+                    1: {"uuid": "connector-uuid"},
+                },
+            }
+        }
+
+        result = _normalize_connector_mapping_station_keys(
+            mapping,
+            fallback_station_serial="6220017988",
+        )
+
+        assert result["6220017988"]["station_name"] == "Fallback charger"
+        assert result["6220017988"]["station_model"] == "Smappee EV Wall"
+        assert result["6220017988"]["connectors"][1]["uuid"] == "connector-uuid"
+
+    def test_normalize_connector_mapping_keeps_existing_station_metadata_over_fallback(self):
+        """Test fallback metadata does not overwrite explicit station metadata."""
+        mapping = {
+            "6220017988": {
+                "station_name": "Explicit station",
+                "connectors": {},
+            },
+            "": {
+                "station_name": "Fallback station",
+                "connectors": {
+                    1: {"uuid": "connector-uuid"},
+                },
+            },
+        }
+
+        result = _normalize_connector_mapping_station_keys(
+            mapping,
+            fallback_station_serial="6220017988",
+        )
+
+        assert result["6220017988"]["station_name"] == "Explicit station"
+        assert result["6220017988"]["connectors"][1]["uuid"] == "connector-uuid"
 
     def test_make_station_clients(self):
         """Test making station clients."""

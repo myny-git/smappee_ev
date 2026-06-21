@@ -679,23 +679,31 @@ def _normalize_connector_mapping_station_keys(
     """Move connector buckets with missing station keys under a usable station serial."""
     normalized: dict[str, dict] = {}
     orphan_connectors: dict[str, dict] = {}
+    orphan_metadata: dict[str, object] = {}
 
     for station_serial, bucket in mapping.items():
         if not isinstance(bucket, dict):
             continue
         connectors = bucket.get("connectors") or {}
+        metadata = {key: value for key, value in bucket.items() if key != "connectors"}
         key = _safe_str(station_serial)
         if not key:
             orphan_connectors.update(connectors)
+            for meta_key, meta_value in metadata.items():
+                orphan_metadata.setdefault(meta_key, meta_value)
             continue
         target = normalized.setdefault(key, {"connectors": {}})
         target["connectors"].update(connectors)
+        for meta_key, meta_value in metadata.items():
+            target.setdefault(meta_key, meta_value)
 
     if orphan_connectors:
         fallback_key = _safe_str(fallback_station_serial) or next(iter(normalized), None)
         if fallback_key:
             target = normalized.setdefault(fallback_key, {"connectors": {}})
             target["connectors"].update(orphan_connectors)
+            for meta_key, meta_value in orphan_metadata.items():
+                target.setdefault(meta_key, meta_value)
 
     return normalized
 

@@ -90,6 +90,38 @@ def test_dashboard_token_update_handles_missing_and_invalid_expiration():
 
 
 @pytest.mark.asyncio
+async def test_login_success_updates_token_and_refresh_token():
+    token_callback = MagicMock()
+    expires_at = int(time.time() * 1000) + 300_000
+    session = _Session(
+        posts=[
+            _Response(
+                200,
+                {
+                    "token": "login-token",
+                    "refreshToken": "login-refresh",
+                    "tokenExpirationTimestamp": expires_at,
+                },
+            )
+        ]
+    )
+    client = _client(
+        session,
+        username="user",
+        password="pass",  # noqa: S106 - fake test password
+        token_update_callback=token_callback,
+    )
+
+    assert await client.async_login() is True
+
+    assert client._token == "login-token"  # noqa: S105 - fake test token
+    assert client.refresh_token == "login-refresh"  # noqa: S105 - fake test token
+    assert client._token_expires_at_ms == expires_at
+    token_callback.assert_called_once_with({"dashboard_refresh_token": "login-refresh"})
+    assert session.post_calls[0][1]["json"] == {"userName": "user", "password": "pass"}
+
+
+@pytest.mark.asyncio
 async def test_set_capacity_protection_uses_one_decimal_kw_payload():
     """Capacity protection writes use one decimal kW."""
     client = SmappeeDashboardClient(
@@ -551,14 +583,29 @@ async def test_dashboard_ensure_auth_refresh_rejected_falls_back_to_login():
 
 
 @pytest.mark.asyncio
+async def test_dashboard_ensure_auth_refresh_rejected_without_password_raises_reauth():
+    client = _client(
+        _Session(posts=[_Response(403, text="refresh rejected")]),
+        refresh_token="refresh",  # noqa: S106 - fake refresh token
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed, match="Dashboard refresh token rejected"):
+        await client.async_ensure_auth()
+
+
+@pytest.mark.asyncio
 async def test_dashboard_request_raises_for_http_error_and_empty_json_body():
     expires_at = int(time.time() * 1000) + 300_000
     error_client = _client(_Session(requests=[_Response(503, text="unavailable")]))
     error_client._token = "token"  # noqa: S105
     error_client._token_expires_at_ms = expires_at
 
-    with pytest.raises(RuntimeError, match="Dashboard request failed 503"):
+    with pytest.raises(RuntimeError) as err:
         await error_client._request("GET", "v11/example", return_json=True)
+    error_text = str(err.value)
+    assert "Dashboard request failed 503" in error_text
+    assert "GET https://dashboard.smappee.net/api/v11/example" in error_text
+    assert "unavailable" in error_text
 
     empty_client = _client(_Session(requests=[_Response(200, content_length=0)]))
     empty_client._token = "token"  # noqa: S105
@@ -571,6 +618,17 @@ async def test_dashboard_request_non_json_body_returns_none():
     expires_at = int(time.time() * 1000) + 300_000
     content_error = aiohttp.ContentTypeError(MagicMock(), ())
     session = _Session(requests=[_Response(200, json_exc=content_error)])
+    client = _client(session)
+    client._token = "token"  # noqa: S105 - fake token value for auth header
+    client._token_expires_at_ms = expires_at
+
+    assert await client._request("GET", "v11/example", return_json=True) is None
+
+
+@pytest.mark.asyncio
+async def test_dashboard_request_invalid_json_body_returns_none():
+    expires_at = int(time.time() * 1000) + 300_000
+    session = _Session(requests=[_Response(200, json_exc=ValueError("bad json"))])
     client = _client(session)
     client._token = "token"  # noqa: S105 - fake token value for auth header
     client._token_expires_at_ms = expires_at

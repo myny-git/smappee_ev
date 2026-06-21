@@ -1,0 +1,5 @@
+[run]
+omit =
+    custom_components/smappee_ev/api/__init__.py
+    custom_components/smappee_ev/models/__init__.py
+    custom_components/smappee_ev/const.py
