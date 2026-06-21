@@ -86,7 +86,7 @@ class RuntimeData:
 
     api: object
     sites: dict[int, SmappeeSiteRuntime]
-    mqtt: dict[int, object]
+    mqtt: dict[int, MqttRuntimeValue]
     dashboard: object | None = None
     background_tasks: set[asyncio.Task] = field(default_factory=set)
 

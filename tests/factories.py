@@ -11,6 +11,7 @@ from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.models.runtime_data import (
+    MqttRuntimeValue,
     RuntimeData,
     SmappeeConnectorRuntime,
     SmappeeLedRuntime,
@@ -215,7 +216,7 @@ def make_runtime_data(
     *,
     api: object = _DEFAULT_SENTINEL,
     sites: dict[int, SmappeeSiteRuntime] | None = None,
-    mqtt: dict[int, object] | None = None,
+    mqtt: dict[int, MqttRuntimeValue] | None = None,
     dashboard: object | None = None,
     background_tasks: set | None = None,
 ) -> RuntimeData:

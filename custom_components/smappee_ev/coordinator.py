@@ -453,6 +453,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._last_dashboard_refresh = 0.0
         self._last_dashboard_warning = 0.0
         self._dashboard_refresh_lock = asyncio.Lock()
+        self._dashboard_refresh_unsub: CALLBACK_TYPE | None = None
         self._dashboard_refresh_task: asyncio.Task | None = None
         self._shutting_down = False
 
@@ -1034,17 +1035,33 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         """Schedule a forced dashboard refresh after a write."""
         if self._is_stopping:
             return
+        self._cancel_dashboard_refresh_timer()
+
+        if delay <= 0:
+            self._start_dashboard_refresh_task()
+            return
+
+        async def _refresh(_now: datetime) -> None:
+            self._dashboard_refresh_unsub = None
+            if self._is_stopping:
+                return
+            self._start_dashboard_refresh_task()
+
+        self._dashboard_refresh_unsub = async_call_later(self.hass, delay, _refresh)
+
+    def _start_dashboard_refresh_task(self) -> None:
+        """Start the dashboard refresh task if shutdown has not begun."""
+        if self._is_stopping:
+            return
         task = self._dashboard_refresh_task
         if task is not None and not task.done():
             task.cancel()
-        task = self.hass.async_create_task(self._async_delayed_dashboard_refresh(delay))
+        task = self.hass.async_create_task(self._async_dashboard_refresh_now())
         self._dashboard_refresh_task = task
         task.add_done_callback(self._log_background_task_exception)
 
-    async def _async_delayed_dashboard_refresh(self, delay: float) -> None:
+    async def _async_dashboard_refresh_now(self) -> None:
         try:
-            if delay > 0:
-                await asyncio.sleep(delay)
             if self._is_stopping:
                 return
             data = self.data
@@ -1058,6 +1075,26 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         finally:
             if self._dashboard_refresh_task is asyncio.current_task():
                 self._dashboard_refresh_task = None
+
+    async def _async_delayed_dashboard_refresh(self, delay: float) -> None:
+        """Compatibility wrapper for older tests and callers."""
+        if delay > 0:
+            unsub_holder: dict[str, CALLBACK_TYPE] = {}
+            done = asyncio.Event()
+
+            async def _set_done(_now: datetime) -> None:
+                unsub_holder.pop("unsub", None)
+                done.set()
+
+            unsub_holder["unsub"] = async_call_later(self.hass, delay, _set_done)
+            try:
+                await done.wait()
+            finally:
+                unsub = unsub_holder.pop("unsub", None)
+                if unsub is not None:
+                    with suppress(RuntimeError):
+                        unsub()
+        await self._async_dashboard_refresh_now()
 
     def _merge_dashboard_station_details(
         self, data: IntegrationData, details: DashboardObject
@@ -1574,15 +1611,26 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         self._cancel_session_refresh()
         self._cancel_active_session_loop()
         self._cancel_final_session_refreshes()
+        self._cancel_dashboard_refresh_timer()
 
         task = self._dashboard_refresh_task
         if task is not None and not task.done():
             task.cancel()
 
+    def _cancel_dashboard_refresh_timer(self) -> None:
+        """Cancel a scheduled dashboard refresh timer."""
+        if self._dashboard_refresh_unsub is None:
+            return
+
+        unsub = self._dashboard_refresh_unsub
+        self._dashboard_refresh_unsub = None
+        with suppress(RuntimeError):
+            unsub()
+
     @property
     def _is_stopping(self) -> bool:
         """Return True when the coordinator should avoid new background I/O."""
-        return self._shutting_down or bool(getattr(self.hass, "is_stopping", False))
+        return self._shutting_down or getattr(self.hass, "is_stopping", False) is True
 
     def _cancel_session_refresh(self) -> None:
         """Cancel one-shot delayed session refresh."""

@@ -1282,7 +1282,7 @@ def _register_runtime_stop_cleanup(
     entry.async_on_unload(remove_stop_listener)
 
 
-def _mqtt_client_count(mqtt_by_site: dict[int, object]) -> int:
+def _mqtt_client_count(mqtt_by_site: dict[int, MqttRuntimeValue]) -> int:
     """Return the total number of MQTT clients across all sites."""
     return sum(len(_iter_mqtt_clients(mqtt)) for mqtt in mqtt_by_site.values())
 
@@ -1784,7 +1784,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     topologies = await _load_dashboard_topologies(dashboard_client)
 
     sites: dict[int, SmappeeSiteRuntime] = {}
-    mqtt_clients: dict[int, object] = {}
+    mqtt_clients: dict[int, MqttRuntimeValue] = {}
     background_tasks: set[asyncio.Task] = set()
 
     # 2) Prepare each site in parallel
