@@ -14,6 +14,7 @@ from custom_components.smappee_ev.entity import (
     SmappeeConnectorMqttEntity,
     SmappeeStationEntity,
     SmappeeStationRestEntity,
+    _is_int_like,
 )
 from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
@@ -84,6 +85,13 @@ def test_station_serial_prefers_charging_station_serial():
     assert station_serial(coordinator) == "6220017988"
 
 
+def test_entity_helper_int_like_accepts_only_parseable_ints():
+    assert _is_int_like(123) is True
+    assert _is_int_like("123") is True
+    assert _is_int_like("not-int") is False
+    assert _is_int_like(None) is False
+
+
 class TestSmappeeBaseEntity:
     """Test the SmappeeBaseEntity class."""
 
@@ -108,6 +116,40 @@ class TestSmappeeBaseEntity:
         # Verify device_info calls helper with correct parameters
         mock_make_device_info.assert_called_once_with(12345, "SERIAL123", "station-uuid")
         assert device_info == {"identifiers": {("test", "device")}}
+
+    @patch("custom_components.smappee_ev.entity.station_serial", return_value="SERIAL123")
+    @patch("custom_components.smappee_ev.entity.make_device_info")
+    def test_device_info_uses_connector_label_fallback_without_extra_metadata(
+        self, mock_make_device_info, mock_station_serial
+    ):
+        """Minimal metadata path should still produce connector-labeled device info."""
+        mock_make_device_info.return_value = {"identifiers": {("test", "connector")}}
+        coordinator = MagicMock(spec=SmappeeCoordinator)
+        coordinator.last_update_success = True
+        coordinator.gateway_serial = None
+        coordinator.station_client = None
+        coordinator.site_name = None
+        coordinator.gateway_type = None
+        coordinator.station_name = None
+        coordinator.station_model = None
+        coordinator.data = MagicMock()
+
+        entity = SmappeeBaseEntity(
+            coordinator,
+            12345,
+            "station-uuid",
+            "connector:test",
+            connector_label="1",
+        )
+
+        assert entity.device_info == {"identifiers": {("test", "connector")}}
+        assert entity.internal_integration_suggested_object_id == "smappee_ev_SERIAL123_test_1"
+        mock_make_device_info.assert_called_once_with(
+            12345,
+            "SERIAL123",
+            "station-uuid",
+            connector_label="1",
+        )
 
 
 class TestSmappeeStationEntity:
@@ -156,6 +198,18 @@ class TestSmappeeStationRestEntity:
             mock_coordinator, 12345, "station-uuid", "test-suffix", "Test Entity"
         )
 
+        assert entity.available is False
+
+    def test_available_false_without_data_or_station(self, mock_coordinator):
+        """REST station entities fail closed when coordinator data is incomplete."""
+        entity = SmappeeStationRestEntity(
+            mock_coordinator, 12345, "station-uuid", "test-suffix", "Test Entity"
+        )
+
+        mock_coordinator.data = None
+        assert entity.available is False
+
+        mock_coordinator.data = MagicMock(station=None)
         assert entity.available is False
 
 
@@ -267,6 +321,19 @@ class TestSmappeeConnectorEntity:
 
         assert entity.available is False
 
+    def test_available_false_without_connector_state(self, mock_coordinator):
+        """Connector REST entities fail closed when connector state is missing."""
+        entity = SmappeeConnectorEntity(
+            mock_coordinator,
+            12345,
+            "station-uuid",
+            "missing-connector",
+            "test-suffix",
+            "Test Connector",
+        )
+
+        assert entity.available is False
+
     def test_mqtt_entity_availability_uses_mqtt_state_not_connector_api(self, mock_coordinator):
         """Test MQTT-backed connector entities follow MQTT reachability."""
         mock_coordinator.data.station = StationState(mqtt_connected=True)
@@ -286,4 +353,17 @@ class TestSmappeeConnectorEntity:
         assert entity.available is True
 
         mock_coordinator.data.station.mqtt_connected = False
+        assert entity.available is False
+
+    def test_mqtt_entity_available_false_without_connector_state(self, mock_coordinator):
+        """MQTT connector entities still require a known connector state."""
+        entity = SmappeeConnectorMqttEntity(
+            mock_coordinator,
+            12345,
+            "station-uuid",
+            "missing-connector",
+            "mqtt-power",
+            "Power",
+        )
+
         assert entity.available is False

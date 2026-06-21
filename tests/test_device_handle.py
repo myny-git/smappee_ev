@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -112,6 +113,25 @@ def make_client(
     return client
 
 
+def test_serial_id_and_dashboard_configured_variants():
+    client = make_client(serial="SERIAL123")
+
+    assert client.serial_id == "SERIAL123"
+    assert client._dashboard_configured() is False
+
+    client.dashboard_client = object()
+    assert client._dashboard_configured() is True
+
+    dashboard = RecordingDashboard()
+    dashboard.refresh_token = None
+    dashboard._token = None
+    client.dashboard_client = dashboard
+    assert client._dashboard_configured() is False
+
+    dashboard._token = "access-token"  # noqa: S105 - fake test token
+    assert client._dashboard_configured() is True
+
+
 @pytest.mark.asyncio
 async def test_recent_sessions_use_dashboard_station_serial():
     dashboard = RecordingDashboard()
@@ -133,6 +153,20 @@ async def test_recent_sessions_return_empty_without_dashboard():
     client = make_client(station_serial="STATIONSERIAL")
 
     assert await client.async_get_recent_sessions() == []
+
+
+@pytest.mark.asyncio
+async def test_recent_sessions_propagates_dashboard_errors_and_cancelled_error():
+    dashboard = RecordingDashboard()
+    client = make_client(serial="SERIAL", dashboard=dashboard)
+    dashboard.async_get_recent_sessions = AsyncMock(side_effect=TimeoutError("slow"))
+
+    with pytest.raises(RuntimeError, match="recent sessions fetch failed"):
+        await client.async_get_recent_sessions()
+
+    dashboard.async_get_recent_sessions = AsyncMock(side_effect=asyncio.CancelledError)
+    with pytest.raises(asyncio.CancelledError):
+        await client.async_get_recent_sessions()
 
 
 @pytest.mark.asyncio
@@ -171,6 +205,16 @@ async def test_smartdevices_return_none_for_errors_and_bad_shapes():
 
     assert await client.async_get_smartdevices() is None
     assert await client.async_get_smartdevices() is None
+
+
+@pytest.mark.asyncio
+async def test_smartdevices_propagates_cancelled_error():
+    dashboard = RecordingDashboard()
+    dashboard.async_get_smart_devices = AsyncMock(side_effect=asyncio.CancelledError)
+    client = make_client(dashboard=dashboard)
+
+    with pytest.raises(asyncio.CancelledError):
+        await client.async_get_smartdevices()
 
 
 @pytest.mark.asyncio
@@ -229,6 +273,16 @@ async def test_dashboard_action_false_result_raises():
 
 
 @pytest.mark.asyncio
+async def test_dashboard_action_propagates_cancelled_error():
+    dashboard = RecordingDashboard()
+    dashboard.async_set_charging_mode = AsyncMock(side_effect=asyncio.CancelledError)
+    client = make_client(dashboard=dashboard)
+
+    with pytest.raises(asyncio.CancelledError):
+        await client.set_charging_mode("SMART")
+
+
+@pytest.mark.asyncio
 async def test_station_level_dashboard_action_error_paths():
     dashboard = RecordingDashboard()
     client = make_client(station_serial="STATION", dashboard=dashboard)
@@ -251,6 +305,28 @@ async def test_station_level_dashboard_action_error_paths():
 
 
 @pytest.mark.asyncio
+async def test_station_level_dashboard_actions_use_serial_fallback_and_propagate_cancelled():
+    dashboard = RecordingDashboard()
+    client = make_client(serial="CONNECTSERIAL", station_serial=None, dashboard=dashboard)
+
+    await client.set_available()
+    await client.restart_charging_station()
+
+    assert dashboard.calls == [
+        ("async_set_charger_availability", ("CONNECTSERIAL", True)),
+        ("async_restart_charging_station", ("CONNECTSERIAL",)),
+    ]
+
+    dashboard.async_set_charger_availability = AsyncMock(side_effect=asyncio.CancelledError)
+    with pytest.raises(asyncio.CancelledError):
+        await client.set_unavailable()
+
+    dashboard.async_restart_charging_station = AsyncMock(side_effect=asyncio.CancelledError)
+    with pytest.raises(asyncio.CancelledError):
+        await client.restart_charging_station()
+
+
+@pytest.mark.asyncio
 async def test_offline_charging_error_paths():
     client = make_client()
     with pytest.raises(RuntimeError, match="not configured"):
@@ -268,6 +344,22 @@ async def test_offline_charging_error_paths():
 
     dashboard.async_set_offline_charging = AsyncMock(return_value=False)
     with pytest.raises(RuntimeError, match="offline charging returned no success"):
+        await client.set_offline_charging_config(True, 6)
+
+
+@pytest.mark.asyncio
+async def test_offline_charging_uses_serial_fallback_and_propagates_cancelled():
+    dashboard = RecordingDashboard()
+    client = make_client(serial="CONNECTSERIAL", station_serial=None, dashboard=dashboard)
+
+    await client.set_offline_charging_config(True, 6)
+
+    assert dashboard.calls == [
+        ("async_set_offline_charging", ("CONNECTSERIAL", True, 6)),
+    ]
+
+    dashboard.async_set_offline_charging = AsyncMock(side_effect=asyncio.CancelledError)
+    with pytest.raises(asyncio.CancelledError):
         await client.set_offline_charging_config(True, 6)
 
 
@@ -294,6 +386,18 @@ async def test_set_percentage_limit_and_current_use_dashboard():
     assert dashboard.calls == [
         ("async_set_percentage_limit", (100, "DASHBOARD_DEVICE", 50)),
         ("async_set_percentage_limit", (100, "DASHBOARD_DEVICE", 40)),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_set_current_degenerate_range_uses_full_percentage():
+    dashboard = RecordingDashboard()
+    client = make_client(dashboard=dashboard)
+
+    assert await client.set_current(12, min_current=10, max_current=10) == (10, 100)
+
+    assert dashboard.calls == [
+        ("async_set_percentage_limit", (100, "DASHBOARD_DEVICE", 100)),
     ]
 
 

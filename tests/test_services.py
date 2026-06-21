@@ -142,6 +142,20 @@ class TestServiceHelpers:
 
         assert result is None
 
+    def test_resolve_sid_rejects_unknown_explicit_config_entry(self, mock_hass_with_entries):
+        """Explicit config_entry_id should fail clearly when it is not loaded."""
+        call = ServiceCall(
+            domain="smappee_ev",
+            service="pause_charging",
+            data={"config_entry_id": "missing_entry"},
+            hass=mock_hass_with_entries,
+        )
+
+        with pytest.raises(ServiceValidationError) as exc:
+            services._resolve_sid(mock_hass_with_entries, call)
+
+        assert exc.value.translation_key == "config_entry_not_loaded"
+
     def test_find_runtime_for_sid(
         self, mock_hass_with_entries, mock_loaded_entries, mock_runtime_data
     ):
@@ -247,6 +261,10 @@ class TestServiceHelpers:
 
         assert result is None
 
+    def test_get_station_client_no_sid(self, mock_runtime_data):
+        """Test station lookup without a resolved service location."""
+        assert services.get_station_client(mock_runtime_data, None) is None
+
     def test_get_station_client_without_site_or_station(self, mock_runtime_data):
         """Test station client lookup when site data is missing or empty."""
         assert services.get_station_client(mock_runtime_data, 99999) is None
@@ -273,6 +291,12 @@ class TestServiceHelpers:
         result = services.get_connector_client(mock_runtime_data, 12345, 99)
 
         assert result is None
+
+    def test_get_connector_client_no_runtime_or_site(self, mock_runtime_data):
+        """Test connector lookup fails closed without runtime, sid, or site."""
+        assert services.get_connector_client(None, 12345, 1) is None
+        assert services.get_connector_client(mock_runtime_data, None, 1) is None
+        assert services.get_connector_client(mock_runtime_data, 99999, 1) is None
 
     def test_get_connector_client_ambiguous_without_id(self, mock_runtime_data, mock_api_client):
         """Test connector lookup refuses to guess when multiple connectors exist."""
@@ -333,6 +357,52 @@ class TestServiceHelpers:
 
         mock_api_client.smart_device_uuid = "missing"
         assert services._connector_current_range(runtime, mock_api_client) == (6, 32)
+
+    def test_schedule_dashboard_refresh_matches_connector_uuid_in_state(self, mock_hass):
+        """Refresh scheduling should still find the owner from coordinator state."""
+        client = make_connector_client(
+            service_location_id=12345,
+            connector_number=1,
+            smart_device_uuid="connector-in-state",
+        )
+        different_runtime_client = make_connector_client(
+            service_location_id=12345,
+            connector_number=1,
+            smart_device_uuid="other-runtime-key",
+        )
+        coord = MagicMock()
+        coord.data = IntegrationData(
+            station=StationState(),
+            connectors={"connector-in-state": ConnectorState(connector_number=1)},
+        )
+        runtime = make_runtime_data(
+            sites={
+                12345: make_site_runtime(
+                    site_location_id=12345,
+                    stations={
+                        "station1": make_station_runtime(
+                            site_location_id=12345,
+                            control_location_id=12345,
+                            station_uuid="station1",
+                            coordinator=coord,
+                            connectors={
+                                "other-runtime-key": make_connector_runtime(
+                                    connector_key="other-runtime-key",
+                                    connector_uuid="other-runtime-key",
+                                    connector_position=1,
+                                    connector_client=different_runtime_client,
+                                )
+                            },
+                        )
+                    },
+                )
+            }
+        )
+        configure_loaded_entries(mock_hass, [make_loaded_config_entry("entry", runtime)])
+
+        services._schedule_dashboard_refresh_for_client(mock_hass, client)
+
+        coord.async_schedule_dashboard_refresh.assert_called_once()
 
 
 class TestServiceHandlers:

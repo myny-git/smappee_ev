@@ -1,3 +1,4 @@
+import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -57,7 +58,10 @@ class _Session:
 
     def request(self, method, url, **kwargs):
         self.request_calls.append((method, url, kwargs))
-        return _ResponseContext(self.requests.pop(0))
+        response = self.requests.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return _ResponseContext(response)
 
 
 def _client(session=None, **kwargs) -> SmappeeDashboardClient:
@@ -483,6 +487,44 @@ async def test_dashboard_request_reauthenticates_and_retries_after_unauthorized(
 
 
 @pytest.mark.asyncio
+async def test_dashboard_request_retries_only_once_after_repeated_unauthorized():
+    """A repeated 401 after token refresh must not recurse into another retry."""
+    expires_at = int(time.time() * 1000) + 300_000
+    session = _Session(
+        posts=[
+            _Response(
+                200,
+                {
+                    "token": "new-token",
+                    "refreshToken": "new-refresh",
+                    "tokenExpirationTimestamp": expires_at,
+                },
+            )
+        ],
+        requests=[
+            _Response(401, text="expired"),
+            _Response(401, text="still expired"),
+        ],
+    )
+    client = _client(
+        session,
+        refresh_token="old-refresh",  # noqa: S106 - fake token value for retry behavior
+    )
+    client._token = "old-token"  # noqa: S105 - fake token value for retry behavior
+    client._token_expires_at_ms = expires_at
+
+    with pytest.raises(ConfigEntryAuthFailed, match="Dashboard authorization failed"):
+        await client._request("GET", "v11/example", return_json=True)
+
+    assert len(session.request_calls) == 2
+    assert len(session.post_calls) == 1
+    assert [call[2]["headers"]["token"] for call in session.request_calls] == [
+        "old-token",
+        "new-token",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dashboard_request_uses_new_token_if_another_task_refreshed_it():
     expires_at = int(time.time() * 1000) + 300_000
     session = _Session(requests=[_Response(401), _Response(200, {"ok": True})])
@@ -511,6 +553,45 @@ async def test_dashboard_request_uses_new_token_if_another_task_refreshed_it():
         "old-token",
         "new-token",
     ]
+
+
+@pytest.mark.asyncio
+async def test_dashboard_ensure_auth_refresh_is_serialized_by_auth_lock():
+    """Parallel auth callers should share the first successful refresh."""
+    expires_at = int(time.time() * 1000) + 300_000
+    refresh_started = asyncio.Event()
+    release_refresh = asyncio.Event()
+
+    class DelayedRefreshSession(_Session):
+        async def _delayed_json(self):
+            refresh_started.set()
+            await release_refresh.wait()
+            return {
+                "token": "new-token",
+                "refreshToken": "new-refresh",
+                "tokenExpirationTimestamp": expires_at,
+            }
+
+        def post(self, url, **kwargs):
+            self.post_calls.append((url, kwargs))
+            response = _Response(200)
+            response.json = self._delayed_json
+            return _ResponseContext(response)
+
+    session = DelayedRefreshSession()
+    client = _client(
+        session,
+        refresh_token="old-refresh",  # noqa: S106 - fake refresh token
+    )
+
+    first = asyncio.create_task(client.async_ensure_auth())
+    await refresh_started.wait()
+    second = asyncio.create_task(client.async_ensure_auth())
+    release_refresh.set()
+
+    assert await asyncio.gather(first, second) == [True, True]
+    assert len(session.post_calls) == 1
+    assert client._token == "new-token"  # noqa: S105 - fake test token
 
 
 @pytest.mark.asyncio
@@ -611,6 +692,34 @@ async def test_dashboard_request_raises_for_http_error_and_empty_json_body():
     empty_client._token = "token"  # noqa: S105
     empty_client._token_expires_at_ms = expires_at
     assert await empty_client._request("GET", "v11/example", return_json=True) is None
+
+
+@pytest.mark.asyncio
+async def test_dashboard_request_204_without_json_returns_true_for_non_json_call():
+    expires_at = int(time.time() * 1000) + 300_000
+    session = _Session(requests=[_Response(204, content_length=0)])
+    client = _client(session)
+    client._token = "token"  # noqa: S105 - fake token value for auth header
+    client._token_expires_at_ms = expires_at
+
+    assert await client._request("PATCH", "v11/example", expected=(200, 204)) is True
+
+
+@pytest.mark.asyncio
+async def test_dashboard_request_client_error_raises_runtime_error_with_method_and_url():
+    expires_at = int(time.time() * 1000) + 300_000
+    session = _Session(requests=[aiohttp.ClientError("network down")])
+    client = _client(session)
+    client._token = "token"  # noqa: S105 - fake token value for auth header
+    client._token_expires_at_ms = expires_at
+
+    with pytest.raises(RuntimeError) as err:
+        await client._request("GET", "v11/example", return_json=True)
+
+    error_text = str(err.value)
+    assert "Dashboard request failed" in error_text
+    assert "GET https://dashboard.smappee.net/api/v11/example" in error_text
+    assert "network down" in error_text
 
 
 @pytest.mark.asyncio

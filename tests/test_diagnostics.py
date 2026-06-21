@@ -6,7 +6,19 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.smappee_ev.diagnostics import REDACT_KEYS, async_get_config_entry_diagnostics
+from custom_components.smappee_ev.diagnostics import (
+    REDACT_KEYS,
+    _dashboard_info,
+    _handle_info,
+    _mqtt_client_count,
+    _mqtt_info,
+    _obfuscate,
+    _redact_nested_text_values,
+    _redact_text_values,
+    _safe_len,
+    _safe_sorted,
+    async_get_config_entry_diagnostics,
+)
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from tests.factories import (
     make_config_entry,
@@ -15,6 +27,76 @@ from tests.factories import (
     make_site_runtime,
     make_station_runtime,
 )
+
+
+def test_diagnostics_small_helpers_are_stable_and_defensive():
+    assert _obfuscate(None) is None
+    assert _obfuscate("") is None
+    assert _obfuscate("A") == "***"
+    assert _obfuscate("AB") == "A***B"
+    assert _safe_len(123) == 0
+    assert _safe_len([1, 2, 3]) == 3
+    assert _safe_sorted({"b", "a"}) == ["a", "b"]
+    assert _safe_sorted("not-a-container-list") == []
+
+    assert _redact_text_values(123, ["secret"]) == 123
+    assert _redact_nested_text_values(
+        ("secret", {"nested": "keep secret"}),
+        ["secret"],
+    ) == ["**REDACTED**", {"nested": "keep **REDACTED**"}]
+
+    assert _handle_info(None) == {}
+    assert _mqtt_info(None) == {"configured": False}
+    assert _mqtt_client_count(None) == 0
+    assert _mqtt_client_count({1: [object(), object()], 2: object(), 3: None}) == 3
+
+
+def test_diagnostics_mqtt_and_dashboard_helpers_cover_fallback_shapes():
+    mqtt_one = SimpleNamespace(
+        _slu="SITE_UUID_123456",
+        _slu_id=123,
+        _client_id="CLIENT_ID_123456",
+        _serial="SERIAL_123456",
+        _slus=("SITE_UUID_123456",),
+        _mqtt_specs=(
+            SimpleNamespace(
+                service_location_id=123,
+                role="grid",
+                metric="activePower",
+                topic="servicelocation/SITE_UUID_123456/power",
+                username="user",
+                password="pass",  # noqa: S106 - fake diagnostics password
+                aspect_paths=("path/SITE_UUID_123456",),
+            ),
+        ),
+    )
+    mqtt_two = SimpleNamespace(_mqtt_specs=())
+
+    info = _mqtt_info([mqtt_one, mqtt_two], ["SITE_UUID_123456"])
+
+    assert info["configured"] is True
+    assert info["client_count"] == 2
+    assert info["clients"][0]["spec_count"] == 1
+    assert info["clients"][0]["specs"][0]["aspect_paths"] == ["path/**REDACTED**"]
+
+    assert _dashboard_info(None) == {"configured": False}
+    assert _dashboard_info(SimpleNamespace(api=None)) == {"configured": False}
+    dashboard = SimpleNamespace(
+        username="user",
+        password=None,
+        refresh_token="refresh",  # noqa: S106 - fake diagnostics token
+        _token="token",  # noqa: S106 - fake diagnostics token
+        _token_expires_at_ms=123,
+    )
+    assert _dashboard_info(SimpleNamespace(dashboard=dashboard)) == {
+        "configured": True,
+        "client_type": "SimpleNamespace",
+        "username_present": True,
+        "password_present": False,
+        "refresh_token_present": True,
+        "access_token_present": True,
+        "token_expires_at_present": True,
+    }
 
 
 @pytest.fixture

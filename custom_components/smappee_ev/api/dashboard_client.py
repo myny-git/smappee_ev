@@ -160,14 +160,19 @@ class SmappeeDashboardClient:
 
         url = f"{DASHBOARD_API_URL}/{path.lstrip('/')}"
         failed_token = self._token
-        async with self._session.request(
-            method,
-            url,
-            json=json,
-            params=params,
-            headers={"token": str(failed_token), "content-type": "application/json"},
-            timeout=self._timeout,
-        ) as resp:
+        try:
+            response_context = self._session.request(
+                method,
+                url,
+                json=json,
+                params=params,
+                headers={"token": str(failed_token), "content-type": "application/json"},
+                timeout=self._timeout,
+            )
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise RuntimeError(f"Dashboard request failed ({method} {url}): {err}") from err
+
+        async with response_context as resp:
             if resp.status in (401, 403) and retry_auth:
                 async with self._auth_lock:
                     if self._token and self._token != failed_token and self._token_valid():

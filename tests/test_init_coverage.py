@@ -14,14 +14,21 @@ from custom_components.smappee_ev import (
     _dashboard_discover_service_locations,
     _dashboard_fetch_devices,
     _dashboard_fetch_highlevel_configs,
+    _fallback_dashboard_connector_mapping,
     _fallback_highlevel_connector_mapping,
     _fetch_dashboard_connector_mapping,
+    _find_in,
     _group_mqtt_specs_by_credentials,
+    _is_connector,
     _load_dashboard_service_locations,
     _load_dashboard_topologies,
+    _normalize_connector_mapping_station_keys,
     _prepare_site,
     _prepare_topology,
     _register_runtime_devices,
+    _safe_str,
+    _station_serial,
+    _uuid_from_dashboard_channel,
     async_remove_config_entry_device,
     async_unload_entry,
 )
@@ -63,6 +70,83 @@ def _spec(
         username=username,
         password=password,
         aspect_paths=[],
+    )
+
+
+def test_dashboard_device_parsing_helpers_handle_fallback_shapes():
+    assert _safe_str(None) is None
+    assert _safe_str(" none ") is None
+    assert _safe_str(" null ") is None
+    assert _safe_str(" SERIAL ") == "SERIAL"
+
+    assert _is_connector({"carCharger": {}}) is True
+    assert _is_connector({"type": {"category": "CARCHARGER"}}) is True
+    assert _is_connector({"type": "CARCHARGER"}) is True
+    assert _is_connector({"type": "SENSOR"}) is False
+
+    assert (
+        _find_in(
+            {
+                "configurationProperties": [
+                    {
+                        "spec": {"name": "device.serial.number"},
+                        "value": {"value": "SERIAL-FROM-CONFIG"},
+                    }
+                ]
+            },
+            "serialNumber",
+        )
+        == "SERIAL-FROM-CONFIG"
+    )
+    assert (
+        _find_in(
+            {
+                "properties": [
+                    {
+                        "spec": {"name": "deviceSerial"},
+                        "value": "SERIAL-FROM-PROPS",
+                    }
+                ]
+            },
+            "serialNumber",
+        )
+        == "SERIAL-FROM-PROPS"
+    )
+    assert _find_in({"configurationProperties": [{"spec": {"name": "other"}}]}) is None
+
+
+def test_dashboard_channel_uuid_helpers_extract_connector_and_station_ids():
+    assert _uuid_from_dashboard_channel({"carCharger": "bad"}) is None
+    assert (
+        _uuid_from_dashboard_channel(
+            {
+                "carCharger": {
+                    "chargingStateUpdateChannel": "servicelocation/site/devices/connector-uuid/property/state"
+                }
+            }
+        )
+        == "connector-uuid"
+    )
+    assert (
+        _uuid_from_dashboard_channel(
+            {
+                "carCharger": {
+                    "chargingStateUpdateChannel": {
+                        "name": "servicelocation/site/devices/channel-uuid/property/state"
+                    }
+                }
+            }
+        )
+        == "channel-uuid"
+    )
+    assert (
+        _station_serial(
+            {
+                "serialNumber": " ",
+                "uuid": "station-uuid",
+            }
+        )
+        == "station-uuid"
     )
 
 
@@ -212,6 +296,104 @@ async def test_fetch_dashboard_connector_mapping_extracts_station_led_and_connec
     assert mapping["STATION-1"]["connectors"]["connector-channel-uuid"]["position"] == 2
 
 
+@pytest.mark.asyncio
+async def test_fetch_dashboard_connector_mapping_ignores_incomplete_dashboard_shapes():
+    dashboard = _configured_dashboard(
+        async_get_charging_station_details=AsyncMock(
+            side_effect=[
+                {"modules": []},
+                ["not-a-dict"],
+                {
+                    "modules": [
+                        "not-a-module",
+                        {"position": 1},
+                        {"position": 2, "smartDevice": {"type": {"category": "LED"}}},
+                        {
+                            "position": 3,
+                            "smartDevice": {
+                                "id": "non-connector",
+                                "type": {"category": "SENSOR"},
+                            },
+                        },
+                        {
+                            "position": 4,
+                            "smartDevice": {
+                                "id": "connector-without-uuid",
+                                "type": {"category": "CARCHARGER"},
+                            },
+                        },
+                    ]
+                },
+            ]
+        )
+    )
+
+    mapping = await _fetch_dashboard_connector_mapping(
+        dashboard,
+        [
+            {"type": "CHARGINGSTATION"},
+            {"serialNumber": "STATION-1", "type": "CHARGINGSTATION"},
+            {"serialNumber": "STATION-2", "type": "CHARGINGSTATION"},
+            {"serialNumber": "STATION-3", "type": "CHARGINGSTATION"},
+        ],
+    )
+
+    assert mapping == {"STATION-1": {"connectors": {}}, "STATION-3": {"connectors": {}}}
+    assert dashboard.async_get_charging_station_details.await_count == 3
+
+
+def test_fallback_dashboard_connector_mapping_rejects_ambiguous_or_unserialed_stations():
+    connector = {"uuid": "connector-uuid", "id": "connector-id", "type": "CARCHARGER"}
+
+    assert (
+        _fallback_dashboard_connector_mapping(
+            [{"serialNumber": "STATION-1"}, {"serialNumber": "STATION-2"}],
+            [connector],
+        )
+        == {}
+    )
+    assert _fallback_dashboard_connector_mapping([{"type": "CHARGINGSTATION"}], [connector]) == {}
+
+
+def test_fallback_dashboard_connector_mapping_position_precedence_and_uuid_skip():
+    mapping = _fallback_dashboard_connector_mapping(
+        [{"serialNumber": "STATION-1"}],
+        [
+            {"id": "missing-uuid", "type": "CARCHARGER"},
+            {
+                "uuid": "connector-number-wins",
+                "id": "connector-1",
+                "connectorNumber": 2,
+                "position": 1,
+                "type": "CARCHARGER",
+            },
+            {
+                "uuid": "position-wins-over-index",
+                "id": "connector-2",
+                "position": 3,
+                "type": "CARCHARGER",
+            },
+            {
+                "uuid": "index-fallback",
+                "smartDeviceId": "connector-3",
+                "type": "CARCHARGER",
+            },
+        ],
+    )
+
+    connectors = mapping["STATION-1"]["connectors"]
+    assert set(connectors) == {
+        "connector-number-wins",
+        "position-wins-over-index",
+        "index-fallback",
+    }
+    assert connectors["connector-number-wins"]["id"] == "connector-1"
+    assert connectors["connector-number-wins"]["position"] == 2
+    assert connectors["position-wins-over-index"]["position"] == 3
+    assert connectors["index-fallback"]["id"] == "connector-3"
+    assert connectors["index-fallback"]["position"] == 4
+
+
 def test_fallback_highlevel_connector_mapping_uses_measurement_position_and_appliance_uuid():
     mapping = _fallback_highlevel_connector_mapping(
         "STATION-1",
@@ -232,6 +414,159 @@ def test_fallback_highlevel_connector_mapping_uses_measurement_position_and_appl
     connector = mapping["STATION-1"]["connectors"]["appliance-uuid"]
     assert connector["position"] == 2
     assert connector["station_serial"] == "STATION-1"
+
+
+def test_fallback_highlevel_connector_mapping_ignores_invalid_measurements():
+    mapping = _fallback_highlevel_connector_mapping(
+        "STATION-1",
+        {
+            1: {
+                "measurements": [
+                    "bad",
+                    {"type": "GRID", "uuid": "grid-uuid"},
+                    {"type": "APPLIANCE", "appliance": {"type": "FRIDGE", "uuid": "fridge"}},
+                    {"type": "APPLIANCE", "category": "CAR_CHARGER"},
+                ]
+            }
+        },
+    )
+
+    assert mapping == {}
+    assert _fallback_highlevel_connector_mapping(None, {1: {"measurements": []}}) == {}
+
+
+def test_fallback_highlevel_connector_mapping_uses_expected_uuid_fallback_order():
+    def mapping_for(measurement):
+        return _fallback_highlevel_connector_mapping(
+            "STATION-1",
+            {1: {"measurements": [measurement]}},
+        )["STATION-1"]["connectors"]
+
+    assert set(
+        mapping_for(
+            {
+                "type": "APPLIANCE",
+                "uuid": "measurement-uuid",
+                "smartDeviceUuid": "measurement-smart-uuid",
+                "appliance": {"type": "CAR_CHARGER", "uuid": "appliance-uuid"},
+            }
+        )
+    ) == {"measurement-uuid"}
+    assert set(
+        mapping_for(
+            {
+                "type": "APPLIANCE",
+                "smartDeviceUuid": "measurement-smart-uuid",
+                "deviceUuid": "measurement-device-uuid",
+                "appliance": {"type": "CAR_CHARGER", "uuid": "appliance-uuid"},
+            }
+        )
+    ) == {"measurement-smart-uuid"}
+    assert set(
+        mapping_for(
+            {
+                "type": "APPLIANCE",
+                "deviceUuid": "measurement-device-uuid",
+                "appliance": {"type": "CAR_CHARGER", "uuid": "appliance-uuid"},
+            }
+        )
+    ) == {"measurement-device-uuid"}
+    assert set(
+        mapping_for(
+            {
+                "type": "APPLIANCE",
+                "appliance": {
+                    "type": "CAR_CHARGER",
+                    "uuid": "appliance-uuid",
+                    "smartDeviceUuid": "appliance-smart-uuid",
+                },
+            }
+        )
+    ) == {"appliance-uuid"}
+    assert set(
+        mapping_for(
+            {
+                "type": "APPLIANCE",
+                "appliance": {
+                    "type": "CAR_CHARGER",
+                    "smartDeviceUuid": "appliance-smart-uuid",
+                    "deviceUuid": "appliance-device-uuid",
+                },
+            }
+        )
+    ) == {"appliance-smart-uuid"}
+    assert set(
+        mapping_for(
+            {
+                "type": "APPLIANCE",
+                "appliance": {"type": "CAR_CHARGER", "deviceUuid": "appliance-device-uuid"},
+            }
+        )
+    ) == {"appliance-device-uuid"}
+
+
+def test_normalize_connector_mapping_preserves_station_metadata():
+    mapping = {
+        "6220017988": {
+            "station_name": "Garage charger",
+            "station_model": "Smappee EV Wall",
+            "led_serial": "5130086592",
+            "connectors": {
+                1: {"uuid": "connector-uuid"},
+            },
+        }
+    }
+
+    result = _normalize_connector_mapping_station_keys(mapping, None)
+
+    assert result["6220017988"]["station_name"] == "Garage charger"
+    assert result["6220017988"]["station_model"] == "Smappee EV Wall"
+    assert result["6220017988"]["led_serial"] == "5130086592"
+    assert result["6220017988"]["connectors"][1]["uuid"] == "connector-uuid"
+
+
+def test_normalize_connector_mapping_preserves_orphan_metadata_on_fallback():
+    mapping = {
+        "": {
+            "station_name": "Fallback charger",
+            "station_model": "Smappee EV Wall",
+            "connectors": {
+                1: {"uuid": "connector-uuid"},
+            },
+        }
+    }
+
+    result = _normalize_connector_mapping_station_keys(
+        mapping,
+        fallback_station_serial="6220017988",
+    )
+
+    assert result["6220017988"]["station_name"] == "Fallback charger"
+    assert result["6220017988"]["station_model"] == "Smappee EV Wall"
+    assert result["6220017988"]["connectors"][1]["uuid"] == "connector-uuid"
+
+
+def test_normalize_connector_mapping_keeps_existing_station_metadata_over_fallback():
+    mapping = {
+        "6220017988": {
+            "station_name": "Explicit station",
+            "connectors": {},
+        },
+        "": {
+            "station_name": "Fallback station",
+            "connectors": {
+                1: {"uuid": "connector-uuid"},
+            },
+        },
+    }
+
+    result = _normalize_connector_mapping_station_keys(
+        mapping,
+        fallback_station_serial="6220017988",
+    )
+
+    assert result["6220017988"]["station_name"] == "Explicit station"
+    assert result["6220017988"]["connectors"][1]["uuid"] == "connector-uuid"
 
 
 def test_build_mqtt_clients_groups_specs_by_credentials_and_tracks_routes(hass):
@@ -333,7 +668,18 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
         ),
         async_get_charging_station_details=AsyncMock(
             return_value={
+                "name": "Garage Charger",
+                "chargingStation": {"model": "EV Wall"},
                 "modules": [
+                    {
+                        "position": 0,
+                        "smartDevice": {
+                            "id": "led-id",
+                            "uuid": "led-uuid",
+                            "name": "LED Ring",
+                            "type": {"category": "LED"},
+                        },
+                    },
                     {
                         "position": 1,
                         "smartDevice": {
@@ -346,8 +692,8 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
                                 }
                             },
                         },
-                    }
-                ]
+                    },
+                ],
             }
         ),
     )
@@ -376,7 +722,11 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
     bucket = stations["STATION-1"]
     assert bucket.site_location_id == 100
     assert bucket.control_location_id == 200
+    assert bucket.station_name == "Garage Charger"
     assert bucket.charging_station_serial == "STATION-1"
+    assert bucket.charging_station_model == "EV Wall"
+    assert bucket.led_devices["led-id"].led_device_uuid == "led-uuid"
+    assert bucket.led_devices["led-id"].led_device_name == "LED Ring"
     assert bucket.site_coordinator is site_coord
     assert bucket.highlevel_configs.keys() == {100, 200}
     assert create_site.await_args.kwargs["highlevel_configs"]

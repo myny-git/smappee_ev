@@ -75,6 +75,7 @@ def test_mqtt_channel_helpers_ignore_invalid_shapes_and_pick_first_field():
     assert _mqtt_channel_topic(None) is None
     assert _mqtt_channel_topic({"protocol": "HTTP", "name": "topic"}) is None
     assert _mqtt_channel_topic({"protocol": "MQTT", "name": " "}) is None
+    assert _indexes_and_field_from_aspect_paths(None, "channelData") == ([], None)
     assert _indexes_from_aspect_paths(channel, "channelData") == [3, 5]
     assert _indexes_and_field_from_aspect_paths(channel, "channelData", "activePowerData") == (
         [3, 5],
@@ -84,7 +85,88 @@ def test_mqtt_channel_helpers_ignore_invalid_shapes_and_pick_first_field():
     assert _active_power_values({"custom": "bad"}, "custom") == []
     assert _active_power_values({"activePowerData": [2]}) == [2]
     assert _active_power_values({"channelData": [3]}) == [3]
+    assert _active_power_values({"noPower": [4]}) == []
     assert _volts_from_dv([2301, 2299]) == [230, 230]
+
+
+@pytest.mark.asyncio
+async def test_site_coordinator_lazy_update_builds_power_map_and_default_state(hass):
+    topic = "servicelocation/site/power"
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+        highlevel_configs={
+            100: {
+                "measurements": [
+                    {
+                        "type": "GRID",
+                        "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
+                    }
+                ]
+            }
+        },
+    )
+
+    data = await coord._async_update_data()
+
+    assert isinstance(data, SiteData)
+    assert topic in coord._power_index_maps_by_topic
+
+    cached = coord._power_index_maps_by_topic
+    await coord._ensure_power_index_map()
+    assert coord._power_index_maps_by_topic is cached
+
+
+def test_site_mqtt_connection_change_handles_no_data_and_up_down_transitions(hass):
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+    )
+    coord.async_set_updated_data = MagicMock()
+
+    coord.apply_mqtt_connection_change(True)
+    coord.async_set_updated_data.assert_not_called()
+
+    coord.data = SiteData(site=SiteState())
+    coord.apply_mqtt_connection_change(True)
+    assert coord.data.site.mqtt_connected is True
+    assert coord.data.site.last_mqtt_rx is not None
+    coord.async_set_updated_data.assert_called_once_with(coord.data)
+
+    coord.async_set_updated_data.reset_mock()
+    coord.apply_mqtt_connection_change(True)
+    coord.async_set_updated_data.assert_not_called()
+
+    coord.apply_mqtt_connection_change(False)
+    assert coord.data.site.mqtt_connected is False
+    coord.async_set_updated_data.assert_called_once_with(coord.data)
+
+
+def test_site_apply_mqtt_properties_without_data_is_safe(hass):
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+    )
+    coord.async_set_updated_data = MagicMock()
+
+    coord.apply_mqtt_properties("servicelocation/site/power", {"channelData": [1]})
+
+    coord.async_set_updated_data.assert_not_called()
 
 
 def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
@@ -154,6 +236,46 @@ def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
     assert site.always_on_power == 111
 
 
+def test_site_power_index_map_empty_or_invalid_highlevel_config_is_safe(hass):
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+        highlevel_configs={},
+    )
+    coord.data = SiteData(site=SiteState(grid_power_total=123))
+
+    assert coord._build_measurement_index_maps_by_topic_from_highlevel_configs({}) is None
+    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+        {
+            100: {
+                "measurements": [
+                    "bad",
+                    {"type": "GRID", "updateChannels": "bad"},
+                    {
+                        "type": "GRID",
+                        "updateChannels": {
+                            "activePower": {
+                                "protocol": "MQTT",
+                                "name": "servicelocation/site/power",
+                                "aspectPaths": [{"path": "$.wrong"}],
+                            }
+                        },
+                    },
+                ]
+            }
+        }
+    )
+    assert mapping["servicelocation/site/power"]["grid"]["power"] == []
+    coord._power_index_maps_by_topic = mapping
+    assert coord._handle_power("servicelocation/site/power", {"channelData": [999]}) is True
+    assert coord.data.site.grid_power_total == 123
+
+
 def test_station_coordinator_highlevel_power_map_applies_station_and_connector_values(hass):
     coord = _station_coordinator(hass)
     topic = "servicelocation/control/power"
@@ -214,6 +336,148 @@ def test_station_coordinator_highlevel_power_map_applies_station_and_connector_v
     assert conn.power_total == 2400
     assert conn.current_phases == [7.0, 8.0, 9.0]
     assert conn.energy_import_kwh == 1.234
+
+
+def test_station_shared_topic_merges_grid_pv_and_connector_without_overwrite(hass):
+    coord = _station_coordinator(hass)
+    topic = "servicelocation/shared/power"
+    coord._power_index_maps_by_topic = (
+        coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+            {
+                100: {
+                    "measurements": [
+                        {
+                            "type": "GRID",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "channelData", 0, 1, 2),
+                            },
+                        }
+                    ]
+                },
+                200: {
+                    "measurements": [
+                        {
+                            "type": "PRODUCTION",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "channelData", 3, 4, 5),
+                            },
+                        },
+                        {
+                            "type": "APPLIANCE",
+                            "category": "CAR_CHARGER",
+                            "name": "EV Wall - 1",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "activePowerData", 0, 1, 2),
+                            },
+                        },
+                    ]
+                },
+            }
+        )
+    )
+
+    changed = coord._handle_power(
+        topic,
+        {
+            "channelData": [100, 200, 300, 10, 20, 30],
+            "activePowerData": [700, 800, 900],
+        },
+    )
+
+    assert changed is True
+    assert coord.data.station.grid_power_total == 600
+    assert coord.data.station.pv_power_total == 60
+    assert coord.data.connectors["conn-1"].power_total == 2400
+    assert coord.data.connectors["conn-2"].power_total is None
+
+
+def test_station_power_payload_missing_current_and_energy_arrays_zero_fills_safely(hass):
+    coord = _station_coordinator(hass)
+    topic = "servicelocation/control/power"
+    coord.data.connectors["conn-1"].current_phases = [1.0, 2.0, 3.0]
+    coord.data.connectors["conn-1"].energy_import_kwh = 12.3
+    coord._power_index_maps_by_topic = (
+        coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+            {
+                200: {
+                    "measurements": [
+                        {
+                            "type": "APPLIANCE",
+                            "category": "CAR_CHARGER",
+                            "name": "EV Wall - 1",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "activePowerData", 0, 1, 2),
+                                "current": _channel(topic, "currentData", 0, 1, 2),
+                                "meterReadings": _channel(topic, "importActiveEnergyData", 0, 1, 2),
+                            },
+                        }
+                    ]
+                }
+            }
+        )
+    )
+
+    assert coord._handle_power(topic, {"activePowerData": [100, 200, 300]}) is True
+
+    connector = coord.data.connectors["conn-1"]
+    assert connector.power_total == 600
+    assert connector.current_phases == [0.0, 0.0, 0.0]
+    assert connector.energy_import_kwh == 0.0
+
+
+def test_station_highlevel_ignores_ambiguous_connector_and_uses_single_fallback(hass):
+    coord = _station_coordinator(hass)
+    topic = "servicelocation/control/power"
+    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+        {
+            200: {
+                "measurements": [
+                    "bad",
+                    {"type": "APPLIANCE", "category": "CAR_CHARGER", "updateChannels": "bad"},
+                    {
+                        "type": "APPLIANCE",
+                        "category": "CAR_CHARGER",
+                        "name": "EV Wall",
+                        "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
+                    },
+                ]
+            }
+        }
+    )
+
+    assert mapping is None
+
+    only_client = MagicMock(spec=SmappeeDeviceHandle)
+    only_client.connector_number = None
+    coord_one = SmappeeStationCoordinator(
+        hass,
+        station_client=coord.station_client,
+        connector_clients={"sole-connector": only_client},
+        update_interval=60,
+    )
+    coord_one.data = IntegrationData(
+        station=StationState(),
+        connectors={"sole-connector": ConnectorState(connector_number=1)},
+    )
+
+    mapping = coord_one._build_measurement_index_maps_by_topic_from_highlevel_configs(
+        {
+            200: {
+                "measurements": [
+                    {
+                        "type": "APPLIANCE",
+                        "category": "CAR_CHARGER",
+                        "name": "EV Wall",
+                        "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
+                    }
+                ]
+            }
+        }
+    )
+
+    car_map = mapping[topic]["cars"]["sole-connector"]
+    assert car_map["power"] == [0, 1, 2]
+    assert car_map["position"] is None
 
 
 @pytest.mark.asyncio

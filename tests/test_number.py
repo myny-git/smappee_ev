@@ -190,6 +190,67 @@ async def test_connector_max_current_number_updates_config_without_charging_limi
 
 
 @pytest.mark.asyncio
+async def test_connector_max_current_number_clamps_to_live_range(coordinator, api_client):
+    state = coordinator.data.connectors["uuid"]
+    state.min_current = 8
+    state.max_current = 20
+    state.selected_current_limit = 18
+    number = SmappeeConnectorMaxCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+        connector_uuid="uuid",
+    )
+
+    await number.async_set_native_value(4)
+
+    api_client.set_connector_max_current.assert_awaited_once_with(8)
+    assert state.max_current == 8
+    assert state.selected_current_limit == 8
+
+
+@pytest.mark.asyncio
+async def test_connector_max_current_number_missing_state_raises(coordinator, api_client):
+    coordinator.data = None
+    number = SmappeeConnectorMaxCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+        connector_uuid="uuid",
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await number.async_set_native_value(16)
+
+    api_client.set_connector_max_current.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_connector_max_current_number_api_error_preserves_state(coordinator, api_client):
+    state = coordinator.data.connectors["uuid"]
+    state.max_current = 32
+    state.selected_current_limit = 20
+    api_client.set_connector_max_current.side_effect = RuntimeError("dashboard down")
+    number = SmappeeConnectorMaxCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+        connector_uuid="uuid",
+    )
+
+    with pytest.raises(RuntimeError):
+        await number.async_set_native_value(16)
+
+    assert state.max_current == 32
+    assert state.selected_current_limit == 20
+    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_schedule_dashboard_refresh.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_capacity_maximum_power_rounds_to_one_decimal_and_defaults_active_true(
     coordinator, dashboard_client
 ):
@@ -210,6 +271,46 @@ async def test_capacity_maximum_power_rounds_to_one_decimal_and_defaults_active_
 
 
 @pytest.mark.asyncio
+async def test_capacity_maximum_power_missing_station_state_raises(coordinator, dashboard_client):
+    coordinator.dashboard_client = dashboard_client
+    coordinator.data = None
+    number = SmappeeCapacityMaximumPowerNumber(
+        coordinator=coordinator,
+        sid=1,
+        station_uuid="station",
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await number.async_set_native_value(5)
+
+    dashboard_client.async_set_capacity_protection.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_capacity_maximum_power_api_error_preserves_previous_value(
+    coordinator, dashboard_client
+):
+    coordinator.dashboard_client = dashboard_client
+    station = coordinator.data.station
+    station.capacity_protection_active = False
+    station.capacity_maximum_power_kw = 4.2
+    dashboard_client.async_set_capacity_protection.side_effect = RuntimeError("offline")
+    number = SmappeeCapacityMaximumPowerNumber(
+        coordinator=coordinator,
+        sid=1,
+        station_uuid="station",
+    )
+
+    with pytest.raises(RuntimeError):
+        await number.async_set_native_value(6)
+
+    dashboard_client.async_set_capacity_protection.assert_awaited_once_with(1, False, 6.0)
+    assert station.capacity_maximum_power_kw == 4.2
+    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_schedule_dashboard_refresh.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_overload_maximum_load_rounds_to_integer_and_defaults_active_true(
     coordinator, dashboard_client
 ):
@@ -227,6 +328,22 @@ async def test_overload_maximum_load_rounds_to_integer_and_defaults_active_true(
     assert coordinator.data.station.overload_maximum_load_a == 25
     coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_overload_maximum_load_missing_station_state_raises(coordinator, dashboard_client):
+    coordinator.dashboard_client = dashboard_client
+    coordinator.data = None
+    number = SmappeeOverloadMaximumLoadNumber(
+        coordinator=coordinator,
+        sid=1,
+        station_uuid="station",
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await number.async_set_native_value(16)
+
+    dashboard_client.async_set_overload_protection.assert_not_awaited()
 
 
 def test_current_slider_fixed_range_and_missing_state(coordinator, api_client):
@@ -339,6 +456,66 @@ async def test_offline_failsafe_set_native_value(coordinator, api_client, dashbo
     coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
 
 
+@pytest.mark.asyncio
+async def test_offline_failsafe_defaults_enabled_and_clamps_negative_current(
+    coordinator, api_client, dashboard_client
+):
+    coordinator.dashboard_client = dashboard_client
+    station = coordinator.data.station
+    station.offline_charging_enabled = None
+    station.offline_failsafe_current_a = 12
+    api_client.set_offline_charging_config = AsyncMock()
+    number = SmappeeOfflineFailsafeCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+    )
+
+    await number.async_set_native_value(-3)
+
+    api_client.set_offline_charging_config.assert_awaited_once_with(True, 0)
+    assert station.offline_charging_enabled is True
+    assert station.offline_failsafe_current_a == 0
+    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_offline_failsafe_missing_station_state_raises(coordinator, api_client):
+    coordinator.data = None
+    number = SmappeeOfflineFailsafeCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await number.async_set_native_value(10)
+
+
+def test_offline_failsafe_available_only_when_supported(coordinator, api_client, dashboard_client):
+    coordinator.last_update_success = True
+    coordinator.dashboard_client = dashboard_client
+    station = coordinator.data.station
+    number = SmappeeOfflineFailsafeCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+    )
+
+    station.offline_charging_enabled = False
+    assert number.available is False
+
+    station.offline_charging_enabled = True
+    assert number.available is True
+
+    coordinator.dashboard_client = None
+    assert number.available is False
+
+
 # --- SmappeeMinSurplusPctNumber ---
 def test_min_surpluspct_native_value(coordinator, api_client):
     min_pct = SmappeeMinSurplusPctNumber(
@@ -365,6 +542,31 @@ async def test_min_surpluspct_set_native_value(coordinator, api_client):
     await min_pct.async_set_native_value(17)
     assert state.min_surpluspct == 17
     api_client.set_min_surpluspct.assert_awaited_with(17)
+    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_min_surpluspct_api_error_preserves_state_and_raises_homeassistant_error(
+    coordinator, api_client
+):
+    state = coordinator.data.connectors["uuid"]
+    state.min_surpluspct = 20
+    api_client.set_min_surpluspct.side_effect = RuntimeError("dashboard down")
+    min_pct = SmappeeMinSurplusPctNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+        connector_uuid="uuid",
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await min_pct.async_set_native_value(17)
+
+    assert state.min_surpluspct == 20
+    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_schedule_dashboard_refresh.assert_not_called()
 
 
 def test_min_surpluspct_native_value_returns_none_without_state(coordinator, api_client):
