@@ -202,6 +202,13 @@ class SmappeeMqtt:
             _LOGGER.warning("MQTT runner stopped unexpectedly: %s", err)
             self._notify_conn(False)
 
+    def begin_shutdown(self) -> None:
+        """Synchronously request MQTT shutdown from HA stop callbacks."""
+        self._stop.set()
+        for task in (self._start_task, self._runner_task, self._track_task):
+            if task is not None and not task.done():
+                task.cancel()
+
     async def _runner_main(self, ssl_ctx: ssl.SSLContext) -> None:
         """Maintain connection with auto-reconnect."""
         backoff = MQTT_RECONNECT_INITIAL_BACKOFF
@@ -361,7 +368,7 @@ class SmappeeMqtt:
 
     async def stop(self) -> None:
         """Stop loops and disconnect."""
-        self._stop.set()
+        self.begin_shutdown()
         start_task = self._start_task
         if start_task is not None:
             await self._cancel_and_wait(start_task)

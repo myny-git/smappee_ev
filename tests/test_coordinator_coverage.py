@@ -423,6 +423,18 @@ async def test_station_dashboard_scheduled_refresh_reauth_and_cleanup(hass):
 
 
 @pytest.mark.asyncio
+async def test_station_dashboard_scheduled_refresh_skips_during_shutdown(hass):
+    coord = _station_coordinator(hass)
+    coord._maybe_refresh_dashboard_data = AsyncMock(return_value=True)
+
+    coord.cancel_delayed_refreshes()
+    await coord._async_delayed_dashboard_refresh(0)
+
+    coord._maybe_refresh_dashboard_data.assert_not_called()
+    assert coord._dashboard_refresh_task is None
+
+
+@pytest.mark.asyncio
 async def test_recent_sessions_filter_malformed_results_and_handle_errors(hass):
     coord = _station_coordinator(hass)
     coord.connector_clients["conn-1"].async_get_recent_sessions = AsyncMock(

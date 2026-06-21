@@ -152,6 +152,57 @@ class TestSmappeeMqtt:
         assert connection_events == [True, False]
 
     @pytest.mark.asyncio
+    async def test_runner_does_not_reconnect_after_shutdown_request(
+        self, mock_properties_callback, monkeypatch, caplog
+    ):
+        """Runner should not start a reconnect cycle after HA shutdown begins."""
+        connection_events: list[bool] = []
+        gw = SmappeeMqtt(
+            service_location_uuid="u",
+            client_id="c",
+            serial_number="s",
+            on_properties=mock_properties_callback,
+            service_location_id=1,
+            on_connection_change=connection_events.append,
+        )
+
+        class ShutdownMessages:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                gw.begin_shutdown()
+                raise StopAsyncIteration
+
+        class FakeClient:
+            messages = ShutdownMessages()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def subscribe(self, *_args, **_kwargs):
+                return None
+
+            async def publish(self, *_args, **_kwargs):
+                return None
+
+        monkeypatch.setattr(
+            "custom_components.smappee_ev.api.mqtt_gateway.Client",
+            lambda *_args, **_kwargs: FakeClient(),
+        )
+
+        with caplog.at_level("DEBUG", logger="custom_components.smappee_ev.api.mqtt_gateway"):
+            await gw._runner_main(MagicMock())
+
+        assert "MQTT connection loop ended; reconnecting" not in caplog.text
+        assert connection_events == [True, False]
+        assert gw._track_task is None
+        assert gw._client is None
+
+    @pytest.mark.asyncio
     async def test_publish_no_client_no_errors(self, mqtt_gateway):
         # No client set → functions should return silently
         await mqtt_gateway._publish_tracking_once()

@@ -11,8 +11,8 @@ from typing import Any
 
 from aiohttp import ClientError, ClientSession
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -1247,6 +1247,41 @@ def _iter_mqtt_clients(value: object) -> list[object]:
     return [value] if value is not None else []
 
 
+def _begin_runtime_shutdown(rd: RuntimeData) -> None:
+    """Synchronously mark runtime resources as stopping."""
+    for site in (rd.sites or {}).values():
+        for bucket in site.stations.values():
+            coord = bucket.station_coordinator
+            cancel_delayed = getattr(coord, "cancel_delayed_refreshes", None)
+            if callable(cancel_delayed):
+                cancel_delayed()
+
+    for mqtt in (rd.mqtt or {}).values():
+        for mqtt_client in _iter_mqtt_clients(mqtt):
+            begin_shutdown = getattr(mqtt_client, "begin_shutdown", None)
+            if callable(begin_shutdown):
+                begin_shutdown()
+
+
+def _register_runtime_stop_cleanup(
+    hass: HomeAssistant,
+    entry: SmappeeEvConfigEntry,
+    runtime: RuntimeData,
+) -> None:
+    """Cancel runtime background work as soon as Home Assistant begins stopping."""
+
+    @callback
+    def _handle_homeassistant_stop(_event: Event) -> None:
+        _begin_runtime_shutdown(runtime)
+        hass.async_create_task(_async_shutdown_runtime_resources(runtime))
+
+    remove_stop_listener = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STOP,
+        _handle_homeassistant_stop,
+    )
+    entry.async_on_unload(remove_stop_listener)
+
+
 def _mqtt_client_count(mqtt_by_site: dict[int, object]) -> int:
     """Return the total number of MQTT clients across all sites."""
     return sum(len(_iter_mqtt_clients(mqtt)) for mqtt in mqtt_by_site.values())
@@ -1836,6 +1871,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         background_tasks=background_tasks,
     )
     entry.runtime_data = runtime
+    _register_runtime_stop_cleanup(hass, entry, runtime)
     _log_stored_runtime_shape(runtime)
     try:
         _register_runtime_devices(hass, entry)
@@ -1857,9 +1893,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 async def _shutdown_site_coordinator(site: SmappeeSiteRuntime) -> None:
     """Shutdown a site coordinator if present."""
     site_coord = site.site_coordinator
-    if site_coord and hasattr(site_coord, "async_shutdown"):
+    shutdown = getattr(site_coord, "async_shutdown", None)
+    if callable(shutdown):
         try:
-            await site_coord.async_shutdown()
+            result = shutdown()
+            if isawaitable(result):
+                await result
         except asyncio.CancelledError:
             raise
         except (RuntimeError, OSError, ValueError) as exc:
@@ -1870,13 +1909,17 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
     """Stop MQTT clients and coordinator background tasks for runtime data."""
     # Mark coordinators as shutting down before stopping MQTT, because MQTT
     # disconnect callbacks can otherwise schedule fallback refreshes.
+    _begin_runtime_shutdown(rd)
     for site in (rd.sites or {}).values():
         await _shutdown_site_coordinator(site)
         for bucket in site.stations.values():
             coord = bucket.station_coordinator
-            if coord and hasattr(coord, "async_shutdown"):
+            shutdown = getattr(coord, "async_shutdown", None)
+            if callable(shutdown):
                 try:
-                    await coord.async_shutdown()
+                    result = shutdown()
+                    if isawaitable(result):
+                        await result
                 except asyncio.CancelledError:
                     raise
                 except (RuntimeError, OSError, ValueError) as exc:

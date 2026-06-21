@@ -872,6 +872,8 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         self, data: IntegrationData, force: bool = False
     ) -> bool:
         """Refresh slow Dashboard REST config/cache data when due."""
+        if self._is_stopping:
+            return False
         if self.dashboard_client is None:
             return False
         if self._dashboard_refresh_lock.locked():
@@ -886,6 +888,9 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             return False
 
         async with self._dashboard_refresh_lock:
+            if self._is_stopping:
+                return False
+
             now = _now()
             if (
                 not force
@@ -1027,7 +1032,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         self, delay: float = DASHBOARD_REFRESH_AFTER_WRITE_DELAY
     ) -> None:
         """Schedule a forced dashboard refresh after a write."""
-        if self._shutting_down:
+        if self._is_stopping:
             return
         task = self._dashboard_refresh_task
         if task is not None and not task.done():
@@ -1040,13 +1045,16 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         try:
             if delay > 0:
                 await asyncio.sleep(delay)
+            if self._is_stopping:
+                return
             data = self.data
             if data and await self._maybe_refresh_dashboard_data(data, force=True):
                 self.async_set_updated_data(data)
         except asyncio.CancelledError:
             raise
         except ConfigEntryAuthFailed:
-            self._start_background_reauth()
+            if not self._is_stopping:
+                self._start_background_reauth()
         finally:
             if self._dashboard_refresh_task is asyncio.current_task():
                 self._dashboard_refresh_task = None
@@ -1553,6 +1561,14 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
 
     async def async_shutdown(self) -> None:
         """Cancel session refresh callbacks and background tasks."""
+        self.cancel_delayed_refreshes()
+        task = self._dashboard_refresh_task
+
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
+
+    def cancel_delayed_refreshes(self) -> None:
+        """Synchronously cancel delayed refresh callbacks/tasks during shutdown."""
         self._shutting_down = True
 
         self._cancel_session_refresh()
@@ -1563,8 +1579,10 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         if task is not None and not task.done():
             task.cancel()
 
-        if task is not None:
-            await asyncio.gather(task, return_exceptions=True)
+    @property
+    def _is_stopping(self) -> bool:
+        """Return True when the coordinator should avoid new background I/O."""
+        return self._shutting_down or bool(getattr(self.hass, "is_stopping", False))
 
     def _cancel_session_refresh(self) -> None:
         """Cancel one-shot delayed session refresh."""
