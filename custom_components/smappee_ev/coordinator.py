@@ -1079,21 +1079,8 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
     async def _async_delayed_dashboard_refresh(self, delay: float) -> None:
         """Compatibility wrapper for older tests and callers."""
         if delay > 0:
-            unsub_holder: dict[str, CALLBACK_TYPE] = {}
-            done = asyncio.Event()
-
-            async def _set_done(_now: datetime) -> None:
-                unsub_holder.pop("unsub", None)
-                done.set()
-
-            unsub_holder["unsub"] = async_call_later(self.hass, delay, _set_done)
-            try:
-                await done.wait()
-            finally:
-                unsub = unsub_holder.pop("unsub", None)
-                if unsub is not None:
-                    with suppress(RuntimeError):
-                        unsub()
+            self.async_schedule_dashboard_refresh(delay=delay)
+            return
         await self._async_dashboard_refresh_now()
 
     def _merge_dashboard_station_details(

@@ -454,6 +454,23 @@ def test_dashboard_delayed_refresh_uses_unsub_and_leaves_no_sleeping_task_on_shu
 
 
 @pytest.mark.asyncio
+async def test_compat_dashboard_delayed_refresh_delegates_positive_delay(hass):
+    coord = _station_coordinator(hass)
+    coord._maybe_refresh_dashboard_data = AsyncMock(return_value=True)
+    unsub = MagicMock()
+
+    with patch(
+        "custom_components.smappee_ev.coordinator.async_call_later",
+        return_value=unsub,
+    ):
+        await coord._async_delayed_dashboard_refresh(30)
+
+    assert coord._dashboard_refresh_unsub is unsub
+    assert coord._dashboard_refresh_task is None
+    coord._maybe_refresh_dashboard_data.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_recent_sessions_filter_malformed_results_and_handle_errors(hass):
     coord = _station_coordinator(hass)
     coord.connector_clients["conn-1"].async_get_recent_sessions = AsyncMock(
