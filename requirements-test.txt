@@ -5,11 +5,11 @@
 
 # Pytest + async support (choose latest plugin variant requiring pytest-asyncio 0.24.0)
 pytest-cov>=7.1.0,<8
-pytest-homeassistant-custom-component==0.13.339
+pytest-homeassistant-custom-component==0.13.340
 
 # Home Assistant core + type stubs (keep in sync!)
 homeassistant==2026.6.4
-homeassistant-stubs==2026.6.3
+homeassistant-stubs==2026.6.4
 
 # MQTT: pytest-homeassistant-custom-component currently pins paho-mqtt==1.6.1.
 # To avoid conflict with aiomqtt>=2 (needs paho>=2.1), we stub aiomqtt in tests.
