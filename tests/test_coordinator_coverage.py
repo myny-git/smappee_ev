@@ -236,6 +236,100 @@ def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
     assert site.always_on_power == 111
 
 
+@pytest.mark.parametrize(
+    ("indexes", "payload", "expected_phases", "expected_total", "expected_currents"),
+    [
+        (
+            (0,),
+            {"channelData": [321], "currentData": [1000]},
+            [321],
+            321,
+            [1.0],
+        ),
+        (
+            (2, 0, 1),
+            {"channelData": [100, 200, 300], "currentData": [1000, 2000, 3000]},
+            [300, 100, 200],
+            600,
+            [3.0, 1.0, 2.0],
+        ),
+        (
+            (0, 2, 5),
+            {"channelData": [10, 20, 30], "currentData": [1000, 2000, 3000]},
+            [10, 30, 0],
+            40,
+            [1.0, 3.0, 0.0],
+        ),
+    ],
+)
+def test_site_power_mapping_matrix_handles_phase_shapes(
+    hass, indexes, payload, expected_phases, expected_total, expected_currents
+):
+    topic = "servicelocation/site/power"
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+        highlevel_configs={},
+    )
+    coord.data = SiteData(site=SiteState())
+    coord._power_index_maps_by_topic = coord._build_measurement_index_maps_by_topic_from_highlevel(
+        {
+            "measurements": [
+                {
+                    "type": "GRID",
+                    "updateChannels": {
+                        "activePower": _channel(topic, "channelData", *indexes),
+                        "current": _channel(topic, "currentData", *indexes),
+                    },
+                }
+            ]
+        }
+    )
+
+    assert coord._handle_power(topic, payload) is True
+
+    site = coord.data.site
+    assert site.grid_power_phases == expected_phases
+    assert site.grid_power_total == expected_total
+    assert site.grid_current_phases == expected_currents
+
+
+def test_site_power_mapping_empty_arrays_zero_fill_existing_state(hass):
+    topic = "servicelocation/site/power"
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+        highlevel_configs={},
+    )
+    coord.data = SiteData(site=SiteState(grid_power_total=999, grid_power_phases=[9, 9, 9]))
+    coord._power_index_maps_by_topic = coord._build_measurement_index_maps_by_topic_from_highlevel(
+        {
+            "measurements": [
+                {
+                    "type": "GRID",
+                    "updateChannels": {
+                        "activePower": _channel(topic, "channelData", 0, 1, 2),
+                    },
+                }
+            ]
+        }
+    )
+
+    assert coord._handle_power(topic, {"channelData": []}) is True
+    assert coord.data.site.grid_power_total == 0
+    assert coord.data.site.grid_power_phases == [0, 0, 0]
+
+
 def test_site_power_index_map_empty_or_invalid_highlevel_config_is_safe(hass):
     coord = SmappeeSiteCoordinator(
         hass,

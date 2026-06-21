@@ -6,7 +6,7 @@ from homeassistant.core import ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
 import pytest
 
-from custom_components.smappee_ev import async_setup_entry
+from custom_components.smappee_ev import _setup_mqtt, async_setup_entry, async_unload_entry
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
@@ -426,9 +426,7 @@ def test_mqtt_routes_deliver_properties_to_site_and_station_coordinators(hass):
     ]
 
     with patch("custom_components.smappee_ev.SmappeeMqtt", _FakeMqtt):
-        mqtt_clients = __import__(
-            "custom_components.smappee_ev", fromlist=["_setup_mqtt"]
-        )._setup_mqtt(
+        mqtt_clients = _setup_mqtt(
             hass,
             "site-uuid",
             "GATEWAY123",
@@ -454,3 +452,65 @@ def test_mqtt_routes_deliver_properties_to_site_and_station_coordinators(hass):
     station_coordinator.apply_mqtt_properties.assert_called_once_with(
         "servicelocation/station-location-uuid/power", {"activePowerData": [456]}
     )
+
+
+@pytest.mark.asyncio
+async def test_service_call_survives_unload_reload_without_reregistering_services():
+    """Domain services should keep resolving the current runtime after entry reload."""
+    hass = MagicMock()
+    hass.services = _ServiceRegistry(hass)
+    hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
+
+    first_connector = make_connector_client(
+        service_location_id=11111,
+        connector_number=1,
+        smart_device_uuid="connector-before-reload",
+    )
+    first_runtime = make_runtime_for_connector(11111, first_connector)
+    entry = make_loaded_config_entry("entry_a", first_runtime)
+    configure_loaded_entries(hass, [entry])
+
+    await register_services(hass)
+    assert hass.services.has_service(DOMAIN, "set_current")
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_current",
+        {
+            "config_entry_id": "entry_a",
+            "service_location_id": 11111,
+            "connector_id": 1,
+            "current": 17,
+        },
+    )
+    first_connector.set_current.assert_awaited_once_with(
+        current=17.0, min_current=6, max_current=32
+    )
+
+    assert await async_unload_entry(hass, entry) is True
+    assert hass.services.has_service(DOMAIN, "set_current")
+
+    reloaded_connector = make_connector_client(
+        service_location_id=11111,
+        connector_number=1,
+        smart_device_uuid="connector-after-reload",
+    )
+    entry.runtime_data = make_runtime_for_connector(11111, reloaded_connector)
+    configure_loaded_entries(hass, [entry])
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_current",
+        {
+            "config_entry_id": "entry_a",
+            "service_location_id": 11111,
+            "connector_id": 1,
+            "current": 18,
+        },
+    )
+
+    reloaded_connector.set_current.assert_awaited_once_with(
+        current=18.0, min_current=6, max_current=32
+    )
+    first_connector.set_current.assert_awaited_once()
+    hass.config_entries.async_unload_platforms.assert_awaited_once()
