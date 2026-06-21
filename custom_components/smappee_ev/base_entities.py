@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -13,7 +13,7 @@ from .helpers import build_connector_id, make_device_info, make_unique_id, stati
 if TYPE_CHECKING:
     from homeassistant.helpers.entity import DeviceInfo
 
-    from .data import ConnectorState
+    from .state import ConnectorState
 
 __all__ = [
     "SmappeeBaseEntity",
@@ -244,8 +244,8 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
         unique_suffix: str,
         name: str | None = None,
     ) -> None:
-        if not _is_int_like(sid) and _is_int_like(api):
-            old_sid = int(cast(int | str, api))
+        if not _is_int_like(sid) and isinstance(api, int):
+            old_sid = api
             old_station_uuid = str(sid)
             old_connector_uuid = str(station_uuid)
             old_unique_suffix = str(connector_uuid)
@@ -257,7 +257,7 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
             unique_suffix = old_unique_suffix
             name = old_name
         self._connector_uuid = connector_uuid
-        self._api = cast(SmappeeDeviceHandle, api)
+        self._api = api
         self._unique_suffix = unique_suffix
         sid_int = int(sid)
         connector_label = build_connector_id(self._api, connector_uuid)

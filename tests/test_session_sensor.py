@@ -5,9 +5,9 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import UnitOfEnergy
 
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.sensor import ConnectorSessionEnergySensor
+from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 
 
 def _make_sensor(connector_uuid: str = "conn-1") -> ConnectorSessionEnergySensor:

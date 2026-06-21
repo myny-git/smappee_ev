@@ -8,7 +8,7 @@ import json
 import logging
 import re
 import ssl
-from typing import Any, cast
+from typing import Any
 
 from aiomqtt import Client, MqttError
 
@@ -101,15 +101,18 @@ class SmappeeMqtt:
         dec = getattr(raw, "decode", None)
         if callable(dec):
             try:
-                return cast(str, dec("utf-8", "ignore"))
+                decoded = dec("utf-8", "ignore")
+                if isinstance(decoded, str):
+                    return decoded
             except (TypeError, UnicodeDecodeError) as err:
                 _LOGGER.debug("decode() failed on payload: %s", err)
 
         tob = getattr(raw, "tobytes", None)
         if callable(tob):
             try:
-                b = tob()  # expected: bytes
-                return cast(bytes, b).decode("utf-8", "ignore")
+                data = tob()
+                if isinstance(data, bytes | bytearray | memoryview):
+                    return bytes(data).decode("utf-8", "ignore")
             except (TypeError, AttributeError, ValueError, UnicodeDecodeError) as err:
                 _LOGGER.debug("tobytes()/decode failed on payload: %s", err)
 

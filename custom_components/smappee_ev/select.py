@@ -1,5 +1,3 @@
-from typing import cast
-
 from aiohttp import ClientError
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
@@ -10,8 +8,9 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .base_entities import SmappeeConnectorEntity
 from .const import CHARGING_MODES, DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
+from .runtime_data import SmappeeEvConfigEntry
+from .state import ConnectorState, IntegrationData
 
 PARALLEL_UPDATES = 1
 MODES = [mode.lower() for mode in CHARGING_MODES]
@@ -36,13 +35,10 @@ async def async_setup_entry(
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
         for st_uuid, bucket in site.stations.items():
-            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+            coord = bucket.station_coordinator
             if coord is None:
                 continue
-            conns = cast(
-                dict[str, SmappeeDeviceHandle],
-                {key: conn.connector_client for key, conn in bucket.connectors.items()},
-            )
+            conns = {key: conn.connector_client for key, conn in bucket.connectors.items()}
 
             for cuuid, client in (conns or {}).items():
                 entities.append(

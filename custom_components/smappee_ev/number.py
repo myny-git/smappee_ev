@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 import logging
-from typing import Any, cast
+from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.components.number import (
@@ -20,8 +20,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base_entities import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import ConnectorState, IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
+from .runtime_data import SmappeeEvConfigEntry
+from .state import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -35,7 +36,7 @@ def _active_or_true(value: bool | None) -> bool:
 def _dashboard_coord_for_site(site) -> SmappeeCoordinator | None:
     """Return a station coordinator that can serve site-scoped Dashboard settings."""
     for bucket in site.stations.values():
-        coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+        coord = bucket.station_coordinator
         if coord is not None and getattr(coord, "dashboard_client", None) is not None:
             return coord
     return None
@@ -68,18 +69,14 @@ async def async_setup_entry(
             )
 
         for st_uuid, bucket in site.stations.items():
-            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+            coord = bucket.station_coordinator
             if coord is None:
                 continue
-            conns = cast(
-                dict[str, SmappeeDeviceHandle],
-                {key: conn.connector_client for key, conn in bucket.connectors.items()},
-            )
+            conns = {key: conn.connector_client for key, conn in bucket.connectors.items()}
 
             if getattr(coord, "dashboard_client", None) is not None:
-                st_client = cast(
-                    SmappeeDeviceHandle | None,
-                    bucket.station_client or getattr(coord, "station_client", None),
+                st_client: SmappeeDeviceHandle | None = bucket.station_client or getattr(
+                    coord, "station_client", None
                 )
                 if st_client is not None:
                     entities.append(

@@ -8,8 +8,8 @@ import pytest
 import voluptuous as vol
 
 from custom_components.smappee_ev import services
-from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 from tests.factories import (
     configure_loaded_entries,
     make_connector_client,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
@@ -11,8 +11,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base_entities import SmappeeLedEntity
 from .const import DEFAULT_LED_BRIGHTNESS, DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import IntegrationData, SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
+from .runtime_data import SmappeeEvConfigEntry
+from .state import IntegrationData
 
 PARALLEL_UPDATES = 1
 
@@ -37,8 +38,8 @@ async def async_setup_entry(
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
         for st_uuid, bucket in site.stations.items():
-            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
-            st_client = cast(SmappeeDeviceHandle | None, bucket.station_client)
+            coord = bucket.station_coordinator
+            st_client = bucket.station_client
             if coord is None or st_client is None:
                 continue
             if bucket.connectors:

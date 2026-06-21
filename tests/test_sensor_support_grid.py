@@ -4,9 +4,9 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import UnitOfElectricCurrent
 
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.sensor import SmappeeSupportGridSensor
+from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 
 
 def test_support_grid_sensor_native_value():

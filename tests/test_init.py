@@ -35,8 +35,8 @@ from custom_components.smappee_ev.const import (
     CONF_USERNAME,
     DOMAIN,
 )
-from custom_components.smappee_ev.data import RuntimeData
 from custom_components.smappee_ev.discovery import MqttChannelSpec, SmappeeLocationTopology
+from custom_components.smappee_ev.runtime_data import RuntimeData
 from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 

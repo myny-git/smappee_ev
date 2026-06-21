@@ -15,9 +15,9 @@ from custom_components.smappee_ev.coordinator import (
     _pick,
     _to_int,
 )
-from custom_components.smappee_ev.data import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.sensor import ConnectorSessionEnergySensor
+from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 
 CHARGINGSTATE_TOPIC = (
     "servicelocation/site/etc/carcharger/acchargingcontroller/v1"

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import cast
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -10,8 +9,9 @@ from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
-from .data import ConnectorState, RuntimeData, SmappeeEvConfigEntry, SmappeeSiteRuntime
 from .device_handle import SmappeeDeviceHandle
+from .runtime_data import RuntimeData, SmappeeSiteRuntime
+from .state import ConnectorState
 
 _LOGGER = logging.getLogger(__name__)
 DASHBOARD_CHARGING_MODES = {mode.upper() for mode in CHARGING_MODES}
@@ -56,17 +56,30 @@ def _home_assistant_error(
 # ----------------------------
 
 
-def _iter_loaded_entries(hass: HomeAssistant) -> list[SmappeeEvConfigEntry]:
+def _loaded_runtime_data(entry: object) -> RuntimeData | None:
+    runtime_data = getattr(entry, "runtime_data", None)
+    return runtime_data if isinstance(runtime_data, RuntimeData) else None
+
+
+def _iter_loaded_entries(hass: HomeAssistant) -> list[object]:
     return [
-        cast(SmappeeEvConfigEntry, entry)
+        entry
         for entry in hass.config_entries.async_entries(DOMAIN)
         if entry.state is ConfigEntryState.LOADED
     ]
 
 
+def _iter_loaded_runtimes(hass: HomeAssistant) -> list[RuntimeData]:
+    return [
+        runtime_data
+        for entry in _iter_loaded_entries(hass)
+        if (runtime_data := _loaded_runtime_data(entry)) is not None
+    ]
+
+
 def _first_runtime(hass: HomeAssistant) -> RuntimeData | None:
-    for entry in _iter_loaded_entries(hass):
-        return entry.runtime_data
+    for runtime_data in _iter_loaded_runtimes(hass):
+        return runtime_data
     return None
 
 
@@ -76,15 +89,14 @@ def _runtime_by_entry_id(hass: HomeAssistant, entry_id: str | None) -> RuntimeDa
     entry = hass.config_entries.async_get_entry(entry_id)
     if not entry or entry.state is not ConfigEntryState.LOADED:
         return None
-    return cast(SmappeeEvConfigEntry, entry).runtime_data
+    return _loaded_runtime_data(entry)
 
 
 def _find_runtime_for_sid(hass: HomeAssistant, sid: int) -> RuntimeData | None:
     """Return the runtime_data whose sites contains sid (first match)."""
-    for entry in _iter_loaded_entries(hass):
-        rd = entry.runtime_data
-        if sid in rd.sites:
-            return rd
+    for runtime_data in _iter_loaded_runtimes(hass):
+        if sid in runtime_data.sites:
+            return runtime_data
     return None
 
 
@@ -149,16 +161,16 @@ def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | 
             return rt_for_sid, sid
         _raise_service_location_not_found(sid)
 
-    loaded_entries = _iter_loaded_entries(hass)
+    loaded_runtimes = _iter_loaded_runtimes(hass)
     if (
         not isinstance(sid, int)
-        and sum(len(entry.runtime_data.sites) for entry in loaded_entries) > 1
+        and sum(len(runtime_data.sites) for runtime_data in loaded_runtimes) > 1
     ):
         _raise_multiple_service_locations()
 
-    if not loaded_entries:
+    if not loaded_runtimes:
         return None, None
-    rt = loaded_entries[0].runtime_data
+    rt = loaded_runtimes[0]
     if isinstance(sid, int):
         return (rt, sid if sid in rt.sites else None)
     return rt, _only_or_single_sid(rt.sites)
@@ -177,7 +189,7 @@ def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeDevice
         return None
     stations = site.stations.values()
     first = next(iter(stations), None)
-    return cast(SmappeeDeviceHandle | None, first.station_client if first else None)
+    return first.station_client if first else None
 
 
 def _connector_clients_for_site(site: SmappeeSiteRuntime) -> list[SmappeeDeviceHandle]:
@@ -240,8 +252,8 @@ def _schedule_dashboard_refresh_for_client(
 ) -> None:
     """Schedule the owning coordinator to refresh slow Dashboard data after a write."""
     client_uuid = getattr(client, "smart_device_uuid", None)
-    for entry in _iter_loaded_entries(hass):
-        for site in entry.runtime_data.sites.values():
+    for runtime_data in _iter_loaded_runtimes(hass):
+        for site in runtime_data.sites.values():
             for bucket in site.stations.values():
                 coord = bucket.station_coordinator
                 if coord is None:

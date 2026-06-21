@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any
 
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -57,17 +57,16 @@ def make_site_device_info(
     """Return Home Assistant device_info for a site/service location."""
     name = site_name or f"{MANUFACTURER} {site_sid}"
     model_parts = [part for part in (gateway_type, "Service Location") if part]
-    return cast(
-        DeviceInfo,
-        {
-            "identifiers": {site_device_identifier(site_sid)},
-            "name": name,
-            "manufacturer": MANUFACTURER,
-            "configuration_url": CONFIGURATION_URL,
-            "model": " / ".join(model_parts) if model_parts else "Service Location",
-            **({"serial_number": gateway_serial} if gateway_serial else {}),
-        },
-    )
+    device_info: DeviceInfo = {
+        "identifiers": {site_device_identifier(site_sid)},
+        "name": name,
+        "manufacturer": MANUFACTURER,
+        "configuration_url": CONFIGURATION_URL,
+        "model": " / ".join(model_parts) if model_parts else "Service Location",
+    }
+    if gateway_serial:
+        device_info["serial_number"] = gateway_serial
+    return device_info
 
 
 def make_station_device_info(
@@ -83,18 +82,16 @@ def make_station_device_info(
     identifiers = {station_device_identifier(site_sid, control_sid, charging_station_serial)}
     if legacy_identifier:
         identifiers.add((DOMAIN, legacy_identifier))
-    return cast(
-        DeviceInfo,
-        {
-            "identifiers": identifiers,
-            "name": station_name or f"{MANUFACTURER} EV {charging_station_serial}",
-            "manufacturer": MANUFACTURER,
-            "configuration_url": CONFIGURATION_URL,
-            "model": station_model or "EV Wall",
-            "serial_number": charging_station_serial,
-            "via_device": site_device_identifier(site_sid),
-        },
-    )
+    device_info: DeviceInfo = {
+        "identifiers": identifiers,
+        "name": station_name or f"{MANUFACTURER} EV {charging_station_serial}",
+        "manufacturer": MANUFACTURER,
+        "configuration_url": CONFIGURATION_URL,
+        "model": station_model or "EV Wall",
+        "serial_number": charging_station_serial,
+        "via_device": site_device_identifier(site_sid),
+    }
+    return device_info
 
 
 def make_led_device_info(
@@ -106,19 +103,17 @@ def make_led_device_info(
     led_name: str | None = None,
 ) -> DeviceInfo:
     """Return Home Assistant device_info for a LED controller."""
-    return cast(
-        DeviceInfo,
-        {
-            "identifiers": {
-                led_device_identifier(site_sid, control_sid, charging_station_serial, led_device_id)
-            },
-            "name": led_name or f"{MANUFACTURER} EV {charging_station_serial} LED controller",
-            "manufacturer": MANUFACTURER,
-            "configuration_url": CONFIGURATION_URL,
-            "model": "LED Controller",
-            "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
+    device_info: DeviceInfo = {
+        "identifiers": {
+            led_device_identifier(site_sid, control_sid, charging_station_serial, led_device_id)
         },
-    )
+        "name": led_name or f"{MANUFACTURER} EV {charging_station_serial} LED controller",
+        "manufacturer": MANUFACTURER,
+        "configuration_url": CONFIGURATION_URL,
+        "model": "LED Controller",
+        "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
+    }
+    return device_info
 
 
 def make_connector_device_info(
@@ -132,21 +127,19 @@ def make_connector_device_info(
     """Return Home Assistant device_info for a connector."""
     label = connector_label or connector_key
     base = station_name or f"{MANUFACTURER} EV {charging_station_serial}"
-    return cast(
-        DeviceInfo,
-        {
-            "identifiers": {
-                connector_device_identifier(
-                    site_sid, control_sid, charging_station_serial, connector_key
-                )
-            },
-            "name": f"{base} | Connector {label}",
-            "manufacturer": MANUFACTURER,
-            "configuration_url": CONFIGURATION_URL,
-            "model": "Connector",
-            "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
+    device_info: DeviceInfo = {
+        "identifiers": {
+            connector_device_identifier(
+                site_sid, control_sid, charging_station_serial, connector_key
+            )
         },
-    )
+        "name": f"{base} | Connector {label}",
+        "manufacturer": MANUFACTURER,
+        "configuration_url": CONFIGURATION_URL,
+        "model": "Connector",
+        "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
+    }
+    return device_info
 
 
 def make_device_info(

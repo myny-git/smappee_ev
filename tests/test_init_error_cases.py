@@ -14,8 +14,8 @@ from custom_components.smappee_ev import (
     async_unload_entry,
 )
 from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
-from custom_components.smappee_ev.data import RuntimeData
 from custom_components.smappee_ev.mqtt_gateway import SmappeeMqtt
+from custom_components.smappee_ev.runtime_data import RuntimeData
 from tests.factories import make_site_runtime, make_station_runtime
 
 

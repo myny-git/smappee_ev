@@ -12,7 +12,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
-from .data import RuntimeData, SmappeeEvConfigEntry, SmappeeStationRuntime
+from .runtime_data import RuntimeData, SmappeeEvConfigEntry, SmappeeStationRuntime
 
 REDACT_KEYS = {
     "access_token",

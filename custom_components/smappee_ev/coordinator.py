@@ -11,9 +11,10 @@ from inspect import iscoroutinefunction
 import logging
 import re
 from time import time as _now
-from typing import Any, cast
+from typing import Any
 
 from aiohttp import ClientError
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
@@ -26,18 +27,20 @@ from .const import (
     DEFAULT_MIN_CURRENT,
 )
 from .dashboard_client import SmappeeDashboardClient
-from .data import (
-    ConnectorState,
-    IntegrationData,
-    SiteData,
-    SiteState,
-    SmappeeEvConfigEntry,
-    StationState,
-)
 from .device_handle import SmappeeDeviceHandle
 from .helpers import anonymize_uuid
 from .mqtt_gateway import redact_mqtt_topic
-from .payload_types import DashboardObject, HighLevelConfigMap, MqttPayload, RecentSession
+from .state import (
+    ConnectorState,
+    DashboardObject,
+    HighLevelConfigMap,
+    IntegrationData,
+    MqttPayload,
+    RecentSession,
+    SiteData,
+    SiteState,
+    StationState,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -166,7 +169,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         gateway_serial: str | None,
         gateway_type: str | None,
         update_interval: int,
-        config_entry: SmappeeEvConfigEntry | None = None,
+        config_entry: ConfigEntry[Any] | None = None,
         highlevel_configs: HighLevelConfigMap | None = None,
     ) -> None:
         super().__init__(
@@ -407,7 +410,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         station_client: SmappeeDeviceHandle,
         connector_clients: dict[str, SmappeeDeviceHandle],  # keyed by UUID
         update_interval: int,
-        config_entry: SmappeeEvConfigEntry | None = None,
+        config_entry: ConfigEntry[Any] | None = None,
         dashboard_client: SmappeeDashboardClient | None = None,
         highlevel_configs: HighLevelConfigMap | None = None,
         site_name: str | None = None,
@@ -483,11 +486,10 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
                             connector_number=getattr(client, "connector_number", 1),
                             api_available=False,
                         )
-                else:
+                elif isinstance(res, ConnectorState):
                     self._log_connector_api_transition(uuid, True)
-                    rest_state = cast(ConnectorState, res)
                     prev = (prev_data.connectors or {}).get(uuid) if prev_data else None
-                    connectors_state[uuid] = self._merge_connector_rest_state(prev, rest_state)
+                    connectors_state[uuid] = self._merge_connector_rest_state(prev, res)
 
             await self._ensure_power_index_map()
 
@@ -1979,7 +1981,7 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             if v_ph:
                 changed |= self._set_if_changed(st, "grid_voltage_phases", v_ph)
 
-        energy_idx_list = cast(list[int], energy_idxs)
+        energy_idx_list = energy_idxs if isinstance(energy_idxs, list) else []
         if energy_idx_list:
             if power_key_prefix == "grid":
                 changed |= self._set_if_changed(

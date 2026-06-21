@@ -7,7 +7,7 @@ from datetime import timedelta
 from inspect import isawaitable
 import logging
 import re
-from typing import Any, cast
+from typing import Any
 
 from aiohttp import ClientError, ClientSession
 from homeassistant.config_entries import ConfigEntry
@@ -29,14 +29,6 @@ from .const import (
 )
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .dashboard_client import SmappeeDashboardClient
-from .data import (
-    RuntimeData,
-    SmappeeConnectorRuntime,
-    SmappeeEvConfigEntry,
-    SmappeeLedRuntime,
-    SmappeeSiteRuntime,
-    SmappeeStationRuntime,
-)
 from .device_handle import SmappeeDeviceHandle
 from .discovery import (
     MqttChannelSpec,
@@ -51,8 +43,16 @@ from .helpers import (
     station_device_identifier,
 )
 from .mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
-from .payload_types import DashboardObject, DashboardObjectList, HighLevelConfigMap, MqttPayload
+from .runtime_data import (
+    RuntimeData,
+    SmappeeConnectorRuntime,
+    SmappeeEvConfigEntry,
+    SmappeeLedRuntime,
+    SmappeeSiteRuntime,
+    SmappeeStationRuntime,
+)
 from .services import register_services
+from .state import DashboardObject, DashboardObjectList, HighLevelConfigMap, MqttPayload
 
 _LOGGER = logging.getLogger(__name__)
 _SERVICE_REGISTRATION_SENTINEL = "start_charging"
@@ -454,11 +454,11 @@ def _build_mqtt_routes(
 ) -> dict[str, list[MqttRouteTarget]]:
     """Build explicit MQTT topic routes for site and station coordinators."""
     routes: dict[str, list[MqttRouteTarget]] = {}
-    station_coordinators: list[MqttRouteTarget] = []
+    station_coordinators: list[SmappeeStationCoordinator] = []
     for bucket in stations.values():
         coordinator = bucket.station_coordinator
         if coordinator is not None:
-            station_coordinators.append(cast(MqttRouteTarget, coordinator))
+            station_coordinators.append(coordinator)
     for spec in mqtt_specs or []:
         if spec.role in {"grid", "production", "consumption", "always_on"}:
             if site_coordinator is not None:
@@ -1799,7 +1799,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             first_bucket: SmappeeStationRuntime | None = next(iter(stations_map.values()), None)
             if site.site_coordinator is None:
                 site.site_coordinator = first_bucket.site_coordinator if first_bucket else None
-            site.stations.update(cast(dict[str, SmappeeStationRuntime], stations_map))
+            site.stations.update(stations_map)
             site.control_location_ids = list(
                 dict.fromkeys([*site.control_location_ids, topology.control_location_id])
             )
@@ -1820,7 +1820,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             RuntimeData(
                 api=dashboard_client,
                 sites=sites,
-                mqtt=cast(dict[int, object], mqtt_clients),
+                mqtt=mqtt_clients,
                 dashboard=dashboard_client,
                 background_tasks=background_tasks,
             )
@@ -1831,7 +1831,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     runtime = RuntimeData(
         api=dashboard_client,
         sites=sites,
-        mqtt=cast(dict[int, object], mqtt_clients),
+        mqtt=mqtt_clients,
         dashboard=dashboard_client,
         background_tasks=background_tasks,
     )

@@ -10,12 +10,6 @@ import pytest
 
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
-    RuntimeData,
-    StationState,
-)
 from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.number import (
     SmappeeCapacityMaximumPowerNumber,
@@ -26,6 +20,8 @@ from custom_components.smappee_ev.number import (
     SmappeeOverloadMaximumLoadNumber,
     async_setup_entry,
 )
+from custom_components.smappee_ev.runtime_data import RuntimeData
+from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 

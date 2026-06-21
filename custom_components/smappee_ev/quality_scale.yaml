@@ -77,7 +77,7 @@ rules:
   inject-websession: done
   strict-typing:
     status: in_progress
-    comment: Mypy is clean and the obvious Any escapes have been reduced. Dashboard/MQTT payload aliases are in place, but full strict typing still needs narrower TypedDicts for stable API shapes.
+    comment: Mypy is clean, state/runtime types are split to avoid import cycles, and integration-local casts were removed. Full strict typing still needs narrower TypedDicts for stable API shapes.
   # Internal roadmap items.
   centralized-constants: done
   code-structure-entity-base: done

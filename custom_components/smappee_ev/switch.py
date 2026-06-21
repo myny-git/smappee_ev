@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, cast
+from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
@@ -16,9 +16,10 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import IntegrationData, SmappeeEvConfigEntry, StationState
 from .device_handle import SmappeeDeviceHandle
 from .helpers import anonymize_uuid
+from .runtime_data import SmappeeEvConfigEntry
+from .state import IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -39,7 +40,7 @@ async def async_setup_entry(
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
         for st_uuid, bucket in site.stations.items():
-            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+            coord: SmappeeCoordinator | None = bucket.station_coordinator
             st_client: SmappeeDeviceHandle | None = bucket.station_client
             conns: dict[str, SmappeeDeviceHandle] = {
                 key: conn.connector_client for key, conn in bucket.connectors.items()

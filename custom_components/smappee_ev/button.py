@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import cast
 
 from aiohttp import ClientError
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
@@ -12,8 +11,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .data import SmappeeEvConfigEntry
 from .device_handle import SmappeeDeviceHandle
+from .runtime_data import SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -56,17 +55,13 @@ async def async_setup_entry(
     entities: list[ButtonEntity] = []
     for sid, site in runtime.sites.items():
         for st_uuid, bucket in site.stations.items():
-            coord = cast(SmappeeCoordinator | None, bucket.station_coordinator)
+            coord = bucket.station_coordinator
             if coord is None:
                 continue
-            st_client = cast(
-                SmappeeDeviceHandle | None,
-                bucket.station_client or getattr(coord, "station_client", None),
+            st_client: SmappeeDeviceHandle | None = bucket.station_client or getattr(
+                coord, "station_client", None
             )
-            conns = cast(
-                dict[str, SmappeeDeviceHandle],
-                {key: conn.connector_client for key, conn in bucket.connectors.items()},
-            )
+            conns = {key: conn.connector_client for key, conn in bucket.connectors.items()}
 
             if st_client is not None:
                 entities.append(

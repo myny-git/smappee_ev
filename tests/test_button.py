@@ -12,7 +12,8 @@ from custom_components.smappee_ev.button import (
 )
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import ConnectorState, RuntimeData
+from custom_components.smappee_ev.runtime_data import RuntimeData
+from custom_components.smappee_ev.state import ConnectorState
 from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 

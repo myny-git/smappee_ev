@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -9,8 +7,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entities import SmappeeSiteEntity
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
-from .data import SmappeeEvConfigEntry
 from .helpers import station_serial
+from .runtime_data import SmappeeEvConfigEntry
 
 PARALLEL_UPDATES = 0
 
@@ -29,13 +27,10 @@ async def async_setup_entry(
     entities: list[SmappeeMqttConnectivity] = []
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
-        coord = cast(SmappeeSiteCoordinator | SmappeeCoordinator | None, site.site_coordinator)
+        coord: SmappeeSiteCoordinator | SmappeeCoordinator | None = site.site_coordinator
         if coord is None:
             first_bucket = next(iter(site.stations.values()), None)
-            coord = cast(
-                SmappeeSiteCoordinator | SmappeeCoordinator | None,
-                first_bucket.station_coordinator if first_bucket else None,
-            )
+            coord = first_bucket.station_coordinator if first_bucket else None
         if coord is not None:
             entities.append(SmappeeMqttConnectivity(coord, sid_int))
 

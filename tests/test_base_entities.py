@@ -14,13 +14,13 @@ from custom_components.smappee_ev.base_entities import (
 )
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import ConnectorState, StationState
 from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
     make_led_device_info,
     make_station_device_info,
     station_serial,
 )
+from custom_components.smappee_ev.state import ConnectorState, StationState
 
 
 @pytest.fixture

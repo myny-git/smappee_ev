@@ -13,12 +13,8 @@ import pytest
 
 from custom_components.smappee_ev import switch
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
-    RuntimeData,
-    StationState,
-)
+from custom_components.smappee_ev.runtime_data import RuntimeData
+from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 

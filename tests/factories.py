@@ -9,17 +9,15 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.data import (
-    ConnectorState,
-    IntegrationData,
+from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.runtime_data import (
     RuntimeData,
     SmappeeConnectorRuntime,
     SmappeeLedRuntime,
     SmappeeSiteRuntime,
     SmappeeStationRuntime,
-    StationState,
 )
-from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 
 _DEFAULT_SENTINEL = object()
 

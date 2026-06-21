@@ -1,18 +1,17 @@
-# custom_components/smappee_ev/data.py
+"""Pure state and loose payload types for the Smappee EV integration."""
+
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
-from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Protocol
-
-from homeassistant.config_entries import ConfigEntry
+from typing import Any
 
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
-from .payload_types import DashboardObject, HighLevelConfigMap, RecentSession
 
-if TYPE_CHECKING:
-    from .device_handle import SmappeeDeviceHandle
+type DashboardObject = dict[str, Any]
+type DashboardObjectList = list[DashboardObject]
+type HighLevelConfigMap = dict[int, DashboardObject]
+type MqttPayload = dict[str, Any]
+type RecentSession = DashboardObject
 
 
 @dataclass
@@ -64,21 +63,19 @@ class ConnectorState:
     session_cause: str | None = None
     stopped_by_cloud: bool | None = None
 
-    # Modus/strategy + returned UI-modus en paused-overlay
     raw_charging_mode: str | None = None  # NORMAL / SMART / PAUSED
     optimization_strategy: str | None = None  # NONE / EXCESS_ONLY / SCHEDULES_FIRST_THEN_EXCESS
     ui_mode_base: str | None = None  # STANDARD / SMART / SOLAR
-    paused: bool = False  # overlay
+    paused: bool = False
 
     status_current: str | None = None
 
-    # EVCC letter/code (return from IEC of chargingState)
     evcc_state: str | None = None  # "A" / "B" / "C"
     evcc_state_code: int | None = None  # 0(A) / 1(B) / 2(C)
 
     power_phases: list[int] | None = None  # [W_L1, W_L2, W_L3] (missing phases 0)
     current_phases: list[float] | None = None  # [A_L1, A_L2, A_L3]
-    energy_import_kwh: float | None = None  # cumulative (kWh)
+    energy_import_kwh: float | None = None
     power_total: int | None = None
 
 
@@ -108,9 +105,7 @@ class StationState:
     grid_power_phases: list[int] | None = None
     grid_energy_import_kwh: float | None = None
     grid_energy_export_kwh: float | None = None
-    # list of per-phase currents (A)
     grid_current_phases: list[float] | None = None
-    # list of per-phase voltages (V, integer)
     grid_voltage_phases: list[int] | None = None
 
     house_consumption_power: int | None = None
@@ -135,111 +130,3 @@ class SiteData:
     """Top-level state container for site-scoped data."""
 
     site: SiteState
-
-
-class SmappeeSiteCoordinatorRuntime(Protocol):
-    """Runtime shape used by site-scoped setup and cleanup code."""
-
-    @property
-    def data(self) -> SiteData | None: ...
-
-    def apply_mqtt_connection_change(self, up: bool) -> None: ...
-
-    async def async_shutdown(self) -> None: ...
-
-
-class SmappeeStationCoordinatorRuntime(Protocol):
-    """Runtime shape used by station-scoped setup and cleanup code."""
-
-    @property
-    def data(self) -> IntegrationData | None: ...
-
-    @property
-    def update_interval(self) -> timedelta | None: ...
-
-    def apply_mqtt_connection_change(self, up: bool) -> None: ...
-
-    def async_schedule_dashboard_refresh(self, delay: float = ...) -> None: ...
-
-    async def async_request_refresh(self) -> None: ...
-
-    async def async_shutdown(self) -> None: ...
-
-
-@dataclass
-class SmappeeConnectorRuntime:
-    """Runtime objects for one connector."""
-
-    connector_key: str
-    connector_uuid: str | None
-    connector_position: int | None
-    connector_client: SmappeeDeviceHandle
-
-
-@dataclass
-class SmappeeLedRuntime:
-    """Runtime objects for one LED controller."""
-
-    led_key: str
-    led_device_id: str | None
-    led_device_uuid: str | None = None
-    led_device_name: str | None = None
-
-
-@dataclass
-class SmappeeStationRuntime:
-    """Runtime objects for one charging station."""
-
-    site_location_id: int
-    control_location_id: int
-    site_name: str | None
-    gateway_serial: str | None
-    gateway_type: str | None
-    control_name: str | None
-    control_uuid: str | None
-    control_function_type: str | None
-    station_name: str | None
-    charging_station_serial: str
-    charging_station_model: str | None
-    station_client: SmappeeDeviceHandle
-    station_coordinator: SmappeeStationCoordinatorRuntime | None
-    mqtt: Any | None = None
-    site_coordinator: SmappeeSiteCoordinatorRuntime | None = None
-    highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
-    led_devices: dict[str, SmappeeLedRuntime] = field(default_factory=dict)
-    connectors: dict[str, SmappeeConnectorRuntime] = field(default_factory=dict)
-
-
-@dataclass
-class SmappeeSiteRuntime:
-    """Runtime objects for one site/service location."""
-
-    site_location_id: int
-    site_name: str | None
-    site_function_type: str | None
-    site_uuid: str | None
-    gateway_serial: str | None
-    gateway_type: str | None
-    control_location_ids: list[int] = field(default_factory=list)
-    measurement_location_ids: list[int] = field(default_factory=list)
-    highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
-    mqtt_clients: Any | None = None
-    site_coordinator: SmappeeSiteCoordinatorRuntime | None = None
-    stations: dict[str, SmappeeStationRuntime] = field(default_factory=dict)
-
-
-@dataclass
-class RuntimeData:
-    """Runtime storage placed on ConfigEntry.runtime_data.
-
-    Keeps the public objects platforms need without depending on hass.data.
-    """
-
-    api: object  # Dashboard client (kept generic to avoid circular import in type checking)
-    sites: dict[int, SmappeeSiteRuntime]
-    mqtt: dict[int, object]  # service_location_id -> SmappeeMqtt or list[SmappeeMqtt]
-    dashboard: object | None = None
-    background_tasks: set[asyncio.Task] = field(default_factory=set)
-
-
-type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]
