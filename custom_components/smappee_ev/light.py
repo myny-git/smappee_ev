@@ -8,12 +8,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeLedEntity
+from .api.device_handle import SmappeeDeviceHandle
 from .const import DEFAULT_LED_BRIGHTNESS, DOMAIN
 from .coordinator import SmappeeCoordinator
-from .device_handle import SmappeeDeviceHandle
-from .runtime_data import SmappeeEvConfigEntry
-from .state import IntegrationData
+from .entity import SmappeeLedEntity
+from .models.runtime_data import SmappeeEvConfigEntry
+from .models.state import IntegrationData
 
 PARALLEL_UPDATES = 1
 

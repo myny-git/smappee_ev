@@ -1,4 +1,4 @@
-# custom_components/smappee_ev/mqtt_gateway.py
+# custom_components/smappee_ev/api/mqtt_gateway.py
 from __future__ import annotations
 
 import asyncio
@@ -12,7 +12,7 @@ from typing import Any
 
 from aiomqtt import Client, MqttError
 
-from .const import (
+from ..const import (
     MQTT_HEARTBEAT_TOPIC_SUFFIX,
     MQTT_HOST,
     MQTT_PORT_TLS,
@@ -22,26 +22,26 @@ from .const import (
     MQTT_TRACK_INTERVAL_SEC,
     MQTT_TRACKING_TYPE_RT_VALUES,
 )
-from .helpers import anonymize_uuid
+from ..helpers import anonymize_uuid
 
 _LOGGER = logging.getLogger(__name__)
 _TOPIC_SECRET_RE = re.compile(r"(servicelocation/)([^/]+)(/)")
+_DEVICE_TOPIC_SECRET_RE = re.compile(r"(devices/)([^/]+)(/)")
 
 
 def redact_mqtt_topic(topic: str) -> str:
-    """Redact service-location UUIDs from MQTT topics using anonymization."""
+    """Redact sensitive UUIDs from MQTT topics using stable anonymization."""
 
-    def replacer(match: re.Match) -> str:
-        # Group 1: 'servicelocation/'
-        # Group 2: UUID
-        # Group 3: '/'
+    def replacer(match: re.Match[str]) -> str:
         prefix = match.group(1)
         uuid = match.group(2)
         suffix = match.group(3)
+        if uuid in {"+", "#"}:
+            return match.group(0)
 
         return f"{prefix}{anonymize_uuid(uuid)}{suffix}"
 
-    return _TOPIC_SECRET_RE.sub(replacer, topic)
+    return _DEVICE_TOPIC_SECRET_RE.sub(replacer, _TOPIC_SECRET_RE.sub(replacer, topic))
 
 
 class SmappeeMqtt:

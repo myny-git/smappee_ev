@@ -10,14 +10,14 @@ import aiohttp
 from aiohttp import ClientSession, ClientTimeout
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
-from .const import (
+from ..const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     DASHAPI_URL,
     DASHBOARD_API_URL,
     HTTP_CONNECT_TIMEOUT,
     HTTP_TOTAL_TIMEOUT,
 )
-from .state import DashboardObject, DashboardObjectList, RecentSession
+from ..models.state import DashboardObject, DashboardObjectList, RecentSession
 
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_RENEW_SKEW_MS = 60_000

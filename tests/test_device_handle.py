@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 from aiohttp import ClientError
 import pytest
 
-from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 
 
 class RecordingDashboard:

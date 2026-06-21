@@ -17,12 +17,12 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
+from .api.device_handle import SmappeeDeviceHandle
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
-from .device_handle import SmappeeDeviceHandle
-from .runtime_data import SmappeeEvConfigEntry
-from .state import ConnectorState, IntegrationData, StationState
+from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
+from .models.runtime_data import SmappeeEvConfigEntry
+from .models.state import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1

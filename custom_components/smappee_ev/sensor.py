@@ -24,11 +24,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .base_entities import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, SmappeeSiteEntity
+from .api.device_handle import SmappeeDeviceHandle
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
-from .device_handle import SmappeeDeviceHandle
+from .entity import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, SmappeeSiteEntity
 from .helpers import format_as_hms, safe_sum, update_total_increasing
-from .runtime_data import SmappeeEvConfigEntry
+from .models.runtime_data import SmappeeEvConfigEntry
 
 PARALLEL_UPDATES = 0
 

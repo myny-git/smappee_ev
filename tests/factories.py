@@ -7,17 +7,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
-from custom_components.smappee_ev.runtime_data import (
+from custom_components.smappee_ev.models.runtime_data import (
     RuntimeData,
     SmappeeConnectorRuntime,
     SmappeeLedRuntime,
     SmappeeSiteRuntime,
     SmappeeStationRuntime,
 )
-from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
+from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 
 _DEFAULT_SENTINEL = object()
 

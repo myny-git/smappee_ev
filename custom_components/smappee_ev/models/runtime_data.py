@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 
+from ..api.mqtt_gateway import SmappeeMqtt
 from .state import HighLevelConfigMap
 
 if TYPE_CHECKING:
-    from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
-    from .device_handle import SmappeeDeviceHandle
+    from ..api.device_handle import SmappeeDeviceHandle
+    from ..coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
+
+type MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
 
 
 @dataclass
@@ -52,7 +55,7 @@ class SmappeeStationRuntime:
     charging_station_model: str | None
     station_client: SmappeeDeviceHandle
     station_coordinator: SmappeeStationCoordinator | None
-    mqtt: Any | None = None
+    mqtt: MqttRuntimeValue = None
     site_coordinator: SmappeeSiteCoordinator | None = None
     highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
     led_devices: dict[str, SmappeeLedRuntime] = field(default_factory=dict)
@@ -72,7 +75,7 @@ class SmappeeSiteRuntime:
     control_location_ids: list[int] = field(default_factory=list)
     measurement_location_ids: list[int] = field(default_factory=list)
     highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
-    mqtt_clients: Any | None = None
+    mqtt_clients: MqttRuntimeValue = None
     site_coordinator: SmappeeSiteCoordinator | None = None
     stations: dict[str, SmappeeStationRuntime] = field(default_factory=dict)
 

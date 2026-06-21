@@ -9,15 +9,15 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinator import (
     SmappeeCoordinator,
     _amps_from_ma,
     _pick,
     _to_int,
 )
-from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import ConnectorSessionEnergySensor
-from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 
 CHARGINGSTATE_TOPIC = (
     "servicelocation/site/etc/carcharger/acchargingcontroller/v1"

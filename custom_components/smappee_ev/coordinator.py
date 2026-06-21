@@ -20,17 +20,17 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .api.dashboard_client import SmappeeDashboardClient
+from .api.device_handle import SmappeeDeviceHandle
+from .api.mqtt_gateway import redact_mqtt_topic
 from .const import (
     DASHBOARD_REFRESH_AFTER_WRITE_DELAY,
     DASHBOARD_REFRESH_INTERVAL,
     DEFAULT_MAX_CURRENT,
     DEFAULT_MIN_CURRENT,
 )
-from .dashboard_client import SmappeeDashboardClient
-from .device_handle import SmappeeDeviceHandle
 from .helpers import anonymize_uuid
-from .mqtt_gateway import redact_mqtt_topic
-from .state import (
+from .models.state import (
     ConnectorState,
     DashboardObject,
     HighLevelConfigMap,

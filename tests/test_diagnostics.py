@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from custom_components.smappee_ev.diagnostics import REDACT_KEYS, async_get_config_entry_diagnostics
-from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
+from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from tests.factories import (
     make_config_entry,
     make_connector_runtime,

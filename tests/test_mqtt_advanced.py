@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from custom_components.smappee_ev.mqtt_gateway import MQTT_HEARTBEAT_TOPIC_SUFFIX, SmappeeMqtt
+from custom_components.smappee_ev.api.mqtt_gateway import MQTT_HEARTBEAT_TOPIC_SUFFIX, SmappeeMqtt
 from tests.helpers import wait_until
 
 
@@ -120,7 +120,7 @@ async def test_subscriptions_and_message_parsing(monkeypatch):
             return factory.build()
 
     # aiomqtt stub already installed via conftest
-    monkeypatch.setattr("custom_components.smappee_ev.mqtt_gateway.Client", PatchedClient())
+    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
 
     # Start
     await mqtt.start()
@@ -186,7 +186,7 @@ async def test_tracking_and_heartbeat_publish(monkeypatch):
         def __call__(self, *_, **__):
             return factory.build()
 
-    monkeypatch.setattr("custom_components.smappee_ev.mqtt_gateway.Client", PatchedClient())
+    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
     await mqtt.start()
 
     await wait_until(
@@ -230,14 +230,14 @@ async def test_reconnect_backoff(monkeypatch):
         def __call__(self, *_, **__):
             return factory.build()
 
-    monkeypatch.setattr("custom_components.smappee_ev.mqtt_gateway.Client", PatchedClient())
+    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
 
     # Shrink backoff constants so retry happens quickly
     monkeypatch.setattr(
-        "custom_components.smappee_ev.mqtt_gateway.MQTT_RECONNECT_INITIAL_BACKOFF", 0.01
+        "custom_components.smappee_ev.api.mqtt_gateway.MQTT_RECONNECT_INITIAL_BACKOFF", 0.01
     )
     monkeypatch.setattr(
-        "custom_components.smappee_ev.mqtt_gateway.MQTT_RECONNECT_MAX_BACKOFF", 0.02
+        "custom_components.smappee_ev.api.mqtt_gateway.MQTT_RECONNECT_MAX_BACKOFF", 0.02
     )
 
     await mqtt.start()

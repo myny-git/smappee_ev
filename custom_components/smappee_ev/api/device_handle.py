@@ -7,7 +7,7 @@ from typing import Any
 
 import aiohttp
 
-from .helpers import anonymize_uuid
+from ..helpers import anonymize_uuid
 
 _LOGGER = logging.getLogger(__name__)
 

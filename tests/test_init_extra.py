@@ -12,9 +12,9 @@ from custom_components.smappee_ev import (
     _prepare_site,
     _setup_mqtt,
 )
+from custom_components.smappee_ev.api.discovery import MqttChannelSpec
+from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
 from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
-from custom_components.smappee_ev.discovery import MqttChannelSpec
-from custom_components.smappee_ev.mqtt_gateway import SmappeeMqtt
 from tests.factories import make_connector_runtime, make_station_runtime
 
 

@@ -5,7 +5,7 @@ import aiohttp
 from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
-from custom_components.smappee_ev.dashboard_client import SmappeeDashboardClient
+from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
 
 
 class _Response:

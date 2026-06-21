@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.smappee_ev.mqtt_gateway import SmappeeMqtt
+from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
 
 
 class TestSmappeeMqttBasic:

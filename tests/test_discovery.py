@@ -1,6 +1,6 @@
 """Tests for Dashboard topology and highlevel MQTT parsing."""
 
-from custom_components.smappee_ev.discovery import (
+from custom_components.smappee_ev.api.discovery import (
     build_topologies_from_full_details,
     parse_mqtt_channel_specs_from_highlevel,
     unique_mqtt_channel_specs,

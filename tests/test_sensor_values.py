@@ -3,8 +3,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import (
     ConnCurrentL1,
     ConnCurrentL2,
@@ -37,7 +38,6 @@ from custom_components.smappee_ev.sensor import (
     _nested_value,
     _session_ts_to_datetime,
 )
-from custom_components.smappee_ev.state import ConnectorState, IntegrationData, StationState
 
 
 def _api(connector_number: int | None = 1) -> MagicMock:

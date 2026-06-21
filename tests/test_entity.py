@@ -6,21 +6,21 @@ from unittest.mock import MagicMock, patch
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import pytest
 
-from custom_components.smappee_ev.base_entities import (
+from custom_components.smappee_ev.const import DOMAIN
+from custom_components.smappee_ev.coordinator import SmappeeCoordinator
+from custom_components.smappee_ev.entity import (
     SmappeeBaseEntity,
     SmappeeConnectorEntity,
     SmappeeStationEntity,
     SmappeeStationRestEntity,
 )
-from custom_components.smappee_ev.const import DOMAIN
-from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
     make_led_device_info,
     make_station_device_info,
     station_serial,
 )
-from custom_components.smappee_ev.state import ConnectorState, StationState
+from custom_components.smappee_ev.models.state import ConnectorState, StationState
 
 
 @pytest.fixture
@@ -95,8 +95,8 @@ class TestSmappeeBaseEntity:
         assert entity._attr_has_entity_name is True
         assert isinstance(entity, CoordinatorEntity)
 
-    @patch("custom_components.smappee_ev.base_entities.station_serial", return_value="SERIAL123")
-    @patch("custom_components.smappee_ev.base_entities.make_device_info")
+    @patch("custom_components.smappee_ev.entity.station_serial", return_value="SERIAL123")
+    @patch("custom_components.smappee_ev.entity.make_device_info")
     def test_device_info(self, mock_make_device_info, mock_station_serial, mock_coordinator):
         """Test device_info property."""
         mock_make_device_info.return_value = {"identifiers": {("test", "device")}}
@@ -112,7 +112,7 @@ class TestSmappeeBaseEntity:
 class TestSmappeeStationEntity:
     """Test the SmappeeStationEntity class."""
 
-    @patch("custom_components.smappee_ev.base_entities.make_unique_id", return_value="unique-id")
+    @patch("custom_components.smappee_ev.entity.make_unique_id", return_value="unique-id")
     def test_init(self, mock_make_unique_id, mock_coordinator):
         """Test entity initialization."""
         entity = SmappeeStationEntity(
@@ -162,7 +162,7 @@ class TestSmappeeConnectorEntity:
     """Test the SmappeeConnectorEntity class."""
 
     @patch(
-        "custom_components.smappee_ev.base_entities.make_unique_id",
+        "custom_components.smappee_ev.entity.make_unique_id",
         return_value="connector-unique-id",
     )
     def test_init(self, mock_make_unique_id, mock_coordinator):

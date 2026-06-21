@@ -6,6 +6,7 @@ from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinator import (
     SmappeeSiteCoordinator,
     SmappeeStationCoordinator,
@@ -15,8 +16,7 @@ from custom_components.smappee_ev.coordinator import (
     _mqtt_channel_topic,
     _volts_from_dv,
 )
-from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
-from custom_components.smappee_ev.state import (
+from custom_components.smappee_ev.models.state import (
     ConnectorState,
     IntegrationData,
     SiteData,

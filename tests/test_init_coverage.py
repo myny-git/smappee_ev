@@ -25,9 +25,9 @@ from custom_components.smappee_ev import (
     async_remove_config_entry_device,
     async_unload_entry,
 )
+from custom_components.smappee_ev.api.discovery import MqttChannelSpec, SmappeeLocationTopology
 from custom_components.smappee_ev.const import DOMAIN
-from custom_components.smappee_ev.discovery import MqttChannelSpec, SmappeeLocationTopology
-from custom_components.smappee_ev.runtime_data import RuntimeData
+from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from tests.factories import (
     make_connector_runtime,
     make_led_runtime,

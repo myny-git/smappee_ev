@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
+from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 
 type DashboardObject = dict[str, Any]
 type DashboardObjectList = list[DashboardObject]

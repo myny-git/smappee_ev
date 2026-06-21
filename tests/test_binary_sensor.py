@@ -8,11 +8,11 @@ from homeassistant.core import HomeAssistant
 import pytest
 
 from custom_components.smappee_ev import binary_sensor
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.binary_sensor import SmappeeMqttConnectivity
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.device_handle import SmappeeDeviceHandle
-from custom_components.smappee_ev.runtime_data import RuntimeData
-from custom_components.smappee_ev.state import IntegrationData, StationState
+from custom_components.smappee_ev.models.runtime_data import RuntimeData
+from custom_components.smappee_ev.models.state import IntegrationData, StationState
 from tests.factories import make_site_runtime, make_station_runtime
 
 

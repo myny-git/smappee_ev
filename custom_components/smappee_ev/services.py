@@ -8,10 +8,10 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
+from .api.device_handle import SmappeeDeviceHandle
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
-from .device_handle import SmappeeDeviceHandle
-from .runtime_data import RuntimeData, SmappeeSiteRuntime
-from .state import ConnectorState
+from .models.runtime_data import RuntimeData, SmappeeSiteRuntime
+from .models.state import ConnectorState
 
 _LOGGER = logging.getLogger(__name__)
 DASHBOARD_CHARGING_MODES = {mode.upper() for mode in CHARGING_MODES}

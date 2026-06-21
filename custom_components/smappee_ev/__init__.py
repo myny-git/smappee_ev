@@ -18,6 +18,15 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
+from .api.dashboard_client import SmappeeDashboardClient
+from .api.device_handle import SmappeeDeviceHandle
+from .api.discovery import (
+    MqttChannelSpec,
+    SmappeeLocationTopology,
+    build_topologies_from_full_details,
+    parse_mqtt_channel_specs_from_highlevel,
+)
+from .api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
@@ -28,22 +37,14 @@ from .const import (
     UPDATE_INTERVAL_DEFAULT,
 )
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
-from .dashboard_client import SmappeeDashboardClient
-from .device_handle import SmappeeDeviceHandle
-from .discovery import (
-    MqttChannelSpec,
-    SmappeeLocationTopology,
-    build_topologies_from_full_details,
-    parse_mqtt_channel_specs_from_highlevel,
-)
 from .helpers import (
     connector_device_identifier,
     led_device_identifier,
     site_device_identifier,
     station_device_identifier,
 )
-from .mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
-from .runtime_data import (
+from .models.runtime_data import (
+    MqttRuntimeValue,
     RuntimeData,
     SmappeeConnectorRuntime,
     SmappeeEvConfigEntry,
@@ -51,8 +52,8 @@ from .runtime_data import (
     SmappeeSiteRuntime,
     SmappeeStationRuntime,
 )
+from .models.state import DashboardObject, DashboardObjectList, HighLevelConfigMap, MqttPayload
 from .services import register_services
-from .state import DashboardObject, DashboardObjectList, HighLevelConfigMap, MqttPayload
 
 _LOGGER = logging.getLogger(__name__)
 _SERVICE_REGISTRATION_SENTINEL = "start_charging"
@@ -67,7 +68,6 @@ PLATFORMS = [
 ]
 
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
-MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
 MqttRouteTarget = SmappeeSiteCoordinator | SmappeeStationCoordinator
 
 # Discovery helpers.

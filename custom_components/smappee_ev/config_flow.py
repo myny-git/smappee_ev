@@ -12,6 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 import voluptuous as vol
 
+from .api.dashboard_client import SmappeeDashboardClient
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
@@ -19,7 +20,6 @@ from .const import (
     CONF_USERNAME,
     DOMAIN,
 )
-from .dashboard_client import SmappeeDashboardClient
 from .registry import async_remove_config_entry_registry_entries
 
 _LOGGER = logging.getLogger(__name__)

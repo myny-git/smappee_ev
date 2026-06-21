@@ -5,10 +5,10 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeSiteEntity
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
+from .entity import SmappeeSiteEntity
 from .helpers import station_serial
-from .runtime_data import SmappeeEvConfigEntry
+from .models.runtime_data import SmappeeEvConfigEntry
 
 PARALLEL_UPDATES = 0
 

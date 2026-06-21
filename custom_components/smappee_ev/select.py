@@ -5,12 +5,12 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .base_entities import SmappeeConnectorEntity
+from .api.device_handle import SmappeeDeviceHandle
 from .const import CHARGING_MODES, DOMAIN
 from .coordinator import SmappeeCoordinator
-from .device_handle import SmappeeDeviceHandle
-from .runtime_data import SmappeeEvConfigEntry
-from .state import ConnectorState, IntegrationData
+from .entity import SmappeeConnectorEntity
+from .models.runtime_data import SmappeeEvConfigEntry
+from .models.state import ConnectorState, IntegrationData
 
 PARALLEL_UPDATES = 1
 MODES = [mode.lower() for mode in CHARGING_MODES]

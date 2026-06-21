@@ -13,13 +13,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .base_entities import SmappeeConnectorEntity, SmappeeStationRestEntity
+from .api.device_handle import SmappeeDeviceHandle
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .device_handle import SmappeeDeviceHandle
+from .entity import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .helpers import anonymize_uuid
-from .runtime_data import SmappeeEvConfigEntry
-from .state import IntegrationData, StationState
+from .models.runtime_data import SmappeeEvConfigEntry
+from .models.state import IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1

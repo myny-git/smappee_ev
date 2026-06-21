@@ -8,11 +8,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entities import SmappeeConnectorEntity, SmappeeStationEntity
+from .api.device_handle import SmappeeDeviceHandle
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .device_handle import SmappeeDeviceHandle
-from .runtime_data import SmappeeEvConfigEntry
+from .entity import SmappeeConnectorEntity, SmappeeStationEntity
+from .models.runtime_data import SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1

@@ -27,14 +27,14 @@ from custom_components.smappee_ev.helpers import (
     station_device_identifier,
 )
 from custom_components.smappee_ev.light import SmappeeLedLight
-from custom_components.smappee_ev.sensor import ConnectorPowerSensor, StationGridPower
-from custom_components.smappee_ev.state import (
+from custom_components.smappee_ev.models.state import (
     ConnectorState,
     IntegrationData,
     SiteData,
     SiteState,
     StationState,
 )
+from custom_components.smappee_ev.sensor import ConnectorPowerSensor, StationGridPower
 from tests.factories import (
     make_config_entry,
     make_connector_client,

@@ -5,15 +5,15 @@ from typing import TYPE_CHECKING, TypeVar
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api.device_handle import SmappeeDeviceHandle
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
-from .device_handle import SmappeeDeviceHandle
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
 if TYPE_CHECKING:
     from homeassistant.helpers.entity import DeviceInfo
 
-    from .state import ConnectorState
+    from .models.state import ConnectorState
 
 __all__ = [
     "SmappeeBaseEntity",

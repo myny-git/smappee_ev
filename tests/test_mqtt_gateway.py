@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 from aiomqtt import MqttError
 import pytest
 
-from custom_components.smappee_ev.discovery import MqttChannelSpec
-from custom_components.smappee_ev.mqtt_gateway import SmappeeMqtt
+from custom_components.smappee_ev.api.discovery import MqttChannelSpec
+from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
 
 
 @pytest.fixture
@@ -37,6 +37,26 @@ def mqtt_gateway(mock_properties_callback, mock_connection_callback):
 class TestSmappeeMqtt:
     """Updated tests matching current SmappeeMqtt implementation (runner_main + tracking_loop)."""
 
+    def test_redact_mqtt_topic_masks_service_location_and_device_uuid(self):
+        topic = (
+            "servicelocation/site-uuid/etc/carcharger/acchargingcontroller/v1/"
+            "devices/aa6a3217-cc6a-44a8-8ff9-1ea67618ec15/property/chargingstate"
+        )
+
+        redacted = redact_mqtt_topic(topic)
+
+        assert "site-uuid" not in redacted
+        assert "aa6a3217-cc6a-44a8-8ff9-1ea67618ec15" not in redacted
+        assert "servicelocation/site****uuid/" in redacted
+        assert "devices/aa6a****ec15/property/chargingstate" in redacted
+
+    def test_redact_mqtt_topic_keeps_subscription_wildcards(self):
+        topic = "servicelocation/site-uuid/etc/carcharger/acchargingcontroller/v1/devices/+/state"
+
+        redacted = redact_mqtt_topic(topic)
+
+        assert redacted.endswith("/devices/+/state")
+
     def test_initialization(self, mqtt_gateway, mock_properties_callback, mock_connection_callback):
         assert mqtt_gateway._slu == "test-uuid"
         assert mqtt_gateway._client_id == "test-client"
@@ -60,7 +80,7 @@ class TestSmappeeMqtt:
             await dummy_runner(self, ssl_ctx)
 
         monkeypatch.setattr(
-            "custom_components.smappee_ev.mqtt_gateway.SmappeeMqtt._runner_main", wrapper
+            "custom_components.smappee_ev.api.mqtt_gateway.SmappeeMqtt._runner_main", wrapper
         )
         await mqtt_gateway.start()
         assert mqtt_gateway._runner_task is not None
@@ -102,7 +122,7 @@ class TestSmappeeMqtt:
                 return None
 
         monkeypatch.setattr(
-            "custom_components.smappee_ev.mqtt_gateway.Client",
+            "custom_components.smappee_ev.api.mqtt_gateway.Client",
             lambda *_args, **_kwargs: FakeClient(),
         )
 
@@ -248,9 +268,9 @@ class TestSmappeeMqtt:
                 close()
             gw._stop.set()
 
-        monkeypatch.setattr("custom_components.smappee_ev.mqtt_gateway.Client", FailingClient())
+        monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", FailingClient())
         monkeypatch.setattr(
-            "custom_components.smappee_ev.mqtt_gateway.asyncio.wait_for",
+            "custom_components.smappee_ev.api.mqtt_gateway.asyncio.wait_for",
             stop_during_backoff,
         )
 
@@ -266,7 +286,7 @@ class TestSmappeeMqtt:
             await self._stop.wait()
 
         monkeypatch.setattr(
-            "custom_components.smappee_ev.mqtt_gateway.SmappeeMqtt._runner_main", dummy_runner
+            "custom_components.smappee_ev.api.mqtt_gateway.SmappeeMqtt._runner_main", dummy_runner
         )
         await mqtt_gateway.start()
         await mqtt_gateway.stop()
@@ -282,7 +302,7 @@ class TestSmappeeMqtt:
             return MagicMock()
 
         monkeypatch.setattr(
-            "custom_components.smappee_ev.mqtt_gateway.asyncio.to_thread",
+            "custom_components.smappee_ev.api.mqtt_gateway.asyncio.to_thread",
             stop_during_to_thread,
         )
 
@@ -368,7 +388,7 @@ class TestSmappeeMqtt:
     async def test_start_ssl_context_failure_notifies_disconnected(self, mqtt_gateway, monkeypatch):
         """Test start reports disconnected if SSL context creation fails."""
         monkeypatch.setattr(
-            "custom_components.smappee_ev.mqtt_gateway.asyncio.to_thread",
+            "custom_components.smappee_ev.api.mqtt_gateway.asyncio.to_thread",
             MagicMock(side_effect=RuntimeError("ssl failed")),
         )
 
