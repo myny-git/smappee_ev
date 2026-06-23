@@ -3,4 +3,5 @@
 .continue/  
 .ha-config/
 .ruff_cache/
+.agents/
 __pycache__/
