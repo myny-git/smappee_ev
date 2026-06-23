@@ -61,7 +61,11 @@ trigger:
   to: cable_connected
   for:
     minutes: !input delay_time
-condition: []
+condition:
+- alias: Ignore unavailable
+  condition: template
+  value_template: '{{ trigger.from_state.state not in [''unknown'', ''unavailable'']
+    and trigger.to_state.state not in [''unknown'', ''unavailable'']}}'
 action:
 - action: notify.send_message
   target: !input notify_service
