@@ -5,7 +5,7 @@
 
 # Pytest + async support (choose latest plugin variant requiring pytest-asyncio 0.24.0)
 pytest-cov>=7.1.0,<8
-pytest-homeassistant-custom-component==0.13.340
+pytest-homeassistant-custom-component==0.13.342
 
 # Home Assistant core + type stubs (keep in sync!)
 homeassistant==2026.6.4
