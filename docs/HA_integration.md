@@ -166,7 +166,7 @@ Defines the maximum current in Ampere for the connector. This number is used to 
 
 | Entity | Explanation |
 |---|---|
-| `sensor.smappee_ev_YOURSERIAL_charging_state_1` | Current session state, for example `STARTED`, `SUSPENDED` or `STOPPED`. |
+| `sensor.smappee_ev_YOURSERIAL_charging_state_1` | Current session state, for example `started`, `suspended` or `stopped`. |
 | `sensor.smappee_ev_YOURSERIAL_evcc_state_1` | EVCC state following IEC 61851, for example A/B/C/E. |
 | `sensor.smappee_ev_YOURSERIAL_status_current_1` | Charger state similar to the Dashboard. |
 | `sensor.smappee_ev_YOURSERIAL_session_energy_1` | Current or most recent Smappee charging session energy in kWh. |
@@ -180,6 +180,8 @@ The session energy sensor exposes session metadata such as id, serial number, co
 ### Diagnostic Sensor Values
 
 These values are passed through from Smappee MQTT/API payloads. Smappee does not officially document all possible values, so this list is not exhaustive and may differ between firmware versions.
+
+These are the raw Home Assistant state values to use in automations. The Home Assistant UI may display them with capitalization, for example `charging finished` may appear as `Charging finished` in the activity/history view.
 
 | Sensor | Possible HA state values | Meaning |
 |---|---|---|

@@ -1010,6 +1010,21 @@ class TestSmappeeCoordinator:
         assert mock_station.mqtt_connected is False
         coordinator.async_set_updated_data.assert_called_with(coordinator.data)
 
+    def test_mqtt_connection_change_up_does_not_notify_when_already_connected(
+        self, coordinator
+    ):
+        """Test repeated MQTT up events only update last-seen timestamp."""
+        station = coordinator.data.station
+        station.mqtt_connected = True
+        station.last_mqtt_rx = 1.0
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator.apply_mqtt_connection_change(True)
+
+        assert station.mqtt_connected is True
+        assert station.last_mqtt_rx > 1.0
+        coordinator.async_set_updated_data.assert_not_called()
+
     def test_mqtt_topic_parsing(self, coordinator):
         """Test MQTT topic parsing methods."""
         # Test device UUID extraction
