@@ -1651,8 +1651,8 @@ class TestSmappeeCoordinator:
             coordinator.apply_mqtt_properties("/etc/led/acledcontroller/v1/devices/updated", {})
             mock5.assert_called_once()
 
-    def test_apply_mqtt_properties_notifies_on_heartbeat_only(self, coordinator):
-        """Test heartbeat-only MQTT messages notify last-seen updates."""
+    def test_apply_mqtt_properties_does_not_notify_on_heartbeat_only(self, coordinator):
+        """Test heartbeat-only MQTT messages only update last-seen state."""
         coordinator.data.station.mqtt_connected = True
         coordinator.data.station.last_mqtt_rx = 1.0
         coordinator.async_set_updated_data = MagicMock()
@@ -1661,7 +1661,26 @@ class TestSmappeeCoordinator:
 
         assert coordinator.data.station.mqtt_connected is True
         assert coordinator.data.station.last_mqtt_rx > 1.0
-        coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+        coordinator.async_set_updated_data.assert_not_called()
+
+    def test_apply_mqtt_properties_notifies_each_changed_power_message(self, coordinator):
+        """Test frequent changed power messages still notify immediately."""
+        topic = "servicelocation/site/power"
+        coordinator.data.station.mqtt_connected = True
+        coordinator._power_index_maps_by_topic = {
+            topic: {
+                "grid": {"power": [0], "power_field": "channelData"},
+                "pv": {},
+                "cars": {},
+            }
+        }
+        coordinator.async_set_updated_data = MagicMock()
+
+        coordinator.apply_mqtt_properties(topic, {"channelData": [100]})
+        coordinator.apply_mqtt_properties(topic, {"channelData": [101]})
+
+        assert coordinator.data.station.grid_power_total == 101
+        assert coordinator.async_set_updated_data.call_count == 2
 
     def test_handle_connector_mqtt(self, coordinator):
         """Test _handle_connector_mqtt method."""

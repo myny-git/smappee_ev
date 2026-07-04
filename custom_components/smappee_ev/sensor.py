@@ -50,7 +50,6 @@ async def async_setup_entry(
             first_bucket = next(iter(site.stations.values()), None)
             site_coord = first_bucket.station_coordinator if first_bucket else None
         if site_coord is not None:
-            entities.append(SmappeeMqttLastSeenSensor(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationGridPower(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationPvPower(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationHouseConsumptionPower(site_coord, None, sid_int, f"site-{sid}"))
@@ -989,40 +988,6 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         if restored_value is not None:
             self._restored_value = str(restored_value)
             _safe_write_ha_state(self)
-
-
-class SmappeeMqttLastSeenSensor(SmappeeSiteEntity, SensorEntity):
-    """Site-scope 'last MQTT RX' as timestamp sensor."""
-
-    _attr_translation_key = "mqtt_last_seen"
-    _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_entity_registry_enabled_default = False  # Disable by default in UI
-
-    def __init__(
-        self,
-        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
-        api_client: SmappeeDeviceHandle | None,
-        sid: int,
-        station_uuid: str,
-    ) -> None:
-        SmappeeSiteEntity.__init__(
-            self,
-            coordinator,
-            sid,
-            unique_suffix="sensor:mqtt_last_seen",
-        )
-        self.api_client = api_client
-
-    @property
-    def native_value(self) -> datetime | None:
-        st = _site_state(self.coordinator)
-        ts = getattr(st, "last_mqtt_rx", None)
-        if ts is None:
-            return None
-        with suppress(TypeError, ValueError):
-            return datetime.fromtimestamp(float(ts), tz=UTC)
-        return None
 
 
 def _session_ts_to_datetime(value: object) -> datetime | None:

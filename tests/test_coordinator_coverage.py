@@ -169,6 +169,26 @@ def test_site_apply_mqtt_properties_without_data_is_safe(hass):
     coord.async_set_updated_data.assert_not_called()
 
 
+def test_site_apply_mqtt_properties_does_not_notify_on_heartbeat_only(hass):
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+    )
+    coord.data = SiteData(site=SiteState(mqtt_connected=True, last_mqtt_rx=1.0))
+    coord.async_set_updated_data = MagicMock()
+
+    coord.apply_mqtt_properties("/homeassistant/heartbeat", {})
+
+    assert coord.data.site.mqtt_connected is True
+    assert coord.data.site.last_mqtt_rx > 1.0
+    coord.async_set_updated_data.assert_not_called()
+
+
 def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
     topic = "servicelocation/site/power"
     cfg = {

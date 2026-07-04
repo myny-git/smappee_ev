@@ -59,9 +59,6 @@
       "evse_status": {
         "default": "mdi:ev-plug-type2"
       },
-      "mqtt_last_seen": {
-        "default": "mdi:clock-check"
-      },
       "support_grid": {
         "default": "mdi:transmission-tower-export"
       }

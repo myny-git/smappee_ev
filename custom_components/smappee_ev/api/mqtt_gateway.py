@@ -27,6 +27,13 @@ from ..helpers import anonymize_uuid
 _LOGGER = logging.getLogger(__name__)
 _TOPIC_SECRET_RE = re.compile(r"(servicelocation/)([^/]+)(/)")
 _DEVICE_TOPIC_SECRET_RE = re.compile(r"(devices/)([^/]+)(/)")
+_ON_PROPERTIES_PARSE_ERRORS = (
+    RuntimeError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+)
 
 
 def redact_mqtt_topic(topic: str) -> str:
@@ -285,19 +292,13 @@ class SmappeeMqtt:
                                         if isinstance(payload, dict)
                                         else {"raw": payload_raw},
                                     )
-                                except (
-                                    RuntimeError,
-                                    ValueError,
-                                    TypeError,
-                                    KeyError,
-                                    AttributeError,
-                                ) as err:
+                                except _ON_PROPERTIES_PARSE_ERRORS as err:
                                     _LOGGER.debug("on_properties (heartbeat) raised: %s", err)
                                 continue
 
                             try:
                                 self._on_properties(topic_str, payload)
-                            except (RuntimeError, ValueError, TypeError, KeyError) as err:
+                            except _ON_PROPERTIES_PARSE_ERRORS as err:
                                 _LOGGER.warning("on_properties raised: %s", err)
 
                 except asyncio.CancelledError:

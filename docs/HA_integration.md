@@ -171,12 +171,21 @@ Defines the maximum current in Ampere for the connector. This number is used to 
 | `sensor.smappee_ev_YOURSERIAL_status_current_1` | Charger state similar to the Dashboard. |
 | `sensor.smappee_ev_YOURSERIAL_session_energy_1` | Current or most recent Smappee charging session energy in kWh. |
 | `binary_sensor.smappee_ev_YOURSERIAL_mqtt_connected` | MQTT connectivity state. |
-| `sensor.smappee_ev_YOURSERIAL_mqtt_last_seen` | Timestamp of the last MQTT update. Disabled as it gives a lot of noise to Home Assistant. |
 | `sensor.smappee_ev_YOURSERIAL_offline_failsafe_current` | The failsafe current that will be used when the Smappee is offline and offline_charging is enabled. |
 | `number.smappee_ev_YOURSERIAL_overload_maximum_load` | The main circuit breaker limit in amperes. |
 | `number.smappee_ev_YOURSERIAL_capacity_maximum_power` | The maximum peak capacity power in kW. Interesting for Belgian users.|
 
 The session energy sensor exposes session metadata such as id, serial number, connector, start time, end time, status, smart mode, priority and configured amperage values.
+
+### Diagnostic Sensor Values
+
+These values are passed through from Smappee MQTT/API payloads. Smappee does not officially document all possible values, so this list is not exhaustive and may differ between firmware versions.
+
+| Sensor | Possible HA state values | Meaning |
+|---|---|---|
+| `charging_state` | `initialize`, `started`, `suspended`, `stopped`, rare: `smart` | Raw Smappee `chargingState` from `_fetch_connector_state`, published by the integration as a lowercase string. `initialize` is the default before the first API fetch. No fixed enum is enforced. The rare `smart` value has been observed once; its session-classification behavior is unconfirmed, so consider opening an issue if it appears repeatedly. |
+| `evcc_state` | `A`, `B`, `C`, `E`, `F` | IEC 61851 notation derived from `iec_status` through `_derive_evcc_letter`. A means no vehicle connected, B means connected/not charging, C means actively charging, E/F indicate fault states. `D` is intentionally excluded. |
+| `evse_status` | `available`, `charging`, `paused by charger`, `cable connected`, `charging finished` | Raw Smappee `status_current`, published by the integration as a lowercase string. No fixed enum is enforced. |
 
 ## Power, Current and Energy Sensors
 
@@ -215,7 +224,7 @@ When removing the integration manually, also remove `custom_components/smappee_e
 |---|---|
 | Setup says authentication failed | Verify the same username and password in the online Smappee Dashboard. If the account has changed, reconfigure or reauthenticate the integration. |
 | Entities are unavailable | Check internet access, Smappee cloud availability, Dashboard credentials and whether `binary_sensor.*_mqtt_connected` is on. |
-| MQTT values are stale | Check the `mqtt_last_seen` diagnostic sensor and confirm that `mqtt.smappee.net` is reachable from Home Assistant. |
+| MQTT values are stale | Check whether `binary_sensor.*_mqtt_connected` is on and confirm that `mqtt.smappee.net` is reachable from Home Assistant. |
 | A service action asks for `service_location_id` or `connector_id` | The integration found multiple possible targets. Provide the site or connector explicitly in the service call. |
 | `set_current` is rejected | The requested current is outside the connector's configured min/max current range. Check the connector max current and use a value inside the allowed range. |
 | The mobile app shows different information | The Smappee mobile app may lag behind. Use the online Dashboard and Home Assistant entity history when verifying recent changes. |

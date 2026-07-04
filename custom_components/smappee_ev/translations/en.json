@@ -273,9 +273,6 @@
       }
     },
     "sensor": {
-      "mqtt_last_seen": {
-        "name": "MQTT last seen"
-      },
       "grid_power": {
         "name": "Grid power"
       },

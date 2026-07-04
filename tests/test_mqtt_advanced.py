@@ -168,6 +168,48 @@ async def test_subscriptions_and_message_parsing(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_runner_survives_attribute_error_on_regular_topic(monkeypatch):
+    stream = MsgStream()
+    fc = FakeClient(stream)
+    factory = ClientFactory(fc)
+
+    calls: list[tuple[str, dict]] = []
+    processed: list[dict] = []
+
+    def on_props(t: str, d: dict):
+        calls.append((t, d))
+        if len(calls) == 1:
+            raise AttributeError("unexpected payload shape")
+        processed.append(d)
+
+    mqtt = SmappeeMqtt(
+        service_location_uuid="slu-attr",
+        client_id="cid-attr",
+        serial_number="SERIAL-ATTR",
+        on_properties=on_props,
+        service_location_id=123,
+    )
+
+    class PatchedClient:
+        def __call__(self, *_, **__):
+            return factory.build()
+
+    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
+    await mqtt.start()
+
+    topic = "servicelocation/slu-attr/etc/carcharger/acchargingcontroller/v1/devices/ABC/state"
+    await stream.push(topic, json.dumps({"seq": 1}))
+    await wait_until(lambda: len(calls) == 1)
+    assert mqtt._runner_task is not None
+    assert not mqtt._runner_task.done()
+
+    await stream.push(topic, json.dumps({"seq": 2}))
+    await wait_until(lambda: any(payload.get("seq") == 2 for payload in processed))
+
+    await mqtt.stop()
+
+
+@pytest.mark.asyncio
 async def test_tracking_and_heartbeat_publish(monkeypatch):
     stream = MsgStream()
     fc = FakeClient(stream)

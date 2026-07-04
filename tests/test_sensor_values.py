@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,7 +16,6 @@ from custom_components.smappee_ev.sensor import (
     SmappeeChargingStateSensor,
     SmappeeEVCCStateSensor,
     SmappeeEvseStatusSensor,
-    SmappeeMqttLastSeenSensor,
     StationGridCurrentL1,
     StationGridCurrentL2,
     StationGridCurrentL3,
@@ -205,16 +203,6 @@ def test_evse_status_restored_fallback_without_current_state():
     entity._restored_value = "B1"
 
     assert entity.native_value == "B1"
-
-
-def test_mqtt_last_seen_timestamp_and_invalid_values():
-    coordinator = _coordinator(StationState(last_mqtt_rx=1_700_000_000))
-    entity = SmappeeMqttLastSeenSensor(coordinator, _api(), 42, "station-uuid")
-
-    assert entity.native_value == datetime.fromtimestamp(1_700_000_000, tz=UTC)
-
-    coordinator.data.station.last_mqtt_rx = "bad"
-    assert entity.native_value is None
 
 
 @pytest.mark.parametrize(

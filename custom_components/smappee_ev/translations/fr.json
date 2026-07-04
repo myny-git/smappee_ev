@@ -270,9 +270,6 @@
       }
     },
     "sensor": {
-      "mqtt_last_seen": {
-        "name": "Dernière connexion MQTT"
-      },
       "grid_power": {
         "name": "Puissance du réseau"
       },

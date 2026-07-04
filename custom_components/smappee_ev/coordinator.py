@@ -380,9 +380,10 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         if not data:
             return
         data.site.last_mqtt_rx = _now()
-        changed = True
+        changed = False
         if not getattr(data.site, "mqtt_connected", False):
             data.site.mqtt_connected = True
+            changed = True
         if topic.endswith("/power"):
             changed |= self._handle_power(topic, payload)
         if changed:
@@ -1411,17 +1412,14 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             return
         st = data.station
         changed = False
+        st.last_mqtt_rx = _now()
         if up:
-            st.last_mqtt_rx = _now()
             if not getattr(st, "mqtt_connected", False):
                 st.mqtt_connected = True
                 changed = True
+        elif getattr(st, "mqtt_connected", None) is not False:
+            st.mqtt_connected = False
             changed = True
-        else:
-            if getattr(st, "mqtt_connected", None) is not False:
-                st.mqtt_connected = False
-                st.last_mqtt_rx = _now()
-                changed = True
 
         if changed:
             self.async_set_updated_data(data)
@@ -1438,9 +1436,9 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
         st = getattr(data, "station", None)
         if st is not None:
             st.last_mqtt_rx = _now()
-            changed = True
             if not getattr(st, "mqtt_connected", False):
                 st.mqtt_connected = True
+                changed = True
 
         # devices/updated (connector)
         if "/etc/carcharger/acchargingcontroller/" in topic and topic.endswith("/devices/updated"):
