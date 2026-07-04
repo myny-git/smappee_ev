@@ -12,13 +12,13 @@ from custom_components.smappee_ev.entity import (
     SmappeeBaseEntity,
     SmappeeConnectorEntity,
     SmappeeConnectorMqttEntity,
+    SmappeeLedEntity,
     SmappeeStationEntity,
     SmappeeStationRestEntity,
     _is_int_like,
 )
 from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
-    make_led_device_info,
     make_station_device_info,
     station_serial,
 )
@@ -57,13 +57,39 @@ def test_scoped_device_info_hierarchy():
         "6230010364",
         station_model="WALL_QUANTUM_CABLE",
     )
-    led = make_led_device_info(317418, 317443, "6230010364", "LED-controller-123")
     connector = make_connector_device_info(317418, 317443, "6230010364", "connector-uuid", "1")
 
     assert station["identifiers"] == {(DOMAIN, "station:317418:317443:6230010364")}
     assert station["via_device"] == (DOMAIN, "site:317418")
-    assert led["via_device"] == (DOMAIN, "station:317418:317443:6230010364")
     assert connector["via_device"] == (DOMAIN, "station:317418:317443:6230010364")
+
+
+def test_led_entity_uses_station_device_info(mock_coordinator):
+    """LED entities should attach to the charging station device."""
+    mock_coordinator.station_client = SimpleNamespace(
+        service_location_id=317443,
+        charging_station_serial="6230010364",
+    )
+    mock_coordinator.station_name = None
+    mock_coordinator.station_model = None
+    mock_coordinator.site_name = None
+    mock_coordinator.gateway_serial = None
+    mock_coordinator.gateway_type = None
+    led_entity = SmappeeLedEntity(
+        mock_coordinator,
+        317418,
+        "station-uuid",
+        unique_suffix="light:led",
+        led_device_id="LED-controller-123",
+        led_name="LED Ring",
+    )
+
+    identifiers = led_entity.device_info["identifiers"]
+
+    assert (DOMAIN, "station:317418:317443:6230010364") in identifiers
+    assert not any(
+        identifier.startswith("led:") for domain, identifier in identifiers if domain == DOMAIN
+    )
 
 
 def test_connector_device_info_uses_serial_fallback_without_station_name():

@@ -17,11 +17,11 @@ from custom_components.smappee_ev import (
     sensor,
     switch,
 )
+from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.helpers import (
     build_connector_label,
     connector_device_identifier,
-    led_device_identifier,
     make_device_info,
     make_unique_id,
     station_device_identifier,
@@ -405,8 +405,8 @@ class TestLightPlatform:
         async_add_entities.assert_called_once_with([], False)
 
     @pytest.mark.asyncio
-    async def test_led_light_metadata_uses_led_device_hierarchy(self, hass: HomeAssistant):
-        """Protect HA device registry identifiers for LED controller entities."""
+    async def test_led_light_metadata_uses_station_device_hierarchy(self, hass: HomeAssistant):
+        """Protect HA device registry identifiers for LED entities."""
         station_client = make_station_client()
         station_client.set_brightness = AsyncMock()
         connector_client = make_connector_client(
@@ -460,12 +460,12 @@ class TestLightPlatform:
         assert led_light.unique_id == "317418:STATION123:station-uuid:light:led"
         assert led_light.is_on is True
         assert led_light.brightness == 102
-        assert led_light.device_info["identifiers"] == {
-            led_device_identifier(317418, 317443, "STATION123", "led-device-1")
-        }
-        assert led_light.device_info["via_device"] == station_device_identifier(
-            317418, 317443, "STATION123"
+        identifiers = led_light.device_info["identifiers"]
+        assert station_device_identifier(317418, 317443, "STATION123") in identifiers
+        assert not any(
+            identifier.startswith("led:") for domain, identifier in identifiers if domain == DOMAIN
         )
+        assert led_light.device_info["via_device"] == (DOMAIN, "site:317418")
 
 
 class TestSwitchPlatform:

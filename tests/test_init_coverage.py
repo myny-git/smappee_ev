@@ -873,7 +873,7 @@ def test_create_dashboard_client_persists_refresh_token_updates():
     )
 
 
-def test_register_runtime_devices_creates_site_station_led_and_connector_devices():
+def test_register_runtime_devices_creates_site_station_and_connector_devices():
     hass = MagicMock()
     entry = MagicMock()
     entry.entry_id = "entry-1"
@@ -916,7 +916,10 @@ def test_register_runtime_devices_creates_site_station_led_and_connector_devices
     )
     registry = MagicMock()
 
-    with patch("custom_components.smappee_ev.dr.async_get", return_value=registry):
+    with (
+        patch("custom_components.smappee_ev.dr.async_get", return_value=registry),
+        patch("custom_components.smappee_ev.dr.async_entries_for_config_entry", return_value=[]),
+    ):
         _register_runtime_devices(hass, entry)
 
     identifiers = [
@@ -926,7 +929,7 @@ def test_register_runtime_devices_creates_site_station_led_and_connector_devices
     assert "site:100" in flattened
     assert "station:100:200:STATION-1" in flattened
     assert "100:LEGACY-SERIAL:station-uuid" in flattened
-    assert "led:100:200:STATION-1:led-id" in flattened
+    assert "led:100:200:STATION-1:led-id" not in flattened
     assert "connector:100:200:STATION-1:conn-uuid" in flattened
 
 

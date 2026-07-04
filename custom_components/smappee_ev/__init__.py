@@ -37,12 +37,7 @@ from .const import (
     UPDATE_INTERVAL_DEFAULT,
 )
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
-from .helpers import (
-    connector_device_identifier,
-    led_device_identifier,
-    site_device_identifier,
-    station_device_identifier,
-)
+from .helpers import connector_device_identifier, site_device_identifier, station_device_identifier
 from .models.runtime_data import (
     MqttRuntimeValue,
     RuntimeData,
@@ -1295,11 +1290,30 @@ def _mqtt_client_count(mqtt_by_site: dict[int, MqttRuntimeValue]) -> int:
     return sum(len(_iter_mqtt_clients(mqtt)) for mqtt in mqtt_by_site.values())
 
 
+def _remove_legacy_led_controller_devices(
+    registry: dr.DeviceRegistry,
+    entry: SmappeeEvConfigEntry,
+) -> None:
+    """Remove old standalone LED Controller devices for this config entry."""
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        if not any(
+            domain == DOMAIN and identifier.startswith("led:")
+            for domain, identifier in device.identifiers
+        ):
+            continue
+
+        if device.config_entries == {entry.entry_id}:
+            registry.async_remove_device(device.id)
+        else:
+            registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)
+
+
 def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> None:
     """Ensure the HA device registry contains the real Smappee hierarchy."""
     if hass.config_entries.async_get_entry(entry.entry_id) is None:
         return
     registry = dr.async_get(hass)
+    _remove_legacy_led_controller_devices(registry, entry)
     rd = entry.runtime_data
     for site_sid, site in (rd.sites or {}).items():
         site_identifier = site_device_identifier(site_sid)
@@ -1334,21 +1348,6 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
                 serial_number=str(station_serial),
                 via_device=site_identifier,
             )
-
-            for led_key, led in bucket.led_devices.items():
-                led_id = led.led_device_id or led_key
-                if not led_id:
-                    continue
-                registry.async_get_or_create(
-                    config_entry_id=entry.entry_id,
-                    identifiers={
-                        led_device_identifier(site_sid, control_sid, station_serial, led_id)
-                    },
-                    manufacturer=MANUFACTURER,
-                    name=led.led_device_name or f"Smappee EV {station_serial} LED controller",
-                    model="LED Controller",
-                    via_device=station_identifier,
-                )
 
             for connector_uuid, info in bucket.connectors.items():
                 client = info.connector_client

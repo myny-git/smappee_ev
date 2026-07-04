@@ -25,16 +25,6 @@ def station_device_identifier(
     return (DOMAIN, f"station:{site_sid}:{control_sid}:{charging_station_serial}")
 
 
-def led_device_identifier(
-    site_sid: int | str,
-    control_sid: int | str,
-    charging_station_serial: str,
-    led_device_id: str,
-) -> tuple[str, str]:
-    """Return the registry identifier for a LED controller device."""
-    return (DOMAIN, f"led:{site_sid}:{control_sid}:{charging_station_serial}:{led_device_id}")
-
-
 def connector_device_identifier(
     site_sid: int | str,
     control_sid: int | str,
@@ -94,28 +84,6 @@ def make_station_device_info(
     return device_info
 
 
-def make_led_device_info(
-    site_sid: int | str,
-    control_sid: int | str,
-    charging_station_serial: str,
-    led_device_id: str,
-    *,
-    led_name: str | None = None,
-) -> DeviceInfo:
-    """Return Home Assistant device_info for a LED controller."""
-    device_info: DeviceInfo = {
-        "identifiers": {
-            led_device_identifier(site_sid, control_sid, charging_station_serial, led_device_id)
-        },
-        "name": led_name or f"{MANUFACTURER} EV {charging_station_serial} LED controller",
-        "manufacturer": MANUFACTURER,
-        "configuration_url": CONFIGURATION_URL,
-        "model": "LED Controller",
-        "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
-    }
-    return device_info
-
-
 def make_connector_device_info(
     site_sid: int | str,
     control_sid: int | str,
@@ -156,8 +124,6 @@ def make_device_info(
     charging_station_serial: str | None = None,
     station_name: str | None = None,
     station_model: str | None = None,
-    led_device_id: str | None = None,
-    led_name: str | None = None,
     connector_key: str | None = None,
 ) -> DeviceInfo:
     """Return a Home Assistant device_info dict for a station or connector."""
@@ -167,15 +133,6 @@ def make_device_info(
     resolved_control_sid = control_sid or sid
     resolved_station_serial = charging_station_serial or serial
     legacy_identifier = f"{sid}:{serial}:{station_uuid}"
-
-    if scope == "led" and led_device_id:
-        return make_led_device_info(
-            sid,
-            resolved_control_sid,
-            resolved_station_serial,
-            led_device_id,
-            led_name=led_name,
-        )
 
     if scope == "connector":
         resolved_connector_key = connector_key or connector_label or "unknown"
@@ -292,7 +249,6 @@ __all__ = [
     "make_device_info",
     "make_site_device_info",
     "make_station_device_info",
-    "make_led_device_info",
     "make_connector_device_info",
     "make_unique_id",
     "station_serial",

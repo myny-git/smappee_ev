@@ -64,8 +64,6 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
         connector_uuid: str | None = None,
         connector_label: str | None = None,
         device_scope: str = "station",
-        led_device_id: str | None = None,
-        led_name: str | None = None,
     ) -> None:
         self._sid = sid
         self._station_uuid = station_uuid
@@ -75,8 +73,6 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
         self._serial = serial
         self._connector_label = connector_label
         self._device_scope = device_scope
-        self._led_device_id = led_device_id
-        self._led_name = led_name
         self._connector_key = connector_uuid
         unique_suffix = unique_suffix or "entity"
         self.internal_integration_suggested_object_id = (
@@ -134,8 +130,6 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
             charging_station_serial=charging_station_serial,
             station_name=station_name,
             station_model=station_model,
-            led_device_id=self._led_device_id,
-            led_name=self._led_name,
             connector_key=self._connector_key,
         )
 
@@ -157,8 +151,6 @@ class SmappeeStationEntity(SmappeeBaseEntity[SmappeeCoordinator]):
         name: str | None = None,
         *,
         device_scope: str = "station",
-        led_device_id: str | None = None,
-        led_name: str | None = None,
     ) -> None:
         super().__init__(
             coordinator,
@@ -166,8 +158,6 @@ class SmappeeStationEntity(SmappeeBaseEntity[SmappeeCoordinator]):
             station_uuid,
             unique_suffix=unique_suffix,
             device_scope=device_scope,
-            led_device_id=led_device_id,
-            led_name=led_name,
         )
         if name is not None:
             self._attr_name = name
@@ -209,7 +199,7 @@ class SmappeeStationRestEntity(SmappeeStationEntity):
 
 
 class SmappeeLedEntity(SmappeeStationRestEntity):
-    """Base for LED-controller entities."""
+    """Base for LED entities attached to the charging station device."""
 
     def __init__(
         self,
@@ -225,9 +215,7 @@ class SmappeeLedEntity(SmappeeStationRestEntity):
             sid,
             station_uuid,
             unique_suffix=unique_suffix,
-            device_scope="led",
-            led_device_id=led_device_id,
-            led_name=led_name,
+            device_scope="station",
         )
 
 
