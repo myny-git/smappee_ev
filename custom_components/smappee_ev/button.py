@@ -12,6 +12,7 @@ from .api.device_handle import SmappeeDeviceHandle
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeStationEntity
+from .helpers import dashboard_mode, station_action_error
 from .models.runtime_data import SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,24 +25,6 @@ def _connector_action_error(method_name: str, err: BaseException) -> HomeAssista
         translation_key="connector_service_failed",
         translation_placeholders={"method_name": method_name, "error": str(err)},
     )
-
-
-def _station_action_error(method_name: str, err: BaseException) -> HomeAssistantError:
-    return HomeAssistantError(
-        translation_domain=DOMAIN,
-        translation_key="station_service_failed",
-        translation_placeholders={"method_name": method_name, "error": str(err)},
-    )
-
-
-def _dashboard_mode(mode: str | None) -> str | None:
-    """Return a Dashboard v10 charging mode, accepting legacy/restored labels."""
-    mode_up = str(mode or "").upper()
-    if mode_up in {"STANDARD", "NORMAL"}:
-        return "STANDARD"
-    if mode_up in {"SMART", "SOLAR"}:
-        return mode_up
-    return None
 
 
 async def async_setup_entry(
@@ -149,7 +132,7 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
             try:
                 await self.api_client.restart_charging_station()
             except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
-                raise _station_action_error("restart_charging_station", err) from err
+                raise station_action_error("restart_charging_station", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         else:
             _LOGGER.debug("Unknown station action for button: %s", self._action)
@@ -211,8 +194,8 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
             if data and self.connector_uuid in (data.connectors or {}):
                 conn = data.connectors[self.connector_uuid]
                 mode = (
-                    _dashboard_mode(getattr(conn, "selected_mode", None))
-                    or _dashboard_mode(getattr(conn, "ui_mode_base", None))
+                    dashboard_mode(getattr(conn, "selected_mode", None))
+                    or dashboard_mode(getattr(conn, "ui_mode_base", None))
                     or "STANDARD"
                 )
             try:

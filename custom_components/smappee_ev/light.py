@@ -5,25 +5,17 @@ from typing import Any
 from aiohttp import ClientError
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api.device_handle import SmappeeDeviceHandle
-from .const import DEFAULT_LED_BRIGHTNESS, DOMAIN
+from .const import DEFAULT_LED_BRIGHTNESS
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeLedEntity
+from .helpers import station_action_error
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import IntegrationData
 
 PARALLEL_UPDATES = 1
-
-
-def _station_action_error(method_name: str, err: BaseException) -> HomeAssistantError:
-    return HomeAssistantError(
-        translation_domain=DOMAIN,
-        translation_key="station_service_failed",
-        translation_placeholders={"method_name": method_name, "error": str(err)},
-    )
 
 
 async def async_setup_entry(
@@ -133,7 +125,7 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
         try:
             await self.api_client.set_brightness(brightness)
         except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
-            raise _station_action_error("set_brightness", err) from err
+            raise station_action_error("set_brightness", err) from err
         if brightness > 0:
             self._last_nonzero_brightness = brightness
         data: IntegrationData | None = self.coordinator.data

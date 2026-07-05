@@ -10,6 +10,7 @@ import voluptuous as vol
 
 from .api.device_handle import SmappeeDeviceHandle
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
+from .helpers import dashboard_mode
 from .models.runtime_data import RuntimeData, SmappeeSiteRuntime
 from .models.state import ConnectorState
 
@@ -237,16 +238,6 @@ def _get_connector_state(
     return None
 
 
-def _dashboard_mode(mode: str | None) -> str | None:
-    """Return a Dashboard v10 charging mode, accepting legacy/restored labels."""
-    mode_up = str(mode or "").upper()
-    if mode_up in {"STANDARD", "NORMAL"}:
-        return "STANDARD"
-    if mode_up in {"SMART", "SOLAR"}:
-        return mode_up
-    return None
-
-
 def _schedule_dashboard_refresh_for_client(
     hass: HomeAssistant, client: SmappeeDeviceHandle
 ) -> None:
@@ -405,8 +396,8 @@ async def handle_resume_charging(call: ServiceCall) -> None:
     mode = "STANDARD"
     if conn_state:
         mode = (
-            _dashboard_mode(conn_state.selected_mode)
-            or _dashboard_mode(conn_state.ui_mode_base)
+            dashboard_mode(conn_state.selected_mode)
+            or dashboard_mode(conn_state.ui_mode_base)
             or "STANDARD"
         )
 

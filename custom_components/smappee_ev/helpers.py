@@ -6,9 +6,29 @@ from contextlib import suppress
 from datetime import timedelta
 from typing import Any
 
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import CONFIGURATION_URL, DOMAIN, MANUFACTURER
+
+
+def dashboard_mode(mode: str | None) -> str | None:
+    """Return a Dashboard v10 charging mode, accepting legacy/restored labels."""
+    mode_up = str(mode or "").upper()
+    if mode_up in {"STANDARD", "NORMAL"}:
+        return "STANDARD"
+    if mode_up in {"SMART", "SOLAR"}:
+        return mode_up
+    return None
+
+
+def station_action_error(method_name: str, err: BaseException) -> HomeAssistantError:
+    """Return a translated station action failure."""
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="station_service_failed",
+        translation_placeholders={"method_name": method_name, "error": str(err)},
+    )
 
 
 def site_device_identifier(site_sid: int | str) -> tuple[str, str]:
