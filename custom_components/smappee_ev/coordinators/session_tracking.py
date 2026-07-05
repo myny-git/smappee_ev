@@ -8,7 +8,6 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 import logging
 from time import time as _now
-from typing import TYPE_CHECKING
 
 from aiohttp import ClientError
 from homeassistant.core import CALLBACK_TYPE
@@ -16,12 +15,8 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
 from ..helpers import anonymize_uuid
-from ..models.state import ConnectorState, IntegrationData, RecentSession
-
-if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-
-    from ..api.device_handle import SmappeeDeviceHandle
+from ..models.state import ConnectorState, RecentSession
+from .base import CoordinatorMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,27 +31,13 @@ _SESSION_PAUSED_STATES = {"PAUSED", "SUSPENDED"}
 _SESSION_STOPPED_STATES = {"STOPPED", "CHARGING_FINISHED", "FINISHED", "COMPLETED", "IDLE"}
 
 
-class SessionTrackingMixin:
+class SessionTrackingMixin(CoordinatorMixin):
     """Recent-session refresh and active-session tracking helpers."""
 
-    if TYPE_CHECKING:
-        hass: HomeAssistant
-        data: IntegrationData
-        connector_clients: dict[str, SmappeeDeviceHandle]
-        _connector_session_available: dict[str, bool]
-        _last_session_api_attempt: float
-        _last_session_api_update: float
-        _session_refresh_unsub: CALLBACK_TYPE | None
-        _session_active_loop_unsub: CALLBACK_TYPE | None
-        _session_active_loop_interval: int | None
-        _session_final_refresh_unsubs: list[CALLBACK_TYPE]
-        _session_refresh_lock: asyncio.Lock
-        _session_tracking_started: bool
-        _shutting_down: bool
-
-        def async_set_updated_data(self, data: IntegrationData) -> None: ...
-
-        def _start_background_reauth(self) -> None: ...
+    _last_session_api_attempt: float
+    _session_refresh_unsub: CALLBACK_TYPE | None
+    _session_active_loop_unsub: CALLBACK_TYPE | None
+    _session_active_loop_interval: int | None
 
     def _log_connector_session_transition(
         self, uuid: str, available: bool, err: Exception | None = None

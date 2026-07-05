@@ -5,33 +5,15 @@ from __future__ import annotations
 from contextlib import suppress
 import logging
 from time import time as _now
-from typing import TYPE_CHECKING
 
-from ..models.state import ConnectorState, IntegrationData, StationState
-
-if TYPE_CHECKING:
-    from typing import Any
+from ..models.state import ConnectorState, StationState
+from .base import CoordinatorMixin
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class MqttMixin:
+class MqttMixin(CoordinatorMixin):
     """Station MQTT topic parsing and payload merge helpers."""
-
-    if TYPE_CHECKING:
-        data: IntegrationData
-
-        def async_set_updated_data(self, data: IntegrationData) -> None: ...
-
-        def _handle_power(self, topic: str, payload: dict[str, Any]) -> bool: ...
-
-        def _handle_session_tracking_transition(
-            self, conn: ConnectorState, was_active: bool, connector_uuid: str | None
-        ) -> None: ...
-
-        def _is_session_active(self, conn: ConnectorState) -> bool: ...
-
-        def _set_if_changed(self, obj: object, attr: str, value: Any) -> bool: ...
 
     @staticmethod
     def _get_any(d: dict, *names: str):

@@ -6,7 +6,6 @@ import asyncio
 from contextlib import suppress
 from dataclasses import replace
 import logging
-from typing import TYPE_CHECKING
 
 from aiohttp import ClientError
 
@@ -14,17 +13,17 @@ from ..api.device_handle import SmappeeDeviceHandle
 from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 from ..helpers import anonymize_uuid
 from ..models.state import ConnectorState, StationState
+from .base import CoordinatorMixin
 from .power import _to_int
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class StationApiMixin:
+class StationApiMixin(CoordinatorMixin):
     """REST/API reachability, fetching, and merge helpers."""
 
-    if TYPE_CHECKING:
-        _station_api_available: bool | None
-        _connector_api_available: dict[str, bool]
+    _station_api_available: bool | None
+    _connector_api_available: dict[str, bool]
 
     def _log_connector_api_transition(
         self, uuid: str, available: bool, err: Exception | None = None

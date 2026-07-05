@@ -29,7 +29,7 @@ from .coordinators.power import (
     _indexes_from_aspect_paths,
     _mqtt_channel_topic,
     _pick,
-    _to_int,  # noqa: F401 - re-exported compatibility helper.
+    _to_int as _power_to_int,
     _volts_from_dv,
 )
 from .coordinators.session_tracking import SessionTrackingMixin
@@ -44,6 +44,11 @@ from .models.state import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _to_int(value: object, default: int = 0) -> int:
+    """Compatibility wrapper for tests and older internal imports."""
+    return _power_to_int(value, default)
 
 
 class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
