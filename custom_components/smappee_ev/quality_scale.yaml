@@ -6,8 +6,8 @@ rules:
   # Bronze.
   action-setup: done
   appropriate-polling:
-    status: in_progress
-    comment: Live charger data is primarily event-driven via MQTT, but Dashboard/API refresh intervals and fallback polling behavior should still be documented and reviewed.
+    status: done
+    comment: Live charger data is primarily event-driven via MQTT. The REST/API coordinator uses an explicit 30-second update interval for availability and fallback state, while slower Dashboard configuration data is throttled to at most every 30 minutes and refreshed shortly after supported writes.
   brands: done
   common-modules: done
   config-flow: done
@@ -33,9 +33,7 @@ rules:
   docs-configuration-parameters: done
   docs-installation-parameters: done
   entity-unavailable: done
-  integration-owner:
-    status: done
-    comment: The manifest lists the active maintainer as code owner.
+  integration-owner: done
   log-when-unavailable:
     status: done
     comment: REST/API availability and MQTT availability both log once on unavailable transitions and once on recovery, without repeated logs for unchanged failure or heartbeat/no-op states.
