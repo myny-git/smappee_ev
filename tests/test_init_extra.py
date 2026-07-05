@@ -185,7 +185,7 @@ class TestMqttSetup:
         mock_coordinator.update_interval = UPDATE_INTERVAL_DEFAULT
 
         # Mock SmappeeMqtt
-        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+        with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
             # Create a mock MQTT instance
             mock_mqtt = MagicMock(spec=SmappeeMqtt)
             mock_mqtt.start = AsyncMock()
@@ -249,7 +249,7 @@ class TestMqttSetup:
         mock_coordinator.data.station = MagicMock()
 
         # Mock SmappeeMqtt
-        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+        with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
             # Call _setup_mqtt with no UUID
             result = _setup_mqtt(
                 hass,
@@ -284,7 +284,7 @@ class TestMqttSetup:
             ),
         ]
 
-        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+        with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
             mock_mqtt = MagicMock(spec=SmappeeMqtt)
             mock_mqtt.start = AsyncMock()
             mock_mqtt_class.return_value = mock_mqtt
@@ -329,7 +329,7 @@ class TestMqttSetup:
             ),
         ]
 
-        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+        with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
             mqtt_a = MagicMock(spec=SmappeeMqtt)
             mqtt_b = MagicMock(spec=SmappeeMqtt)
             mqtt_a.start = AsyncMock()
@@ -370,7 +370,7 @@ class TestMqttSetup:
         }
 
         # Mock SmappeeMqtt to capture the callback
-        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+        with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
             # Call _setup_mqtt to get the callback
             _setup_mqtt(
                 hass,
@@ -408,7 +408,7 @@ class TestMqttSetup:
         }
 
         # Mock SmappeeMqtt to capture the callback
-        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+        with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
             # Call _setup_mqtt to get the callback
             _setup_mqtt(
                 hass,
@@ -455,7 +455,7 @@ class TestMqttSetup:
         }
         background_tasks = set()
 
-        with patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class:
+        with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
             mock_mqtt = MagicMock(spec=SmappeeMqtt)
             mock_mqtt.start = AsyncMock()
             mock_mqtt_class.return_value = mock_mqtt

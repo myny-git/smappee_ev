@@ -264,7 +264,7 @@ async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass):
         patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
         patch("custom_components.smappee_ev.SmappeeSiteCoordinator", _FakeSiteCoordinator),
         patch("custom_components.smappee_ev.SmappeeCoordinator", _FakeStationCoordinator),
-        patch("custom_components.smappee_ev.SmappeeMqtt", _FakeMqtt),
+        patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
         patch("custom_components.smappee_ev._register_runtime_devices"),
         patch.object(hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
     ):
@@ -425,7 +425,7 @@ def test_mqtt_routes_deliver_properties_to_site_and_station_coordinators(hass):
         ),
     ]
 
-    with patch("custom_components.smappee_ev.SmappeeMqtt", _FakeMqtt):
+    with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt):
         mqtt_clients = _setup_mqtt(
             hass,
             "site-uuid",

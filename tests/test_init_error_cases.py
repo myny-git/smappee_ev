@@ -330,8 +330,8 @@ class TestErrorHandling:
 
         # Mock SmappeeMqtt to capture the callback and the logger
         with (
-            patch("custom_components.smappee_ev.SmappeeMqtt") as mock_mqtt_class,
-            patch("custom_components.smappee_ev._LOGGER.exception") as mock_log_exception,
+            patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class,
+            patch("custom_components.smappee_ev.mqtt_setup._LOGGER.exception") as mock_log_exception,
         ):
             # Call _setup_mqtt to get the callback
             _setup_mqtt(

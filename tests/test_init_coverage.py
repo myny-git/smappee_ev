@@ -580,7 +580,7 @@ def test_build_mqtt_clients_groups_specs_by_credentials_and_tracks_routes(hass):
         ),
     ]
 
-    with patch("custom_components.smappee_ev.SmappeeMqtt") as mqtt_cls:
+    with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mqtt_cls:
         mqtt_cls.side_effect = [MagicMock(name="mqtt-a"), MagicMock(name="mqtt-b")]
         clients = _build_mqtt_clients(
             suuid="fallback",
