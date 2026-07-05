@@ -223,8 +223,7 @@ async def _prepare_topology(
         )
 
     has_connector_mapping = any(
-        (mapping.get("connectors") or {})
-        for mapping in station_serial_to_connectors.values()
+        (mapping.get("connectors") or {}) for mapping in station_serial_to_connectors.values()
     )
 
     allowed_station_serials = set(station_serial_to_connectors.keys())
@@ -247,7 +246,9 @@ async def _prepare_topology(
     }
     if allowed_connector_uuids:
         car_devs = [
-            connector for connector in car_devs if _connector_uuid(connector) in allowed_connector_uuids
+            connector
+            for connector in car_devs
+            if _connector_uuid(connector) in allowed_connector_uuids
         ]
 
     stations = _make_station_clients_with_mapping_fallback(

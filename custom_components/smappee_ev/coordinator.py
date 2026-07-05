@@ -466,5 +466,6 @@ class SmappeeStationCoordinator(
             return True
         return False
 
+
 # Backwards-compatible public name used by older tests and platform code.
 SmappeeCoordinator = SmappeeStationCoordinator

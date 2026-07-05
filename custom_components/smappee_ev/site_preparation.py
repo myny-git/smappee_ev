@@ -171,9 +171,7 @@ async def _async_prepare_site(  # noqa: C901 - moved as-is from __init__.py.
     # build station map with station_client + empty connector buckets
     stations = _make_station_clients(serial_str, sid, station_devs)
     if not stations and has_connector_mapping:
-        mapping_station_devs = _station_devices_from_connector_mapping(
-            station_serial_to_connectors
-        )
+        mapping_station_devs = _station_devices_from_connector_mapping(station_serial_to_connectors)
         if mapping_station_devs:
             _LOGGER.debug(
                 "Connector mapping at %s yielded no usable station smartdevices; "
