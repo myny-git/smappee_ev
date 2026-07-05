@@ -8,8 +8,9 @@ from datetime import datetime
 from inspect import iscoroutinefunction
 import logging
 from time import time as _now
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from homeassistant.core import CALLBACK_TYPE
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later
 
@@ -23,11 +24,53 @@ from ..models.state import (
     StationState,
 )
 
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from ..api.dashboard_client import SmappeeDashboardClient
+    from ..api.device_handle import SmappeeDeviceHandle
+    from ..models.state import HighLevelConfigMap
+
 _LOGGER = logging.getLogger(__name__)
 
 
 class DashboardMixin:
     """Dashboard refresh, scheduling, and payload merge helpers."""
+
+    if TYPE_CHECKING:
+        hass: HomeAssistant
+        data: IntegrationData
+        dashboard_client: SmappeeDashboardClient | None
+        station_client: SmappeeDeviceHandle
+        connector_clients: dict[str, SmappeeDeviceHandle]
+        _highlevel_configs: HighLevelConfigMap
+        _power_index_maps_by_topic: dict[str, DashboardObject] | None
+        _last_dashboard_refresh: float
+        _last_dashboard_warning: float
+        _dashboard_refresh_lock: asyncio.Lock
+        _dashboard_refresh_unsub: CALLBACK_TYPE | None
+        _dashboard_refresh_task: asyncio.Task[None] | None
+
+        @property
+        def _is_stopping(self) -> bool: ...
+
+        def async_set_updated_data(self, data: IntegrationData) -> None: ...
+
+        def _as_int(self, v: object, default: int | None = None) -> int | None: ...
+
+        def _build_measurement_index_maps_by_topic_from_highlevel_configs(
+            self, configs: HighLevelConfigMap
+        ) -> dict[str, DashboardObject] | None: ...
+
+        def _derive_base_mode(self, mode: str | None, strategy: str | None) -> str: ...
+
+        def _log_background_task_exception(self, task: asyncio.Task) -> None: ...
+
+        def _set_if_changed(self, obj: object, attr: str, value: Any) -> bool: ...
+
+        def _start_background_reauth(self) -> None: ...
+
+        def _update_evcc(self, conn: ConnectorState) -> bool: ...
 
     async def _maybe_refresh_dashboard_data(
         self, data: IntegrationData, force: bool = False

@@ -6,6 +6,7 @@ import asyncio
 from contextlib import suppress
 from dataclasses import replace
 import logging
+from typing import TYPE_CHECKING
 
 from aiohttp import ClientError
 
@@ -20,6 +21,10 @@ _LOGGER = logging.getLogger(__name__)
 
 class StationApiMixin:
     """REST/API reachability, fetching, and merge helpers."""
+
+    if TYPE_CHECKING:
+        _station_api_available: bool | None
+        _connector_api_available: dict[str, bool]
 
     def _log_connector_api_transition(
         self, uuid: str, available: bool, err: Exception | None = None

@@ -6,10 +6,14 @@ from collections.abc import Iterable, Sequence
 from contextlib import suppress
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..api.mqtt_gateway import redact_mqtt_topic
-from ..models.state import DashboardObject, HighLevelConfigMap, MqttPayload
+from ..models.state import DashboardObject, HighLevelConfigMap, IntegrationData, MqttPayload
+
+if TYPE_CHECKING:
+    from ..api.dashboard_client import SmappeeDashboardClient
+    from ..api.device_handle import SmappeeDeviceHandle
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -118,6 +122,16 @@ def _mqtt_channel_topic(channel: DashboardObject | None) -> str | None:
 
 class PowerMixin:
     """Station MQTT power mapping and application helpers."""
+
+    if TYPE_CHECKING:
+        data: IntegrationData
+        dashboard_client: SmappeeDashboardClient | None
+        station_client: SmappeeDeviceHandle
+        connector_clients: dict[str, SmappeeDeviceHandle]
+        _highlevel_configs: HighLevelConfigMap
+        _power_index_maps_by_topic: dict[str, DashboardObject] | None
+
+        def _set_if_changed(self, obj: object, attr: str, value: Any) -> bool: ...
 
     async def _ensure_power_index_map(self) -> None:
         """Load and cache MQTT power index mapping from Dashboard v10."""
