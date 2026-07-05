@@ -1,5 +1,6 @@
 # tests/test_mqtt_gateway.py
 import asyncio
+import json
 import logging
 from unittest.mock import MagicMock
 
@@ -363,6 +364,67 @@ class TestSmappeeMqtt:
 
         assert events
         assert events[0] is False
+
+    @pytest.mark.asyncio
+    async def test_runner_keeps_wrapper_payload_when_json_content_is_not_text(
+        self, mock_properties_callback, monkeypatch
+    ):
+        """Non-text jsonContent should not stop MQTT message processing."""
+        gw = SmappeeMqtt(
+            service_location_uuid="u",
+            client_id="c",
+            serial_number="s",
+            on_properties=mock_properties_callback,
+            service_location_id=1,
+        )
+
+        class Topic:
+            value = "servicelocation/u/etc/carcharger/acchargingcontroller/v1/devices/d/state"
+
+        class Message:
+            topic = Topic()
+            payload = json.dumps({"jsonContent": {"bad": "shape"}, "deviceUUID": "d"}).encode()
+
+        class Messages:
+            def __init__(self):
+                self._sent = False
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if self._sent:
+                    gw._stop.set()
+                    raise StopAsyncIteration
+                self._sent = True
+                return Message()
+
+        class FakeClient:
+            messages = Messages()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def subscribe(self, *_args, **_kwargs):
+                return None
+
+            async def publish(self, *_args, **_kwargs):
+                return None
+
+        monkeypatch.setattr(
+            "custom_components.smappee_ev.api.mqtt_gateway.Client",
+            lambda *_args, **_kwargs: FakeClient(),
+        )
+
+        await gw._runner_main(MagicMock())
+
+        mock_properties_callback.assert_called_once_with(
+            "servicelocation/u/etc/carcharger/acchargingcontroller/v1/devices/d/state",
+            {"jsonContent": {"bad": "shape"}, "deviceUUID": "d"},
+        )
 
     @pytest.mark.asyncio
     async def test_stop_idempotent(self, mqtt_gateway, monkeypatch):
