@@ -1,0 +1,314 @@
+"""MQTT power mapping helpers for Smappee station coordinators."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+from contextlib import suppress
+import logging
+import re
+from typing import Any
+
+from ..api.mqtt_gateway import redact_mqtt_topic
+from ..models.state import DashboardObject, HighLevelConfigMap, MqttPayload
+
+_LOGGER = logging.getLogger(__name__)
+
+_MQTT_PATH_RE = re.compile(r"\$\.([A-Za-z0-9_]+)\[(\d+)\]")
+
+
+def _to_int(value: object, default: int = 0) -> int:
+    """Convert a value to int safely, fallback to default on error."""
+    if not isinstance(value, int | float | str):
+        return default
+    with suppress(TypeError, ValueError):
+        return int(value)
+    return default
+
+
+def _pick(seq: Sequence[int] | list, idxs: Iterable[int]) -> list[int]:
+    """Safe index selection with zero-fill. Returns [] if seq or idxs are empty."""
+    idxs = list(idxs)
+    if not isinstance(seq, list) or not idxs:
+        return []
+    n = len(seq)
+    return [int(seq[i]) if 0 <= i < n else 0 for i in idxs]
+
+
+def _amps_from_ma(ma: list[int]) -> list[float]:
+    """Convert mA list to A with 3 decimals."""
+    return [round(x / 1000.0, 3) for x in ma] if ma else []
+
+
+def _volts_from_dv(dv: list[int]) -> list[int]:
+    """Convert deci-volt list to V as integers."""
+    return [round(x / 10) for x in dv] if dv else []
+
+
+def _indexes_from_aspect_paths(channel: DashboardObject | None, field: str) -> list[int]:
+    """Extract MQTT array indexes from Dashboard aspect paths."""
+    if not isinstance(channel, dict):
+        return []
+    indexes: list[int] = []
+    for aspect in channel.get("aspectPaths") or []:
+        if not isinstance(aspect, dict):
+            continue
+        match = _MQTT_PATH_RE.fullmatch(str(aspect.get("path") or ""))
+        if match and match.group(1) == field:
+            indexes.append(int(match.group(2)))
+    return indexes
+
+
+def _indexes_and_field_from_aspect_paths(
+    channel: DashboardObject | None, *fields: str
+) -> tuple[list[int], str | None]:
+    """Extract MQTT array indexes and remember which array field they belong to."""
+    if not isinstance(channel, dict):
+        return [], None
+
+    selected_field: str | None = None
+    indexes: list[int] = []
+    allowed = set(fields)
+    for aspect in channel.get("aspectPaths") or []:
+        if not isinstance(aspect, dict):
+            continue
+        match = _MQTT_PATH_RE.fullmatch(str(aspect.get("path") or ""))
+        if not match:
+            continue
+        field = match.group(1)
+        if field not in allowed:
+            continue
+        if selected_field is None:
+            selected_field = field
+        if field == selected_field:
+            indexes.append(int(match.group(2)))
+
+    return indexes, selected_field
+
+
+def _active_power_values(payload: MqttPayload, field: str | None = None) -> list[Any]:
+    """Return active power values from the Dashboard-indicated MQTT array field."""
+    if field:
+        values = payload.get(field)
+        return values if isinstance(values, list) else []
+    for fallback in ("activePowerData", "channelData"):
+        values = payload.get(fallback)
+        if isinstance(values, list):
+            return values
+    return []
+
+
+def _empty_power_topic_map() -> dict[str, Any]:
+    """Return an empty MQTT power index map for one topic."""
+    return {
+        "grid": {"power": [], "current": [], "cons": [], "energy": []},
+        "pv": {"power": [], "current": [], "cons": [], "energy": []},
+        "cars": {},
+    }
+
+
+def _mqtt_channel_topic(channel: DashboardObject | None) -> str | None:
+    """Return the MQTT topic advertised by a highlevel channel."""
+    if not isinstance(channel, dict):
+        return None
+    if str(channel.get("protocol") or "").upper() != "MQTT":
+        return None
+    topic = str(channel.get("name") or "").strip()
+    return topic or None
+
+
+class PowerMixin:
+    """Station MQTT power mapping and application helpers."""
+
+    async def _ensure_power_index_map(self) -> None:
+        """Load and cache MQTT power index mapping from Dashboard v10."""
+        if self._power_index_maps_by_topic is not None:
+            return
+        if self.dashboard_client is None:
+            return
+
+        configs = dict(self._highlevel_configs)
+        if not configs:
+            cfg = await self.dashboard_client.async_get_highlevel_configuration(
+                self.station_client.service_location_id
+            )
+            if cfg is None:
+                return
+            configs[int(self.station_client.service_location_id)] = cfg
+
+        mapping = self._build_measurement_index_maps_by_topic_from_highlevel_configs(configs)
+        if mapping:
+            self._power_index_maps_by_topic = mapping
+
+    def _build_measurement_index_maps_by_topic_from_highlevel_configs(
+        self, configs: HighLevelConfigMap
+    ) -> dict[str, DashboardObject] | None:
+        """Build MQTT index mappings grouped by exact power topic."""
+        maps_by_topic: dict[str, DashboardObject] = {}
+        for cfg in configs.values():
+            mapping = self._build_measurement_index_maps_by_topic_from_highlevel(cfg)
+            if not mapping:
+                continue
+            for topic, topic_map in mapping.items():
+                merged = maps_by_topic.setdefault(topic, _empty_power_topic_map())
+                for role in ("grid", "pv"):
+                    for key in ("power", "power_field", "current", "energy"):
+                        value = topic_map[role].get(key)
+                        if value and not merged[role].get(key):
+                            merged[role][key] = value
+                merged["cars"].update(topic_map["cars"])
+
+        return maps_by_topic or None
+
+    def _build_measurement_index_maps_by_topic_from_highlevel(
+        self, cfg: DashboardObject
+    ) -> dict[str, DashboardObject] | None:
+        """Build MQTT index mappings from Dashboard v10 highlevelconfiguration."""
+        maps_by_topic: dict[str, DashboardObject] = {}
+
+        for meas in cfg.get("measurements") or []:
+            if not isinstance(meas, dict):
+                continue
+            channels = meas.get("updateChannels") or {}
+            if not isinstance(channels, dict):
+                continue
+
+            power_idx, power_field = _indexes_and_field_from_aspect_paths(
+                channels.get("activePower"), "activePowerData", "channelData"
+            )
+            power_topic = _mqtt_channel_topic(channels.get("activePower"))
+            current_idx = _indexes_from_aspect_paths(channels.get("current"), "currentData")
+            current_topic = _mqtt_channel_topic(channels.get("current"))
+            energy_idx = _indexes_from_aspect_paths(
+                channels.get("meterReadings"), "importActiveEnergyData"
+            )
+            energy_topic = _mqtt_channel_topic(channels.get("meterReadings"))
+
+            mtype = str(meas.get("type") or "").upper()
+            appliance_raw = meas.get("appliance")
+            appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
+            category = str(meas.get("category") or appliance.get("type") or "").upper()
+
+            if mtype == "GRID":
+                if power_topic:
+                    topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
+                    topic_map["grid"]["power"] = power_idx
+                    topic_map["grid"]["power_field"] = power_field
+                if current_topic:
+                    topic_map = maps_by_topic.setdefault(current_topic, _empty_power_topic_map())
+                    topic_map["grid"]["current"] = current_idx
+                if energy_topic:
+                    topic_map = maps_by_topic.setdefault(energy_topic, _empty_power_topic_map())
+                    topic_map["grid"]["energy"] = energy_idx
+                continue
+
+            if mtype == "PRODUCTION":
+                if power_topic:
+                    topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
+                    topic_map["pv"]["power"] = power_idx
+                    topic_map["pv"]["power_field"] = power_field
+                if current_topic:
+                    topic_map = maps_by_topic.setdefault(current_topic, _empty_power_topic_map())
+                    topic_map["pv"]["current"] = current_idx
+                if energy_topic:
+                    topic_map = maps_by_topic.setdefault(energy_topic, _empty_power_topic_map())
+                    topic_map["pv"]["energy"] = energy_idx
+                continue
+
+            if mtype == "APPLIANCE" and category == "CAR_CHARGER":
+                uuid = self._connector_uuid_for_highlevel_measurement(meas)
+                if not uuid:
+                    continue
+                position = self._connector_position_from_measurement(meas)
+                if power_topic:
+                    topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
+                    car = topic_map["cars"].setdefault(
+                        uuid,
+                        {"position": position, "serial": None},
+                    )
+                    car["power"] = power_idx
+                    car["power_field"] = power_field
+                if current_topic:
+                    topic_map = maps_by_topic.setdefault(current_topic, _empty_power_topic_map())
+                    car = topic_map["cars"].setdefault(
+                        uuid,
+                        {"position": position, "serial": None},
+                    )
+                    car["current"] = current_idx
+                if energy_topic:
+                    topic_map = maps_by_topic.setdefault(energy_topic, _empty_power_topic_map())
+                    car = topic_map["cars"].setdefault(
+                        uuid,
+                        {"position": position, "serial": None},
+                    )
+                    car["energy"] = energy_idx
+
+        return maps_by_topic or None
+
+    def _handle_power(self, topic: str, payload: dict) -> bool:
+        data = self.data
+        if not data:
+            return False
+        st = data.station
+        changed = False
+
+        idx_map = (self._power_index_maps_by_topic or {}).get(topic)
+        if not idx_map:
+            return False
+        grid = idx_map.get("grid", {})
+        pv = idx_map.get("pv", {})
+        cars = idx_map.get("cars", {}) or {}
+        roles = []
+        if any(grid.values()):
+            roles.append("grid")
+        if any(pv.values()):
+            roles.append("pv")
+        if cars:
+            roles.append("cars")
+        _LOGGER.debug(
+            "Smappee MQTT power apply: topic=%s roles=%s payload_keys=%s",
+            redact_mqtt_topic(topic),
+            roles,
+            list(payload.keys()),
+        )
+
+        changed |= self._apply_station_group(
+            st,
+            payload,
+            grid.get("power", []),
+            grid.get("current", []),
+            grid.get("energy", []),
+            "grid",
+            grid.get("power_field"),
+        )
+        changed |= self._apply_station_group(
+            st,
+            payload,
+            pv.get("power", []),
+            pv.get("current", []),
+            pv.get("energy", []),
+            "pv",
+            pv.get("power_field"),
+        )
+
+        for uuid, mapping in cars.items():
+            conn = data.connectors.get(uuid)
+            if not conn:
+                continue
+            changed |= self._apply_connector_values(
+                conn,
+                payload,
+                mapping.get("power", []),
+                mapping.get("current", []),
+                mapping.get("energy", []),
+                mapping.get("power_field"),
+            )
+
+        cp = payload.get("consumptionPower")
+        if isinstance(cp, int | float):
+            changed |= self._set_if_changed(st, "house_consumption_power", int(cp))
+
+        sp = payload.get("solarPower")
+        if isinstance(sp, int | float):
+            changed |= self._set_if_changed(st, "pv_power_total", int(sp))
+
+        return changed
