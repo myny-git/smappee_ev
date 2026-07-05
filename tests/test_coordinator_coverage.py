@@ -859,7 +859,10 @@ def test_dashboard_delayed_refresh_uses_unsub_and_leaves_no_sleeping_task_on_shu
     coord._maybe_refresh_dashboard_data = AsyncMock(return_value=True)
     unsub = MagicMock()
 
-    with patch("custom_components.smappee_ev.coordinator.async_call_later", return_value=unsub):
+    with patch(
+        "custom_components.smappee_ev.coordinators.dashboard.async_call_later",
+        return_value=unsub,
+    ):
         coord.async_schedule_dashboard_refresh(delay=30)
 
     assert coord._dashboard_refresh_unsub is unsub
@@ -880,7 +883,7 @@ async def test_compat_dashboard_delayed_refresh_delegates_positive_delay(hass):
     unsub = MagicMock()
 
     with patch(
-        "custom_components.smappee_ev.coordinator.async_call_later",
+        "custom_components.smappee_ev.coordinators.dashboard.async_call_later",
         return_value=unsub,
     ):
         await coord._async_delayed_dashboard_refresh(30)
