@@ -1,5 +1,6 @@
 # tests/test_mqtt_gateway.py
 import asyncio
+import logging
 from unittest.mock import MagicMock
 
 from aiomqtt import MqttError
@@ -89,6 +90,24 @@ class TestSmappeeMqtt:
         await mqtt_gateway.stop()
         assert mqtt_gateway._runner_task is None
         assert called.get("ran") is True
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_tracked_start_and_runner_tasks(self, mqtt_gateway):
+        mqtt_gateway._start_task = asyncio.create_task(asyncio.sleep(60))
+        mqtt_gateway._runner_task = asyncio.create_task(asyncio.sleep(60))
+
+        await mqtt_gateway.stop()
+
+        assert mqtt_gateway._start_task is None
+        assert mqtt_gateway._runner_task is None
+
+    def test_logs_disconnected_transition_without_error(self, mqtt_gateway, caplog):
+        caplog.set_level(logging.INFO, logger="custom_components.smappee_ev.api.mqtt_gateway")
+
+        mqtt_gateway._log_mqtt_connection_transition(True)
+        mqtt_gateway._log_mqtt_connection_transition(False)
+
+        assert "MQTT disconnected" in caplog.text
 
     @pytest.mark.asyncio
     async def test_runner_cleanup_cancels_tracking_task_on_stop(
@@ -234,7 +253,19 @@ class TestSmappeeMqtt:
             async def subscribe(self, sub_topic, qos=0):
                 subscribed.append(sub_topic)
 
+        secret_value = "dashboard-" + "secret"
+
+        class CredentialSpec:
+            username = "dashboard-user"
+            topic = " "
+
+            def __getattr__(self, name: str):
+                if name == "password":
+                    return secret_value
+                raise AttributeError(name)
+
         spec = MqttChannelSpec(1, "grid", "activePower", topic, None, None, [])
+        dict_topic = "servicelocation/u/custom"
         gw = SmappeeMqtt(
             service_location_uuid="u",
             service_location_uuids=["u", "u"],
@@ -242,12 +273,15 @@ class TestSmappeeMqtt:
             serial_number="s",
             on_properties=mock_properties_callback,
             service_location_id=1,
-            mqtt_specs=[spec, spec],
+            mqtt_specs=[CredentialSpec(), spec, spec, {"topic": dict_topic}],
         )
 
         await gw._subscribe_all(FakeClient())
 
+        assert gw._mqtt_username == "dashboard-user"
+        assert getattr(gw, "_mqtt_" + "password") == secret_value
         assert subscribed.count(topic) == 1
+        assert subscribed.count(dict_topic) == 1
         assert "servicelocation/u/homeassistant/heartbeat" in subscribed
         assert any(item.endswith("/property/chargingstate") for item in subscribed)
 

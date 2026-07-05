@@ -34,24 +34,26 @@ rules:
   docs-installation-parameters: done
   entity-unavailable: done
   integration-owner:
-    status: in_progress
-    comment: The manifest should list only active maintainers as code owners. Verify whether all listed code owners are still active maintainers.
+    status: done
+    comment: The manifest lists the active maintainer as code owner.
   log-when-unavailable:
-    status: in_progress
-    comment: The integration should log once when the service or device becomes unavailable and once when it recovers, without repeatedly logging the same failure.
+    status: done
+    comment: REST/API availability and MQTT availability both log once on unavailable transitions and once on recovery, without repeated logs for unchanged failure or heartbeat/no-op states.
   parallel-updates: done
   reauthentication-flow: done
   test-coverage:
-    status: in_progress
-    comment: Local coverage on Python 3.14 is 92.54% overall with 496 passing tests. The official Silver requirement remains above 95% coverage for integration modules, so this needs behavior-focused tests for remaining gaps.
+    status: done
+    comment: Local coverage on Python 3.14 is 95.01% overall: 5296/5574 covered statements, meeting the official Silver requirement above 95%.
 
   # Gold.
   devices: done
   diagnostics: done
   discovery:
-    status: in_progress
-    comment: Discovery support should be reviewed and tested against the official rule, including whether devices can be discovered automatically in supported setups.
-  discovery-update-info: todo
+    status: exempt
+    comment: Smappee EV devices are not locally discoverable by Home Assistant. Setup requires Smappee Dashboard credentials and uses the cloud Dashboard API plus Smappee MQTT, not mDNS, DHCP, SSDP, Bluetooth, USB or local broadcast discovery.
+  discovery-update-info:
+    status: exempt
+    comment: Smappee EV devices are not discovered through local network discovery, so there is no discovered host/IP information to update. Device topology is obtained from the authenticated Smappee Dashboard API.
   docs-data-update: done
   docs-examples: done
   docs-known-limitations: done

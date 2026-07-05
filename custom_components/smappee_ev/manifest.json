@@ -2,7 +2,6 @@
   "domain": "smappee_ev",
   "name": "Smappee EV",
   "codeowners": [
-    "@gvnuland",
     "@myny-git"
   ],
   "config_flow": true,

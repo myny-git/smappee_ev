@@ -1,5 +1,6 @@
 """Additional behavior coverage for coordinator mapping and merge helpers."""
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
@@ -122,7 +123,7 @@ async def test_site_coordinator_lazy_update_builds_power_map_and_default_state(h
     assert coord._power_index_maps_by_topic is cached
 
 
-def test_site_mqtt_connection_change_handles_no_data_and_up_down_transitions(hass):
+def test_site_mqtt_connection_change_handles_no_data_and_up_down_transitions(hass, caplog):
     coord = SmappeeSiteCoordinator(
         hass,
         site_location_id=100,
@@ -138,18 +139,59 @@ def test_site_mqtt_connection_change_handles_no_data_and_up_down_transitions(has
     coord.async_set_updated_data.assert_not_called()
 
     coord.data = SiteData(site=SiteState())
+    caplog.set_level(logging.INFO, logger="custom_components.smappee_ev.coordinator")
     coord.apply_mqtt_connection_change(True)
     assert coord.data.site.mqtt_connected is True
     assert coord.data.site.last_mqtt_rx is not None
     coord.async_set_updated_data.assert_called_once_with(coord.data)
+    assert "MQTT availability recovered" in caplog.text
 
+    caplog.clear()
     coord.async_set_updated_data.reset_mock()
     coord.apply_mqtt_connection_change(True)
     coord.async_set_updated_data.assert_not_called()
+    assert "MQTT availability recovered" not in caplog.text
 
+    caplog.clear()
     coord.apply_mqtt_connection_change(False)
     assert coord.data.site.mqtt_connected is False
     coord.async_set_updated_data.assert_called_once_with(coord.data)
+    assert caplog.text.count("MQTT unavailable") == 1
+
+    caplog.clear()
+    coord.async_set_updated_data.reset_mock()
+    coord.apply_mqtt_connection_change(False)
+    coord.async_set_updated_data.assert_not_called()
+    assert "MQTT unavailable" not in caplog.text
+
+
+def test_station_mqtt_connection_change_logs_only_on_transitions(hass, caplog):
+    coord = _station_coordinator(hass)
+    coord.async_set_updated_data = MagicMock()
+    caplog.set_level(logging.INFO, logger="custom_components.smappee_ev.coordinator")
+
+    coord.apply_mqtt_connection_change(True)
+    assert coord.data.station.mqtt_connected is True
+    coord.async_set_updated_data.assert_called_once_with(coord.data)
+    assert caplog.text.count("Station MQTT availability recovered") == 1
+
+    caplog.clear()
+    coord.async_set_updated_data.reset_mock()
+    coord.apply_mqtt_connection_change(True)
+    coord.async_set_updated_data.assert_not_called()
+    assert "Station MQTT availability recovered" not in caplog.text
+
+    caplog.clear()
+    coord.apply_mqtt_connection_change(False)
+    assert coord.data.station.mqtt_connected is False
+    coord.async_set_updated_data.assert_called_once_with(coord.data)
+    assert caplog.text.count("Station MQTT unavailable") == 1
+
+    caplog.clear()
+    coord.async_set_updated_data.reset_mock()
+    coord.apply_mqtt_connection_change(False)
+    coord.async_set_updated_data.assert_not_called()
+    assert "Station MQTT unavailable" not in caplog.text
 
 
 def test_site_apply_mqtt_properties_without_data_is_safe(hass):

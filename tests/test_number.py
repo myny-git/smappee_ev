@@ -210,6 +210,28 @@ async def test_connector_max_current_number_clamps_to_live_range(coordinator, ap
     assert state.selected_current_limit == 8
 
 
+def test_connector_max_current_number_updates_live_minimum_from_coordinator(
+    coordinator, api_client
+):
+    state = coordinator.data.connectors["uuid"]
+    state.min_current = 6
+    number = SmappeeConnectorMaxCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+        connector_uuid="uuid",
+    )
+    assert number.native_min_value == 6
+
+    state.min_current = 10
+
+    with patch.object(SmappeeConnectorMaxCurrentNumber.__mro__[1], "_handle_coordinator_update"):
+        number._handle_coordinator_update()
+
+    assert number.native_min_value == 10
+
+
 @pytest.mark.asyncio
 async def test_connector_max_current_number_missing_state_raises(coordinator, api_client):
     coordinator.data = None

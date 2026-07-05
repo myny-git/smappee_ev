@@ -369,9 +369,11 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         if up and not getattr(site, "mqtt_connected", False):
             site.mqtt_connected = True
             changed = True
+            _LOGGER.info("Site %s MQTT availability recovered", anonymize_uuid(self.site_uuid))
         elif not up and getattr(site, "mqtt_connected", None) is not False:
             site.mqtt_connected = False
             changed = True
+            _LOGGER.info("Site %s MQTT unavailable", anonymize_uuid(self.site_uuid))
         if changed:
             self.async_set_updated_data(data)
 
@@ -1417,9 +1419,11 @@ class SmappeeStationCoordinator(DataUpdateCoordinator[IntegrationData]):
             if not getattr(st, "mqtt_connected", False):
                 st.mqtt_connected = True
                 changed = True
+                _LOGGER.info("Station MQTT availability recovered")
         elif getattr(st, "mqtt_connected", None) is not False:
             st.mqtt_connected = False
             changed = True
+            _LOGGER.info("Station MQTT unavailable")
 
         if changed:
             self.async_set_updated_data(data)

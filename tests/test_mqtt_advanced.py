@@ -45,6 +45,18 @@ class MsgStream:
             self._q.put_nowait(FakeMsg("close", "{}"))
 
 
+class DisconnectingMsgStream:
+    """Message stream that drops the MQTT connection when iteration starts."""
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> FakeMsg:
+        from aiomqtt import MqttError  # type: ignore
+
+        raise MqttError("connection lost")
+
+
 class FakeClient:
     def __init__(self, messages: MsgStream, fail_publish: bool = False):
         self.messages = messages
@@ -89,6 +101,14 @@ class ClientFactory:
         return self._clients.pop(0)
 
 
+def _patch_client(monkeypatch, factory: ClientFactory) -> None:
+    class PatchedClient:
+        def __call__(self, *_, **__):  # called as Client(...)
+            return factory.build()
+
+    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
+
+
 @pytest.mark.asyncio
 async def test_subscriptions_and_message_parsing(monkeypatch):
     stream = MsgStream()
@@ -114,13 +134,8 @@ async def test_subscriptions_and_message_parsing(monkeypatch):
         on_connection_change=on_conn,
     )
 
-    # Patch Client context used inside _runner_main
-    class PatchedClient:
-        def __call__(self, *_, **__):  # called as Client(...)
-            return factory.build()
-
     # aiomqtt stub already installed via conftest
-    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
+    _patch_client(monkeypatch, factory)
 
     # Start
     await mqtt.start()
@@ -168,6 +183,137 @@ async def test_subscriptions_and_message_parsing(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_non_json_regular_payload_is_ignored(monkeypatch):
+    stream = MsgStream()
+    factory = ClientFactory(FakeClient(stream))
+    calls: list[tuple[str, dict]] = []
+    mqtt = SmappeeMqtt(
+        service_location_uuid="slu-json",
+        client_id="cid-json",
+        serial_number="SERIAL-JSON",
+        on_properties=lambda t, d: calls.append((t, d)),
+        service_location_id=123,
+    )
+
+    _patch_client(monkeypatch, factory)
+    await mqtt.start()
+
+    await stream.push(
+        "servicelocation/slu-json/etc/carcharger/acchargingcontroller/v1/devices/ABC/state",
+        "not-json",
+    )
+    await stream.push(
+        "servicelocation/slu-json/etc/carcharger/acchargingcontroller/v1/devices/ABC/state",
+        json.dumps({"seq": 1}),
+    )
+    await wait_until(lambda: bool(calls))
+
+    assert calls == [
+        (
+            "servicelocation/slu-json/etc/carcharger/acchargingcontroller/v1/devices/ABC/state",
+            {"seq": 1},
+        )
+    ]
+    await mqtt.stop()
+
+
+@pytest.mark.asyncio
+async def test_broken_nested_json_content_keeps_wrapper_payload(monkeypatch):
+    stream = MsgStream()
+    factory = ClientFactory(FakeClient(stream))
+    calls: list[tuple[str, dict]] = []
+    mqtt = SmappeeMqtt(
+        service_location_uuid="slu-json",
+        client_id="cid-json",
+        serial_number="SERIAL-JSON",
+        on_properties=lambda t, d: calls.append((t, d)),
+        service_location_id=123,
+    )
+
+    _patch_client(monkeypatch, factory)
+    await mqtt.start()
+
+    topic = "servicelocation/slu-json/etc/carcharger/acchargingcontroller/v1/devices/ABC/state"
+    wrapper = {"jsonContent": "{broken", "deviceUUID": "outer-device", "messageType": "update"}
+    await stream.push(topic, json.dumps(wrapper))
+    await wait_until(lambda: bool(calls))
+
+    assert calls == [(topic, wrapper)]
+    await mqtt.stop()
+
+
+@pytest.mark.asyncio
+async def test_nested_json_content_merges_outer_identifiers(monkeypatch):
+    stream = MsgStream()
+    factory = ClientFactory(FakeClient(stream))
+    calls: list[tuple[str, dict]] = []
+    mqtt = SmappeeMqtt(
+        service_location_uuid="slu-json",
+        client_id="cid-json",
+        serial_number="SERIAL-JSON",
+        on_properties=lambda t, d: calls.append((t, d)),
+        service_location_id=123,
+    )
+
+    _patch_client(monkeypatch, factory)
+    await mqtt.start()
+
+    topic = "servicelocation/slu-json/etc/carcharger/acchargingcontroller/v1/devices/ABC/state"
+    await stream.push(
+        topic,
+        json.dumps(
+            {
+                "jsonContent": json.dumps({"power": 100}),
+                "deviceUUID": "outer-device",
+                "messageType": "update",
+            }
+        ),
+    )
+    await wait_until(lambda: bool(calls))
+
+    assert calls == [(topic, {"power": 100, "deviceUUID": "outer-device", "messageType": "update"})]
+    await mqtt.stop()
+
+
+@pytest.mark.asyncio
+async def test_nested_json_content_preserves_messsage_type_typo(monkeypatch):
+    stream = MsgStream()
+    factory = ClientFactory(FakeClient(stream))
+    calls: list[tuple[str, dict]] = []
+    mqtt = SmappeeMqtt(
+        service_location_uuid="slu-json",
+        client_id="cid-json",
+        serial_number="SERIAL-JSON",
+        on_properties=lambda t, d: calls.append((t, d)),
+        service_location_id=123,
+    )
+
+    _patch_client(monkeypatch, factory)
+    await mqtt.start()
+
+    topic = "servicelocation/slu-json/etc/carcharger/acchargingcontroller/v1/devices/ABC/state"
+    await stream.push(
+        topic,
+        json.dumps(
+            {
+                "jsonContent": json.dumps({"power": 101}),
+                "deviceUUID": "outer-device",
+                "messsageType": "typo-update",
+            }
+        ),
+    )
+    await wait_until(lambda: bool(calls))
+
+    assert calls == [
+        (
+            topic,
+            {"power": 101, "deviceUUID": "outer-device", "messsageType": "typo-update"},
+        )
+    ]
+    await mqtt.stop()
+
+
+@pytest.mark.asyncio
 async def test_runner_survives_attribute_error_on_regular_topic(monkeypatch):
     stream = MsgStream()
     fc = FakeClient(stream)
@@ -190,11 +336,7 @@ async def test_runner_survives_attribute_error_on_regular_topic(monkeypatch):
         service_location_id=123,
     )
 
-    class PatchedClient:
-        def __call__(self, *_, **__):
-            return factory.build()
-
-    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
+    _patch_client(monkeypatch, factory)
     await mqtt.start()
 
     topic = "servicelocation/slu-attr/etc/carcharger/acchargingcontroller/v1/devices/ABC/state"
@@ -204,6 +346,44 @@ async def test_runner_survives_attribute_error_on_regular_topic(monkeypatch):
     assert not mqtt._runner_task.done()
 
     await stream.push(topic, json.dumps({"seq": 2}))
+    await wait_until(lambda: any(payload.get("seq") == 2 for payload in processed))
+
+    await mqtt.stop()
+
+
+@pytest.mark.asyncio
+async def test_runner_survives_attribute_error_on_heartbeat_topic(monkeypatch):
+    stream = MsgStream()
+    fc = FakeClient(stream)
+    factory = ClientFactory(fc)
+
+    calls: list[tuple[str, dict]] = []
+    processed: list[dict] = []
+
+    def on_props(t: str, d: dict):
+        calls.append((t, d))
+        if len(calls) == 1:
+            raise AttributeError("unexpected heartbeat payload")
+        processed.append(d)
+
+    mqtt = SmappeeMqtt(
+        service_location_uuid="slu-hb",
+        client_id="cid-hb",
+        serial_number="SERIAL-HB",
+        on_properties=on_props,
+        service_location_id=123,
+    )
+
+    _patch_client(monkeypatch, factory)
+    await mqtt.start()
+
+    topic = f"servicelocation/slu-hb{MQTT_HEARTBEAT_TOPIC_SUFFIX}"
+    await stream.push(topic, json.dumps({"serviceLocationId": 123, "seq": 1}))
+    await wait_until(lambda: len(calls) == 1)
+    assert mqtt._runner_task is not None
+    assert not mqtt._runner_task.done()
+
+    await stream.push(topic, json.dumps({"serviceLocationId": 123, "seq": 2}))
     await wait_until(lambda: any(payload.get("seq") == 2 for payload in processed))
 
     await mqtt.stop()
@@ -224,11 +404,7 @@ async def test_tracking_and_heartbeat_publish(monkeypatch):
         service_location_id="789",  # str to test int conversion
     )
 
-    class PatchedClient:
-        def __call__(self, *_, **__):
-            return factory.build()
-
-    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
+    _patch_client(monkeypatch, factory)
     await mqtt.start()
 
     await wait_until(
@@ -250,6 +426,38 @@ async def test_tracking_and_heartbeat_publish(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_tracking_task_is_cancelled_when_connection_drops(monkeypatch):
+    fc = FakeClient(DisconnectingMsgStream())
+    stream2 = MsgStream()
+    c2 = FakeClient(stream2)
+    factory = ClientFactory(fc, c2)
+    events: list[bool] = []
+
+    mqtt = SmappeeMqtt(
+        service_location_uuid="slu-drop",
+        client_id="cid-drop",
+        serial_number="SERIAL-DROP",
+        on_properties=lambda *_: None,
+        service_location_id=1,
+        on_connection_change=lambda up: events.append(up),
+    )
+
+    _patch_client(monkeypatch, factory)
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.api.mqtt_gateway.MQTT_RECONNECT_INITIAL_BACKOFF", 0.01
+    )
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.api.mqtt_gateway.MQTT_RECONNECT_MAX_BACKOFF", 0.02
+    )
+
+    await mqtt.start()
+    await wait_until(lambda: events[:2] == [True, False])
+
+    assert mqtt._track_task is None
+    await mqtt.stop()
+
+
+@pytest.mark.asyncio
 async def test_reconnect_backoff(monkeypatch):
     stream1 = MsgStream()
     c1 = FakeClient(stream1)
@@ -268,11 +476,7 @@ async def test_reconnect_backoff(monkeypatch):
         on_connection_change=lambda up: events.append(up),
     )
 
-    class PatchedClient:
-        def __call__(self, *_, **__):
-            return factory.build()
-
-    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", PatchedClient())
+    _patch_client(monkeypatch, factory)
 
     # Shrink backoff constants so retry happens quickly
     monkeypatch.setattr(
