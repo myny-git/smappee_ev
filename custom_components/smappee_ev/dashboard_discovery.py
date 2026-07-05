@@ -268,8 +268,6 @@ def _create_dashboard_client(
 async def _load_dashboard_service_locations(
     dashboard_client: SmappeeDashboardClient,
 ) -> DashboardObjectList:
-    from . import _dashboard_discover_service_locations
-
     try:
         locations = await _dashboard_discover_service_locations(dashboard_client)
     except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
@@ -288,8 +286,6 @@ async def _load_dashboard_service_locations(
 async def _load_dashboard_topologies(
     dashboard_client: SmappeeDashboardClient,
 ) -> list[SmappeeLocationTopology]:
-    from . import _dashboard_discover_topologies
-
     try:
         topologies = await _dashboard_discover_topologies(dashboard_client)
     except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:

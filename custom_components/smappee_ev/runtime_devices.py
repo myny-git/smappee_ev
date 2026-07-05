@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN, MANUFACTURER
 from .helpers import connector_device_identifier, site_device_identifier, station_device_identifier
@@ -16,8 +17,6 @@ def _remove_legacy_led_controller_devices(
     entry: SmappeeEvConfigEntry,
 ) -> None:
     """Remove old standalone LED Controller devices for this config entry."""
-    from . import dr
-
     for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
         if not any(
             domain == DOMAIN and identifier.startswith("led:")
@@ -33,8 +32,6 @@ def _remove_legacy_led_controller_devices(
 
 def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> None:
     """Ensure the HA device registry contains the real Smappee hierarchy."""
-    from . import _remove_legacy_led_controller_devices, dr
-
     if hass.config_entries.async_get_entry(entry.entry_id) is None:
         return
     registry = dr.async_get(hass)

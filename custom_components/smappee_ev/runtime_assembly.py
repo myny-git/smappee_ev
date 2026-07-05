@@ -10,6 +10,14 @@ from homeassistant.core import HomeAssistant
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology
+from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
+from .dashboard_discovery import (
+    _dashboard_client_configured,
+    _dashboard_fetch_devices,
+    _dashboard_fetch_highlevel_configs,
+    _fallback_dashboard_connector_mapping,
+    _fetch_dashboard_connector_mapping,
+)
 from .models.runtime_data import (
     MqttRuntimeValue,
     RuntimeData,
@@ -17,6 +25,7 @@ from .models.runtime_data import (
     SmappeeStationRuntime,
 )
 from .models.state import HighLevelConfigMap
+from .mqtt_setup import _setup_mqtt
 from .mqtt_specs import _mqtt_specs_from_highlevel_configs, _split_highlevel_configs_by_scope
 from .topology import (
     _assign_connectors,
@@ -82,8 +91,6 @@ async def _create_coordinators(
     dashboard_client=None,
     highlevel_configs: HighLevelConfigMap | None = None,
 ):
-    from . import SmappeeCoordinator
-
     for bucket in stations.values():
         kwargs = {
             "station_client": bucket.station_client,
@@ -124,8 +131,6 @@ async def _create_site_coordinator(
     highlevel_configs: HighLevelConfigMap | None = None,
 ):
     """Create the site-scoped coordinator for grid/PV/house data."""
-    from . import SmappeeSiteCoordinator
-
     coord = SmappeeSiteCoordinator(
         hass,
         site_location_id=topology.site_location_id,
@@ -151,17 +156,6 @@ async def _prepare_topology(
     background_tasks: set[asyncio.Task] | None = None,
 ) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
     """Prepare one site-first Dashboard topology."""
-    from . import (
-        _create_coordinators,
-        _create_site_coordinator,
-        _dashboard_client_configured,
-        _dashboard_fetch_devices,
-        _dashboard_fetch_highlevel_configs,
-        _fallback_dashboard_connector_mapping,
-        _fetch_dashboard_connector_mapping,
-        _setup_mqtt,
-    )
-
     site_sid = topology.site_location_id
     control_sid = topology.control_location_id
     measurement_sids = topology.measurement_location_ids

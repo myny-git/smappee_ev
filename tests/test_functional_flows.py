@@ -6,7 +6,7 @@ from homeassistant.core import ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
 import pytest
 
-from custom_components.smappee_ev import _setup_mqtt, async_setup_entry, async_unload_entry
+from custom_components.smappee_ev import async_setup_entry, async_unload_entry
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
@@ -16,6 +16,7 @@ from custom_components.smappee_ev.const import (
 )
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, SiteData
+from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
 from custom_components.smappee_ev.services import register_services
 from tests.factories import (
     configure_loaded_entries,
@@ -262,8 +263,14 @@ async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass):
     with (
         patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
         patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
-        patch("custom_components.smappee_ev.SmappeeSiteCoordinator", _FakeSiteCoordinator),
-        patch("custom_components.smappee_ev.SmappeeCoordinator", _FakeStationCoordinator),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeSiteCoordinator",
+            _FakeSiteCoordinator,
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeCoordinator",
+            _FakeStationCoordinator,
+        ),
         patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
         patch("custom_components.smappee_ev._register_runtime_devices"),
         patch.object(hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),

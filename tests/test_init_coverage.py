@@ -7,34 +7,35 @@ from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryNotReady
 import pytest
 
-from custom_components.smappee_ev import (
-    _async_shutdown_runtime_resources,
-    _build_mqtt_clients,
+from custom_components.smappee_ev import async_remove_config_entry_device, async_unload_entry
+from custom_components.smappee_ev.api.discovery import MqttChannelSpec, SmappeeLocationTopology
+from custom_components.smappee_ev.const import DOMAIN
+from custom_components.smappee_ev.dashboard_discovery import (
     _create_dashboard_client,
     _dashboard_discover_service_locations,
     _dashboard_fetch_devices,
     _dashboard_fetch_highlevel_configs,
     _fallback_dashboard_connector_mapping,
-    _fallback_highlevel_connector_mapping,
     _fetch_dashboard_connector_mapping,
-    _find_in,
-    _group_mqtt_specs_by_credentials,
-    _is_connector,
     _load_dashboard_service_locations,
     _load_dashboard_topologies,
+)
+from custom_components.smappee_ev.models.runtime_data import RuntimeData
+from custom_components.smappee_ev.mqtt_setup import _build_mqtt_clients
+from custom_components.smappee_ev.mqtt_specs import _group_mqtt_specs_by_credentials
+from custom_components.smappee_ev.runtime_assembly import _prepare_topology
+from custom_components.smappee_ev.runtime_devices import _register_runtime_devices
+from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.site_preparation import _prepare_site
+from custom_components.smappee_ev.topology import (
+    _fallback_highlevel_connector_mapping,
+    _find_in,
+    _is_connector,
     _normalize_connector_mapping_station_keys,
-    _prepare_site,
-    _prepare_topology,
-    _register_runtime_devices,
     _safe_str,
     _station_serial,
     _uuid_from_dashboard_channel,
-    async_remove_config_entry_device,
-    async_unload_entry,
 )
-from custom_components.smappee_ev.api.discovery import MqttChannelSpec, SmappeeLocationTopology
-from custom_components.smappee_ev.const import DOMAIN
-from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from tests.factories import (
     make_connector_runtime,
     make_led_runtime,
@@ -702,11 +703,15 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
 
     with (
         patch(
-            "custom_components.smappee_ev._create_site_coordinator",
+            "custom_components.smappee_ev.runtime_assembly._create_site_coordinator",
             AsyncMock(return_value=site_coord),
         ) as create_site,
-        patch("custom_components.smappee_ev._create_coordinators", AsyncMock()) as create_stations,
-        patch("custom_components.smappee_ev._setup_mqtt", return_value=mqtt) as setup_mqtt,
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._create_coordinators", AsyncMock()
+        ) as create_stations,
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._setup_mqtt", return_value=mqtt
+        ) as setup_mqtt,
     ):
         stations, mqtt_result = await _prepare_topology(
             hass,
@@ -770,8 +775,12 @@ async def test_prepare_site_uses_service_serial_when_dashboard_has_only_connecto
     mqtt = MagicMock()
 
     with (
-        patch("custom_components.smappee_ev._create_coordinators", AsyncMock()) as create_coords,
-        patch("custom_components.smappee_ev._setup_mqtt", return_value=mqtt) as setup_mqtt,
+        patch(
+            "custom_components.smappee_ev.site_preparation._create_coordinators", AsyncMock()
+        ) as create_coords,
+        patch(
+            "custom_components.smappee_ev.site_preparation._setup_mqtt", return_value=mqtt
+        ) as setup_mqtt,
     ):
         stations, mqtt_result = await _prepare_site(
             hass,
@@ -801,7 +810,8 @@ async def test_prepare_site_skips_when_dashboard_devices_unavailable_or_no_seria
     dashboard = _configured_dashboard(async_get_smart_devices=AsyncMock(return_value=[]))
 
     with patch(
-        "custom_components.smappee_ev._dashboard_fetch_devices", AsyncMock(return_value=None)
+        "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
+        AsyncMock(return_value=None),
     ):
         assert await _prepare_site(
             hass,

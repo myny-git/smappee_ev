@@ -9,7 +9,27 @@ from aiohttp import ClientSession
 from homeassistant.core import HomeAssistant
 
 from .api.dashboard_client import SmappeeDashboardClient
+from .dashboard_discovery import (
+    _dashboard_client_configured,
+    _dashboard_fetch_devices,
+    _fallback_dashboard_connector_mapping,
+    _fetch_dashboard_connector_mapping,
+)
 from .models.runtime_data import MqttRuntimeValue, SmappeeEvConfigEntry, SmappeeStationRuntime
+from .mqtt_setup import _setup_mqtt
+from .runtime_assembly import _create_coordinators, _log_station_runtime_shape
+from .topology import (
+    _assign_connectors,
+    _connector_uuid,
+    _derive_service_serial,
+    _fallback_assign,
+    _make_station_clients,
+    _normalize_connector_mapping_station_keys,
+    _safe_str,
+    _split_devices,
+    _station_devices_from_connector_mapping,
+    _station_serial,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,10 +56,8 @@ async def _prepare_site(
         )
     except asyncio.CancelledError:
         raise
-    except Exception:  # noqa: BLE001 - legacy setup path logs and skips failed locations.
-        from . import _LOGGER as root_logger
-
-        root_logger.exception("Failed to prepare service location %s", sl.get("serviceLocationId"))
+    except Exception:
+        _LOGGER.exception("Failed to prepare service location %s", sl.get("serviceLocationId"))
         return None, None
 
 
@@ -53,26 +71,6 @@ async def _async_prepare_site(  # noqa: C901 - moved as-is from __init__.py.
     dashboard_client: SmappeeDashboardClient | None = None,
 ) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
     """Build coordinators, station/connector clients and MQTT for one service location."""
-    from . import (
-        _assign_connectors,
-        _connector_uuid,
-        _create_coordinators,
-        _dashboard_client_configured,
-        _dashboard_fetch_devices,
-        _derive_service_serial,
-        _fallback_assign,
-        _fallback_dashboard_connector_mapping,
-        _fetch_dashboard_connector_mapping,
-        _log_station_runtime_shape,
-        _make_station_clients,
-        _normalize_connector_mapping_station_keys,
-        _safe_str,
-        _setup_mqtt,
-        _split_devices,
-        _station_devices_from_connector_mapping,
-        _station_serial,
-    )
-
     sid = sl["serviceLocationId"]
     suuid = sl.get("serviceLocationUuid")
 

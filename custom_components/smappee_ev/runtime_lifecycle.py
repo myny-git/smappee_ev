@@ -10,14 +10,13 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import Event, HomeAssistant, callback
 
 from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry, SmappeeSiteRuntime
+from .mqtt_setup import _iter_mqtt_clients
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _begin_runtime_shutdown(rd: RuntimeData) -> None:
     """Synchronously mark runtime resources as stopping."""
-    from . import _iter_mqtt_clients
-
     for site in (rd.sites or {}).values():
         for bucket in site.stations.values():
             coord = bucket.station_coordinator
@@ -41,8 +40,6 @@ def _register_runtime_stop_cleanup(
 
     @callback
     def _handle_homeassistant_stop(_event: Event) -> None:
-        from . import _async_shutdown_runtime_resources, _begin_runtime_shutdown
-
         _begin_runtime_shutdown(runtime)
         hass.async_create_task(_async_shutdown_runtime_resources(runtime))
 
@@ -70,8 +67,6 @@ async def _shutdown_site_coordinator(site: SmappeeSiteRuntime) -> None:
 
 async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
     """Stop MQTT clients and coordinator background tasks for runtime data."""
-    from . import _begin_runtime_shutdown, _iter_mqtt_clients, _shutdown_site_coordinator
-
     # Mark coordinators as shutting down before stopping MQTT, because MQTT
     # disconnect callbacks can otherwise schedule fallback refreshes.
     _begin_runtime_shutdown(rd)

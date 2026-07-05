@@ -6,15 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.config_entries import ConfigEntry
 import pytest
 
-from custom_components.smappee_ev import (
-    SmappeeCoordinator,
-    _create_coordinators,
-    _prepare_site,
-    _setup_mqtt,
-)
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
 from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
+from custom_components.smappee_ev.coordinator import SmappeeCoordinator
+from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
+from custom_components.smappee_ev.runtime_assembly import _create_coordinators
+from custom_components.smappee_ev.site_preparation import _prepare_site
 from tests.factories import make_connector_runtime, make_station_runtime
 
 
@@ -84,7 +82,9 @@ class TestCoordinatorCreation:
         }
 
         # Mock SmappeeCoordinator
-        with patch("custom_components.smappee_ev.SmappeeCoordinator") as mock_coordinator_class:
+        with patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeCoordinator"
+        ) as mock_coordinator_class:
             # Create a mock coordinator instance
             mock_coordinator = MagicMock(spec=SmappeeCoordinator)
             mock_coordinator.async_config_entry_first_refresh = AsyncMock()
@@ -140,7 +140,9 @@ class TestCoordinatorCreation:
         config_entry = MagicMock(spec=ConfigEntry)
 
         # Mock SmappeeCoordinator
-        with patch("custom_components.smappee_ev.SmappeeCoordinator") as mock_coordinator_class:
+        with patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeCoordinator"
+        ) as mock_coordinator_class:
             # Create a mock coordinator instance
             mock_coordinator = MagicMock(spec=SmappeeCoordinator)
             mock_coordinator.async_config_entry_first_refresh = AsyncMock()
@@ -547,19 +549,28 @@ class TestPrepareSite:
 
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices", return_value=station_devs
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
+                return_value=station_devs,
             ),
-            patch("custom_components.smappee_ev._split_devices", return_value=(station_devs, [])),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, []),
+            ),
+            patch(
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value={},
             ),
             patch(
-                "custom_components.smappee_ev._make_station_clients", return_value=stations
+                "custom_components.smappee_ev.site_preparation._make_station_clients",
+                return_value=stations,
             ) as make_station_clients,
-            patch("custom_components.smappee_ev._create_coordinators", new_callable=AsyncMock),
             patch(
-                "custom_components.smappee_ev._setup_mqtt", return_value=MagicMock()
+                "custom_components.smappee_ev.site_preparation._create_coordinators",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "custom_components.smappee_ev.site_preparation._setup_mqtt",
+                return_value=MagicMock(),
             ) as setup_mqtt,
         ):
             result, mqtt = await _prepare_site(
@@ -593,7 +604,10 @@ class TestPrepareSite:
         }
 
         # Mock dashboard device discovery to return None (error)
-        with patch("custom_components.smappee_ev._dashboard_fetch_devices", return_value=None):
+        with patch(
+            "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
+            return_value=None,
+        ):
             # Call _prepare_site
             result = await _prepare_site(
                 hass,
@@ -623,8 +637,14 @@ class TestPrepareSite:
 
         # Mock _fetch_devices and _split_devices
         with (
-            patch("custom_components.smappee_ev._dashboard_fetch_devices", return_value=[]),
-            patch("custom_components.smappee_ev._split_devices", return_value=([], [])),
+            patch(
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
+                return_value=[],
+            ),
+            patch(
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=([], []),
+            ),
         ):
             # Call _prepare_site
             result = await _prepare_site(
@@ -654,11 +674,11 @@ class TestPrepareSite:
         # Mock _fetch_devices and _split_devices
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=[{"type": "CARCHARGER"}],
             ),
             patch(
-                "custom_components.smappee_ev._split_devices",
+                "custom_components.smappee_ev.site_preparation._split_devices",
                 return_value=([], [{"type": "CARCHARGER"}]),
             ),
         ):
@@ -724,21 +744,28 @@ class TestPrepareSite:
         # Mock the required functions
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=[{"type": "CHARGINGSTATION"}, {"type": "CARCHARGER"}],
             ),
             patch(
-                "custom_components.smappee_ev._split_devices", return_value=(station_devs, car_devs)
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, car_devs),
             ),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value=station_mapping,
             ),
-            patch("custom_components.smappee_ev._make_station_clients", return_value=stations),
-            patch("custom_components.smappee_ev._assign_connectors"),
-            patch("custom_components.smappee_ev._fallback_assign"),
-            patch("custom_components.smappee_ev._create_coordinators"),
-            patch("custom_components.smappee_ev._setup_mqtt", return_value=MagicMock()),
+            patch(
+                "custom_components.smappee_ev.site_preparation._make_station_clients",
+                return_value=stations,
+            ),
+            patch("custom_components.smappee_ev.site_preparation._assign_connectors"),
+            patch("custom_components.smappee_ev.site_preparation._fallback_assign"),
+            patch("custom_components.smappee_ev.site_preparation._create_coordinators"),
+            patch(
+                "custom_components.smappee_ev.site_preparation._setup_mqtt",
+                return_value=MagicMock(),
+            ),
         ):
             # Call _prepare_site
             result, mqtt = await _prepare_site(
@@ -812,21 +839,28 @@ class TestPrepareSite:
         # Mock the required functions
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=station_devs + car_devs,
             ),
             patch(
-                "custom_components.smappee_ev._split_devices", return_value=(station_devs, car_devs)
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, car_devs),
             ),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value=station_mapping,
             ),
-            patch("custom_components.smappee_ev._make_station_clients", return_value=stations),
-            patch("custom_components.smappee_ev._assign_connectors"),
-            patch("custom_components.smappee_ev._fallback_assign"),
-            patch("custom_components.smappee_ev._create_coordinators"),
-            patch("custom_components.smappee_ev._setup_mqtt", return_value=MagicMock()),
+            patch(
+                "custom_components.smappee_ev.site_preparation._make_station_clients",
+                return_value=stations,
+            ),
+            patch("custom_components.smappee_ev.site_preparation._assign_connectors"),
+            patch("custom_components.smappee_ev.site_preparation._fallback_assign"),
+            patch("custom_components.smappee_ev.site_preparation._create_coordinators"),
+            patch(
+                "custom_components.smappee_ev.site_preparation._setup_mqtt",
+                return_value=MagicMock(),
+            ),
         ):
             # Call _prepare_site
             result, mqtt = await _prepare_site(
@@ -898,16 +932,22 @@ class TestPrepareSite:
 
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=station_devs,
             ),
-            patch("custom_components.smappee_ev._split_devices", return_value=(station_devs, [])),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, []),
+            ),
+            patch(
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value=station_mapping,
             ),
-            patch("custom_components.smappee_ev._create_coordinators", new_callable=AsyncMock),
-            patch("custom_components.smappee_ev._setup_mqtt", return_value=None),
+            patch(
+                "custom_components.smappee_ev.site_preparation._create_coordinators",
+                new_callable=AsyncMock,
+            ),
+            patch("custom_components.smappee_ev.site_preparation._setup_mqtt", return_value=None),
         ):
             result, mqtt = await _prepare_site(
                 hass,
@@ -980,16 +1020,22 @@ class TestPrepareSite:
 
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=station_devs,
             ),
-            patch("custom_components.smappee_ev._split_devices", return_value=(station_devs, [])),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, []),
+            ),
+            patch(
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value=station_mapping,
             ),
-            patch("custom_components.smappee_ev._create_coordinators", new_callable=AsyncMock),
-            patch("custom_components.smappee_ev._setup_mqtt", return_value=None),
+            patch(
+                "custom_components.smappee_ev.site_preparation._create_coordinators",
+                new_callable=AsyncMock,
+            ),
+            patch("custom_components.smappee_ev.site_preparation._setup_mqtt", return_value=None),
         ):
             result, mqtt = await _prepare_site(
                 hass,
@@ -1064,16 +1110,22 @@ class TestPrepareSite:
 
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=station_devs,
             ),
-            patch("custom_components.smappee_ev._split_devices", return_value=(station_devs, [])),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, []),
+            ),
+            patch(
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value=station_mapping,
             ),
-            patch("custom_components.smappee_ev._create_coordinators", new_callable=AsyncMock),
-            patch("custom_components.smappee_ev._setup_mqtt", return_value=None),
+            patch(
+                "custom_components.smappee_ev.site_preparation._create_coordinators",
+                new_callable=AsyncMock,
+            ),
+            patch("custom_components.smappee_ev.site_preparation._setup_mqtt", return_value=None),
         ):
             result, mqtt = await _prepare_site(
                 hass,
@@ -1131,23 +1183,30 @@ class TestPrepareSite:
 
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=station_devs + car_devs,
             ),
             patch(
-                "custom_components.smappee_ev._split_devices", return_value=(station_devs, car_devs)
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, car_devs),
             ),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value={},
             ),
-            patch("custom_components.smappee_ev._make_station_clients", return_value=stations),
+            patch(
+                "custom_components.smappee_ev.site_preparation._make_station_clients",
+                return_value=stations,
+            ),
             patch(
                 "custom_components.smappee_ev.topology.SmappeeDeviceHandle",
                 return_value=MagicMock(),
             ),
-            patch("custom_components.smappee_ev._create_coordinators", new_callable=AsyncMock),
-            patch("custom_components.smappee_ev._setup_mqtt", return_value=None),
+            patch(
+                "custom_components.smappee_ev.site_preparation._create_coordinators",
+                new_callable=AsyncMock,
+            ),
+            patch("custom_components.smappee_ev.site_preparation._setup_mqtt", return_value=None),
         ):
             result, mqtt = await _prepare_site(
                 hass,
@@ -1217,21 +1276,32 @@ class TestPrepareSite:
 
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=station_devs + car_devs,
             ),
             patch(
-                "custom_components.smappee_ev._split_devices", return_value=(station_devs, car_devs)
+                "custom_components.smappee_ev.site_preparation._split_devices",
+                return_value=(station_devs, car_devs),
             ),
             patch(
-                "custom_components.smappee_ev._fetch_dashboard_connector_mapping",
+                "custom_components.smappee_ev.site_preparation._fetch_dashboard_connector_mapping",
                 return_value=station_mapping,
             ),
-            patch("custom_components.smappee_ev._make_station_clients", return_value=stations),
-            patch("custom_components.smappee_ev._assign_connectors") as assign_connectors,
-            patch("custom_components.smappee_ev._fallback_assign") as fallback_assign,
-            patch("custom_components.smappee_ev._create_coordinators", new_callable=AsyncMock),
-            patch("custom_components.smappee_ev._setup_mqtt", return_value=None),
+            patch(
+                "custom_components.smappee_ev.site_preparation._make_station_clients",
+                return_value=stations,
+            ),
+            patch(
+                "custom_components.smappee_ev.site_preparation._assign_connectors"
+            ) as assign_connectors,
+            patch(
+                "custom_components.smappee_ev.site_preparation._fallback_assign"
+            ) as fallback_assign,
+            patch(
+                "custom_components.smappee_ev.site_preparation._create_coordinators",
+                new_callable=AsyncMock,
+            ),
+            patch("custom_components.smappee_ev.site_preparation._setup_mqtt", return_value=None),
         ):
             result, mqtt = await _prepare_site(
                 hass,

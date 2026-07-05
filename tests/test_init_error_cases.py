@@ -5,17 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.smappee_ev import (
-    _assign_connectors,
-    _async_shutdown_runtime_resources,
-    _fetch_dashboard_connector_mapping,
-    _prepare_site,
-    _setup_mqtt,
-    async_unload_entry,
-)
+from custom_components.smappee_ev import async_unload_entry
 from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
 from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
+from custom_components.smappee_ev.dashboard_discovery import _fetch_dashboard_connector_mapping
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
+from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
+from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.site_preparation import _prepare_site
+from custom_components.smappee_ev.topology import _assign_connectors
 from tests.factories import make_site_runtime, make_station_runtime
 
 
@@ -167,14 +165,16 @@ class TestErrorHandling:
         # Mock dashboard device discovery to succeed but _split_devices to raise an exception
         with (
             patch(
-                "custom_components.smappee_ev._dashboard_fetch_devices",
+                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
                 return_value=[{"type": "CHARGINGSTATION"}],
             ),
             patch(
-                "custom_components.smappee_ev._split_devices",
+                "custom_components.smappee_ev.site_preparation._split_devices",
                 side_effect=Exception("Test exception"),
             ),
-            patch("custom_components.smappee_ev._LOGGER.exception") as mock_log_exception,
+            patch(
+                "custom_components.smappee_ev.site_preparation._LOGGER.exception"
+            ) as mock_log_exception,
         ):
             # Call _prepare_site - should handle the exception
             result = await _prepare_site(

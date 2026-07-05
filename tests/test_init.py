@@ -9,22 +9,6 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 import pytest
 
 from custom_components.smappee_ev import (
-    _assign_connectors,
-    _build_mqtt_routes,
-    _connector_uuid,
-    _dashboard_client_configured,
-    _dashboard_discover_service_locations,
-    _fallback_assign,
-    _fetch_dashboard_connector_mapping,
-    _find_in,
-    _is_connector,
-    _is_station,
-    _make_station_clients,
-    _mqtt_specs_from_highlevel_configs,
-    _normalize_connector_mapping_station_keys,
-    _normalize_dashboard_service_location,
-    _safe_str,
-    _split_devices,
     async_remove_config_entry_device,
     async_setup,
     async_setup_entry,
@@ -37,7 +21,27 @@ from custom_components.smappee_ev.const import (
     CONF_USERNAME,
     DOMAIN,
 )
+from custom_components.smappee_ev.dashboard_discovery import (
+    _dashboard_client_configured,
+    _dashboard_discover_service_locations,
+    _fetch_dashboard_connector_mapping,
+)
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
+from custom_components.smappee_ev.mqtt_setup import _build_mqtt_routes
+from custom_components.smappee_ev.mqtt_specs import _mqtt_specs_from_highlevel_configs
+from custom_components.smappee_ev.topology import (
+    _assign_connectors,
+    _connector_uuid,
+    _fallback_assign,
+    _find_in,
+    _is_connector,
+    _is_station,
+    _make_station_clients,
+    _normalize_connector_mapping_station_keys,
+    _normalize_dashboard_service_location,
+    _safe_str,
+    _split_devices,
+)
 from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
 
@@ -280,7 +284,7 @@ class TestInitFunctions:
         assert _safe_str(None) is None
 
         # This is a separate mock test with a custom implementation
-        with patch("custom_components.smappee_ev._safe_str") as mock_safe_str:
+        with patch("custom_components.smappee_ev.topology._safe_str") as mock_safe_str:
             # Make our mocked function return None only for "TypeError" input
             mock_safe_str.side_effect = lambda x: None if x == "TypeError" else _safe_str(x)
             assert mock_safe_str("TypeError") is None
@@ -397,7 +401,7 @@ class TestInitFunctions:
         assert _find_in({"serialNumber": ""}, "serialNumber") is None
 
         # Mock _safe_str for None input
-        with patch("custom_components.smappee_ev._safe_str", return_value=None):
+        with patch("custom_components.smappee_ev.topology._safe_str", return_value=None):
             assert _find_in({"serialNumber": None}, "serialNumber") is None
 
         # Property-based match in configurationProperties
@@ -749,7 +753,7 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
                 return_value=[self._topology()],
             ),
             patch(
@@ -824,7 +828,7 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
                 return_value=[self._topology()],
             ),
             patch("custom_components.smappee_ev._prepare_topology", return_value=(stations, None)),
@@ -853,7 +857,7 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
                 side_effect=ClientError("Auth failed"),
             ),
             pytest.raises(ConfigEntryNotReady),
@@ -868,7 +872,7 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
                 return_value=[],
             ),
             pytest.raises(ConfigEntryNotReady),
@@ -882,7 +886,9 @@ class TestDomainSetup:
 
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
-            patch("custom_components.smappee_ev._dashboard_discover_topologies") as mock_discover,
+            patch(
+                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies"
+            ) as mock_discover,
             patch("custom_components.smappee_ev._prepare_topology", return_value=(None, None)),
         ):
             # Return some service locations
@@ -917,7 +923,7 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
                 return_value=[self._topology(), self._topology()],
             ),
             patch(
