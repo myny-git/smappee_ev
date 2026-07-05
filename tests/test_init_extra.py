@@ -1142,7 +1142,10 @@ class TestPrepareSite:
                 return_value={},
             ),
             patch("custom_components.smappee_ev._make_station_clients", return_value=stations),
-            patch("custom_components.smappee_ev.SmappeeDeviceHandle", return_value=MagicMock()),
+            patch(
+                "custom_components.smappee_ev.topology.SmappeeDeviceHandle",
+                return_value=MagicMock(),
+            ),
             patch("custom_components.smappee_ev._create_coordinators", new_callable=AsyncMock),
             patch("custom_components.smappee_ev._setup_mqtt", return_value=None),
         ):

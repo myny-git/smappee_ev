@@ -561,7 +561,7 @@ class TestSitePreparation:
     def test_make_station_clients(self):
         """Test making station clients."""
         # Mock SmappeeDeviceHandle
-        with patch("custom_components.smappee_ev.SmappeeDeviceHandle"):
+        with patch("custom_components.smappee_ev.topology.SmappeeDeviceHandle"):
             station_devs = [
                 {"uuid": "station1_uuid", "id": "station1_id", "serialNumber": "STATION1"},
                 {"uuid": "station2_uuid", "id": "station2_id"},
@@ -584,7 +584,9 @@ class TestSitePreparation:
     def test_assign_connectors(self):
         """Test connector assignment to stations."""
         # Mock SmappeeDeviceHandle
-        with patch("custom_components.smappee_ev.SmappeeDeviceHandle") as mock_api_client_class:
+        with patch(
+            "custom_components.smappee_ev.topology.SmappeeDeviceHandle"
+        ) as mock_api_client_class:
             # Create stations
             stations = {
                 "station1_uuid": make_station_runtime(
@@ -623,7 +625,9 @@ class TestSitePreparation:
     def test_fallback_assign(self):
         """Test fallback connector assignment."""
         # Mock SmappeeDeviceHandle
-        with patch("custom_components.smappee_ev.SmappeeDeviceHandle") as mock_api_client_class:
+        with patch(
+            "custom_components.smappee_ev.topology.SmappeeDeviceHandle"
+        ) as mock_api_client_class:
             # Create stations with no connectors
             stations = {
                 "station1_uuid": make_station_runtime(
