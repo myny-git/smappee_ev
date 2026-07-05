@@ -933,7 +933,9 @@ async def test_recent_session_refresh_lock_throttle_reauth_and_success(hass, mon
         coord._session_refresh_lock.release()
     coord._async_get_recent_sessions.assert_not_awaited()
 
-    monkeypatch.setattr("custom_components.smappee_ev.coordinator._now", lambda: 1000.0)
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.coordinators.session_tracking._now", lambda: 1000.0
+    )
     coord._last_session_api_attempt = 999.0
     await coord._async_refresh_recent_sessions("throttled")
     coord._async_get_recent_sessions.assert_not_awaited()
@@ -969,12 +971,17 @@ async def test_session_tracking_shutdown_cancels_pending_scheduled_refreshes(has
         return unsub
 
     with (
-        patch("custom_components.smappee_ev.coordinator.SESSION_FINAL_REFRESH_DELAYS", (30, 120)),
         patch(
-            "custom_components.smappee_ev.coordinator.async_call_later", side_effect=fake_call_later
+            "custom_components.smappee_ev.coordinators.session_tracking."
+            "SESSION_FINAL_REFRESH_DELAYS",
+            (30, 120),
         ),
         patch(
-            "custom_components.smappee_ev.coordinator.async_track_time_interval",
+            "custom_components.smappee_ev.coordinators.session_tracking.async_call_later",
+            side_effect=fake_call_later,
+        ),
+        patch(
+            "custom_components.smappee_ev.coordinators.session_tracking.async_track_time_interval",
             return_value=active_loop_unsub,
         ),
     ):

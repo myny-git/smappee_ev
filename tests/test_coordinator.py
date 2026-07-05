@@ -395,7 +395,10 @@ class TestSmappeeCoordinator:
         """Test failed recent session refreshes are throttled by last attempt time."""
         mock_connector_client.async_get_recent_sessions.side_effect = RuntimeError("cloud down")
 
-        with patch("custom_components.smappee_ev.coordinator._now", side_effect=(1000.0, 1060.0)):
+        with patch(
+            "custom_components.smappee_ev.coordinators.session_tracking._now",
+            side_effect=(1000.0, 1060.0),
+        ):
             await coordinator._async_refresh_recent_sessions("test")
             await coordinator._async_refresh_recent_sessions("test")
 
@@ -416,7 +419,7 @@ class TestSmappeeCoordinator:
             return active_loop_unsub
 
         with patch(
-            "custom_components.smappee_ev.coordinator.async_track_time_interval",
+            "custom_components.smappee_ev.coordinators.session_tracking.async_track_time_interval",
             side_effect=capture_interval,
         ):
             conn = coordinator.data.connectors["test_uuid"]
@@ -472,7 +475,7 @@ class TestSmappeeCoordinator:
             conn.raw_charging_mode = "PAUSED"
 
         with patch(
-            "custom_components.smappee_ev.coordinator.async_track_time_interval",
+            "custom_components.smappee_ev.coordinators.session_tracking.async_track_time_interval",
             side_effect=capture_interval,
         ):
             conn = coordinator.data.connectors["test_uuid"]
@@ -501,13 +504,18 @@ class TestSmappeeCoordinator:
             return MagicMock()
 
         with (
-            patch("custom_components.smappee_ev.coordinator.SESSION_START_REFRESH_DELAY", 0),
             patch(
-                "custom_components.smappee_ev.coordinator.async_call_later",
+                "custom_components.smappee_ev.coordinators.session_tracking."
+                "SESSION_START_REFRESH_DELAY",
+                0,
+            ),
+            patch(
+                "custom_components.smappee_ev.coordinators.session_tracking.async_call_later",
                 side_effect=capture_call_later,
             ),
             patch(
-                "custom_components.smappee_ev.coordinator.async_track_time_interval",
+                "custom_components.smappee_ev.coordinators.session_tracking."
+                "async_track_time_interval",
                 return_value=MagicMock(),
             ),
         ):
@@ -536,13 +544,18 @@ class TestSmappeeCoordinator:
             return MagicMock()
 
         with (
-            patch("custom_components.smappee_ev.coordinator.SESSION_START_REFRESH_DELAY", 60),
             patch(
-                "custom_components.smappee_ev.coordinator.async_call_later",
+                "custom_components.smappee_ev.coordinators.session_tracking."
+                "SESSION_START_REFRESH_DELAY",
+                60,
+            ),
+            patch(
+                "custom_components.smappee_ev.coordinators.session_tracking.async_call_later",
                 side_effect=capture_call_later,
             ),
             patch(
-                "custom_components.smappee_ev.coordinator.async_track_time_interval",
+                "custom_components.smappee_ev.coordinators.session_tracking."
+                "async_track_time_interval",
                 return_value=MagicMock(),
             ),
         ):
@@ -572,13 +585,18 @@ class TestSmappeeCoordinator:
             return MagicMock()
 
         with (
-            patch("custom_components.smappee_ev.coordinator.SESSION_FINAL_REFRESH_DELAYS", (0,)),
             patch(
-                "custom_components.smappee_ev.coordinator.async_call_later",
+                "custom_components.smappee_ev.coordinators.session_tracking."
+                "SESSION_FINAL_REFRESH_DELAYS",
+                (0,),
+            ),
+            patch(
+                "custom_components.smappee_ev.coordinators.session_tracking.async_call_later",
                 side_effect=capture_call_later,
             ),
             patch(
-                "custom_components.smappee_ev.coordinator.async_track_time_interval",
+                "custom_components.smappee_ev.coordinators.session_tracking."
+                "async_track_time_interval",
                 return_value=active_loop_unsub,
             ),
         ):
