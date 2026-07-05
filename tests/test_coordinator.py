@@ -323,7 +323,9 @@ class TestSmappeeCoordinator:
         coordinator.dashboard_client = dashboard
         coordinator.data.connectors["test_uuid"].dashboard_device_id = "device-1"
 
-        with patch("custom_components.smappee_ev.coordinators.dashboard._LOGGER.warning") as warning:
+        with patch(
+            "custom_components.smappee_ev.coordinators.dashboard_merge._LOGGER.warning"
+        ) as warning:
             changed = await coordinator._refresh_dashboard_load_management(coordinator.data)
 
         assert not changed
