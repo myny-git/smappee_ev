@@ -244,6 +244,51 @@ class PowerMixin:
 
         return maps_by_topic or None
 
+    def _connector_uuid_for_highlevel_measurement(self, meas: DashboardObject) -> str | None:
+        """Match a Dashboard highlevel APPLIANCE measurement to a connector UUID."""
+        direct_values = [
+            meas.get("uuid"),
+            meas.get("smartDeviceUuid"),
+            meas.get("deviceUuid"),
+        ]
+        appliance = meas.get("appliance")
+        if isinstance(appliance, dict):
+            direct_values.extend(
+                [
+                    appliance.get("uuid"),
+                    appliance.get("smartDeviceUuid"),
+                    appliance.get("deviceUuid"),
+                ]
+            )
+        for value in direct_values:
+            text = str(value).strip() if value is not None else ""
+            if text and text in self.connector_clients:
+                return text
+
+        position = self._connector_position_from_measurement(meas)
+        if position is not None:
+            for uuid, client in self.connector_clients.items():
+                if getattr(client, "connector_number", None) == position:
+                    return uuid
+
+        if len(self.connector_clients) == 1:
+            return next(iter(self.connector_clients))
+        return None
+
+    @staticmethod
+    def _connector_position_from_measurement(meas: DashboardObject) -> int | None:
+        for key in ("position", "connectorNumber"):
+            value = meas.get(key)
+            if value is not None:
+                with suppress(TypeError, ValueError):
+                    return int(value)
+        name = str(meas.get("name") or "")
+        match = re.search(r"(?:^|\s-\s|\s)(\d+)\s*$", name)
+        if match:
+            with suppress(TypeError, ValueError):
+                return int(match.group(1))
+        return None
+
     def _handle_power(self, topic: str, payload: dict) -> bool:
         data = self.data
         if not data:
@@ -311,4 +356,95 @@ class PowerMixin:
         if isinstance(sp, int | float):
             changed |= self._set_if_changed(st, "pv_power_total", int(sp))
 
+        return changed
+
+    def _apply_station_group(
+        self,
+        st,
+        payload: dict,
+        power_idxs: list[int],
+        current_idxs: list[int],
+        energy_idxs: list[int] | str,
+        power_key_prefix: str | None = None,
+        power_field: str | None = None,
+    ) -> bool:
+        if power_key_prefix is None:
+            power_key_prefix = str(energy_idxs)
+            energy_idxs = current_idxs
+            current_idxs = []
+        changed = False
+        active = _active_power_values(payload, power_field)
+        currents_ma = payload.get("currentData") or []
+        voltage_dv = payload.get("phaseVoltageData") or []
+        imp_wh = payload.get("importActiveEnergyData") or []
+        exp_wh = payload.get("exportActiveEnergyData") or []
+
+        p_ph = _pick(active, power_idxs)
+        if p_ph:
+            changed |= self._set_if_changed(st, f"{power_key_prefix}_power_phases", p_ph)
+            changed |= self._set_if_changed(st, f"{power_key_prefix}_power_total", sum(p_ph))
+            i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
+            if i_ph:
+                changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
+
+        if power_key_prefix == "grid":
+            v_ph = _volts_from_dv(_pick(voltage_dv, [0, 1, 2]))
+            if v_ph:
+                changed |= self._set_if_changed(st, "grid_voltage_phases", v_ph)
+
+        energy_idx_list = energy_idxs if isinstance(energy_idxs, list) else []
+        if energy_idx_list:
+            if power_key_prefix == "grid":
+                changed |= self._set_if_changed(
+                    st,
+                    "grid_energy_import_kwh",
+                    round(sum(_pick(imp_wh, energy_idx_list)) / 1000.0, 3),
+                )
+                changed |= self._set_if_changed(
+                    st,
+                    "grid_energy_export_kwh",
+                    round(sum(_pick(exp_wh, energy_idx_list)) / 1000.0, 3),
+                )
+            else:
+                changed |= self._set_if_changed(
+                    st,
+                    "pv_energy_import_kwh",
+                    round(sum(_pick(imp_wh, energy_idx_list)) / 1000.0, 3),
+                )
+        return changed
+
+    def _apply_connector_values(
+        self,
+        conn,
+        payload: dict,
+        power_idxs: list[int],
+        current_idxs: list[int],
+        energy_idxs: list[int] | None = None,
+        power_field: str | None = None,
+    ) -> bool:
+        if energy_idxs is None:
+            energy_idxs = current_idxs
+            current_idxs = []
+        changed = False
+        active = _active_power_values(payload, power_field)
+        currents_ma = payload.get("currentData") or []
+        imp_wh = payload.get("importActiveEnergyData") or []
+
+        p_ph = _pick(active, power_idxs)
+        i_ma = _pick(currents_ma, current_idxs or power_idxs)
+        if energy_idxs:
+            energy_values = _pick(imp_wh, energy_idxs)
+            if energy_values and len(set(energy_values)) == 1:
+                val = energy_values[0]
+            else:
+                val = sum(energy_values)
+            imp_kwh = round(val / 1000.0, 3)
+        else:
+            imp_kwh = None
+
+        changed |= self._set_if_changed(conn, "power_phases", p_ph)
+        changed |= self._set_if_changed(conn, "power_total", sum(p_ph) if p_ph else None)
+        if i_ma:
+            changed |= self._set_if_changed(conn, "current_phases", _amps_from_ma(i_ma))
+        changed |= self._set_if_changed(conn, "energy_import_kwh", imp_kwh)
         return changed
