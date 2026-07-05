@@ -34,6 +34,7 @@ _ON_PROPERTIES_PARSE_ERRORS = (
     KeyError,
     AttributeError,
 )
+_JSON_CONTENT_PARSE_ERRORS = (json.JSONDecodeError, TypeError)
 
 
 def redact_mqtt_topic(topic: str) -> str:
@@ -269,7 +270,7 @@ class SmappeeMqtt:
                                 if isinstance(payload, dict) and "jsonContent" in payload:
                                     try:
                                         inner = json.loads(payload["jsonContent"])
-                                    except json.JSONDecodeError, TypeError:
+                                    except _JSON_CONTENT_PARSE_ERRORS:
                                         inner = None
                                     if isinstance(inner, dict):
                                         for k in ("deviceUUID", "messageType", "messsageType"):
