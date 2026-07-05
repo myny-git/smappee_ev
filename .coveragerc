@@ -2,3 +2,8 @@
 omit =
     custom_components/smappee_ev/api/__init__.py
     custom_components/smappee_ev/models/__init__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:

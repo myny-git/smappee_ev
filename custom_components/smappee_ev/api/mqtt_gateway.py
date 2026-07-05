@@ -269,7 +269,7 @@ class SmappeeMqtt:
                                 if isinstance(payload, dict) and "jsonContent" in payload:
                                     try:
                                         inner = json.loads(payload["jsonContent"])
-                                    except (json.JSONDecodeError, TypeError):
+                                    except json.JSONDecodeError, TypeError:
                                         inner = None
                                     if isinstance(inner, dict):
                                         for k in ("deviceUUID", "messageType", "messsageType"):
