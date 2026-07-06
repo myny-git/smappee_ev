@@ -70,7 +70,7 @@ The MQTT topic observation for starting charging is: `startcharging = {"percenta
 
 ### `smappee_ev.resume_charging`
 
-Resumes a paused charging session. 
+Resumes a paused charging session.
 
 The MQTT topic observation for resuming charging is: `setchargingmode = {"mode":"XXX"}`.
 
@@ -148,7 +148,6 @@ The `sensor.smappee_ev_YOURSERIAL_support_grid_1` sensor provides information ab
 
 Defines the maximum current in Ampere for the connector. This number is used to calculate the percentages and your Smappee Wallbox will not allow charging above this value. This number is available per connector.
 
-
 ### Other controls
 
 | Entity | Purpose |
@@ -187,7 +186,7 @@ These are the raw Home Assistant state values to use in automations. The Home As
 |---|---|---|
 | `charging_state` | `initialize`, `started`, `suspended`, `stopped`, rare: `smart` | Raw Smappee `chargingState` from `_fetch_connector_state`, published by the integration as a lowercase string. `initialize` is the default before the first API fetch. No fixed enum is enforced. The rare `smart` value has been observed once; its session-classification behavior is unconfirmed, so consider opening an issue if it appears repeatedly. |
 | `evcc_state` | `A`, `B`, `C`, `E`, `F` | IEC 61851 notation derived from `iec_status` through `_derive_evcc_letter`. A means no vehicle connected, B means connected/not charging, C means actively charging, E/F indicate fault states. `D` is intentionally excluded. |
-| `evse_status` | `available`, `charging`, `paused by charger`, `cable connected`, `charging finished` | Raw Smappee `status_current`, published by the integration as a lowercase string. No fixed enum is enforced. |
+| `evse_status` | `available`, `cable_connected`, `charging`, `charging_finished`, `error`, `suspended_evse` | Raw Smappee `status_current`, published by the integration as a lowercase string. No fixed enum is enforced. |
 
 ## Power, Current and Energy Sensors
 
