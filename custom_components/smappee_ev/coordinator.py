@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from time import time as _now
 from typing import Any
@@ -81,6 +81,11 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         self.gateway_type = gateway_type
         self._highlevel_configs = highlevel_configs or {}
         self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
+        self._power_map_retry_after = 0.0
+        self.mqtt_transport_connected = False
+        self.last_real_charger_rx: datetime | None = None
+        self.last_real_power_rx: datetime | None = None
+        self.last_heartbeat_rx: datetime | None = None
 
     async def _async_update_data(self) -> SiteData:
         await self._ensure_power_index_map()
@@ -332,6 +337,11 @@ class SmappeeStationCoordinator(
         for client in self.connector_clients.values():
             client.dashboard_client = dashboard_client
         self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
+        self._power_map_retry_after = 0.0
+        self.mqtt_transport_connected = False
+        self.last_real_charger_rx: datetime | None = None
+        self.last_real_power_rx: datetime | None = None
+        self.last_heartbeat_rx: datetime | None = None
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
         self._connector_session_available: dict[str, bool] = {}

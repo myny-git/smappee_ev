@@ -94,7 +94,17 @@ class DashboardMixin(CoordinatorMixin):
             changed = False
             errors: list[str] = []
             responses = dict(zip(calls.keys(), results, strict=True))
-            if any(not isinstance(result, BaseException) for result in responses.values()):
+            usable_response = any(
+                isinstance(responses[label], expected_type)
+                for label, expected_type in (
+                    ("charging station details", dict),
+                    ("capacity protection", dict),
+                    ("overload protection", dict),
+                    ("high-level configuration", dict),
+                    ("appliances", list),
+                )
+            )
+            if usable_response:
                 self._last_dashboard_refresh = now
             for label, result in responses.items():
                 if isinstance(result, BaseException):
@@ -122,8 +132,7 @@ class DashboardMixin(CoordinatorMixin):
                 mapping = self._build_measurement_index_maps_by_topic_from_highlevel_configs(
                     self._highlevel_configs
                 )
-                if mapping is not None:
-                    self._power_index_maps_by_topic = mapping
+                self._power_index_maps_by_topic = mapping or {}
 
             if errors:
                 self._log_dashboard_refresh_errors(errors)

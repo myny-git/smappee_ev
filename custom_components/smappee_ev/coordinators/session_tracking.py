@@ -14,6 +14,7 @@ from homeassistant.core import CALLBACK_TYPE
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
+from ..api.errors import SmappeeError
 from ..helpers import anonymize_uuid
 from ..models.state import ConnectorState, RecentSession
 from .base import CoordinatorMixin
@@ -305,7 +306,7 @@ class SessionTrackingMixin(CoordinatorMixin):
             except ConfigEntryAuthFailed:
                 self._start_background_reauth()
                 return
-            except (TimeoutError, ClientError, RuntimeError) as err:
+            except (SmappeeError, TimeoutError, ClientError, RuntimeError) as err:
                 _LOGGER.warning("Recent session refresh failed for %s: %s", reason, err)
                 return
 

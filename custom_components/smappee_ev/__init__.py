@@ -32,9 +32,14 @@ from .models.runtime_data import (
     SmappeeSiteRuntime,
     SmappeeStationRuntime,
 )
+from .mqtt_setup import _start_mqtt_clients
 from .runtime_assembly import _log_stored_runtime_shape, _prepare_topology
 from .runtime_devices import _current_station_device_identifiers, _register_runtime_devices
-from .runtime_lifecycle import _async_shutdown_runtime_resources, _register_runtime_stop_cleanup
+from .runtime_lifecycle import (
+    _async_shutdown_runtime_resources,
+    _register_runtime_stop_cleanup,
+    ensure_runtime_shutdown,
+)
 from .services import register_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -130,6 +135,21 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+def _start_runtime_background_work(
+    hass: HomeAssistant,
+    sites: dict[int, SmappeeSiteRuntime],
+    mqtt_clients: dict[int, MqttRuntimeValue],
+) -> None:
+    """Start periodic work after the complete topology has committed."""
+    for site in sites.values():
+        for bucket in site.stations.values():
+            coordinator = bucket.station_coordinator
+            if coordinator is not None:
+                coordinator.async_start_session_tracking()
+    for mqtt in mqtt_clients.values():
+        _start_mqtt_clients(hass, mqtt)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Set up a Smappee EV account entry that discovers all service locations with a charger."""
     _LOGGER.debug("Setting up Smappee EV account entry: %s", entry.title)
@@ -166,6 +186,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             config_entry=entry,
             dashboard_client=dashboard_client,
             background_tasks=background_tasks,
+            start_runtime=False,
         )
         for topology in topologies
     ]
@@ -180,6 +201,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
                 hard_error = hard_error or res
                 continue
             if isinstance(res, BaseException):
+                hard_error = hard_error or res
                 _LOGGER.warning("Site %s preparation failed: %s", topology.site_location_id, res)
                 continue
             stations_map, mqtt = res
@@ -213,11 +235,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
                 site.highlevel_configs.update(first_bucket.highlevel_configs)
 
         if hard_error is not None:
-            raise hard_error
+            if isinstance(hard_error, asyncio.CancelledError | ConfigEntryAuthFailed):
+                raise hard_error
+            raise ConfigEntryNotReady(
+                f"Preparing Smappee EV topology failed: {hard_error}"
+            ) from hard_error
 
         if not sites:
             _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")
             raise ConfigEntryNotReady("No Smappee EV stations discovered (will retry)")
+
+        # Commit the complete topology before starting periodic/background work.
+        _start_runtime_background_work(hass, sites, mqtt_clients)
     except BaseException:
         await _async_shutdown_runtime_resources(
             RuntimeData(
@@ -270,7 +299,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         )
     else:
         if isinstance(rd, RuntimeData):
-            await _async_shutdown_runtime_resources(rd)
+            await ensure_runtime_shutdown(hass, rd)
         else:
             _LOGGER.debug(
                 "Unload requested for %s but runtime_data is invalid (may have failed early)",

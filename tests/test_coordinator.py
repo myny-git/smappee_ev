@@ -996,10 +996,13 @@ class TestSmappeeCoordinator:
         )
         coordinator.dashboard_client = dashboard
 
-        await coordinator._ensure_power_index_map()
-        assert coordinator._power_index_maps_by_topic is None
-
-        await coordinator._ensure_power_index_map()
+        with patch(
+            "custom_components.smappee_ev.coordinators.power.monotonic",
+            side_effect=[0.0, 0.0, 61.0],
+        ):
+            await coordinator._ensure_power_index_map()
+            assert coordinator._power_index_maps_by_topic is None
+            await coordinator._ensure_power_index_map()
         assert coordinator._power_index_maps_by_topic is not None
         assert coordinator._power_index_maps_by_topic[topic]["grid"]["power"] == [9]
         assert dashboard.async_get_highlevel_configuration.call_count == 2
@@ -1019,11 +1022,11 @@ class TestSmappeeCoordinator:
         assert hasattr(mock_station, "last_mqtt_rx")
         coordinator.async_set_updated_data.assert_called_with(coordinator.data)
 
-        # Test connection already up (should still update timestamp)
+        # Transport callbacks are not proof that a real payload was received.
         old_timestamp = mock_station.last_mqtt_rx
         coordinator.apply_mqtt_connection_change(True)
         assert mock_station.mqtt_connected is True
-        assert mock_station.last_mqtt_rx >= old_timestamp
+        assert mock_station.last_mqtt_rx == old_timestamp
 
         # Test connection down (not yet implemented, should remain up)
         coordinator.apply_mqtt_connection_change(False)
@@ -1031,7 +1034,7 @@ class TestSmappeeCoordinator:
         coordinator.async_set_updated_data.assert_called_with(coordinator.data)
 
     def test_mqtt_connection_change_up_does_not_notify_when_already_connected(self, coordinator):
-        """Test repeated MQTT up events only update last-seen timestamp."""
+        """Test repeated MQTT up events do not masquerade as received data."""
         station = coordinator.data.station
         station.mqtt_connected = True
         station.last_mqtt_rx = 1.0
@@ -1040,7 +1043,7 @@ class TestSmappeeCoordinator:
         coordinator.apply_mqtt_connection_change(True)
 
         assert station.mqtt_connected is True
-        assert station.last_mqtt_rx > 1.0
+        assert station.last_mqtt_rx == 1.0
         coordinator.async_set_updated_data.assert_not_called()
 
     def test_mqtt_topic_parsing(self, coordinator):

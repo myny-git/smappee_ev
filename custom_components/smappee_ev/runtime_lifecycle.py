@@ -41,7 +41,7 @@ def _register_runtime_stop_cleanup(
     @callback
     def _handle_homeassistant_stop(_event: Event) -> None:
         _begin_runtime_shutdown(runtime)
-        hass.async_create_task(_async_shutdown_runtime_resources(runtime))
+        ensure_runtime_shutdown(hass, runtime)
 
     remove_stop_listener = hass.bus.async_listen_once(
         EVENT_HOMEASSISTANT_STOP,
@@ -61,7 +61,7 @@ async def _shutdown_site_coordinator(site: SmappeeSiteRuntime) -> None:
                 await result
         except asyncio.CancelledError:
             raise
-        except (RuntimeError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - shutdown must continue for other resources
             _LOGGER.debug("Site coordinator shutdown issue: %s", exc)
 
 
@@ -82,7 +82,7 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
                         await result
                 except asyncio.CancelledError:
                     raise
-                except (RuntimeError, OSError, ValueError) as exc:
+                except Exception as exc:  # noqa: BLE001 - shutdown must continue
                     _LOGGER.debug("Coordinator shutdown issue: %s", exc)
 
     for sid, mqtt in (rd.mqtt or {}).items():
@@ -96,7 +96,7 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
                     await result
             except asyncio.CancelledError:
                 raise
-            except (RuntimeError, OSError) as err:
+            except Exception as err:  # noqa: BLE001 - shutdown must continue
                 _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
 
     pending_tasks = [task for task in rd.background_tasks if not task.done()]
@@ -105,3 +105,20 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
     if pending_tasks:
         await asyncio.gather(*pending_tasks, return_exceptions=True)
     rd.background_tasks.difference_update(pending_tasks)
+
+
+def ensure_runtime_shutdown(
+    hass: HomeAssistant,
+    runtime: RuntimeData,
+) -> asyncio.Task[None]:
+    """Return the single shared shutdown task for a runtime."""
+    task = runtime.shutdown_task
+    if task is None:
+        shutdown_coro = _async_shutdown_runtime_resources(runtime)
+        created = hass.async_create_task(shutdown_coro)
+        if not isinstance(created, asyncio.Task):  # pragma: no cover - lightweight HA test doubles
+            shutdown_coro.close()
+            created = asyncio.create_task(_async_shutdown_runtime_resources(runtime))
+        task = created
+        runtime.shutdown_task = task
+    return task

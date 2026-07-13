@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+from inspect import isawaitable
 import logging
 
 from homeassistant.core import HomeAssistant
@@ -90,36 +91,56 @@ async def _create_coordinators(
     config_entry=None,
     dashboard_client=None,
     highlevel_configs: HighLevelConfigMap | None = None,
+    start_tracking: bool = True,
 ):
-    for bucket in stations.values():
-        kwargs = {
-            "station_client": bucket.station_client,
-            "connector_clients": {
-                key: connector.connector_client for key, connector in bucket.connectors.items()
-            },
-            "update_interval": update_interval,
-            "config_entry": config_entry,
-        }
-        if dashboard_client is not None:
-            kwargs["dashboard_client"] = dashboard_client
-        if highlevel_configs is not None:
-            kwargs["highlevel_configs"] = highlevel_configs
-        for key in (
-            "site_name",
-            "gateway_serial",
-            "gateway_type",
-            "station_name",
-            "station_model",
-        ):
-            value = (
-                bucket.charging_station_model if key == "station_model" else getattr(bucket, key)
-            )
-            if value is not None:
-                kwargs[key] = value
-        coord = SmappeeCoordinator(hass, **kwargs)
-        await coord.async_config_entry_first_refresh()
-        bucket.station_coordinator = coord
-        coord.async_start_session_tracking()
+    created: list[SmappeeCoordinator] = []
+    try:
+        for bucket in stations.values():
+            kwargs = {
+                "station_client": bucket.station_client,
+                "connector_clients": {
+                    key: connector.connector_client for key, connector in bucket.connectors.items()
+                },
+                "update_interval": update_interval,
+                "config_entry": config_entry,
+            }
+            if dashboard_client is not None:
+                kwargs["dashboard_client"] = dashboard_client
+            if highlevel_configs is not None:
+                kwargs["highlevel_configs"] = highlevel_configs
+            for key in (
+                "site_name",
+                "gateway_serial",
+                "gateway_type",
+                "station_name",
+                "station_model",
+            ):
+                value = (
+                    bucket.charging_station_model
+                    if key == "station_model"
+                    else getattr(bucket, key)
+                )
+                if value is not None:
+                    kwargs[key] = value
+            coord = SmappeeCoordinator(hass, **kwargs)
+            created.append(coord)
+            await coord.async_config_entry_first_refresh()
+            bucket.station_coordinator = coord
+    except BaseException:
+        for coord in created:
+            shutdown = getattr(coord, "async_shutdown", None)
+            if callable(shutdown):
+                try:
+                    result = shutdown()
+                    if isawaitable(result):
+                        await result
+                except Exception:  # noqa: BLE001 - rollback must continue
+                    _LOGGER.debug("Station coordinator rollback failed", exc_info=True)
+        raise
+
+    if start_tracking:
+        for coord in created:
+            coord.async_start_session_tracking()
 
 
 async def _create_site_coordinator(
@@ -146,7 +167,7 @@ async def _create_site_coordinator(
     return coord
 
 
-async def _prepare_topology(
+async def _prepare_topology(  # noqa: C901 - topology validation is intentionally linear
     hass: HomeAssistant,
     topology: SmappeeLocationTopology,
     update_interval: int,
@@ -154,6 +175,7 @@ async def _prepare_topology(
     config_entry: SmappeeEvConfigEntry | None = None,
     dashboard_client: SmappeeDashboardClient | None = None,
     background_tasks: set[asyncio.Task] | None = None,
+    start_runtime: bool = True,
 ) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
     """Prepare one site-first Dashboard topology."""
     site_sid = topology.site_location_id
@@ -289,14 +311,26 @@ async def _prepare_topology(
         highlevel_configs=site_highlevel_configs,
     )
 
-    await _create_coordinators(
-        hass,
-        stations,
-        update_interval,
-        config_entry=config_entry,
-        dashboard_client=dashboard_client,
-        highlevel_configs=station_highlevel_configs,
-    )
+    try:
+        await _create_coordinators(
+            hass,
+            stations,
+            update_interval,
+            config_entry=config_entry,
+            dashboard_client=dashboard_client,
+            highlevel_configs=station_highlevel_configs,
+            start_tracking=start_runtime,
+        )
+    except BaseException:
+        shutdown = getattr(site_coordinator, "async_shutdown", None)
+        if callable(shutdown):
+            try:
+                result = shutdown()
+                if isawaitable(result):
+                    await result
+            except Exception:  # noqa: BLE001 - rollback must preserve original failure
+                _LOGGER.debug("Site coordinator rollback failed", exc_info=True)
+        raise
 
     mqtt = _setup_mqtt(
         hass,
@@ -309,6 +343,7 @@ async def _prepare_topology(
         mqtt_specs=mqtt_specs,
         site_coordinator=site_coordinator,
         background_tasks=background_tasks,
+        start_clients=start_runtime,
     )
 
     for bucket in stations.values():

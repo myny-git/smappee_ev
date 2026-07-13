@@ -225,10 +225,10 @@ class TestMqttSetup:
 
             on_conn_callback = mock_mqtt_class.call_args[1]["on_connection_change"]
             on_conn_callback(True)
-            assert coord.update_interval is None
+            assert coord.update_interval == UPDATE_INTERVAL_DEFAULT
 
             on_conn_callback(False)
-            assert coord.update_interval == timedelta(seconds=UPDATE_INTERVAL_DEFAULT)
+            assert coord.update_interval == UPDATE_INTERVAL_DEFAULT
 
             # Verify MQTT was returned
             assert result == mock_mqtt
@@ -479,7 +479,7 @@ class TestMqttSetup:
 
         assert mock_coordinator.update_interval == timedelta(seconds=UPDATE_INTERVAL_DEFAULT)
         mock_coordinator.async_request_refresh.assert_not_called()
-        mock_coordinator.apply_mqtt_connection_change.assert_called_once_with(False)
+        mock_coordinator.apply_mqtt_connection_change.assert_not_called()
         assert background_tasks == set()
 
 

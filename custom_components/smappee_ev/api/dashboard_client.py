@@ -18,6 +18,7 @@ from ..const import (
     HTTP_TOTAL_TIMEOUT,
 )
 from ..models.state import DashboardObject, DashboardObjectList, RecentSession
+from .errors import SmappeeAuthenticationError, SmappeeConnectionError, SmappeeProtocolError
 
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_RENEW_SKEW_MS = 60_000
@@ -75,10 +76,10 @@ class SmappeeDashboardClient:
             timeout=self._timeout,
         ) as resp:
             if resp.status in (401, 403):
-                raise ConfigEntryAuthFailed("Dashboard credentials rejected")
+                raise SmappeeAuthenticationError("Dashboard credentials rejected")
             if resp.status != 200:
                 text = await resp.text()
-                raise RuntimeError(f"Dashboard login failed {resp.status}: {text}")
+                raise SmappeeProtocolError(f"Dashboard login failed {resp.status}: {text}")
             data = await resp.json()
         if not isinstance(data, dict):
             return False
@@ -96,7 +97,7 @@ class SmappeeDashboardClient:
             timeout=self._timeout,
         ) as resp:
             if resp.status in (401, 403):
-                raise ConfigEntryAuthFailed("Dashboard refresh token rejected")
+                raise SmappeeAuthenticationError("Dashboard refresh token rejected")
             if resp.status != 200:
                 return False
             data = await resp.json()
@@ -170,7 +171,9 @@ class SmappeeDashboardClient:
                 timeout=self._timeout,
             )
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise RuntimeError(f"Dashboard request failed ({method} {url}): {err}") from err
+            raise SmappeeConnectionError(
+                f"Dashboard request failed ({method} {url}): {err}"
+            ) from err
 
         async with response_context as resp:
             if resp.status in (401, 403) and retry_auth:
@@ -199,10 +202,10 @@ class SmappeeDashboardClient:
                         retry_auth=False,
                     )
             if resp.status in (401, 403):
-                raise ConfigEntryAuthFailed("Dashboard authorization failed")
+                raise SmappeeAuthenticationError("Dashboard authorization failed")
             if resp.status not in expected:
                 text = await resp.text()
-                raise RuntimeError(
+                raise SmappeeProtocolError(
                     f"Dashboard request failed {resp.status} ({method} {url}): {text}"
                 )
             if not return_json:

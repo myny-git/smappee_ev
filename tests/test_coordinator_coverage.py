@@ -665,6 +665,7 @@ async def test_station_power_index_map_cache_and_dashboard_loading(hass):
             }
         ]
     }
+    coord._power_map_retry_after = 0.0
     await coord._ensure_power_index_map()
 
     assert topic in coord._power_index_maps_by_topic

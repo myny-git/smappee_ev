@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from inspect import isawaitable
 import logging
+from typing import cast
 
 from .api.discovery import MqttChannelSpec
 from .api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
+from .const import MQTT_HEARTBEAT_TOPIC_SUFFIX
 from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .models.runtime_data import MqttRuntimeValue, SmappeeStationRuntime
 from .models.state import MqttPayload
@@ -17,6 +21,37 @@ from .mqtt_specs import _group_mqtt_specs_by_credentials
 _LOGGER = logging.getLogger(__name__)
 
 MqttRouteTarget = SmappeeSiteCoordinator | SmappeeStationCoordinator
+
+
+@dataclass
+class MqttFreshnessState:
+    """Keep transport state separate from meaningful Smappee payload freshness."""
+
+    clients_connected: dict[int, bool] = field(default_factory=dict)
+    last_real_charger_rx: datetime | None = None
+    last_real_power_rx: datetime | None = None
+    last_heartbeat_rx: datetime | None = None
+
+    @property
+    def mqtt_transport_connected(self) -> bool:
+        """Report healthy only when every configured client is connected."""
+        return bool(self.clients_connected) and all(self.clients_connected.values())
+
+    def record_connection(self, client_index: int, up: bool) -> bool:
+        """Record one client's state and return whether aggregate state changed."""
+        previous = self.mqtt_transport_connected
+        self.clients_connected[client_index] = up
+        return previous != self.mqtt_transport_connected
+
+    def record_message(self, topic: str) -> None:
+        """Record heartbeat, charger, and power traffic independently."""
+        now = datetime.now(UTC)
+        if topic.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
+            self.last_heartbeat_rx = now
+        elif topic.endswith("/power"):
+            self.last_real_power_rx = now
+        elif "/etc/carcharger/" in topic or "/etc/chargingstation/" in topic:
+            self.last_real_charger_rx = now
 
 
 def _build_mqtt_routes(
@@ -72,6 +107,7 @@ def _build_mqtt_clients(
     on_properties,
     on_connection_change,
     mqtt_specs: list[MqttChannelSpec] | None,
+    on_connection_change_factory: Callable[[int], Callable[[bool], None]] | None = None,
 ) -> list[SmappeeMqtt]:
     """Create one or more MQTT clients for a site based on credential sets."""
     if mqtt_specs is None:
@@ -82,7 +118,11 @@ def _build_mqtt_clients(
                 serial_number=serial_str,
                 on_properties=on_properties,
                 service_location_id=sid,
-                on_connection_change=on_connection_change,
+                on_connection_change=(
+                    on_connection_change_factory(0)
+                    if on_connection_change_factory is not None
+                    else on_connection_change
+                ),
             )
         ]
 
@@ -104,7 +144,11 @@ def _build_mqtt_clients(
                 serial_number=serial_str,
                 on_properties=on_properties,
                 service_location_id=sid,
-                on_connection_change=on_connection_change,
+                on_connection_change=(
+                    on_connection_change_factory(index - 1)
+                    if on_connection_change_factory is not None
+                    else on_connection_change
+                ),
                 mqtt_specs=specs,
             )
         )
@@ -164,15 +208,14 @@ def _handle_mqtt_connection_change(
     for bucket in stations.values():
         coord = bucket.station_coordinator
         if coord:
-            if up:
-                object.__setattr__(coord, "update_interval", None)
-            elif coord.update_interval is None:
+            if coord.update_interval is None:
                 object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
+            if not up:
                 schedule_refresh(coord)
             coord.apply_mqtt_connection_change(up)
 
 
-def _setup_mqtt(
+def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     hass,
     suuid,
     serial_str,
@@ -183,12 +226,29 @@ def _setup_mqtt(
     mqtt_specs: list[MqttChannelSpec] | None = None,
     site_coordinator: SmappeeSiteCoordinator | None = None,
     background_tasks: set[asyncio.Task] | None = None,
+    start_clients: bool = True,
 ) -> MqttRuntimeValue:
     if not suuid and not mqtt_specs:
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
         return None
 
+    freshness = MqttFreshnessState()
+
+    def _sync_freshness() -> None:
+        for bucket in stations.values():
+            coord = bucket.station_coordinator
+            if coord is None:
+                continue
+            coord.mqtt_transport_connected = freshness.mqtt_transport_connected
+            coord.last_real_charger_rx = freshness.last_real_charger_rx
+            coord.last_real_power_rx = freshness.last_real_power_rx
+            coord.last_heartbeat_rx = freshness.last_heartbeat_rx
+
     def _on_props(topic: str, payload: MqttPayload) -> None:
+        freshness.record_message(topic)
+        _sync_freshness()
+        if topic.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
+            return
         targets = mqtt_routes.get(topic)
         if targets is None:
             targets = []
@@ -234,14 +294,20 @@ def _setup_mqtt(
         if background_tasks is not None:
             task.add_done_callback(background_tasks.discard)
 
-    def _on_conn(up: bool) -> None:
-        _handle_mqtt_connection_change(
-            up,
-            site_coordinator,
-            stations,
-            update_interval,
-            _schedule_refresh,
-        )
+    def _connection_callback(client_index: int) -> Callable[[bool], None]:
+        def _on_conn(up: bool) -> None:
+            aggregate_changed = freshness.record_connection(client_index, up)
+            _sync_freshness()
+            if aggregate_changed:
+                _handle_mqtt_connection_change(
+                    freshness.mqtt_transport_connected,
+                    site_coordinator,
+                    stations,
+                    update_interval,
+                    _schedule_refresh,
+                )
+
+        return _on_conn
 
     mqtt_routes = _build_mqtt_routes(mqtt_specs, site_coordinator, stations)
 
@@ -251,14 +317,33 @@ def _setup_mqtt(
         sid=sid,
         client_id_prefix=client_id_prefix,
         on_properties=_on_props,
-        on_connection_change=_on_conn,
+        on_connection_change=None,
         mqtt_specs=mqtt_specs,
+        on_connection_change_factory=_connection_callback,
     )
-    for mqtt in mqtt_clients:
-        mqtt.track_start_task(hass.async_create_task(mqtt.start()))
+    freshness.clients_connected.update(dict.fromkeys(range(len(mqtt_clients)), False))
+    _sync_freshness()
+    # MQTT starts disconnected. Keep the REST safety net active from the outset,
+    # without scheduling a redundant refresh after the required first refresh.
+    for bucket in stations.values():
+        coord = bucket.station_coordinator
+        if coord is None:
+            continue
+        if coord.update_interval is None:
+            object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
+    mqtt_runtime = _mqtt_runtime_value(mqtt_clients)
+    if start_clients:
+        _start_mqtt_clients(hass, mqtt_runtime)
 
     _log_mqtt_subscriptions(sid, suuid, mqtt_specs)
-    return _mqtt_runtime_value(mqtt_clients)
+    return mqtt_runtime
+
+
+def _start_mqtt_clients(hass, value: MqttRuntimeValue) -> None:
+    """Start prepared MQTT clients after topology commit."""
+    for mqtt in _iter_mqtt_clients(value):
+        mqtt_client = cast(SmappeeMqtt, mqtt)
+        mqtt_client.track_start_task(hass.async_create_task(mqtt_client.start()))
 
 
 def _iter_mqtt_clients(value: object) -> list[object]:

@@ -129,8 +129,12 @@ async def _dashboard_fetch_devices(
         raise
     except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.warning("Dashboard smart device discovery failed for %s: %s", sid, err)
-        return []
-    return devices if isinstance(devices, list) else []
+        raise
+    if devices is None:
+        raise RuntimeError(f"Dashboard smart device discovery returned no data for {sid}")
+    if not isinstance(devices, list):
+        raise TypeError(f"Dashboard smart device discovery returned malformed data for {sid}")
+    return devices
 
 
 async def _dashboard_fetch_highlevel_configs(

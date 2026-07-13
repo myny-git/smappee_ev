@@ -89,6 +89,7 @@ class RuntimeData:
     mqtt: dict[int, MqttRuntimeValue]
     dashboard: object | None = None
     background_tasks: set[asyncio.Task] = field(default_factory=set)
+    shutdown_task: asyncio.Task[None] | None = None
 
 
 type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]

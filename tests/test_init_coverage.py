@@ -246,8 +246,10 @@ async def test_dashboard_fetch_helpers_handle_errors_duplicates_and_bad_shapes()
         ),
     )
 
-    assert await _dashboard_fetch_devices(dashboard, 1) == []
-    assert await _dashboard_fetch_devices(dashboard, 1) == []
+    with pytest.raises(RuntimeError, match="boom"):
+        await _dashboard_fetch_devices(dashboard, 1)
+    with pytest.raises(TypeError, match="malformed"):
+        await _dashboard_fetch_devices(dashboard, 1)
     configs = await _dashboard_fetch_highlevel_configs(dashboard, [10, 20, 10])
 
     assert configs == {10: {"ok": 1}}

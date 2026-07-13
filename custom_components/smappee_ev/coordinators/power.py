@@ -6,8 +6,13 @@ from collections.abc import Iterable, Sequence
 from contextlib import suppress
 import logging
 import re
+from time import monotonic
 from typing import Any
 
+from aiohttp import ClientError
+from homeassistant.exceptions import ConfigEntryAuthFailed
+
+from ..api.errors import SmappeeError
 from ..api.mqtt_gateway import redact_mqtt_topic
 from ..models.state import DashboardObject, HighLevelConfigMap, MqttPayload
 from .base import CoordinatorMixin
@@ -15,6 +20,7 @@ from .base import CoordinatorMixin
 _LOGGER = logging.getLogger(__name__)
 
 _MQTT_PATH_RE = re.compile(r"\$\.([A-Za-z0-9_]+)\[(\d+)\]")
+_POWER_MAP_RETRY_BACKOFF = 60.0
 
 
 def _to_int(value: object, default: int = 0) -> int:
@@ -121,6 +127,7 @@ class PowerMixin(CoordinatorMixin):
     """Station MQTT power mapping and application helpers."""
 
     _power_index_maps_by_topic: dict[str, DashboardObject] | None
+    _power_map_retry_after: float
 
     async def _ensure_power_index_map(self) -> None:
         """Load and cache MQTT power index mapping from Dashboard v10."""
@@ -128,19 +135,33 @@ class PowerMixin(CoordinatorMixin):
             return
         if self.dashboard_client is None:
             return
+        if monotonic() < self._power_map_retry_after:
+            return
 
         configs = dict(self._highlevel_configs)
         if not configs:
-            cfg = await self.dashboard_client.async_get_highlevel_configuration(
-                self.station_client.service_location_id
-            )
+            try:
+                cfg = await self.dashboard_client.async_get_highlevel_configuration(
+                    self.station_client.service_location_id
+                )
+            except ConfigEntryAuthFailed:
+                raise
+            except SmappeeError as err:
+                _LOGGER.warning("MQTT power mapping temporarily unavailable: %s", err)
+                self._power_map_retry_after = monotonic() + _POWER_MAP_RETRY_BACKOFF
+                return
+            except (ClientError, TimeoutError, RuntimeError) as err:
+                _LOGGER.warning("MQTT power mapping temporarily unavailable: %s", err)
+                self._power_map_retry_after = monotonic() + _POWER_MAP_RETRY_BACKOFF
+                return
             if cfg is None:
+                self._power_map_retry_after = monotonic() + _POWER_MAP_RETRY_BACKOFF
                 return
             configs[int(self.station_client.service_location_id)] = cfg
 
         mapping = self._build_measurement_index_maps_by_topic_from_highlevel_configs(configs)
-        if mapping:
-            self._power_index_maps_by_topic = mapping
+        self._power_index_maps_by_topic = mapping or {}
+        self._power_map_retry_after = 0.0
 
     def _build_measurement_index_maps_by_topic_from_highlevel_configs(
         self, configs: HighLevelConfigMap

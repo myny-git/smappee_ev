@@ -108,7 +108,6 @@ class MqttMixin(CoordinatorMixin):
             return
         st = data.station
         changed = False
-        st.last_mqtt_rx = _now()
         if up:
             if not getattr(st, "mqtt_connected", False):
                 st.mqtt_connected = True

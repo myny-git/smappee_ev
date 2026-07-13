@@ -107,7 +107,15 @@ class StationApiMixin(CoordinatorMixin):
         led_brightness: int | None = None
         try:
             devices = await client.async_get_smartdevices()
-            for dev in devices or []:
+            if devices is None:
+                err = RuntimeError("smartdevice list request returned no data")
+                self._log_station_api_transition(False, err)
+                return StationState(
+                    led_brightness=led_brightness,
+                    available=True,
+                    api_available=False,
+                )
+            for dev in devices:
                 for prop in dev.get("configurationProperties", []):
                     spec = prop.get("spec", {}) or {}
                     if (
