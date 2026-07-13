@@ -7,6 +7,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
+from custom_components.smappee_ev.api.errors import SmappeeConnectionError, SmappeeProtocolError
 
 
 class _Response:
@@ -618,7 +619,7 @@ async def test_dashboard_login_and_refresh_handle_bad_payloads_and_statuses():
     login_session = _Session(posts=[_Response(500, text="server error")])
     client = _client(login_session, username="user", password="pass")  # noqa: S106
 
-    with pytest.raises(RuntimeError, match="Dashboard login failed 500"):
+    with pytest.raises(SmappeeProtocolError, match="Dashboard login failed 500"):
         await client.async_login()
 
     bad_payload = _client(
@@ -681,7 +682,7 @@ async def test_dashboard_request_raises_for_http_error_and_empty_json_body():
     error_client._token = "token"  # noqa: S105
     error_client._token_expires_at_ms = expires_at
 
-    with pytest.raises(RuntimeError) as err:
+    with pytest.raises(SmappeeProtocolError) as err:
         await error_client._request("GET", "v11/example", return_json=True)
     error_text = str(err.value)
     assert "Dashboard request failed 503" in error_text
@@ -706,14 +707,14 @@ async def test_dashboard_request_204_without_json_returns_true_for_non_json_call
 
 
 @pytest.mark.asyncio
-async def test_dashboard_request_client_error_raises_runtime_error_with_method_and_url():
+async def test_dashboard_request_client_error_raises_connection_error_with_method_and_url():
     expires_at = int(time.time() * 1000) + 300_000
     session = _Session(requests=[aiohttp.ClientError("network down")])
     client = _client(session)
     client._token = "token"  # noqa: S105 - fake token value for auth header
     client._token_expires_at_ms = expires_at
 
-    with pytest.raises(RuntimeError) as err:
+    with pytest.raises(SmappeeConnectionError) as err:
         await client._request("GET", "v11/example", return_json=True)
 
     error_text = str(err.value)

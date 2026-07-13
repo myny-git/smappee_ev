@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 import aiohttp
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from ..helpers import anonymize_uuid
 
@@ -85,6 +86,8 @@ class SmappeeDeviceHandle:
             success = bool(await method(self.service_location_id, device_id, *args, **kwargs))
         except asyncio.CancelledError:
             raise
+        except ConfigEntryAuthFailed:
+            raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
             raise RuntimeError(
                 f"Dashboard action {method_name} failed for device {device_id}"
@@ -111,6 +114,8 @@ class SmappeeDeviceHandle:
             success = bool(await method(station_serial, available))
         except asyncio.CancelledError:
             raise
+        except ConfigEntryAuthFailed:
+            raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
             raise RuntimeError(
                 f"Dashboard charger availability failed for station {station_serial}"
@@ -131,6 +136,8 @@ class SmappeeDeviceHandle:
             success = bool(await method(station_serial))
         except asyncio.CancelledError:
             raise
+        except ConfigEntryAuthFailed:
+            raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
             raise RuntimeError(
                 f"Dashboard charging station restart failed for station {station_serial}"
@@ -149,6 +156,8 @@ class SmappeeDeviceHandle:
         try:
             data = await dashboard.async_get_smart_devices(self.service_location_id)
         except asyncio.CancelledError:
+            raise
+        except ConfigEntryAuthFailed:
             raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
             _LOGGER.warning("Dashboard smart devices fetch failed: %s", err)
@@ -313,6 +322,8 @@ class SmappeeDeviceHandle:
             success = bool(await method(station_serial, bool(enabled), int(failsafe_amps)))
         except asyncio.CancelledError:
             raise
+        except ConfigEntryAuthFailed:
+            raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
             raise RuntimeError(
                 f"Dashboard offline charging failed for station {station_serial}"
@@ -336,6 +347,8 @@ class SmappeeDeviceHandle:
         try:
             return await dashboard.async_get_recent_sessions(station_serial)
         except asyncio.CancelledError:
+            raise
+        except ConfigEntryAuthFailed:
             raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
             raise RuntimeError(f"Dashboard recent sessions fetch failed: {err}") from err

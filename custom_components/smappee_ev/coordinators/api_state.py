@@ -8,8 +8,10 @@ from dataclasses import replace
 import logging
 
 from aiohttp import ClientError
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from ..api.device_handle import SmappeeDeviceHandle
+from ..api.errors import SmappeeError
 from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 from ..helpers import anonymize_uuid
 from ..models.state import ConnectorState, StationState
@@ -131,7 +133,9 @@ class StationApiMixin(CoordinatorMixin):
             self._log_station_api_transition(True)
         except asyncio.CancelledError:
             raise
-        except (TimeoutError, ClientError, RuntimeError) as err:
+        except ConfigEntryAuthFailed:
+            raise
+        except (SmappeeError, TimeoutError, ClientError, RuntimeError) as err:
             self._log_station_api_transition(False, err)
             return StationState(led_brightness=led_brightness, available=True, api_available=False)
 

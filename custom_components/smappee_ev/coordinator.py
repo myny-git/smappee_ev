@@ -17,6 +17,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.device_handle import SmappeeDeviceHandle
+from .api.errors import SmappeeError
 from .coordinators.api_state import StationApiMixin
 from .coordinators.dashboard_merge import DashboardMixin
 from .coordinators.mqtt_apply import MqttMixin
@@ -286,7 +287,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         if not getattr(data.site, "mqtt_connected", False):
             data.site.mqtt_connected = True
             changed = True
-        if topic.endswith("/power"):
+        if topic in (self._power_index_maps_by_topic or {}):
             changed |= self._handle_power(topic, payload)
         if changed:
             self.async_set_updated_data(data)
@@ -409,7 +410,7 @@ class SmappeeStationCoordinator(
             raise
         except ConfigEntryAuthFailed:
             raise
-        except (ClientError, TimeoutError) as err:
+        except (SmappeeError, ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
 
     def async_start_session_tracking(self) -> None:

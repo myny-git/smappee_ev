@@ -62,6 +62,7 @@ DASHBOARD_REFRESH_AFTER_WRITE_DELAY: Final = 2 * 60
 MQTT_HOST = "mqtt.smappee.net"
 MQTT_PORT_TLS = 443
 MQTT_TRACK_INTERVAL_SEC = 60
+MQTT_REAL_POWER_FRESHNESS_TIMEOUT: Final = timedelta(minutes=5)
 
 # Shared HTTP timeout parameters for aiohttp.ClientTimeout.
 HTTP_CONNECT_TIMEOUT: Final = 5

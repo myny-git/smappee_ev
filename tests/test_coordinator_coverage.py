@@ -232,7 +232,7 @@ def test_site_apply_mqtt_properties_does_not_notify_on_heartbeat_only(hass):
 
 
 def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
-    topic = "servicelocation/site/power"
+    topic = "custom/realtime/grid-values"
     cfg = {
         "measurements": [
             "bad",

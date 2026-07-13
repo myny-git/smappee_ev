@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypeVar
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER
+from .const import DOMAIN, MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
@@ -47,6 +48,11 @@ def _is_int_like(value: object) -> bool:
 
 type SmappeeEntityCoordinator = SmappeeSiteCoordinator | SmappeeStationCoordinator
 CoordinatorT = TypeVar("CoordinatorT", bound=SmappeeEntityCoordinator)
+
+
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC now for freshness checks."""
+    return datetime.now(UTC)
 
 
 class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
@@ -179,6 +185,16 @@ class SmappeeSiteEntity(SmappeeBaseEntity[CoordinatorT]):
             unique_suffix=unique_suffix,
             device_scope="site",
         )
+
+    @property
+    def available(self) -> bool:
+        """Return False when site power MQTT data is missing or stale."""
+        if not super().available:
+            return False
+        last_rx = getattr(self.coordinator, "last_real_power_rx", None)
+        if not isinstance(last_rx, datetime):
+            return False
+        return _utcnow() - last_rx <= MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 
 
 class SmappeeStationRestEntity(SmappeeStationEntity):

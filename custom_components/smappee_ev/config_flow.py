@@ -13,6 +13,7 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, Tex
 import voluptuous as vol
 
 from .api.dashboard_client import SmappeeDashboardClient
+from .api.errors import SmappeeError
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
@@ -80,7 +81,7 @@ async def _async_dashboard_auth_data(
     except ConfigEntryAuthFailed as err:
         _LOGGER.debug("Dashboard authentication rejected during setup: %s", err)
         return None, ERROR_AUTH_FAILED
-    except (aiohttp.ClientError, RuntimeError, TimeoutError) as err:
+    except (SmappeeError, aiohttp.ClientError, RuntimeError, TimeoutError) as err:
         _LOGGER.debug("Dashboard authentication unavailable during setup: %s", err)
         return None, ERROR_CANNOT_CONNECT
     except (TypeError, ValueError) as err:

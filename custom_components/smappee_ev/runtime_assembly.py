@@ -311,6 +311,7 @@ async def _prepare_topology(  # noqa: C901 - topology validation is intentionall
         highlevel_configs=site_highlevel_configs,
     )
 
+    coordinators_ready = False
     try:
         await _create_coordinators(
             hass,
@@ -321,7 +322,32 @@ async def _prepare_topology(  # noqa: C901 - topology validation is intentionall
             highlevel_configs=station_highlevel_configs,
             start_tracking=start_runtime,
         )
+        coordinators_ready = True
+        mqtt = _setup_mqtt(
+            hass,
+            topology.site_location_uuid or topology.control_location_uuid,
+            serial_str,
+            site_sid,
+            stations,
+            client_id_prefix,
+            update_interval,
+            mqtt_specs=mqtt_specs,
+            site_coordinator=site_coordinator,
+            background_tasks=background_tasks,
+            start_clients=start_runtime,
+        )
     except BaseException:
+        if coordinators_ready:
+            for bucket in stations.values():
+                coordinator = bucket.station_coordinator
+                shutdown = getattr(coordinator, "async_shutdown", None)
+                if callable(shutdown):
+                    try:
+                        result = shutdown()
+                        if isawaitable(result):
+                            await result
+                    except Exception:  # noqa: BLE001 - rollback must continue
+                        _LOGGER.debug("Station coordinator rollback failed", exc_info=True)
         shutdown = getattr(site_coordinator, "async_shutdown", None)
         if callable(shutdown):
             try:
@@ -331,20 +357,6 @@ async def _prepare_topology(  # noqa: C901 - topology validation is intentionall
             except Exception:  # noqa: BLE001 - rollback must preserve original failure
                 _LOGGER.debug("Site coordinator rollback failed", exc_info=True)
         raise
-
-    mqtt = _setup_mqtt(
-        hass,
-        topology.site_location_uuid or topology.control_location_uuid,
-        serial_str,
-        site_sid,
-        stations,
-        client_id_prefix,
-        update_interval,
-        mqtt_specs=mqtt_specs,
-        site_coordinator=site_coordinator,
-        background_tasks=background_tasks,
-        start_clients=start_runtime,
-    )
 
     for bucket in stations.values():
         bucket.mqtt = mqtt

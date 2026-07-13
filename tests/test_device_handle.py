@@ -7,9 +7,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 from aiohttp import ClientError
+from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
 
 
 class RecordingDashboard:
@@ -218,6 +220,37 @@ async def test_smartdevices_propagates_cancelled_error():
 
 
 @pytest.mark.asyncio
+async def test_dashboard_authentication_errors_are_never_wrapped_or_converted_to_none():
+    dashboard = RecordingDashboard()
+    client = make_client(dashboard=dashboard)
+    auth_error = SmappeeAuthenticationError("reauth required")
+
+    dashboard.async_get_smart_devices = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await client.async_get_smartdevices()
+
+    dashboard.async_set_charging_mode = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await client.set_charging_mode("SMART")
+
+    dashboard.async_set_charger_availability = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await client.set_available()
+
+    dashboard.async_restart_charging_station = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await client.restart_charging_station()
+
+    dashboard.async_set_offline_charging = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await client.set_offline_charging_config(True, 6)
+
+    dashboard.async_get_recent_sessions = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await client.async_get_recent_sessions()
+
+
+@pytest.mark.asyncio
 async def test_dashboard_action_error_paths_and_missing_methods():
     dashboard = RecordingDashboard()
     client = make_client(dashboard=dashboard)
@@ -229,6 +262,14 @@ async def test_dashboard_action_error_paths_and_missing_methods():
     dashboard.async_set_charging_mode = AsyncMock(side_effect=ClientError("offline"))
     with pytest.raises(RuntimeError, match="failed for device"):
         await client.set_charging_mode("SMART")
+
+    dashboard.async_set_charger_availability = AsyncMock(return_value=False)
+    with pytest.raises(RuntimeError, match="returned no success"):
+        await client.set_available()
+
+    dashboard.async_restart_charging_station = AsyncMock(side_effect=ClientError("offline"))
+    with pytest.raises(RuntimeError, match="restart failed"):
+        await client.restart_charging_station()
 
 
 @pytest.mark.asyncio

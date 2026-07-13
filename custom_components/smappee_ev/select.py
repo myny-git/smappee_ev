@@ -6,6 +6,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api.device_handle import SmappeeDeviceHandle
+from .api.errors import SmappeeError
 from .const import CHARGING_MODES, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity
@@ -102,7 +103,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
             self.coordinator.async_set_updated_data(data)
         try:
             await self.api_client.set_charging_mode(option.upper())
-        except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+        except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
             if conn:
                 conn.selected_mode = previous_mode
                 if data:

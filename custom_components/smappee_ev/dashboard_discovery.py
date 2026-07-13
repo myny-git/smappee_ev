@@ -7,10 +7,11 @@ import logging
 
 from aiohttp import ClientError, ClientSession
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology, build_topologies_from_full_details
+from .api.errors import SmappeeError
 from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import DashboardObjectList, HighLevelConfigMap
@@ -49,7 +50,9 @@ async def _dashboard_discover_service_locations(
         locations = await dashboard_client.async_get_service_locations_full_details()
     except asyncio.CancelledError:
         raise
-    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+    except ConfigEntryAuthFailed:
+        raise
+    except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.warning("Dashboard service location discovery failed: %s", err)
         raise
 
@@ -93,7 +96,9 @@ async def _dashboard_discover_topologies(
         locations = await dashboard_client.async_get_service_locations_full_details()
     except asyncio.CancelledError:
         raise
-    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+    except ConfigEntryAuthFailed:
+        raise
+    except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.warning("Dashboard service location topology discovery failed: %s", err)
         raise
 
@@ -127,7 +132,9 @@ async def _dashboard_fetch_devices(
         devices = await dashboard_client.async_get_smart_devices(sid)
     except asyncio.CancelledError:
         raise
-    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+    except ConfigEntryAuthFailed:
+        raise
+    except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.warning("Dashboard smart device discovery failed for %s: %s", sid, err)
         raise
     if devices is None:
@@ -151,7 +158,16 @@ async def _dashboard_fetch_highlevel_configs(
             cfg = await dashboard_client.async_get_highlevel_configuration(sid)
         except asyncio.CancelledError:
             raise
-        except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        except ConfigEntryAuthFailed:
+            raise
+        except (
+            SmappeeError,
+            ClientError,
+            RuntimeError,
+            TimeoutError,
+            TypeError,
+            ValueError,
+        ) as err:
             _LOGGER.warning("Dashboard highlevel configuration failed for %s: %s", sid, err)
             continue
         if isinstance(cfg, dict):
@@ -159,7 +175,7 @@ async def _dashboard_fetch_highlevel_configs(
     return configs
 
 
-async def _fetch_dashboard_connector_mapping(
+async def _fetch_dashboard_connector_mapping(  # noqa: C901 - validates nested remote payload
     dashboard_client: SmappeeDashboardClient | None, station_devs: list[dict]
 ) -> dict[str, dict] | None:
     if not _dashboard_client_configured(dashboard_client):
@@ -176,7 +192,16 @@ async def _fetch_dashboard_connector_mapping(
             details = await dashboard_client.async_get_charging_station_details(station_serial)
         except asyncio.CancelledError:
             raise
-        except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+        except ConfigEntryAuthFailed:
+            raise
+        except (
+            SmappeeError,
+            ClientError,
+            RuntimeError,
+            TimeoutError,
+            TypeError,
+            ValueError,
+        ) as err:
             _LOGGER.warning(
                 "Dashboard charging station details failed for %s: %s", station_serial, err
             )
@@ -274,7 +299,9 @@ async def _load_dashboard_service_locations(
 ) -> DashboardObjectList:
     try:
         locations = await _dashboard_discover_service_locations(dashboard_client)
-    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+    except ConfigEntryAuthFailed:
+        raise
+    except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.debug("Transient error loading dashboard service locations: %s", err)
         raise ConfigEntryNotReady(f"Loading service locations failed: {err}") from err
 
@@ -292,7 +319,9 @@ async def _load_dashboard_topologies(
 ) -> list[SmappeeLocationTopology]:
     try:
         topologies = await _dashboard_discover_topologies(dashboard_client)
-    except (ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+    except ConfigEntryAuthFailed:
+        raise
+    except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.debug("Transient error loading dashboard topologies: %s", err)
         raise ConfigEntryNotReady(f"Loading service location topology failed: {err}") from err
 

@@ -402,7 +402,9 @@ class TestErrorHandling:
         # Create a mock config entry
         entry = MagicMock()
         entry.entry_id = "test_entry_id"
-        entry.runtime_data = RuntimeData(api=MagicMock(), sites={}, mqtt={})
+        mqtt = MagicMock()
+        mqtt.stop = AsyncMock()
+        entry.runtime_data = RuntimeData(api=MagicMock(), sites={}, mqtt={1: mqtt})
 
         # Mock config entry unload to fail
         with patch.object(hass.config_entries, "async_unload_platforms", return_value=False):
@@ -414,6 +416,8 @@ class TestErrorHandling:
 
             # Verify runtime_data was not removed
             assert hasattr(entry, "runtime_data")
+            mqtt.stop.assert_not_awaited()
+            assert entry.runtime_data.shutdown_task is None
 
     @pytest.mark.asyncio
     async def test_unload_entry_multiple_entries(self, hass):

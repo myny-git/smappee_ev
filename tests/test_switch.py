@@ -7,11 +7,12 @@ from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 
 from custom_components.smappee_ev import switch
+from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
@@ -370,6 +371,38 @@ class TestSmappeeChargingSwitch:
         with pytest.raises(asyncio.CancelledError):
             await charging_switch.async_turn_on()
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("action", "api_method"),
+        [("async_turn_on", "set_charging_mode"), ("async_turn_off", "pause_charging")],
+    )
+    async def test_charging_actions_propagate_authentication_errors(
+        self, mock_integration_data, action, api_method
+    ):
+        coordinator = MagicMock(spec=SmappeeCoordinator)
+        coordinator.data = mock_integration_data
+        api_client = MagicMock()
+        setattr(
+            api_client,
+            api_method,
+            AsyncMock(side_effect=SmappeeAuthenticationError("reauth required")),
+        )
+        with patch(
+            "custom_components.smappee_ev.helpers.build_connector_label",
+            return_value="Connector 1",
+        ):
+            charging_switch = switch.SmappeeChargingSwitch(
+                coordinator=coordinator,
+                api_client=api_client,
+                sid=12345,
+                station_uuid="station_uuid",
+                connector_uuid="connector_uuid1",
+            )
+        charging_switch.async_write_ha_state = MagicMock()
+
+        with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+            await getattr(charging_switch, action)()
+
         charging_switch.async_write_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
@@ -581,6 +614,28 @@ class TestSmappeeAvailabilitySwitch:
         # First update changes optimistically, second reverts on error
         assert coordinator.async_set_updated_data.call_count == 2
 
+    @pytest.mark.asyncio
+    async def test_set_available_auth_error_reverts_and_propagates(self, mock_integration_data):
+        coordinator = MagicMock(spec=SmappeeCoordinator)
+        coordinator.data = mock_integration_data
+        api_client = MagicMock()
+        api_client.set_available = AsyncMock(
+            side_effect=SmappeeAuthenticationError("reauth required")
+        )
+        availability_switch = switch.SmappeeAvailabilitySwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+        )
+        mock_integration_data.station.available = False
+
+        with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+            await availability_switch.async_turn_on()
+
+        assert mock_integration_data.station.available is False
+        assert coordinator.async_set_updated_data.call_count == 2
+
 
 class TestSmappeeOfflineChargingSwitch:
     """Test station offline charging switch behavior."""
@@ -645,6 +700,20 @@ class TestSmappeeOfflineChargingSwitch:
             await offline_switch.async_turn_on()
 
         assert err.value.translation_key == "station_service_failed"
+        assert mock_integration_data.station.offline_charging_enabled is False
+        assert coordinator.async_set_updated_data.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_turn_on_auth_error_reverts_and_propagates(self, mock_integration_data):
+        mock_integration_data.station.offline_charging_enabled = False
+        offline_switch, coordinator, api_client = self._make_switch(mock_integration_data)
+        api_client.set_offline_charging_config.side_effect = SmappeeAuthenticationError(
+            "reauth required"
+        )
+
+        with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+            await offline_switch.async_turn_on()
+
         assert mock_integration_data.station.offline_charging_enabled is False
         assert coordinator.async_set_updated_data.call_count == 2
 

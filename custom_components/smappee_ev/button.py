@@ -9,6 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api.device_handle import SmappeeDeviceHandle
+from .api.errors import SmappeeError
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeStationEntity
@@ -131,7 +132,7 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
         if self._action == "restart_charging_station":
             try:
                 await self.api_client.restart_charging_station()
-            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+            except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise station_action_error("restart_charging_station", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         else:
@@ -173,19 +174,19 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         if self._action == "start_charging":
             try:
                 await self.api_client.start_charging()
-            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+            except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("start_charging", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "pause_charging":
             try:
                 await self.api_client.pause_charging()
-            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+            except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("pause_charging", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "stop_charging":
             try:
                 await self.api_client.stop_charging()
-            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+            except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("stop_charging", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "resume_charging":
@@ -200,7 +201,7 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
                 )
             try:
                 await self.api_client.set_charging_mode(mode)
-            except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+            except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("set_charging_mode", err) from err
             self.coordinator.async_schedule_dashboard_refresh()
         else:

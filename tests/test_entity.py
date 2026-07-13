@@ -1,5 +1,6 @@
 """Test the Smappee EV base entities."""
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -7,12 +8,13 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import pytest
 
 from custom_components.smappee_ev.const import DOMAIN
-from custom_components.smappee_ev.coordinator import SmappeeCoordinator
+from custom_components.smappee_ev.coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from custom_components.smappee_ev.entity import (
     SmappeeBaseEntity,
     SmappeeConnectorEntity,
     SmappeeConnectorMqttEntity,
     SmappeeLedEntity,
+    SmappeeSiteEntity,
     SmappeeStationEntity,
     SmappeeStationRestEntity,
     _is_int_like,
@@ -116,6 +118,29 @@ def test_entity_helper_int_like_accepts_only_parseable_ints():
     assert _is_int_like("123") is True
     assert _is_int_like("not-int") is False
     assert _is_int_like(None) is False
+
+
+def test_site_entity_availability_requires_fresh_real_power_data():
+    coordinator = MagicMock(spec=SmappeeSiteCoordinator)
+    coordinator.last_update_success = True
+    coordinator.gateway_serial = "gateway"
+    coordinator.site_name = "Home"
+    coordinator.gateway_type = "Genius"
+    coordinator.last_real_power_rx = None
+    entity = SmappeeSiteEntity(coordinator, 12345, "sensor:grid_power")
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+
+    with patch("custom_components.smappee_ev.entity._utcnow", return_value=now):
+        assert entity.available is False
+
+        coordinator.last_real_power_rx = now - timedelta(minutes=6)
+        assert entity.available is False
+
+        coordinator.last_real_power_rx = now - timedelta(minutes=4)
+        assert entity.available is True
+
+        coordinator.last_update_success = False
+        assert entity.available is False
 
 
 class TestSmappeeBaseEntity:

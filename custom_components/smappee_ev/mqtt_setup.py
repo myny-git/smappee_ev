@@ -30,6 +30,7 @@ class MqttFreshnessState:
     clients_connected: dict[int, bool] = field(default_factory=dict)
     last_real_charger_rx: datetime | None = None
     last_real_power_rx: datetime | None = None
+    last_real_site_power_rx: datetime | None = None
     last_heartbeat_rx: datetime | None = None
 
     @property
@@ -43,14 +44,28 @@ class MqttFreshnessState:
         self.clients_connected[client_index] = up
         return previous != self.mqtt_transport_connected
 
-    def record_message(self, topic: str) -> None:
+    def record_message(
+        self,
+        topic: str,
+        *,
+        real_charger: bool | None = None,
+        real_power: bool | None = None,
+        site_power: bool = False,
+    ) -> None:
         """Record heartbeat, charger, and power traffic independently."""
         now = datetime.now(UTC)
         if topic.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
             self.last_heartbeat_rx = now
-        elif topic.endswith("/power"):
+            return
+        if real_power is None:
+            real_power = topic.endswith("/power")
+        if real_charger is None:
+            real_charger = "/etc/carcharger/" in topic or "/etc/chargingstation/" in topic
+        if real_power:
             self.last_real_power_rx = now
-        elif "/etc/carcharger/" in topic or "/etc/chargingstation/" in topic:
+        if site_power:
+            self.last_real_site_power_rx = now
+        if real_charger:
             self.last_real_charger_rx = now
 
 
@@ -235,6 +250,10 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     freshness = MqttFreshnessState()
 
     def _sync_freshness() -> None:
+        if site_coordinator is not None:
+            site_coordinator.mqtt_transport_connected = freshness.mqtt_transport_connected
+            site_coordinator.last_real_power_rx = freshness.last_real_site_power_rx
+            site_coordinator.last_heartbeat_rx = freshness.last_heartbeat_rx
         for bucket in stations.values():
             coord = bucket.station_coordinator
             if coord is None:
@@ -245,9 +264,9 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
             coord.last_heartbeat_rx = freshness.last_heartbeat_rx
 
     def _on_props(topic: str, payload: MqttPayload) -> None:
-        freshness.record_message(topic)
-        _sync_freshness()
         if topic.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
+            freshness.record_message(topic)
+            _sync_freshness()
             return
         targets = mqtt_routes.get(topic)
         if targets is None:
@@ -259,6 +278,21 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                 for bucket in stations.values()
                 if bucket.station_coordinator is not None
             )
+        station_coordinator_ids = {
+            id(bucket.station_coordinator)
+            for bucket in stations.values()
+            if bucket.station_coordinator is not None
+        }
+        is_site_power = site_coordinator is not None and any(
+            target is site_coordinator for target in targets
+        )
+        freshness.record_message(
+            topic,
+            real_power=is_site_power or topic.endswith("/power"),
+            site_power=is_site_power,
+            real_charger=any(id(target) in station_coordinator_ids for target in targets),
+        )
+        _sync_freshness()
         for coord in targets:
             if coord:
                 try:

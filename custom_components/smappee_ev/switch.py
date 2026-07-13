@@ -7,13 +7,14 @@ from typing import Any
 from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .api.device_handle import SmappeeDeviceHandle
+from .api.errors import SmappeeError
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeStationRestEntity
@@ -148,7 +149,16 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             self.async_write_ha_state()
         except asyncio.CancelledError:
             raise
-        except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed, RuntimeError) as err:
+        except ConfigEntryAuthFailed:
+            raise
+        except (
+            SmappeeError,
+            ClientError,
+            TimeoutError,
+            HomeAssistantError,
+            UpdateFailed,
+            RuntimeError,
+        ) as err:
             _LOGGER.warning(
                 "Failed to start charging on %s: %s", anonymize_uuid(self.connector_uuid), err
             )
@@ -169,7 +179,16 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             self.async_write_ha_state()
         except asyncio.CancelledError:
             raise
-        except (ClientError, TimeoutError, HomeAssistantError, UpdateFailed, RuntimeError) as err:
+        except ConfigEntryAuthFailed:
+            raise
+        except (
+            SmappeeError,
+            ClientError,
+            TimeoutError,
+            HomeAssistantError,
+            UpdateFailed,
+            RuntimeError,
+        ) as err:
             _LOGGER.warning(
                 "Failed to pause charging on %s: %s", anonymize_uuid(self.connector_uuid), err
             )
@@ -241,7 +260,12 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
             else:
                 await self.api_client.set_unavailable()
             self.coordinator.async_schedule_dashboard_refresh()
+        except ConfigEntryAuthFailed:
+            st.available = prev
+            self.coordinator.async_set_updated_data(data)
+            raise
         except (
+            SmappeeError,
             ClientError,
             TimeoutError,
             HomeAssistantError,
@@ -325,7 +349,12 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
         try:
             await self.api_client.set_offline_charging_config(enabled, failsafe)
             self.coordinator.async_schedule_dashboard_refresh()
+        except ConfigEntryAuthFailed:
+            st.offline_charging_enabled = prev_enabled
+            self.coordinator.async_set_updated_data(data)
+            raise
         except (
+            SmappeeError,
             ClientError,
             TimeoutError,
             HomeAssistantError,

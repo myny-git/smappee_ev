@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api.device_handle import SmappeeDeviceHandle
+from .api.errors import SmappeeError
 from .const import DEFAULT_LED_BRIGHTNESS
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeLedEntity
@@ -124,7 +125,7 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
     async def _set_brightness(self, brightness: int) -> None:
         try:
             await self.api_client.set_brightness(brightness)
-        except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+        except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
             raise station_action_error("set_brightness", err) from err
         if brightness > 0:
             self._last_nonzero_brightness = brightness

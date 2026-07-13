@@ -290,6 +290,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading config entry: %s", entry.entry_id)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
+
     try:
         rd = entry.runtime_data
     except AttributeError:
@@ -306,7 +310,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
                 entry.entry_id,
             )
 
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    return True
 
 
 async def async_remove_config_entry_device(

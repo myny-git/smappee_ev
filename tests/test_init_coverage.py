@@ -4,11 +4,12 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 import pytest
 
 from custom_components.smappee_ev import async_remove_config_entry_device, async_unload_entry
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec, SmappeeLocationTopology
+from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
     _create_dashboard_client,
@@ -254,6 +255,31 @@ async def test_dashboard_fetch_helpers_handle_errors_duplicates_and_bad_shapes()
 
     assert configs == {10: {"ok": 1}}
     assert dashboard.async_get_highlevel_configuration.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_optional_dashboard_discovery_never_swallows_authentication_errors():
+    auth_error = SmappeeAuthenticationError("reauth required")
+    dashboard = _configured_dashboard(
+        async_get_charging_station_details=AsyncMock(side_effect=auth_error),
+        async_get_highlevel_configuration=AsyncMock(side_effect=auth_error),
+    )
+    station = {"serialNumber": "STATION-1", "type": "CHARGINGSTATION"}
+
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await _fetch_dashboard_connector_mapping(dashboard, [station])
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await _dashboard_fetch_highlevel_configs(dashboard, [100])
+
+    dashboard.async_get_smart_devices = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await _dashboard_fetch_devices(dashboard, 100)
+
+    dashboard.async_get_service_locations_full_details = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await _dashboard_discover_service_locations(dashboard)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await _load_dashboard_topologies(dashboard)
 
 
 @pytest.mark.asyncio
@@ -865,6 +891,73 @@ async def test_prepare_topology_skips_non_charger_topology_without_serial(hass):
         client_id_prefix="client",
         dashboard_client=dashboard,
     ) == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_prepare_topology_mqtt_construction_failure_rolls_back_coordinators(hass):
+    topology = SmappeeLocationTopology(
+        site_location_id=100,
+        site_location_uuid="site-uuid",
+        site_name="Home",
+        site_function_type="ELECTRICITY",
+        control_location_id=200,
+        control_location_uuid="control-uuid",
+        control_name="Charger",
+        control_function_type="CHARGINGSTATION",
+        measurement_location_ids=[100],
+        charging_station_serial="STATION-1",
+        site_gateway_serial="GATEWAY-1",
+        site_gateway_type="Genius",
+        control_gateway_serial=None,
+        control_gateway_type=None,
+        write_access=True,
+    )
+    station_coordinator = MagicMock()
+    station_coordinator.async_shutdown = AsyncMock(side_effect=RuntimeError("station cleanup"))
+    site_coordinator = MagicMock()
+    site_coordinator.async_shutdown = AsyncMock(side_effect=RuntimeError("site cleanup"))
+    station = make_station_runtime(
+        station_uuid="station-uuid",
+        serial="STATION-1",
+        coordinator=station_coordinator,
+    )
+
+    with (
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._dashboard_fetch_highlevel_configs",
+            AsyncMock(return_value={}),
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._dashboard_fetch_devices",
+            AsyncMock(return_value=[{"serialNumber": "STATION-1", "type": "CHARGINGSTATION"}]),
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._fetch_dashboard_connector_mapping",
+            AsyncMock(return_value={"STATION-1": {"connectors": {}}}),
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly."
+            "_make_station_clients_with_mapping_fallback",
+            return_value={"station-uuid": station},
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._create_site_coordinator",
+            AsyncMock(return_value=site_coordinator),
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._create_coordinators",
+            AsyncMock(),
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly._setup_mqtt",
+            side_effect=RuntimeError("mqtt construction failed"),
+        ),
+        pytest.raises(RuntimeError, match="mqtt construction failed"),
+    ):
+        await _prepare_topology(hass, topology, 60, "client")
+
+    station_coordinator.async_shutdown.assert_awaited_once()
+    site_coordinator.async_shutdown.assert_awaited_once()
 
 
 def test_create_dashboard_client_persists_refresh_token_updates():

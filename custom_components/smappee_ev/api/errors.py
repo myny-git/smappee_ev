@@ -3,11 +3,11 @@
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 
-class SmappeeError(RuntimeError):
+class SmappeeError(Exception):
     """Base error for expected remote Smappee failures."""
 
 
-class SmappeeAuthenticationError(SmappeeError, ConfigEntryAuthFailed):
+class SmappeeAuthenticationError(ConfigEntryAuthFailed):
     """Smappee authentication failed."""
 
 

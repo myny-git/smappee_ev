@@ -18,6 +18,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api.device_handle import SmappeeDeviceHandle
+from .api.errors import SmappeeError
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
@@ -400,7 +401,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     async def async_set_native_value(self, value: float) -> None:
         try:
             await self.api_client.set_min_surpluspct(int(value))
-        except (ClientError, TimeoutError, RuntimeError, ValueError) as err:
+        except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="connector_service_failed",

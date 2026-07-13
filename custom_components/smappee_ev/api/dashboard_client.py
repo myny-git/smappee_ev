@@ -18,7 +18,12 @@ from ..const import (
     HTTP_TOTAL_TIMEOUT,
 )
 from ..models.state import DashboardObject, DashboardObjectList, RecentSession
-from .errors import SmappeeAuthenticationError, SmappeeConnectionError, SmappeeProtocolError
+from .errors import (
+    SmappeeAuthenticationError,
+    SmappeeConnectionError,
+    SmappeeError,
+    SmappeeProtocolError,
+)
 
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_RENEW_SKEW_MS = 60_000
@@ -130,7 +135,13 @@ class SmappeeDashboardClient:
                     return True
             except ConfigEntryAuthFailed:
                 raise
-            except (aiohttp.ClientError, TimeoutError, RuntimeError, ValueError) as err:
+            except (
+                SmappeeError,
+                aiohttp.ClientError,
+                TimeoutError,
+                RuntimeError,
+                ValueError,
+            ) as err:
                 _LOGGER.debug("Dashboard authentication failed: %s", err)
                 return False
 

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.api.errors import SmappeeConnectionError
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
@@ -287,3 +288,37 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
     assert first is second
     coordinator.async_shutdown.assert_awaited_once()
     mqtt.stop.assert_awaited_once()
+
+
+def test_route_aware_power_freshness_is_copied_to_site_coordinator(hass):
+    station_coordinator = MagicMock()
+    station_coordinator.update_interval = timedelta(seconds=60)
+    site_coordinator = MagicMock()
+    station = make_station_runtime(coordinator=station_coordinator)
+    topic = "custom/realtime/grid-values"
+    spec = MqttChannelSpec(1, "grid", "activePower", topic, None, None, [])
+    mqtt = MagicMock()
+    mqtt.start = AsyncMock()
+    mqtt.track_start_task = MagicMock()
+
+    with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", return_value=mqtt) as cls:
+        _setup_mqtt(
+            hass,
+            "site-uuid",
+            "station",
+            1,
+            {"station": station},
+            "client",
+            60,
+            mqtt_specs=[spec],
+            site_coordinator=site_coordinator,
+        )
+        on_properties = cls.call_args.kwargs["on_properties"]
+
+        on_properties(topic, {"activePowerData": [100]})
+
+    assert site_coordinator.last_real_power_rx is not None
+    assert station_coordinator.last_real_power_rx == site_coordinator.last_real_power_rx
+    site_coordinator.apply_mqtt_properties.assert_called_once_with(
+        topic, {"activePowerData": [100]}
+    )

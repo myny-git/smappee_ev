@@ -243,7 +243,7 @@ If this integration is useful to you, feel free to support its development:
 [lint-shield]: https://img.shields.io/github/actions/workflow/status/myny-git/smappee_ev/lint.yaml?branch=main&label=Lint&style=flat-square&logo=ruff
 [lint-url]: https://github.com/myny-git/smappee_ev/actions/workflows/lint.yaml
 
-[coverage-shield]: https://img.shields.io/badge/Coverage-97%25-brightgreen?style=flat-square
+[coverage-shield]: https://img.shields.io/badge/Coverage-95%25-brightgreen?style=flat-square
 [coverage-url]: https://github.com/myny-git/smappee_ev/actions/workflows/tests.yaml
 
 [downloads-shield]: https://img.shields.io/github/downloads/myny-git/smappee_ev/total?style=flat-square
