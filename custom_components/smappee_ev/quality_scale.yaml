@@ -14,6 +14,12 @@ rules:
   config-flow-test-coverage: done
   dependency-transparency: done
   docs-actions: done
+  docs-triggers:
+    status: done
+    comment: The integration does not provide custom integration-specific triggers. Users can use the standard Home Assistant state, numeric-state, event, and device/entity triggers.
+  docs-conditions:
+    status: done
+    comment: The integration does not provide custom integration-specific conditions. Users can use the standard Home Assistant state, numeric-state, template, device, and entity conditions.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
@@ -41,7 +47,7 @@ rules:
   reauthentication-flow: done
   test-coverage:
     status: done
-    comment: Local coverage on Python 3.14 is 95.02270345791129% overall: 5441/5726 covered statements, meeting the official Silver requirement above 95%.
+    comment: CI measures coverage for the complete integration and fails below 95%. The current test suite passes this enforced threshold.
 
   # Gold.
   devices: done
@@ -61,7 +67,7 @@ rules:
   docs-use-cases: done
   dynamic-devices:
     status: todo
-    comment: Gold-level follow-up. Devices and entities are created during config entry setup from the authenticated Dashboard topology. Dynamic discovery of newly added sites, stations, connectors or LED metadata after setup is not implemented yet.
+    comment: Newly added sites, charging stations, connectors, or LED modules are only discovered after reloading the config entry. Runtime topology rediscovery and dynamic entity creation are not implemented yet.
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default: done
@@ -70,8 +76,8 @@ rules:
   icon-translations: done
   reconfiguration-flow: done
   repair-issues:
-    status: exempt
-    comment: Authentication and credential issues are handled via reauthentication and reconfiguration; no additional repair flow is currently needed.
+    status: done
+    comment: Authentication failures use the reauthentication flow and editable credentials use the reconfiguration flow. No other detected condition currently requires separate user intervention through a repair issue or repair flow.
   stale-devices: done
 
   # Platinum.
@@ -79,22 +85,4 @@ rules:
   inject-websession: done
   strict-typing:
     status: in_progress
-    comment: Mypy is clean, state/runtime types are split to avoid import cycles, and integration-local casts were removed. Full strict typing still needs narrower TypedDicts for stable API shapes.
-  # Internal roadmap items.
-  centralized-constants: done
-  code-structure-entity-base: done
-  error-handling: done
-  future-proof: done
-  generic-http-helper: done
-  modularization: done
-  mqtt-client-id: done
-  multi-entry: done
-  restore-entity: done
-  service-validation: done
-  state-restoration: done
-  test-coverage-91:
-    status: done
-    comment: The integration has broad passing test coverage; use the current CI or local coverage report for exact test and coverage numbers.
-
-  translation-en: done
-  translation-nl: done
+    comment: Mypy passes and the typed SmappeeEvConfigEntry alias is used for runtime data. Remaining work includes replacing broad DashboardObject/dict shapes with narrower TypedDicts or dataclasses and enabling a strict mypy configuration comparable to Home Assistant's .strict-typing checks.

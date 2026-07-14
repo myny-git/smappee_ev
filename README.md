@@ -28,6 +28,14 @@ Feel free to join the Discord channel if you have questions, want to share feedb
 [![Discord][discord-shield]][discord-url]
 </div>
 
+## Breaking changes in 2026.7.0
+
+> [!CAUTION]
+> Review your Home Assistant configuration after upgrading. Entity names and
+> device assignments have changed and older config entries may rebuild their
+> entity/device registry during reauthentication. As a result, entity IDs can
+> change.
+
 ## 🔧 Features
 
 This custom integration unlocks **more control over your Smappee** charger and connects it directly to Home Assistant. It is based on the Smappee Dashboard API calls and mqtt.smappee.net.
@@ -60,7 +68,7 @@ This custom integration unlocks **more control over your Smappee** charger and c
 ### ✅ Charger State Feedback
 
 - Real-time **Session State**:
-  - `CHARGING`, `PAUSED`, `SUSPENDED`, etc.
+  - `charging`, `paused`, `suspended`, etc.
 - **EVCC State** for in-depth diagnostics (e.g. state A/B/C/E)
 - **EVCC Status** to represent the connector status similar as the dashboard
 - **Session energy** sensor per connector: shows the latest Smappee cloud charging session energy in kWh and exposes the session metadata as attributes

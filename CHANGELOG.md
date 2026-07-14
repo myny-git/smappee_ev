@@ -7,6 +7,86 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.7.0] - 2026-07-14
+
+- Migrated the integration from the legacy Smappee API v3 to the Smappee
+  Dashboard API v10/v11. Discovery, charger control and configuration now use
+  the Dashboard API, while live power, current, energy and charger state
+  updates continue to use MQTT.
+- Simplified setup to Smappee Dashboard username and password authentication;
+  client ID and client secret are no longer required. Added refresh-token
+  handling plus reauthentication and reconfiguration flows.
+- Refactored the integration into typed API, discovery, runtime, topology,
+  entity and coordinator modules.
+- Refactored runtime lifecycle management with transactional setup, rollback on
+  initialization failures, coordinated shutdown and safer background-task
+  cleanup.
+- Removed the legacy `set_charging_mode_chargingstations` and
+  `pause_charging_chargingstations` actions. The remaining charging actions now
+  use the Dashboard device-action path.
+- Added `resume_charging`, which restores the selected charging mode or falls
+  back to Standard when no previous mode is known.
+- Replaced the LED brightness number with a Home Assistant `light` entity and
+  associated the LED with the charging-station device.
+- Added controls for connector maximum current, minimum solar-surplus
+  percentage, site capacity limit, overload-protection limit, offline failsafe
+  current and offline charging.
+- Added station-level restart support and improved start, pause, stop, resume,
+  availability, charging-mode and current-limit validation and error feedback.
+- Added connector devices linked to their charging station, clearer connector
+  device names and more reliable serial-number and entity identification.
+- Added two automation blueprints: an RFID badge reminder and charger-aware,
+  sun-based LED brightness control. The RFID blueprint now ignores unavailable
+  state transitions and supports Home Assistant notify entities and groups.
+- Added formatted charging-session duration attributes, improved session refresh
+  scheduling and excluded RFID tokens from session attributes.
+- Improved multi-site and multi-account support, including multiple MQTT clients
+  per site and explicit validation when a service target is ambiguous.
+- Improved availability handling by distinguishing Dashboard availability, MQTT
+  connectivity and live data freshness.
+- Corrected MQTT freshness tracking, routed aggregate updates, connection
+  recovery, heartbeat handling, malformed `jsonContent` parsing and shutdown
+  cleanup.
+- Corrected Dashboard-derived MQTT channel mapping for grid, solar and connector
+  power, current and energy, including routed topics and `activePowerData` versus
+  `channelData` payloads for multi-site and multi-station installations.
+- Improved API fallback behavior, delayed Dashboard refreshes after writes and
+  cancellation of background work during reload or shutdown.
+- Preserved Dashboard authentication failures so Home Assistant starts the
+  built-in reauthentication flow instead of reporting a generic setup or update
+  failure.
+- Hardened diagnostics and logging redaction for credentials, UUIDs, MQTT topics
+  and runtime data; added a bundled brand-icon fallback.
+- Added translated entity names, states and service errors and refreshed Dutch,
+  French and German translations. English now correctly uses Home Assistant's
+  `strings.json` translation model.
+- Standardized charging-mode, charging-state and EVSE-status raw states to
+  lowercase values for Home Assistant translation support.
+- Updated the entity, service, setup, MQTT and API documentation and added
+  contribution, security and code-of-conduct documentation.
+- Substantially improved compliance with the Home Assistant Integration Quality
+  Scale, expanded the automated regression test suite and enforced a minimum CI
+  coverage of 95%.
+
+References:
+[PR #186](https://github.com/myny-git/smappee_ev/pull/186),
+[PR #195](https://github.com/myny-git/smappee_ev/pull/195),
+[PR #196](https://github.com/myny-git/smappee_ev/pull/196),
+[PR #197](https://github.com/myny-git/smappee_ev/pull/197),
+[PR #199](https://github.com/myny-git/smappee_ev/pull/199),
+[PR #200](https://github.com/myny-git/smappee_ev/pull/200),
+[PR #201](https://github.com/myny-git/smappee_ev/pull/201),
+[PR #202](https://github.com/myny-git/smappee_ev/pull/202),
+[PR #204](https://github.com/myny-git/smappee_ev/pull/204),
+[PR #205](https://github.com/myny-git/smappee_ev/pull/205),
+[PR #209](https://github.com/myny-git/smappee_ev/pull/209),
+[PR #213](https://github.com/myny-git/smappee_ev/pull/213),
+[PR #214](https://github.com/myny-git/smappee_ev/pull/214),
+[PR #218](https://github.com/myny-git/smappee_ev/pull/218),
+[PR #226](https://github.com/myny-git/smappee_ev/pull/226),
+[PR #236](https://github.com/myny-git/smappee_ev/pull/236) and
+[PR #237](https://github.com/myny-git/smappee_ev/pull/237).
+
 ## [2026.6.5] - 2026-06-12
 
 - Fixed connector-to-station mapping bugs reported in
