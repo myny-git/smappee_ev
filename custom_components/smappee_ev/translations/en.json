@@ -1,0 +1,375 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Please add your Smappee Dashboard credentials",
+        "data": {
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard"
+        },
+        "data_description": {
+          "username": "The username used to sign in to the Smappee Dashboard.",
+          "password": "The password used to sign in to the Smappee Dashboard."
+        }
+      },
+      "reauth_confirm": {
+        "description": "Update your Smappee Dashboard credentials to reconnect",
+        "data": {
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard"
+        },
+        "data_description": {
+          "username": "The username used by the existing Smappee EV config entry.",
+          "password": "The updated Smappee Dashboard password."
+        }
+      },
+      "reconfigure": {
+        "description": "Update your Smappee Dashboard credentials",
+        "data": {
+          "username": "Your username on Smappee dashboard",
+          "password": "Your password on Smappee dashboard"
+        },
+        "data_description": {
+          "username": "The username used by the existing Smappee EV config entry.",
+          "password": "The Smappee Dashboard password to save for this config entry."
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Authorization failed",
+      "cannot_connect": "Could not connect",
+      "unknown": "Unexpected response from Smappee Dashboard"
+    },
+    "abort": {
+      "wrong_account": "The credentials belong to a different Smappee account."
+    }
+  },
+  "exceptions": {
+    "service_location_not_in_entry": {
+      "message": "Service location {service_location_id} does not belong to config entry {config_entry_id}"
+    },
+    "service_location_not_found": {
+      "message": "Service location {service_location_id} was not found in any loaded Smappee EV config entry."
+    },
+    "config_entry_not_loaded": {
+      "message": "Config entry {config_entry_id} is not loaded or does not exist."
+    },
+    "multiple_service_locations": {
+      "message": "Multiple service locations detected. Provide service_location_id."
+    },
+    "no_station_client": {
+      "message": "No station client found for config entry {config_entry_id} and service location {service_location_id}."
+    },
+    "station_unavailable": {
+      "message": "Station state is unavailable."
+    },
+    "station_method_not_found": {
+      "message": "Station method {method_name} not found."
+    },
+    "station_service_failed": {
+      "message": "Station service {method_name} failed: {error}"
+    },
+    "no_connector_client": {
+      "message": "No matching connector client found for config entry {config_entry_id}, service location {service_location_id}, connector {connector_id}."
+    },
+    "connector_method_not_found": {
+      "message": "Connector method {method_name} not found."
+    },
+    "connector_service_failed": {
+      "message": "Connector service {method_name} failed: {error}"
+    },
+    "cannot_resolve_connector_client": {
+      "message": "Cannot resolve connector client. Provide connector_id if ambiguous."
+    },
+    "current_out_of_range": {
+      "message": "Current {current} A is out of range {min_current}-{max_current} A for this connector."
+    }
+  },
+  "services": {
+    "start_charging": {
+      "name": "Start charging",
+      "description": "Start charging for the selected connector.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2, leave empty if only one)."
+        }
+      }
+    },
+    "pause_charging": {
+      "name": "Pause charging",
+      "description": "Pause charging for the selected connector via the Dashboard v10 device action when available.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2)."
+        }
+      }
+    },
+    "stop_charging": {
+      "name": "Stop charging",
+      "description": "Stop charging for the selected connector.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2)."
+        }
+      }
+    },
+    "resume_charging": {
+      "name": "Resume charging",
+      "description": "Resume charging by restoring the selected charging mode, or STANDARD when no mode is known.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2)."
+        }
+      }
+    },
+    "set_current": {
+      "name": "Set current",
+      "description": "Set the charging current in Ampere (1 decimal precision). Converted to the nearest integer percentage and sent via setPercentageLimit. The slider and number entities update immediately.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2, leave empty if only one)."
+        },
+        "current": {
+          "name": "Current (A)",
+          "description": "Charging current in Ampere (1 decimal, e.g. 11.4). Rejected when outside the connector's configured min-max range."
+        }
+      }
+    },
+    "set_charging_mode": {
+      "name": "Set charging mode",
+      "description": "Set the charging mode of a connector.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional: specific config entry id to target (when multiple entries)."
+        },
+        "service_location_id": {
+          "name": "Service Location ID",
+          "description": "Optional: ID of the site (leave empty if only one site)."
+        },
+        "connector_id": {
+          "name": "Connector ID",
+          "description": "Optional: connector number (1 or 2)."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Charging mode: Standard, Smart or Solar."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "mqtt_connected": {
+        "name": "MQTT Connected"
+      }
+    },
+    "button": {
+      "start_charging": {
+        "name": "Start charging session"
+      },
+      "pause_charging": {
+        "name": "Pause charging session"
+      },
+      "stop_charging": {
+        "name": "Stop charging session"
+      },
+      "restart_charging_station": {
+        "name": "Restart charging station"
+      },
+      "resume_charging": {
+        "name": "Resume charging"
+      }
+    },
+    "number": {
+      "min_surpluspct": {
+        "name": "Min Surplus Percentage"
+      },
+      "max_charging_speed": {
+        "name": "Charging current limit"
+      },
+      "connector_max_current": {
+        "name": "Maximum current"
+      },
+      "capacity_maximum_power": {
+        "name": "Maximum capacity"
+      },
+      "overload_maximum_load": {
+        "name": "Main circuit breaker"
+      },
+      "offline_failsafe_current": {
+        "name": "Offline failsafe current"
+      }
+    },
+    "select": {
+      "charging_mode": {
+        "name": "Charging mode",
+        "state": {
+          "smart": "Smart charging",
+          "solar": "Solar charging",
+          "standard": "Standard charging"
+        }
+      }
+    },
+    "switch": {
+      "station_available": {
+        "name": "Station available"
+      },
+      "evcc_charging": {
+        "name": "EVCC charging"
+      },
+      "offline_charging": {
+        "name": "Offline charging"
+      }
+    },
+    "light": {
+      "led": {
+        "name": "LED"
+      }
+    },
+    "sensor": {
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "house_consumption_power": {
+        "name": "House consumption power"
+      },
+      "pv_power": {
+        "name": "PV power"
+      },
+      "grid_energy_import": {
+        "name": "Grid energy import"
+      },
+      "grid_energy_export": {
+        "name": "Grid energy export"
+      },
+      "pv_energy_import": {
+        "name": "PV energy import"
+      },
+      "current_l1": {
+        "name": "Current L1"
+      },
+      "current_l2": {
+        "name": "Current L2"
+      },
+      "current_l3": {
+        "name": "Current L3"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "current": {
+        "name": "Current"
+      },
+      "support_grid": {
+        "name": "Support grid"
+      },
+      "energy_import": {
+        "name": "Energy import"
+      },
+      "grid_currents": {
+        "name": "Grid current (L1–L3)"
+      },
+      "pv_currents": {
+        "name": "PV current (L1–L3)"
+      },
+      "grid_current_l1": {
+        "name": "Grid current L1"
+      },
+      "grid_current_l2": {
+        "name": "Grid current L2"
+      },
+      "grid_current_l3": {
+        "name": "Grid current L3"
+      },
+      "pv_current_l1": {
+        "name": "PV current L1"
+      },
+      "pv_current_l2": {
+        "name": "PV current L2"
+      },
+      "pv_current_l3": {
+        "name": "PV current L3"
+      },
+      "grid_voltage_l1": {
+        "name": "Grid voltage L1"
+      },
+      "grid_voltage_l2": {
+        "name": "Grid voltage L2"
+      },
+      "grid_voltage_l3": {
+        "name": "Grid voltage L3"
+      },
+      "charging_state": {
+        "name": "Charging state",
+        "state": {
+          "started": "Started",
+          "suspended": "Suspended",
+          "stopped": "Stopped"
+        }
+      },
+      "evcc_state": {
+        "name": "EVCC state"
+      },
+      "evse_status": {
+        "name": "EVSE status",
+        "state": {
+          "available": "Available",
+          "cable_connected": "Cable connected",
+          "charging": "Charging",
+          "charging_finished": "Charging finished",
+          "error": "Error",
+          "suspended_evse": "Paused by charger"
+        }
+      },
+      "session_energy": {
+        "name": "Session"
+      }
+    }
+  }
+}

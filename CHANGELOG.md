@@ -7,6 +7,12 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.7.1] - 2026-07-14
+
+- Restored `translations/en.json` so Home Assistant can load the English
+  translations bundled with this custom integration, as required by the
+  [Home Assistant custom integration localization documentation](https://developers.home-assistant.io/docs/internationalization/custom_integration/).
+
 ## [2026.7.0] - 2026-07-14
 
 - Migrated the integration from the legacy Smappee API v3 to the Smappee

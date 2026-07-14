@@ -28,7 +28,7 @@ Feel free to join the Discord channel if you have questions, want to share feedb
 [![Discord][discord-shield]][discord-url]
 </div>
 
-## Breaking changes in 2026.7.0
+## Breaking changes in the 2026.7.x version
 
 > [!CAUTION]
 > Review your Home Assistant configuration after upgrading. Entity names and
