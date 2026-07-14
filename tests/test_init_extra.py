@@ -184,7 +184,8 @@ class TestMqttSetup:
         # Add data property to coordinator
         mock_coordinator.data = MagicMock()
         mock_coordinator.data.station = MagicMock()
-        mock_coordinator.update_interval = UPDATE_INTERVAL_DEFAULT
+        expected_update_interval = timedelta(seconds=UPDATE_INTERVAL_DEFAULT)
+        mock_coordinator.update_interval = expected_update_interval
 
         # Mock SmappeeMqtt
         with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
@@ -221,14 +222,14 @@ class TestMqttSetup:
 
             # Polling remains enabled until MQTT actually connects.
             coord = stations["station1_uuid"].station_coordinator
-            assert coord.update_interval == UPDATE_INTERVAL_DEFAULT
+            assert coord.update_interval == expected_update_interval
 
             on_conn_callback = mock_mqtt_class.call_args[1]["on_connection_change"]
             on_conn_callback(True)
-            assert coord.update_interval == UPDATE_INTERVAL_DEFAULT
+            assert coord.update_interval == expected_update_interval
 
             on_conn_callback(False)
-            assert coord.update_interval == UPDATE_INTERVAL_DEFAULT
+            assert coord.update_interval == expected_update_interval
 
             # Verify MQTT was returned
             assert result == mock_mqtt
