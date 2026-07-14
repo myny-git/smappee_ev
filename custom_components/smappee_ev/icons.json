@@ -1,11 +1,19 @@
 {
   "entity": {
+    "binary_sensor": {
+      "mqtt_connected": {
+        "default": "mdi:lan-connect"
+      }
+    },
     "button": {
       "pause_charging": {
         "default": "mdi:pause-circle"
       },
       "resume_charging": {
         "default": "mdi:play-pause"
+      },
+      "restart_charging_station": {
+        "default": "mdi:restart"
       },
       "start_charging": {
         "default": "mdi:play-circle"
@@ -53,11 +61,83 @@
       "charging_state": {
         "default": "mdi:ev-station"
       },
+      "current": {
+        "default": "mdi:current-ac"
+      },
+      "current_l1": {
+        "default": "mdi:current-ac"
+      },
+      "current_l2": {
+        "default": "mdi:current-ac"
+      },
+      "current_l3": {
+        "default": "mdi:current-ac"
+      },
+      "energy_import": {
+        "default": "mdi:transmission-tower-import"
+      },
       "evcc_state": {
         "default": "mdi:connection"
       },
       "evse_status": {
         "default": "mdi:ev-plug-type2"
+      },
+      "grid_current_l1": {
+        "default": "mdi:current-ac"
+      },
+      "grid_current_l2": {
+        "default": "mdi:current-ac"
+      },
+      "grid_current_l3": {
+        "default": "mdi:current-ac"
+      },
+      "grid_currents": {
+        "default": "mdi:current-ac"
+      },
+      "grid_energy_export": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "grid_energy_import": {
+        "default": "mdi:transmission-tower-import"
+      },
+      "grid_power": {
+        "default": "mdi:transmission-tower"
+      },
+      "grid_voltage_l1": {
+        "default": "mdi:sine-wave"
+      },
+      "grid_voltage_l2": {
+        "default": "mdi:sine-wave"
+      },
+      "grid_voltage_l3": {
+        "default": "mdi:sine-wave"
+      },
+      "house_consumption_power": {
+        "default": "mdi:home-lightning-bolt"
+      },
+      "power": {
+        "default": "mdi:flash"
+      },
+      "pv_current_l1": {
+        "default": "mdi:current-ac"
+      },
+      "pv_current_l2": {
+        "default": "mdi:current-ac"
+      },
+      "pv_current_l3": {
+        "default": "mdi:current-ac"
+      },
+      "pv_currents": {
+        "default": "mdi:current-ac"
+      },
+      "pv_energy_import": {
+        "default": "mdi:solar-power"
+      },
+      "pv_power": {
+        "default": "mdi:solar-power"
+      },
+      "session_energy": {
+        "default": "mdi:counter"
       },
       "support_grid": {
         "default": "mdi:transmission-tower-export"

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 __all__ = [
     "SmappeeBaseEntity",
     "SmappeeSiteEntity",
+    "SmappeeSitePowerEntity",
     "SmappeeStationEntity",
     "SmappeeStationRestEntity",
     "SmappeeLedEntity",
@@ -185,6 +186,10 @@ class SmappeeSiteEntity(SmappeeBaseEntity[CoordinatorT]):
             unique_suffix=unique_suffix,
             device_scope="site",
         )
+
+
+class SmappeeSitePowerEntity(SmappeeSiteEntity[CoordinatorT]):
+    """Base for live site measurements backed by power MQTT data."""
 
     @property
     def available(self) -> bool:

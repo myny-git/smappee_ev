@@ -15,6 +15,7 @@ from custom_components.smappee_ev.entity import (
     SmappeeConnectorMqttEntity,
     SmappeeLedEntity,
     SmappeeSiteEntity,
+    SmappeeSitePowerEntity,
     SmappeeStationEntity,
     SmappeeStationRestEntity,
     _is_int_like,
@@ -120,27 +121,32 @@ def test_entity_helper_int_like_accepts_only_parseable_ints():
     assert _is_int_like(None) is False
 
 
-def test_site_entity_availability_requires_fresh_real_power_data():
+def test_only_site_power_entity_availability_requires_fresh_real_power_data():
     coordinator = MagicMock(spec=SmappeeSiteCoordinator)
     coordinator.last_update_success = True
     coordinator.gateway_serial = "gateway"
     coordinator.site_name = "Home"
     coordinator.gateway_type = "Genius"
     coordinator.last_real_power_rx = None
-    entity = SmappeeSiteEntity(coordinator, 12345, "sensor:grid_power")
+    site_entity = SmappeeSiteEntity(coordinator, 12345, "mqtt_connected")
+    power_entity = SmappeeSitePowerEntity(coordinator, 12345, "sensor:grid_power")
     now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
     with patch("custom_components.smappee_ev.entity._utcnow", return_value=now):
-        assert entity.available is False
+        assert site_entity.available is True
+        assert power_entity.available is False
 
         coordinator.last_real_power_rx = now - timedelta(minutes=6)
-        assert entity.available is False
+        assert site_entity.available is True
+        assert power_entity.available is False
 
         coordinator.last_real_power_rx = now - timedelta(minutes=4)
-        assert entity.available is True
+        assert site_entity.available is True
+        assert power_entity.available is True
 
         coordinator.last_update_success = False
-        assert entity.available is False
+        assert site_entity.available is False
+        assert power_entity.available is False
 
 
 class TestSmappeeBaseEntity:

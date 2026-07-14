@@ -26,7 +26,12 @@ from homeassistant.util import dt as dt_util
 
 from .api.device_handle import SmappeeDeviceHandle
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
-from .entity import SmappeeConnectorEntity, SmappeeConnectorMqttEntity, SmappeeSiteEntity
+from .entity import (
+    SmappeeConnectorEntity,
+    SmappeeConnectorMqttEntity,
+    SmappeeSiteEntity,
+    SmappeeSitePowerEntity,
+)
 from .helpers import format_as_hms, safe_sum, update_total_increasing
 from .models.runtime_data import SmappeeEvConfigEntry
 
@@ -134,7 +139,7 @@ class _RestoredTotalSensor(Protocol):
         """Return restored sensor data."""
 
 
-class StationGridPower(SmappeeSiteEntity, SensorEntity):
+class StationGridPower(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -147,7 +152,7 @@ class StationGridPower(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -161,7 +166,7 @@ class StationGridPower(SmappeeSiteEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-class StationHouseConsumptionPower(SmappeeSiteEntity, SensorEntity):
+class StationHouseConsumptionPower(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -174,7 +179,7 @@ class StationHouseConsumptionPower(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -188,7 +193,7 @@ class StationHouseConsumptionPower(SmappeeSiteEntity, SensorEntity):
         return float(v) if isinstance(v, int | float) else None
 
 
-class StationPvPower(SmappeeSiteEntity, SensorEntity):
+class StationPvPower(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -201,7 +206,7 @@ class StationPvPower(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -529,7 +534,7 @@ class ConnEnergyImport(RestoredEnergyConnectorSensor):
         return self._total_increasing_value(getattr(st, "energy_import_kwh", None) if st else None)
 
 
-class StationGridCurrents(SmappeeSiteEntity, SensorEntity):
+class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -542,7 +547,7 @@ class StationGridCurrents(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -568,7 +573,7 @@ class StationGridCurrents(SmappeeSiteEntity, SensorEntity):
         )
 
 
-class StationPvCurrents(SmappeeSiteEntity, SensorEntity):
+class StationPvCurrents(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -581,7 +586,7 @@ class StationPvCurrents(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -607,7 +612,7 @@ class StationPvCurrents(SmappeeSiteEntity, SensorEntity):
         )
 
 
-class StationGridCurrentL1(SmappeeSiteEntity, SensorEntity):
+class StationGridCurrentL1(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -620,7 +625,7 @@ class StationGridCurrentL1(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -634,7 +639,7 @@ class StationGridCurrentL1(SmappeeSiteEntity, SensorEntity):
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
 
 
-class StationGridCurrentL2(SmappeeSiteEntity, SensorEntity):
+class StationGridCurrentL2(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -647,7 +652,7 @@ class StationGridCurrentL2(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -661,7 +666,7 @@ class StationGridCurrentL2(SmappeeSiteEntity, SensorEntity):
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
 
 
-class StationGridCurrentL3(SmappeeSiteEntity, SensorEntity):
+class StationGridCurrentL3(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -674,7 +679,7 @@ class StationGridCurrentL3(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -688,7 +693,7 @@ class StationGridCurrentL3(SmappeeSiteEntity, SensorEntity):
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
 
-class StationPvCurrentL1(SmappeeSiteEntity, SensorEntity):
+class StationPvCurrentL1(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -701,7 +706,7 @@ class StationPvCurrentL1(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -715,7 +720,7 @@ class StationPvCurrentL1(SmappeeSiteEntity, SensorEntity):
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
 
 
-class StationPvCurrentL2(SmappeeSiteEntity, SensorEntity):
+class StationPvCurrentL2(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -728,7 +733,7 @@ class StationPvCurrentL2(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -742,7 +747,7 @@ class StationPvCurrentL2(SmappeeSiteEntity, SensorEntity):
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
 
 
-class StationPvCurrentL3(SmappeeSiteEntity, SensorEntity):
+class StationPvCurrentL3(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -755,7 +760,7 @@ class StationPvCurrentL3(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -769,7 +774,7 @@ class StationPvCurrentL3(SmappeeSiteEntity, SensorEntity):
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
 
 
-class StationGridVoltageL1(SmappeeSiteEntity, SensorEntity):
+class StationGridVoltageL1(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
@@ -782,7 +787,7 @@ class StationGridVoltageL1(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -796,7 +801,7 @@ class StationGridVoltageL1(SmappeeSiteEntity, SensorEntity):
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
 
 
-class StationGridVoltageL2(SmappeeSiteEntity, SensorEntity):
+class StationGridVoltageL2(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
@@ -809,7 +814,7 @@ class StationGridVoltageL2(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,
@@ -823,7 +828,7 @@ class StationGridVoltageL2(SmappeeSiteEntity, SensorEntity):
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
 
 
-class StationGridVoltageL3(SmappeeSiteEntity, SensorEntity):
+class StationGridVoltageL3(SmappeeSitePowerEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
@@ -836,7 +841,7 @@ class StationGridVoltageL3(SmappeeSiteEntity, SensorEntity):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeSiteEntity.__init__(
+        SmappeeSitePowerEntity.__init__(
             self,
             coordinator,
             sid,

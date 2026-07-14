@@ -428,7 +428,8 @@ def test_site_power_index_map_empty_or_invalid_highlevel_config_is_safe(hass):
     )
     assert mapping["servicelocation/site/power"]["grid"]["power"] == []
     coord._power_index_maps_by_topic = mapping
-    assert coord._handle_power("servicelocation/site/power", {"channelData": [999]}) is True
+    assert coord._handle_power("servicelocation/site/power", {"channelData": [999]}) is False
+    assert coord.data.site.grid_power_total == 123
     assert coord.data.site.grid_power_total == 123
 
 

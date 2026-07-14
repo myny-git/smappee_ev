@@ -1,5 +1,6 @@
 """Comprehensive tests for number.py: SmappeeCombinedCurrentSlider and SmappeeMinSurplusPctNumber."""
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.components.number import NumberEntity
@@ -23,6 +24,25 @@ from custom_components.smappee_ev.number import (
     async_setup_entry,
 )
 from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
+
+
+@pytest.mark.parametrize(
+    "entity_cls",
+    [SmappeeCapacityMaximumPowerNumber, SmappeeOverloadMaximumLoadNumber],
+)
+def test_site_dashboard_numbers_remain_available_when_power_is_stale(entity_cls):
+    """Dashboard settings must not depend on site power MQTT freshness."""
+    coordinator = MagicMock(spec=SmappeeCoordinator)
+    coordinator.last_update_success = True
+    coordinator.last_real_power_rx = datetime.now(UTC) - timedelta(hours=1)
+    coordinator.dashboard_client = MagicMock()
+    coordinator.data = IntegrationData(station=StationState(), connectors={})
+    coordinator.station_client = MagicMock(spec=SmappeeDeviceHandle)
+    coordinator.station_client.charging_station_serial = "STATION123"
+
+    entity = entity_cls(coordinator=coordinator, sid=12345)
+
+    assert entity.available is True
 
 
 @pytest.fixture

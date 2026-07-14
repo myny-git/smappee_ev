@@ -196,7 +196,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
             i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
             if i_ph:
                 changed |= self._set_if_changed(site, f"{power_key_prefix}_current_phases", i_ph)
-        if power_key_prefix == "grid":
+        if power_key_prefix == "grid" and voltage_dv:
             v_ph = _volts_from_dv(_pick(voltage_dv, [0, 1, 2]))
             if v_ph:
                 changed |= self._set_if_changed(site, "grid_voltage_phases", v_ph)
@@ -225,12 +225,10 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         if not data:
             return False
         idx_map = (self._power_index_maps_by_topic or {}).get(topic)
-        if not idx_map:
-            return False
         site = data.site
         changed = False
-        grid = idx_map.get("grid", {})
-        pv = idx_map.get("pv", {})
+        grid = idx_map.get("grid", {}) if idx_map else {}
+        pv = idx_map.get("pv", {}) if idx_map else {}
         changed |= self._apply_site_group(
             site,
             payload,
@@ -287,8 +285,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         if not getattr(data.site, "mqtt_connected", False):
             data.site.mqtt_connected = True
             changed = True
-        if topic in (self._power_index_maps_by_topic or {}):
-            changed |= self._handle_power(topic, payload)
+        changed |= self._handle_power(topic, payload)
         if changed:
             self.async_set_updated_data(data)
 

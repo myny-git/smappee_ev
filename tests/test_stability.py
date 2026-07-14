@@ -10,9 +10,14 @@ import pytest
 
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.api.errors import SmappeeConnectionError
-from custom_components.smappee_ev.coordinator import SmappeeCoordinator
+from custom_components.smappee_ev.coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
-from custom_components.smappee_ev.models.state import IntegrationData, StationState
+from custom_components.smappee_ev.models.state import (
+    IntegrationData,
+    SiteData,
+    SiteState,
+    StationState,
+)
 from custom_components.smappee_ev.mqtt_setup import (
     MqttFreshnessState,
     _handle_mqtt_connection_change,
@@ -322,3 +327,50 @@ def test_route_aware_power_freshness_is_copied_to_site_coordinator(hass):
     site_coordinator.apply_mqtt_properties.assert_called_once_with(
         topic, {"activePowerData": [100]}
     )
+
+
+@pytest.mark.parametrize(
+    ("role", "payload", "state_attr", "expected"),
+    [
+        ("consumption", {"consumptionPower": 4100}, "house_consumption_power", 4100),
+        ("production", {"solarPower": 2300}, "pv_power_total", 2300),
+        ("always_on", {"alwaysOnPower": 175}, "always_on_power", 175),
+    ],
+)
+def test_routed_site_aggregate_updates_freshness_and_state_without_index_map(
+    hass, role, payload, state_attr, expected
+):
+    """One routed aggregate message must update freshness and its entity state."""
+    topic = f"custom/realtime/{role}"
+    coordinator = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=1,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="gateway",
+        gateway_type="Genius",
+        update_interval=60,
+    )
+    coordinator.data = SiteData(site=SiteState())
+    assert coordinator._power_index_maps_by_topic is None
+    spec = MqttChannelSpec(1, role, "activePower", topic, None, None, [])
+    mqtt = MagicMock()
+    mqtt.start = AsyncMock()
+    mqtt.track_start_task = MagicMock()
+
+    with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", return_value=mqtt) as cls:
+        _setup_mqtt(
+            hass,
+            "site-uuid",
+            "station",
+            1,
+            {},
+            "client",
+            60,
+            mqtt_specs=[spec],
+            site_coordinator=coordinator,
+        )
+        cls.call_args.kwargs["on_properties"](topic, payload)
+
+    assert coordinator.last_real_power_rx is not None
+    assert getattr(coordinator.data.site, state_attr) == expected

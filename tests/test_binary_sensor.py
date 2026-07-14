@@ -41,7 +41,16 @@ def mock_coordinator(mock_integration_data):
     """Create a mock coordinator."""
     coordinator = MagicMock(spec=SmappeeCoordinator)
     coordinator.data = mock_integration_data
+    coordinator.last_update_success = True
+    coordinator.last_real_power_rx = None
     return coordinator
+
+
+def test_mqtt_connectivity_remains_available_when_site_power_is_stale(mock_coordinator):
+    """Connectivity availability must not depend on live power freshness."""
+    entity = SmappeeMqttConnectivity(mock_coordinator, 12345)
+
+    assert entity.available is True
 
 
 @pytest.fixture

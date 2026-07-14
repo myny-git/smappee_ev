@@ -321,11 +321,9 @@ class PowerMixin(CoordinatorMixin):
         changed = False
 
         idx_map = (self._power_index_maps_by_topic or {}).get(topic)
-        if not idx_map:
-            return False
-        grid = idx_map.get("grid", {})
-        pv = idx_map.get("pv", {})
-        cars = idx_map.get("cars", {}) or {}
+        grid = idx_map.get("grid", {}) if idx_map else {}
+        pv = idx_map.get("pv", {}) if idx_map else {}
+        cars = (idx_map.get("cars", {}) or {}) if idx_map else {}
         roles = []
         if any(grid.values()):
             roles.append("grid")
@@ -379,6 +377,10 @@ class PowerMixin(CoordinatorMixin):
         sp = payload.get("solarPower")
         if isinstance(sp, int | float):
             changed |= self._set_if_changed(st, "pv_power_total", int(sp))
+
+        always_on = payload.get("alwaysOnPower")
+        if isinstance(always_on, int | float):
+            changed |= self._set_if_changed(st, "always_on_power", int(always_on))
 
         return changed
 
