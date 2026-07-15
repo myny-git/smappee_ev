@@ -279,7 +279,7 @@ def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
             "exportActiveEnergyData": [100, 200, 300],
             "consumptionPower": 456,
             "solarPower": 789,
-            "alwaysOnPower": 111,
+            "alwaysOn": 111,
         },
     )
 
@@ -296,6 +296,57 @@ def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
     assert site.house_consumption_power == 456
     assert site.pv_power_total == 789
     assert site.always_on_power == 111
+
+
+def test_site_aggregates_ignore_child_payloads_and_accept_parent_zero(hass):
+    """Child service-location aggregates must not overwrite the parent site."""
+    coord = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=263713,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+    )
+    coord.data = SiteData(site=SiteState())
+
+    coord.apply_mqtt_properties(
+        "servicelocation/parent/power",
+        {
+            "serviceLocationId": 263713,
+            "consumptionPower": 364,
+            "solarPower": 1461,
+            "alwaysOn": 188,
+        },
+    )
+    coord.apply_mqtt_properties(
+        "servicelocation/child/power",
+        {
+            "serviceLocationId": 263703,
+            "consumptionPower": 0,
+            "solarPower": 0,
+            "alwaysOn": 0,
+        },
+    )
+
+    assert coord.data.site.house_consumption_power == 364
+    assert coord.data.site.pv_power_total == 1461
+    assert coord.data.site.always_on_power == 188
+
+    coord.apply_mqtt_properties(
+        "servicelocation/parent/power",
+        {
+            "serviceLocationId": "263713",
+            "consumptionPower": 0,
+            "solarPower": 0,
+            "alwaysOn": 0,
+        },
+    )
+
+    assert coord.data.site.house_consumption_power == 0
+    assert coord.data.site.pv_power_total == 0
+    assert coord.data.site.always_on_power == 0
 
 
 @pytest.mark.parametrize(

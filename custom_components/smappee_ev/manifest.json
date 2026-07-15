@@ -11,11 +11,10 @@
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/myny-git/smappee_ev/issues",
   "loggers": [
-    "custom_components.smappee_ev",
-    "mqtt"
+    "custom_components.smappee_ev"
   ],
   "requirements": [
     "aiomqtt>=2.5.0,<3.0.0"
   ],
-  "version": "2026.7.0"
+  "version": "2026.7.1"
 }

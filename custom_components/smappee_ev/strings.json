@@ -279,6 +279,9 @@
       "house_consumption_power": {
         "name": "House consumption power"
       },
+      "always_on_power": {
+        "name": "Always-on power"
+      },
       "pv_power": {
         "name": "PV power"
       },

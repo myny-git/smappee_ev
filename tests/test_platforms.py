@@ -34,7 +34,11 @@ from custom_components.smappee_ev.models.state import (
     SiteState,
     StationState,
 )
-from custom_components.smappee_ev.sensor import ConnectorPowerSensor, StationGridPower
+from custom_components.smappee_ev.sensor import (
+    ConnectorPowerSensor,
+    StationAlwaysOnPower,
+    StationGridPower,
+)
 from tests.factories import (
     make_config_entry,
     make_connector_client,
@@ -163,6 +167,7 @@ async def test_platform_setup_accepts_typed_runtime_containers(hass: HomeAssista
     await sensor.async_setup_entry(hass, entry, async_add_entities)
 
     entities = async_add_entities.call_args.args[0]
+    assert sum(isinstance(entity, StationAlwaysOnPower) for entity in entities) == 1
     assert sum(isinstance(entity, StationGridPower) for entity in entities) == 1
     assert sum(isinstance(entity, ConnectorPowerSensor) for entity in entities) == 1
 
@@ -300,6 +305,7 @@ class TestSensorPlatform:
         await sensor.async_setup_entry(hass, entry, async_add_entities)
 
         entities = async_add_entities.call_args[0][0]
+        assert sum(isinstance(entity, StationAlwaysOnPower) for entity in entities) == 1
         assert sum(isinstance(entity, StationGridPower) for entity in entities) == 1
         assert sum(isinstance(entity, ConnectorPowerSensor) for entity in entities) == 2
         unique_ids = [entity.unique_id for entity in entities]

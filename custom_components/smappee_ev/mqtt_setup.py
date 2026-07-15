@@ -22,6 +22,9 @@ _LOGGER = logging.getLogger(__name__)
 
 MqttRouteTarget = SmappeeSiteCoordinator | SmappeeStationCoordinator
 
+_SITE_MEASUREMENT_ROLES = frozenset({"grid", "production"})
+_SITE_AGGREGATE_ROLES = frozenset({"consumption", "production_total", "always_on"})
+
 
 @dataclass
 class MqttFreshnessState:
@@ -82,8 +85,15 @@ def _build_mqtt_routes(
         if coordinator is not None:
             station_coordinators.append(coordinator)
     for spec in mqtt_specs or []:
-        if spec.role in {"grid", "production", "consumption", "always_on"}:
+        if spec.role in _SITE_MEASUREMENT_ROLES:
             if site_coordinator is not None:
+                routes.setdefault(spec.topic, []).append(site_coordinator)
+            continue
+        if spec.role in _SITE_AGGREGATE_ROLES:
+            if (
+                site_coordinator is not None
+                and spec.service_location_id == site_coordinator.site_location_id
+            ):
                 routes.setdefault(spec.topic, []).append(site_coordinator)
             continue
         if spec.role == "car_charger":

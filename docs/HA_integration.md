@@ -204,6 +204,7 @@ These values are populated from MQTT. Depending on your installation, some senso
 | `grid_energy_import` | Total grid import energy. |
 | `grid_power` | Total live grid power; can be negative. |
 | `house_consumption_power` | Live household consumption power. |
+| `always_on_power` | Site background or standby consumption in W, populated from the MQTT `alwaysOn` value. |
 | `pv_current` | Total PV current; phase currents are exposed as attributes. |
 | `pv_energy_import` | Total PV energy import. |
 | `pv_power` | Live PV power. |

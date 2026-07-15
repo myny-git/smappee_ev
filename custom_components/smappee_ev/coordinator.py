@@ -247,13 +247,22 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
             "pv",
             pv.get("power_field"),
         )
+
+        payload_location_id = payload.get("serviceLocationId")
+        if payload_location_id is not None:
+            try:
+                if int(payload_location_id) != self.site_location_id:
+                    return changed
+            except TypeError, ValueError:
+                return changed
+
         cp = payload.get("consumptionPower")
         if isinstance(cp, int | float):
             changed |= self._set_if_changed(site, "house_consumption_power", int(cp))
         sp = payload.get("solarPower")
         if isinstance(sp, int | float):
             changed |= self._set_if_changed(site, "pv_power_total", int(sp))
-        always_on = payload.get("alwaysOnPower")
+        always_on = payload.get("alwaysOn")
         if isinstance(always_on, int | float):
             changed |= self._set_if_changed(site, "always_on_power", int(always_on))
         return changed

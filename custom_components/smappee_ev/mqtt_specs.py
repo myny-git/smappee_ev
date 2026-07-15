@@ -51,7 +51,10 @@ def _split_highlevel_configs_by_scope(
     station_configs: HighLevelConfigMap = {}
     for sid, cfg in configs.items():
         specs = parse_mqtt_channel_specs_from_highlevel(sid, cfg)
-        if any(spec.role in {"grid", "production", "consumption", "always_on"} for spec in specs):
+        if any(
+            spec.role in {"grid", "production", "consumption", "production_total", "always_on"}
+            for spec in specs
+        ):
             site_configs[sid] = cfg
         if any(spec.role == "car_charger" for spec in specs):
             station_configs[sid] = cfg

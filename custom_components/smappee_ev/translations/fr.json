@@ -276,6 +276,9 @@
       "house_consumption_power": {
         "name": "Puissance de consommation du logement"
       },
+      "always_on_power": {
+        "name": "Consommation permanente"
+      },
       "pv_power": {
         "name": "Puissance photovoltaïque"
       },

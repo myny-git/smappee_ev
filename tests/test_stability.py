@@ -333,8 +333,8 @@ def test_route_aware_power_freshness_is_copied_to_site_coordinator(hass):
     ("role", "payload", "state_attr", "expected"),
     [
         ("consumption", {"consumptionPower": 4100}, "house_consumption_power", 4100),
-        ("production", {"solarPower": 2300}, "pv_power_total", 2300),
-        ("always_on", {"alwaysOnPower": 175}, "always_on_power", 175),
+        ("production_total", {"solarPower": 2300}, "pv_power_total", 2300),
+        ("always_on", {"alwaysOn": 175}, "always_on_power", 175),
     ],
 )
 def test_routed_site_aggregate_updates_freshness_and_state_without_index_map(

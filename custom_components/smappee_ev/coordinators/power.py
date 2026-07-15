@@ -378,7 +378,7 @@ class PowerMixin(CoordinatorMixin):
         if isinstance(sp, int | float):
             changed |= self._set_if_changed(st, "pv_power_total", int(sp))
 
-        always_on = payload.get("alwaysOnPower")
+        always_on = payload.get("alwaysOn")
         if isinstance(always_on, int | float):
             changed |= self._set_if_changed(st, "always_on_power", int(always_on))
 

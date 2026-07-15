@@ -58,6 +58,7 @@ async def async_setup_entry(
             entities.append(StationGridPower(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationPvPower(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationHouseConsumptionPower(site_coord, None, sid_int, f"site-{sid}"))
+            entities.append(StationAlwaysOnPower(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationGridEnergyImport(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationGridEnergyExport(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationPvEnergyImport(site_coord, None, sid_int, f"site-{sid}"))
@@ -190,6 +191,33 @@ class StationHouseConsumptionPower(SmappeeSitePowerEntity, SensorEntity):
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         v = getattr(st, "house_consumption_power", None)
+        return float(v) if isinstance(v, int | float) else None
+
+
+class StationAlwaysOnPower(SmappeeSitePowerEntity, SensorEntity):
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_translation_key = "always_on_power"
+
+    def __init__(
+        self,
+        coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+        api: SmappeeDeviceHandle | None,
+        sid: int,
+        station_uuid: str,
+    ) -> None:
+        SmappeeSitePowerEntity.__init__(
+            self,
+            coordinator,
+            sid,
+            unique_suffix="sensor:always_on_power",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        st = _site_state(self.coordinator)
+        v = getattr(st, "always_on_power", None)
         return float(v) if isinstance(v, int | float) else None
 
 

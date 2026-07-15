@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from aiomqtt import MqttError
@@ -9,6 +10,14 @@ import pytest
 
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
+
+
+def test_manifest_does_not_enable_raw_mqtt_protocol_logging():
+    """Raw aiomqtt logs expose unredacted MQTT topic UUIDs."""
+    manifest_path = Path(__file__).parents[1] / "custom_components" / "smappee_ev" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert "mqtt" not in manifest.get("loggers", [])
 
 
 @pytest.fixture

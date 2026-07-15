@@ -276,6 +276,9 @@
       "house_consumption_power": {
         "name": "Huishoudelijk verbruik vermogen"
       },
+      "always_on_power": {
+        "name": "Sluimerverbruik"
+      },
       "pv_power": {
         "name": "PV-vermogen"
       },

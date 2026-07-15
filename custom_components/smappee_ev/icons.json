@@ -115,6 +115,9 @@
       "house_consumption_power": {
         "default": "mdi:home-lightning-bolt"
       },
+      "always_on_power": {
+        "default": "mdi:power-sleep"
+      },
       "power": {
         "default": "mdi:flash"
       },

@@ -276,6 +276,9 @@
       "house_consumption_power": {
         "name": "Hausverbrauchsleistung"
       },
+      "always_on_power": {
+        "name": "Standby-Leistung"
+      },
       "pv_power": {
         "name": "PV-Leistung"
       },

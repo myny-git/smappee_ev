@@ -61,6 +61,7 @@ class MockResponseContext:
 def test_mqtt_routes_parent_power_to_site_and_child_power_to_station():
     """Test explicit parent/child MQTT power routing."""
     site_coord = MagicMock()
+    site_coord.site_location_id = 317418
     station_coord = MagicMock()
     specs = [
         MqttChannelSpec(
@@ -81,6 +82,24 @@ def test_mqtt_routes_parent_power_to_site_and_child_power_to_station():
             password=None,
             aspect_paths=[],
         ),
+        MqttChannelSpec(
+            service_location_id=317443,
+            role="consumption",
+            metric="consumption",
+            topic="servicelocation/uuid317443/power",
+            username=None,
+            password=None,
+            aspect_paths=[],
+        ),
+        MqttChannelSpec(
+            service_location_id=317443,
+            role="always_on",
+            metric="alwaysOn",
+            topic="servicelocation/uuid317443/power",
+            username=None,
+            password=None,
+            aspect_paths=[],
+        ),
     ]
 
     routes = _build_mqtt_routes(
@@ -96,6 +115,7 @@ def test_mqtt_routes_parent_power_to_site_and_child_power_to_station():
 def test_mqtt_routes_shared_power_topic_to_site_and_station_once():
     """Test shared Dashboard power topics route to every needed coordinator once."""
     site_coord = MagicMock()
+    site_coord.site_location_id = 123
     station_coord = MagicMock()
     topic = "servicelocation/shared_uuid/power"
     specs = [
@@ -105,6 +125,7 @@ def test_mqtt_routes_shared_power_topic_to_site_and_station_once():
         MqttChannelSpec(123, "grid", "current", topic, None, None, []),
         MqttChannelSpec(123, "production", "activePower", topic, None, None, []),
         MqttChannelSpec(123, "consumption", "consumption", topic, None, None, []),
+        MqttChannelSpec(123, "production_total", "production", topic, None, None, []),
     ]
 
     routes = _build_mqtt_routes(

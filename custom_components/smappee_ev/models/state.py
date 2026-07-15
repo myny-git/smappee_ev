@@ -109,6 +109,7 @@ class StationState:
     grid_voltage_phases: list[int] | None = None
 
     house_consumption_power: int | None = None
+    always_on_power: int | None = None
 
     pv_power_total: int | None = None
     pv_power_phases: list[int] | None = None

@@ -16,6 +16,7 @@ from custom_components.smappee_ev.sensor import (
     SmappeeChargingStateSensor,
     SmappeeEVCCStateSensor,
     SmappeeEvseStatusSensor,
+    StationAlwaysOnPower,
     StationGridCurrentL1,
     StationGridCurrentL2,
     StationGridCurrentL3,
@@ -67,6 +68,7 @@ def _coordinator(
 @pytest.mark.parametrize(
     ("sensor_cls", "expected"),
     [
+        (StationAlwaysOnPower, 111.0),
         (StationGridPower, 123.0),
         (StationHouseConsumptionPower, 456.0),
         (StationPvPower, 789.0),
@@ -87,6 +89,7 @@ def _coordinator(
 def test_station_sensor_native_values(sensor_cls, expected):
     coordinator = _coordinator(
         StationState(
+            always_on_power=111,
             grid_power_total=123,
             house_consumption_power=456,
             pv_power_total=789,

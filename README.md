@@ -71,6 +71,7 @@ This custom integration unlocks **more control over your Smappee** charger and c
   - `charging`, `paused`, `suspended`, etc.
 - **EVCC State** for in-depth diagnostics (e.g. state A/B/C/E)
 - **EVCC Status** to represent the connector status similar as the dashboard
+- **Always-on power** sensor for the site's background or standby consumption, based on the MQTT `alwaysOn` value
 - **Session energy** sensor per connector: shows the latest Smappee cloud charging session energy in kWh and exposes the session metadata as attributes
 - **Support Grid** sensor per connector: shows the maximum grid assistance current (A) configured on the charger
 - **Charging mode** is correctly restored from Home Assistant's persistent state after a restart (MQTT confirms or corrects it shortly after boot)
