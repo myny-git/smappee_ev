@@ -886,6 +886,12 @@ class StationGridVoltageL3(SmappeeSitePowerEntity, SensorEntity):
 class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "charging_state"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [
+        "started",
+        "suspended",
+        "stopped",
+    ]
 
     def __init__(
         self,
@@ -986,6 +992,15 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
 class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "evse_status"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [
+        "available",
+        "cable_connected",
+        "charging",
+        "charging_finished",
+        "error",
+        "suspended_evse",
+    ]
 
     def __init__(
         self,
