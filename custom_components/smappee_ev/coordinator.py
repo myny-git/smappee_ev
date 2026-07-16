@@ -250,10 +250,8 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
 
         payload_location_id = payload.get("serviceLocationId")
         if payload_location_id is not None:
-            try:
-                if int(payload_location_id) != self.site_location_id:
-                    return changed
-            except TypeError, ValueError:
+            # _to_int returns 0 (or a default) if parsing fails safely
+            if _to_int(payload_location_id, -1) != self.site_location_id:
                 return changed
 
         cp = payload.get("consumptionPower")

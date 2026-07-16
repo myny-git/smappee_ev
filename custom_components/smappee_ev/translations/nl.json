@@ -364,7 +364,8 @@
           "charging": "Aan het laden",
           "charging_finished": "Laden voltooid",
           "error": "Fout",
-          "suspended_evse": "Gepauzeerd door lader"
+          "suspended_evse": "Gepauzeerd door lader",
+          "initialize": "Initialiseren"
         }
       },
       "session_energy": {

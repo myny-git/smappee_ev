@@ -364,7 +364,8 @@
           "charging": "En charge",
           "charging_finished": "Charge terminée",
           "error": "Erreur",
-          "suspended_evse": "Suspendu par le chargeur"
+          "suspended_evse": "Suspendu par le chargeur",
+          "initialize": "Initialisation"
         }
       },
       "session_energy": {

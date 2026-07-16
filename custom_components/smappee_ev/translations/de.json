@@ -364,7 +364,8 @@
           "charging": "Lädt",
           "charging_finished": "Ladevorgang abgeschlossen",
           "error": "Fehler",
-          "suspended_evse": "Vom Ladegerät pausiert"
+          "suspended_evse": "Vom Ladegerät pausiert",
+          "initialize": "Initialisierung"
         }
       },
       "session_energy": {
