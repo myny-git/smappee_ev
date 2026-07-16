@@ -994,6 +994,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     _attr_translation_key = "evse_status"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [
+        "initialize",
         "available",
         "cable_connected",
         "charging",
