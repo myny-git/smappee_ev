@@ -7,6 +7,24 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.7.2] - 2026-07-16
+
+- Fixed site-level MQTT routing so aggregate consumption, solar and always-on
+  power values from child service locations no longer overwrite the parent
+  site's values.
+- Added an always-on power sensor for site background or standby consumption,
+  using the MQTT `alwaysOn` value.
+- Defined charging-state and EVSE-status sensors as Home Assistant enum sensors
+  with explicit supported options, so their states are translated correctly.
+- Added the EVSE `initialize` state and its English, Dutch, French and German
+  translations.
+- Removed raw MQTT protocol logging from the integration manifest to avoid
+  exposing complete MQTT topic UUIDs in logs.
+
+References:
+[PR #249](https://github.com/myny-git/smappee_ev/pull/249) and
+[PR #250](https://github.com/myny-git/smappee_ev/pull/250).
+
 ## [2026.7.1] - 2026-07-14
 
 - Restored `translations/en.json` so Home Assistant can load the English
