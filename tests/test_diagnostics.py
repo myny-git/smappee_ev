@@ -774,6 +774,12 @@ class _FakePowerCoord:
     _connector_position_from_measurement = staticmethod(
         PowerMixin._connector_position_from_measurement
     )
+    _explicit_position_from_measurement = staticmethod(
+        PowerMixin._explicit_position_from_measurement
+    )
+    _name_trailing_position_from_measurement = staticmethod(
+        PowerMixin._name_trailing_position_from_measurement
+    )
     _normalize_device_name = staticmethod(PowerMixin._normalize_device_name)
     _connector_uuid_for_highlevel_measurement = PowerMixin._connector_uuid_for_highlevel_measurement
     _resolve_highlevel_measurement = PowerMixin._resolve_highlevel_measurement
