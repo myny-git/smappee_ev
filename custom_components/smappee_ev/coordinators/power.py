@@ -320,13 +320,11 @@ class PowerMixin(CoordinatorMixin):
         ]
         appliance = meas.get("appliance")
         if isinstance(appliance, dict):
-            direct_values.extend(
-                [
-                    appliance.get("uuid"),
-                    appliance.get("smartDeviceUuid"),
-                    appliance.get("deviceUuid"),
-                ]
-            )
+            direct_values.extend([
+                appliance.get("uuid"),
+                appliance.get("smartDeviceUuid"),
+                appliance.get("deviceUuid"),
+            ])
         for value in direct_values:
             text = str(value).strip() if value is not None else ""
             if text and text in self.connector_clients:
