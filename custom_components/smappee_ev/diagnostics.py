@@ -372,10 +372,17 @@ def _power_mapping_info(coord: object | None) -> dict[str, Any]:
             position: int | None = None
             resolved_uuid: str | None = None
             if is_candidate:
-                with suppress(Exception):
-                    position = coord._connector_position_from_measurement(meas)
-                with suppress(Exception):
-                    resolved_uuid = coord._connector_uuid_for_highlevel_measurement(meas)
+                # `coord` is typed as `object` here (it may be any coordinator-like
+                # object, including test doubles), so these private resolver hooks
+                # are looked up dynamically instead of via direct attribute access.
+                position_fn = getattr(coord, "_connector_position_from_measurement", None)
+                if callable(position_fn):
+                    with suppress(Exception):
+                        position = position_fn(meas)
+                uuid_fn = getattr(coord, "_connector_uuid_for_highlevel_measurement", None)
+                if callable(uuid_fn):
+                    with suppress(Exception):
+                        resolved_uuid = uuid_fn(meas)
 
             measurements_out.append(
                 {
