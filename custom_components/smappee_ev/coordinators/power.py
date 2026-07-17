@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from contextlib import suppress
+from dataclasses import dataclass
 import logging
 import re
 from time import monotonic
@@ -18,6 +19,23 @@ from ..models.state import DashboardObject, HighLevelConfigMap, MqttPayload
 from .base import CoordinatorMixin
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorMeasurementResolution:
+    """Outcome of matching a Dashboard highlevel APPLIANCE measurement to a connector.
+
+    Returned by ``PowerMixin._resolve_highlevel_measurement`` and consumed by both
+    the real MQTT power-index-map builder and the diagnostics ``power_mapping``
+    block (#251), so diagnostics can never show a different resolution outcome
+    than the one actually used to build the live power mapping.
+    """
+
+    connector_uuid: str | None
+    method: str
+    position: int | None = None
+    name_match_count: int = 0
+
 
 _MQTT_PATH_RE = re.compile(r"\$\.([A-Za-z0-9_]+)\[(\d+)\]")
 _POWER_MAP_RETRY_BACKOFF = 60.0
@@ -239,10 +257,11 @@ class PowerMixin(CoordinatorMixin):
                 continue
 
             if mtype == "APPLIANCE" and category == "CAR_CHARGER":
-                uuid = self._connector_uuid_for_highlevel_measurement(meas)
+                resolution = self._resolve_highlevel_measurement(meas)
+                uuid = resolution.connector_uuid
                 if not uuid:
                     continue
-                position = self._connector_position_from_measurement(meas)
+                position = resolution.position
                 if power_topic:
                     topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
                     car = topic_map["cars"].setdefault(
@@ -269,7 +288,31 @@ class PowerMixin(CoordinatorMixin):
         return maps_by_topic or None
 
     def _connector_uuid_for_highlevel_measurement(self, meas: DashboardObject) -> str | None:
-        """Match a Dashboard highlevel APPLIANCE measurement to a connector UUID."""
+        """Match a Dashboard highlevel APPLIANCE measurement to a connector UUID.
+
+        Thin wrapper kept for backward compatibility (and simple call sites);
+        prefer ``_resolve_highlevel_measurement`` when the resolution method or
+        position is also needed (e.g. diagnostics), so both stay in sync.
+        """
+        return self._resolve_highlevel_measurement(meas).connector_uuid
+
+    def _resolve_highlevel_measurement(
+        self, meas: DashboardObject
+    ) -> ConnectorMeasurementResolution:
+        """Resolve a Dashboard highlevel APPLIANCE measurement to a connector.
+
+        Tried in order: (1) a direct identifier match (uuid/smartDeviceUuid/
+        deviceUuid on the measurement or its nested ``appliance``), (2) a
+        position/connector-number match, (3) an exact, unambiguous match
+        between the measurement's ``name`` and a known connector's Dashboard
+        device name (``ConnectorState.dashboard_device_name``, populated from
+        the charging-station-details REST call), (4) a single-connector
+        fallback. Returns ``method="unresolved"`` if none apply (#251: this is
+        the case observed for multi-location setups where neither identifiers
+        nor a recognizable position are present on the measurement).
+        """
+        position = self._connector_position_from_measurement(meas)
+
         direct_values = [
             meas.get("uuid"),
             meas.get("smartDeviceUuid"),
@@ -287,17 +330,55 @@ class PowerMixin(CoordinatorMixin):
         for value in direct_values:
             text = str(value).strip() if value is not None else ""
             if text and text in self.connector_clients:
-                return text
+                return ConnectorMeasurementResolution(text, "identifier", position)
 
-        position = self._connector_position_from_measurement(meas)
         if position is not None:
             for uuid, client in self.connector_clients.items():
                 if getattr(client, "connector_number", None) == position:
-                    return uuid
+                    return ConnectorMeasurementResolution(uuid, "position", position)
+
+        name_uuid, name_match_count = self._connector_uuid_by_measurement_name(meas)
+        if name_uuid is not None:
+            return ConnectorMeasurementResolution(name_uuid, "name", position, name_match_count)
 
         if len(self.connector_clients) == 1:
-            return next(iter(self.connector_clients))
-        return None
+            return ConnectorMeasurementResolution(
+                next(iter(self.connector_clients)), "single_connector", position, name_match_count
+            )
+
+        return ConnectorMeasurementResolution(None, "unresolved", position, name_match_count)
+
+    def _connector_uuid_by_measurement_name(self, meas: DashboardObject) -> tuple[str | None, int]:
+        """Match a measurement's ``name`` to exactly one connector's Dashboard device name.
+
+        Returns ``(uuid, match_count)``. Only ``match_count == 1`` yields a
+        usable ``uuid``; a count of 0 means no connector has that name (yet -
+        e.g. before the first Dashboard details merge), and a count > 1 means
+        the name is ambiguous and is deliberately not used.
+        """
+        meas_name = self._normalize_device_name(meas.get("name"))
+        if meas_name is None:
+            return None, 0
+        data = getattr(self, "data", None)
+        connectors = getattr(data, "connectors", None) if data is not None else None
+        if not isinstance(connectors, dict):
+            return None, 0
+        matches = [
+            uuid
+            for uuid, conn in connectors.items()
+            if uuid in self.connector_clients
+            and self._normalize_device_name(getattr(conn, "dashboard_device_name", None))
+            == meas_name
+        ]
+        if len(matches) == 1:
+            return matches[0], 1
+        return None, len(matches)
+
+    @staticmethod
+    def _normalize_device_name(value: object) -> str | None:
+        """Normalize a device/measurement name for exact, case-insensitive matching."""
+        text = str(value or "").strip().casefold()
+        return text or None
 
     @staticmethod
     def _connector_position_from_measurement(meas: DashboardObject) -> int | None:

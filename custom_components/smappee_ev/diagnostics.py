@@ -308,6 +308,37 @@ def _measurement_identifiers(meas: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _redact_name_shape(value: object) -> str | None:
+    """Return a shape-preserving, content-redacted view of a free-text name.
+
+    Keeps digits, spaces, and punctuation intact (so a trailing connector
+    index, or the general format Smappee uses, remains visible) while
+    replacing every letter with ``A`` so the actual device name never leaks.
+    Used to observe why the ``name``-based position regex in
+    ``coordinators.power`` may or may not match, without exposing the name.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return "".join("A" if ch.isalpha() else ch for ch in text)
+
+
+def _measurement_field_inventory(meas: dict[str, Any]) -> dict[str, Any]:
+    """Return only the *key names* present on a measurement and its appliance dict.
+
+    Field names (unlike values) are schema information, not personal data, so
+    this is safe to expose in full. It reveals whether an unrecognized
+    identifier/position field exists under a name the resolver does not
+    currently check (see #251 follow-up).
+    """
+    appliance_raw = meas.get("appliance")
+    appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
+    return {
+        "measurement_keys": sorted(str(key) for key in meas),
+        "appliance_keys": sorted(str(key) for key in appliance) if appliance_raw else [],
+    }
+
+
 def _connector_aliases(connector_clients: dict[str, Any]) -> dict[str, str]:
     """Return a stable local alias (connector_1, connector_2, ...) per connector uuid."""
 
@@ -371,18 +402,22 @@ def _power_mapping_info(coord: object | None) -> dict[str, Any]:
             )
             position: int | None = None
             resolved_uuid: str | None = None
+            resolution_method: str | None = None
+            name_match_count = 0
             if is_candidate:
                 # `coord` is typed as `object` here (it may be any coordinator-like
-                # object, including test doubles), so these private resolver hooks
-                # are looked up dynamically instead of via direct attribute access.
-                position_fn = getattr(coord, "_connector_position_from_measurement", None)
-                if callable(position_fn):
+                # object, including test doubles), so this private resolver hook is
+                # looked up dynamically instead of via direct attribute access. Reusing
+                # the *same* resolver that builds the live power map means diagnostics
+                # can never disagree with the actual mapping outcome (#251).
+                resolve_fn = getattr(coord, "_resolve_highlevel_measurement", None)
+                if callable(resolve_fn):
                     with suppress(Exception):
-                        position = position_fn(meas)
-                uuid_fn = getattr(coord, "_connector_uuid_for_highlevel_measurement", None)
-                if callable(uuid_fn):
-                    with suppress(Exception):
-                        resolved_uuid = uuid_fn(meas)
+                        resolution = resolve_fn(meas)
+                        position = getattr(resolution, "position", None)
+                        resolved_uuid = getattr(resolution, "connector_uuid", None)
+                        resolution_method = getattr(resolution, "method", None)
+                        name_match_count = getattr(resolution, "name_match_count", 0)
 
             measurements_out.append(
                 {
@@ -390,8 +425,12 @@ def _power_mapping_info(coord: object | None) -> dict[str, Any]:
                     "type": "APPLIANCE",
                     **classification,
                     "name_present": bool(meas.get("name")),
+                    "name_shape": _redact_name_shape(meas.get("name")),
                     "position": position,
                     **_measurement_identifiers(meas),
+                    **_measurement_field_inventory(meas),
+                    "resolution_method": resolution_method,
+                    "name_match_count": name_match_count,
                     "resolved": resolved_uuid is not None,
                     "resolved_connector": aliases.get(resolved_uuid) if resolved_uuid else None,
                 }

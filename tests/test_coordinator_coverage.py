@@ -688,6 +688,83 @@ def test_station_highlevel_ignores_ambiguous_connector_and_uses_single_fallback(
     assert car_map["position"] is None
 
 
+def test_station_highlevel_connector_name_match_activates_after_dashboard_merge(hass):
+    """Regression test for #251's real multi-connector, multi-location case.
+
+    Reproduces the exact production sequence: (1) car-charger measurements
+    carry no identifiers and no recognizable position, so with 2 known
+    connectors neither the identifier nor the single-connector fallback
+    applies and the mapping stays completely empty (matches the real bug
+    reporter's ``topics: []``); (2) once ``ConnectorState.dashboard_device_name``
+    is populated (as `_merge_dashboard_station_details` does from the
+    charging-station-details REST call) and the highlevel mapping is rebuilt,
+    the name-based resolver matches both measurements to the correct
+    connector via an exact, unambiguous device-name match.
+    """
+    coord = _station_coordinator(hass)
+    topic = "servicelocation/control/power"
+    cfg = {
+        "measurements": [
+            {
+                "type": "APPLIANCE",
+                "category": "CAR_CHARGER",
+                "name": "Garage Charger",
+                "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
+            },
+            {
+                "type": "APPLIANCE",
+                "category": "CAR_CHARGER",
+                "name": "Driveway Charger",
+                "updateChannels": {"activePower": _channel(topic, "channelData", 3, 4, 5)},
+            },
+        ]
+    }
+
+    # Step 1: no identifiers, no matchable position, 2 connectors known, and
+    # dashboard_device_name not populated yet -> fully unresolved, no topic.
+    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs({200: cfg})
+    assert mapping is None
+    for meas in cfg["measurements"]:
+        resolution = coord._resolve_highlevel_measurement(meas)
+        assert resolution.method == "unresolved"
+        assert resolution.connector_uuid is None
+
+    # Step 2: Dashboard details merge populates device names per connector.
+    coord.data.connectors["conn-1"].dashboard_device_name = "Garage Charger"
+    coord.data.connectors["conn-2"].dashboard_device_name = "Driveway Charger"
+
+    # Step 3: rebuild the highlevel mapping -> name-based resolution kicks in.
+    resolution_1 = coord._resolve_highlevel_measurement(cfg["measurements"][0])
+    assert resolution_1.method == "name"
+    assert resolution_1.connector_uuid == "conn-1"
+    assert resolution_1.name_match_count == 1
+
+    resolution_2 = coord._resolve_highlevel_measurement(cfg["measurements"][1])
+    assert resolution_2.method == "name"
+    assert resolution_2.connector_uuid == "conn-2"
+
+    coord._power_index_maps_by_topic = (
+        coord._build_measurement_index_maps_by_topic_from_highlevel_configs({200: cfg})
+    )
+    cars = coord._power_index_maps_by_topic[topic]["cars"]
+    assert set(cars) == {"conn-1", "conn-2"}
+    assert cars["conn-1"]["power"] == [0, 1, 2]
+    assert cars["conn-2"]["power"] == [3, 4, 5]
+
+
+def test_station_highlevel_connector_name_match_rejects_ambiguous_duplicate_names(hass):
+    """An identical Dashboard device name on two connectors must not match."""
+    coord = _station_coordinator(hass)
+    coord.data.connectors["conn-1"].dashboard_device_name = "Charger"
+    coord.data.connectors["conn-2"].dashboard_device_name = "Charger"
+
+    resolution = coord._resolve_highlevel_measurement({"type": "APPLIANCE", "name": "Charger"})
+
+    assert resolution.method == "unresolved"
+    assert resolution.connector_uuid is None
+    assert resolution.name_match_count == 2
+
+
 @pytest.mark.asyncio
 async def test_station_power_index_map_cache_and_dashboard_loading(hass):
     coord = _station_coordinator(hass)

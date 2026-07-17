@@ -765,22 +765,25 @@ class TestDiagnostics:
 class _FakePowerCoord:
     """Minimal double exposing the *real* PowerMixin resolver methods.
 
-    Reusing the production `_connector_uuid_for_highlevel_measurement` and
-    `_connector_position_from_measurement` implementations (instead of
-    re-mocking their behaviour) keeps this regression test honest: it fails
-    if that resolver logic itself ever changes in a way that would affect
-    diagnostics output.
+    Reusing the production ``_resolve_highlevel_measurement`` implementation
+    (instead of re-mocking its behaviour) keeps this regression test honest:
+    it fails if that resolver logic itself ever changes in a way that would
+    affect diagnostics output.
     """
 
     _connector_position_from_measurement = staticmethod(
         PowerMixin._connector_position_from_measurement
     )
+    _normalize_device_name = staticmethod(PowerMixin._normalize_device_name)
     _connector_uuid_for_highlevel_measurement = PowerMixin._connector_uuid_for_highlevel_measurement
+    _resolve_highlevel_measurement = PowerMixin._resolve_highlevel_measurement
+    _connector_uuid_by_measurement_name = PowerMixin._connector_uuid_by_measurement_name
 
-    def __init__(self, connector_clients, highlevel_configs, power_index_maps_by_topic):
+    def __init__(self, connector_clients, highlevel_configs, power_index_maps_by_topic, data=None):
         self.connector_clients = connector_clients
         self._highlevel_configs = highlevel_configs
         self._power_index_maps_by_topic = power_index_maps_by_topic
+        self.data = data
 
 
 def test_power_mapping_info_reveals_discovery_power_classification_mismatch():
@@ -825,7 +828,11 @@ def test_power_mapping_info_reveals_discovery_power_classification_mismatch():
     # because `power_classification` is None for this measurement.
     assert meas_out["resolved"] is True
     assert meas_out["resolved_connector"] == "connector_1"
+    assert meas_out["resolution_method"] == "identifier"
     assert meas_out["name_present"] is True
+    assert meas_out["name_shape"] == "Aaaaaaa"
+    assert meas_out["measurement_keys"] == ["appliance", "category", "name", "type"]
+    assert meas_out["appliance_keys"] == ["type", "uuid"]
 
     # Privacy: no raw name, uuid, or free-text identifier ever leaks.
     serialized = json.dumps(info, sort_keys=True)
@@ -864,3 +871,64 @@ def test_power_mapping_info_mapping_cache_tri_state():
     assert topic["pv_present"] is False
     assert topic["car_mapping_count"] == 1
     assert topic["mapped_connectors"] == ["connector_1"]
+
+
+def test_power_mapping_info_surfaces_real_251_unresolved_and_name_match_cases():
+    """Regression test for the ACTUAL #251 bug reporter's multi-connector setup.
+
+    No identifiers, no recognizable position, and (before any Dashboard
+    device-name merge) no name match either -> diagnostics must show
+    `resolution_method: "unresolved"` for both, matching the observed
+    `car_mapping_count: 0` / `topics: []`. Once connector Dashboard device
+    names are known, the same shared resolver (reused by both the live power
+    map and diagnostics) surfaces `resolution_method: "name"` instead - never
+    a diverging outcome.
+    """
+    connector_clients = {
+        "connector-uuid-1": SimpleNamespace(connector_number=1),
+        "connector-uuid-2": SimpleNamespace(connector_number=2),
+    }
+    measurements = [
+        {"type": "APPLIANCE", "category": "CAR_CHARGER", "name": "Garage Charger"},
+        {"type": "APPLIANCE", "category": "CAR_CHARGER", "name": "Driveway Charger"},
+    ]
+
+    unresolved_coord = _FakePowerCoord(
+        connector_clients=connector_clients,
+        highlevel_configs={129827: {"measurements": measurements}},
+        power_index_maps_by_topic=None,
+        data=SimpleNamespace(
+            connectors={
+                "connector-uuid-1": SimpleNamespace(dashboard_device_name=None),
+                "connector-uuid-2": SimpleNamespace(dashboard_device_name=None),
+            }
+        ),
+    )
+    unresolved_info = _power_mapping_info(unresolved_coord)
+    assert unresolved_info["car_charger_measurement_count"] == 2
+    assert unresolved_info["mapping_cache_state"] == "not_initialized"
+    for meas_out in unresolved_info["measurements"]:
+        assert meas_out["resolved"] is False
+        assert meas_out["resolution_method"] == "unresolved"
+        assert meas_out["name_match_count"] == 0
+
+    resolved_coord = _FakePowerCoord(
+        connector_clients=connector_clients,
+        highlevel_configs={129827: {"measurements": measurements}},
+        power_index_maps_by_topic=None,
+        data=SimpleNamespace(
+            connectors={
+                "connector-uuid-1": SimpleNamespace(dashboard_device_name="Garage Charger"),
+                "connector-uuid-2": SimpleNamespace(dashboard_device_name="Driveway Charger"),
+            }
+        ),
+    )
+    resolved_info = _power_mapping_info(resolved_coord)
+    resolved_by_alias = {m["resolved_connector"]: m for m in resolved_info["measurements"]}
+    assert resolved_by_alias["connector_1"]["resolution_method"] == "name"
+    assert resolved_by_alias["connector_2"]["resolution_method"] == "name"
+
+    # Privacy: raw device names never leak, only shape/keys/method metadata.
+    serialized = json.dumps(resolved_info, sort_keys=True)
+    assert "Garage Charger" not in serialized
+    assert "Driveway Charger" not in serialized
