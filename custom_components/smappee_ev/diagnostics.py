@@ -6,6 +6,7 @@ Provides redacted runtime information for troubleshooting via HA UI.
 from __future__ import annotations
 
 from collections.abc import Sized
+from contextlib import suppress
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -238,6 +239,198 @@ def _mqtt_client_count(mqtt_by_site: object) -> int:
     return count
 
 
+def _classify_appliance_measurement(meas: dict[str, Any]) -> dict[str, Any]:
+    """Return both known classification outcomes for one highlevel measurement.
+
+    This is a read-only, side-effect-free re-implementation, used only for
+    observability (see issue #251). It intentionally mirrors two existing
+    code paths that disagree on precedence between `category` and
+    `appliance.type`:
+
+    - ``discovery_classification`` mirrors ``api.discovery._measurement_role``
+      (appliance.type wins whenever ``appliance`` is itself a dict).
+    - ``power_classification`` mirrors the inline classification currently
+      used in ``coordinators.power`` (measurement-level ``category`` wins).
+
+    A mismatch between the two is a strong signal that a car-charger
+    measurement is silently skipped while building the MQTT power index map.
+    """
+    category = meas.get("category")
+    appliance_raw = meas.get("appliance")
+    appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
+    appliance_type = appliance.get("type") if isinstance(appliance_raw, dict) else None
+
+    discovery_source = appliance.get("type") if isinstance(appliance_raw, dict) else category
+    discovery_classification = (
+        "car_charger" if str(discovery_source or "").upper() == "CAR_CHARGER" else None
+    )
+
+    power_category = str(category or appliance.get("type") or "").upper()
+    power_classification = "car_charger" if power_category == "CAR_CHARGER" else None
+
+    return {
+        "category": category,
+        "appliance_type": appliance_type,
+        "discovery_classification": discovery_classification,
+        "power_classification": power_classification,
+        "would_enter_power_car_branch": power_classification == "car_charger",
+    }
+
+
+def _measurement_identifiers(meas: dict[str, Any]) -> dict[str, Any]:
+    """Return redacted identifier fields present on one highlevel measurement.
+
+    Includes fields beyond the ones ``_connector_uuid_for_highlevel_measurement``
+    currently matches on, so a future/alternate identifier field (e.g. a
+    ``smartDeviceId`` instead of a ``smartDeviceUuid``) becomes visible instead
+    of silently resulting in an unresolved connector.
+    """
+    appliance_raw = meas.get("appliance")
+    appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
+
+    raw_fields = {
+        "uuid": meas.get("uuid"),
+        "smart_device_uuid": meas.get("smartDeviceUuid"),
+        "device_uuid": meas.get("deviceUuid"),
+        "smart_device_id": meas.get("smartDeviceId"),
+        "device_id": meas.get("deviceId"),
+        "appliance_uuid": appliance.get("uuid"),
+        "appliance_smart_device_uuid": appliance.get("smartDeviceUuid"),
+        "appliance_device_uuid": appliance.get("deviceUuid"),
+        "appliance_smart_device_id": appliance.get("smartDeviceId"),
+        "appliance_device_id": appliance.get("deviceId"),
+    }
+    return {
+        "identifiers": {key: _obfuscate(value) for key, value in raw_fields.items()},
+        "identifier_fields_present": [
+            key for key, value in raw_fields.items() if value not in (None, "")
+        ],
+    }
+
+
+def _connector_aliases(connector_clients: dict[str, Any]) -> dict[str, str]:
+    """Return a stable local alias (connector_1, connector_2, ...) per connector uuid."""
+
+    def _sort_key(item: tuple[str, Any]) -> tuple[bool, int, str]:
+        uuid, client = item
+        number = getattr(client, "connector_number", None)
+        return (number is None, number or 0, uuid)
+
+    ordered = sorted(connector_clients.items(), key=_sort_key)
+    return {uuid: f"connector_{index}" for index, (uuid, _client) in enumerate(ordered, start=1)}
+
+
+def _power_mapping_info(coord: object | None) -> dict[str, Any]:
+    """Return redacted diagnostics for the car-charger MQTT power mapping (#251).
+
+    Deliberately looks at every ``APPLIANCE`` measurement instead of reusing
+    the ``coordinators.power`` car-charger filter, so a classification
+    mismatch stays visible in diagnostics instead of being filtered out again
+    by the same logic that may be causing the bug.
+    """
+    if coord is None:
+        return {"available": False}
+
+    connector_clients = getattr(coord, "connector_clients", None)
+    if not isinstance(connector_clients, dict):
+        connector_clients = {}
+    aliases = _connector_aliases(connector_clients)
+
+    known_connectors = [
+        {
+            "alias": alias,
+            "connector_number": getattr(connector_clients[uuid], "connector_number", None),
+            "connector_uuid": _obfuscate(uuid),
+        }
+        for uuid, alias in aliases.items()
+    ]
+
+    highlevel_configs = getattr(coord, "_highlevel_configs", None)
+    if not isinstance(highlevel_configs, dict):
+        highlevel_configs = {}
+
+    measurements_out: list[dict[str, Any]] = []
+    car_charger_measurement_count = 0
+    index = 0
+    for cfg in highlevel_configs.values():
+        if not isinstance(cfg, dict):
+            continue
+        for meas in cfg.get("measurements") or []:
+            if not isinstance(meas, dict):
+                continue
+            if str(meas.get("type") or "").upper() != "APPLIANCE":
+                continue
+            index += 1
+            classification = _classify_appliance_measurement(meas)
+            if classification["discovery_classification"] == "car_charger":
+                car_charger_measurement_count += 1
+
+            is_candidate = (
+                classification["discovery_classification"] == "car_charger"
+                or classification["power_classification"] == "car_charger"
+            )
+            position: int | None = None
+            resolved_uuid: str | None = None
+            if is_candidate:
+                with suppress(Exception):
+                    position = coord._connector_position_from_measurement(meas)
+                with suppress(Exception):
+                    resolved_uuid = coord._connector_uuid_for_highlevel_measurement(meas)
+
+            measurements_out.append(
+                {
+                    "measurement_index": index,
+                    "type": "APPLIANCE",
+                    **classification,
+                    "name_present": bool(meas.get("name")),
+                    "position": position,
+                    **_measurement_identifiers(meas),
+                    "resolved": resolved_uuid is not None,
+                    "resolved_connector": aliases.get(resolved_uuid) if resolved_uuid else None,
+                }
+            )
+
+    idx_maps = getattr(coord, "_power_index_maps_by_topic", None)
+    if idx_maps is None:
+        mapping_cache_state = "not_initialized"
+        idx_maps = {}
+    elif isinstance(idx_maps, dict):
+        mapping_cache_state = "mapped" if idx_maps else "empty"
+    else:
+        mapping_cache_state = "not_initialized"
+        idx_maps = {}
+
+    topics_out: list[dict[str, Any]] = []
+    car_mapping_count = 0
+    for topic, topic_map in idx_maps.items():
+        if not isinstance(topic_map, dict):
+            continue
+        cars = topic_map.get("cars") or {}
+        grid = topic_map.get("grid") or {}
+        pv = topic_map.get("pv") or {}
+        car_mapping_count += len(cars)
+        topics_out.append(
+            {
+                "topic": _obfuscate(topic, keep=18),
+                "grid_present": bool(any((grid or {}).values())),
+                "pv_present": bool(any((pv or {}).values())),
+                "car_mapping_count": len(cars),
+                "mapped_connectors": sorted(aliases.get(uuid, _obfuscate(uuid)) for uuid in cars),
+            }
+        )
+
+    return {
+        "available": True,
+        "mapping_cache_state": mapping_cache_state,
+        "known_connector_count": len(connector_clients),
+        "known_connectors": known_connectors,
+        "car_charger_measurement_count": car_charger_measurement_count,
+        "car_mapping_count": car_mapping_count,
+        "measurements": measurements_out,
+        "topics": topics_out,
+    }
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: SmappeeEvConfigEntry
 ) -> dict[str, Any]:
@@ -350,6 +543,7 @@ async def async_get_config_entry_diagnostics(
                     "last_mqtt_rx": getattr(st, "last_mqtt_rx", None) if st else None,
                     "connector_client_count": len(connector_clients),
                     "connector_state_count": len((data.connectors or {}) if data else {}),
+                    "power_mapping": _power_mapping_info(coord),
                 }
             )
             state_by_uuid = (data.connectors or {}) if data else {}

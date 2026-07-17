@@ -888,6 +888,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
     _attr_translation_key = "charging_state"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [
+        "initialize",
         "started",
         "suspended",
         "stopped",

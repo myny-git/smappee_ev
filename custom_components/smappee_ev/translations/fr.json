@@ -348,6 +348,7 @@
       "charging_state": {
         "name": "État de charge",
         "state": {
+          "initialize": "Initialisation",
           "started": "Démarré",
           "suspended": "Suspendu",
           "stopped": "Arrêté"

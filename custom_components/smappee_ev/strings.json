@@ -351,6 +351,7 @@
       "charging_state": {
         "name": "Charging state",
         "state": {
+          "initialize": "Initializing",
           "started": "Started",
           "suspended": "Suspended",
           "stopped": "Stopped"

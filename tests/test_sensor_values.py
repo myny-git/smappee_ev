@@ -135,7 +135,10 @@ def test_station_phase_total_sensors_include_phase_attributes():
         (ConnectorPowerSensor, 7200.0),
         (ConnectorCurrentASensor, 24.0),
         (ConnEnergyImport, 15.25),
-        (SmappeeChargingStateSensor, "charging"),
+        # "Started" (not "Charging") is used here: "Charging" is a real EVSE-status
+        # value (see SmappeeEvseStatusSensor below) but is not a documented
+        # chargingState/session_state value, see docs/HA_integration.md and #251.
+        (SmappeeChargingStateSensor, "started"),
         (SmappeeEVCCStateSensor, "B"),
         (SmappeeEvseStatusSensor, "c1"),
     ],
@@ -147,7 +150,7 @@ def test_connector_sensor_native_values(sensor_cls, expected):
             current_phases=[7, 8, 9],
             power_total=7200,
             energy_import_kwh=15.25,
-            session_state="Charging",
+            session_state="Started",
             evcc_state="B",
             status_current="C1",
         )
@@ -156,6 +159,40 @@ def test_connector_sensor_native_values(sensor_cls, expected):
     entity = sensor_cls(coordinator, _api(), 42, "station-uuid", "conn-1")
 
     assert entity.native_value == expected
+
+
+@pytest.mark.parametrize(
+    ("raw_session_state", "expected"),
+    [
+        ("Initialize", "initialize"),
+        ("Started", "started"),
+        ("Suspended", "suspended"),
+        ("Stopped", "stopped"),
+    ],
+)
+def test_charging_state_supports_documented_session_states(raw_session_state, expected):
+    """Regression test for #251: charging_state must accept every documented value.
+
+    ConnectorState.session_state defaults to "Initialize" until the first API
+    fetch completes, so this value must always be a supported ENUM option or
+    Home Assistant raises a ValueError when writing the entity state.
+    """
+    coordinator = _coordinator(
+        connector=ConnectorState(connector_number=1, session_state=raw_session_state)
+    )
+    entity = SmappeeChargingStateSensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+
+    assert entity.native_value == expected
+    assert entity.native_value in entity.options
+
+
+def test_charging_state_default_connector_state_is_supported():
+    """A brand-new ConnectorState() (before any API fetch) must not crash the sensor."""
+    coordinator = _coordinator(connector=ConnectorState(connector_number=1))
+    entity = SmappeeChargingStateSensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+
+    assert entity.native_value == "initialize"
+    assert entity.native_value in entity.options
 
 
 def test_connector_current_total_returns_none_for_invalid_phase_value():

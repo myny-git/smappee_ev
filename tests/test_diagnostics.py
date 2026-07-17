@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from custom_components.smappee_ev.coordinators.power import PowerMixin
 from custom_components.smappee_ev.diagnostics import (
     REDACT_KEYS,
     _dashboard_info,
@@ -13,6 +14,7 @@ from custom_components.smappee_ev.diagnostics import (
     _mqtt_client_count,
     _mqtt_info,
     _obfuscate,
+    _power_mapping_info,
     _redact_nested_text_values,
     _redact_text_values,
     _safe_len,
@@ -284,6 +286,11 @@ class TestDiagnostics:
         assert station["mqtt_connected"] is True
         assert station["connector_client_count"] == 2
         assert station["connector_state_count"] == 2
+        # A plain MagicMock coordinator (no real _highlevel_configs/connector_clients)
+        # must degrade to safe defaults instead of raising.
+        assert station["power_mapping"]["available"] is True
+        assert station["power_mapping"]["mapping_cache_state"] == "not_initialized"
+        assert station["power_mapping"]["measurements"] == []
 
         # Check connectors
         assert len(diagnostics["connectors"]) == 2
@@ -753,3 +760,107 @@ class TestDiagnostics:
             "CONNECTOR_DASH_DATACLASS_SECRET_6666",
         ):
             assert secret not in serialized
+
+
+class _FakePowerCoord:
+    """Minimal double exposing the *real* PowerMixin resolver methods.
+
+    Reusing the production `_connector_uuid_for_highlevel_measurement` and
+    `_connector_position_from_measurement` implementations (instead of
+    re-mocking their behaviour) keeps this regression test honest: it fails
+    if that resolver logic itself ever changes in a way that would affect
+    diagnostics output.
+    """
+
+    _connector_position_from_measurement = staticmethod(
+        PowerMixin._connector_position_from_measurement
+    )
+    _connector_uuid_for_highlevel_measurement = PowerMixin._connector_uuid_for_highlevel_measurement
+
+    def __init__(self, connector_clients, highlevel_configs, power_index_maps_by_topic):
+        self.connector_clients = connector_clients
+        self._highlevel_configs = highlevel_configs
+        self._power_index_maps_by_topic = power_index_maps_by_topic
+
+
+def test_power_mapping_info_reveals_discovery_power_classification_mismatch():
+    """Regression test for #251.
+
+    A car-charger measurement whose `category` is not "CAR_CHARGER" but whose
+    `appliance.type` is must still show up as a car-charger measurement in
+    diagnostics (`discovery_classification`), even though the current
+    `coordinators.power` inline classification (`power_classification`) skips
+    it - proving the MQTT power index map is never populated for this
+    measurement because of the classification precedence mismatch, not
+    because the connector-uuid resolver fails.
+    """
+    connector_clients = {"connector-uuid-1": SimpleNamespace(connector_number=1)}
+    measurement = {
+        "type": "APPLIANCE",
+        "category": "ELECTRICITY",
+        "name": "Wallbox",
+        "appliance": {"type": "CAR_CHARGER", "uuid": "connector-uuid-1"},
+    }
+    coord = _FakePowerCoord(
+        connector_clients=connector_clients,
+        highlevel_configs={12345: {"measurements": [measurement]}},
+        power_index_maps_by_topic=None,
+    )
+
+    info = _power_mapping_info(coord)
+
+    assert info["available"] is True
+    assert info["mapping_cache_state"] == "not_initialized"
+    assert info["known_connector_count"] == 1
+    assert info["known_connectors"] == [
+        {"alias": "connector_1", "connector_number": 1, "connector_uuid": "conn...id-1"}
+    ]
+    assert info["car_charger_measurement_count"] == 1
+
+    (meas_out,) = info["measurements"]
+    assert meas_out["discovery_classification"] == "car_charger"
+    assert meas_out["power_classification"] is None
+    assert meas_out["would_enter_power_car_branch"] is False
+    # The resolver itself works fine - it is never reached in production
+    # because `power_classification` is None for this measurement.
+    assert meas_out["resolved"] is True
+    assert meas_out["resolved_connector"] == "connector_1"
+    assert meas_out["name_present"] is True
+
+    # Privacy: no raw name, uuid, or free-text identifier ever leaks.
+    serialized = json.dumps(info, sort_keys=True)
+    assert "Wallbox" not in serialized
+    assert "connector-uuid-1" not in serialized
+
+
+def test_power_mapping_info_mapping_cache_tri_state():
+    """`mapping_cache_state` must distinguish not-yet-built from built-but-empty."""
+    assert _power_mapping_info(None) == {"available": False}
+
+    not_initialized = _FakePowerCoord({}, {}, None)
+    assert _power_mapping_info(not_initialized)["mapping_cache_state"] == "not_initialized"
+
+    empty = _FakePowerCoord({}, {}, {})
+    empty_info = _power_mapping_info(empty)
+    assert empty_info["mapping_cache_state"] == "empty"
+    assert empty_info["car_mapping_count"] == 0
+
+    mapped = _FakePowerCoord(
+        connector_clients={"connector-uuid-1": SimpleNamespace(connector_number=1)},
+        highlevel_configs={},
+        power_index_maps_by_topic={
+            "servicelocation/SITE_UUID_123456/power": {
+                "grid": {"power": [0], "current": [], "cons": [], "energy": []},
+                "pv": {"power": [], "current": [], "cons": [], "energy": []},
+                "cars": {"connector-uuid-1": {"position": 1, "serial": None}},
+            }
+        },
+    )
+    mapped_info = _power_mapping_info(mapped)
+    assert mapped_info["mapping_cache_state"] == "mapped"
+    assert mapped_info["car_mapping_count"] == 1
+    (topic,) = mapped_info["topics"]
+    assert topic["grid_present"] is True
+    assert topic["pv_present"] is False
+    assert topic["car_mapping_count"] == 1
+    assert topic["mapped_connectors"] == ["connector_1"]
