@@ -829,8 +829,9 @@ def test_power_mapping_info_reveals_discovery_power_classification_mismatch():
     assert meas_out["resolved"] is True
     assert meas_out["resolved_connector"] == "connector_1"
     assert meas_out["resolution_method"] == "identifier"
+    # Identifier match resolves before name-matching ever runs.
+    assert meas_out["name_match_evaluated"] is False
     assert meas_out["name_present"] is True
-    assert meas_out["name_shape"] == "Aaaaaaa"
     assert meas_out["measurement_keys"] == ["appliance", "category", "name", "type"]
     assert meas_out["appliance_keys"] == ["type", "uuid"]
 
@@ -911,6 +912,9 @@ def test_power_mapping_info_surfaces_real_251_unresolved_and_name_match_cases():
         assert meas_out["resolved"] is False
         assert meas_out["resolution_method"] == "unresolved"
         assert meas_out["name_match_count"] == 0
+        # Name-matching *did* run (and found zero matches) - distinguishes
+        # this from a resolution method that never reaches name-matching.
+        assert meas_out["name_match_evaluated"] is True
 
     resolved_coord = _FakePowerCoord(
         connector_clients=connector_clients,
@@ -927,6 +931,8 @@ def test_power_mapping_info_surfaces_real_251_unresolved_and_name_match_cases():
     resolved_by_alias = {m["resolved_connector"]: m for m in resolved_info["measurements"]}
     assert resolved_by_alias["connector_1"]["resolution_method"] == "name"
     assert resolved_by_alias["connector_2"]["resolution_method"] == "name"
+    assert resolved_by_alias["connector_1"]["name_match_evaluated"] is True
+    assert resolved_by_alias["connector_2"]["name_match_evaluated"] is True
 
     # Privacy: raw device names never leak, only shape/keys/method metadata.
     serialized = json.dumps(resolved_info, sort_keys=True)

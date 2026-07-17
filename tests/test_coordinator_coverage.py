@@ -390,17 +390,19 @@ def test_site_power_mapping_matrix_handles_phase_shapes(
         highlevel_configs={},
     )
     coord.data = SiteData(site=SiteState())
-    coord._power_index_maps_by_topic = coord._build_measurement_index_maps_by_topic_from_highlevel({
-        "measurements": [
-            {
-                "type": "GRID",
-                "updateChannels": {
-                    "activePower": _channel(topic, "channelData", *indexes),
-                    "current": _channel(topic, "currentData", *indexes),
-                },
-            }
-        ]
-    })
+    coord._power_index_maps_by_topic = coord._build_measurement_index_maps_by_topic_from_highlevel(
+        {
+            "measurements": [
+                {
+                    "type": "GRID",
+                    "updateChannels": {
+                        "activePower": _channel(topic, "channelData", *indexes),
+                        "current": _channel(topic, "currentData", *indexes),
+                    },
+                }
+            ]
+        }
+    )
 
     assert coord._handle_power(topic, payload) is True
 
@@ -423,16 +425,18 @@ def test_site_power_mapping_empty_arrays_zero_fill_existing_state(hass):
         highlevel_configs={},
     )
     coord.data = SiteData(site=SiteState(grid_power_total=999, grid_power_phases=[9, 9, 9]))
-    coord._power_index_maps_by_topic = coord._build_measurement_index_maps_by_topic_from_highlevel({
-        "measurements": [
-            {
-                "type": "GRID",
-                "updateChannels": {
-                    "activePower": _channel(topic, "channelData", 0, 1, 2),
-                },
-            }
-        ]
-    })
+    coord._power_index_maps_by_topic = coord._build_measurement_index_maps_by_topic_from_highlevel(
+        {
+            "measurements": [
+                {
+                    "type": "GRID",
+                    "updateChannels": {
+                        "activePower": _channel(topic, "channelData", 0, 1, 2),
+                    },
+                }
+            ]
+        }
+    )
 
     assert coord._handle_power(topic, {"channelData": []}) is True
     assert coord.data.site.grid_power_total == 0
@@ -453,24 +457,26 @@ def test_site_power_index_map_empty_or_invalid_highlevel_config_is_safe(hass):
     coord.data = SiteData(site=SiteState(grid_power_total=123))
 
     assert coord._build_measurement_index_maps_by_topic_from_highlevel_configs({}) is None
-    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs({
-        100: {
-            "measurements": [
-                "bad",
-                {"type": "GRID", "updateChannels": "bad"},
-                {
-                    "type": "GRID",
-                    "updateChannels": {
-                        "activePower": {
-                            "protocol": "MQTT",
-                            "name": "servicelocation/site/power",
-                            "aspectPaths": [{"path": "$.wrong"}],
-                        }
+    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+        {
+            100: {
+                "measurements": [
+                    "bad",
+                    {"type": "GRID", "updateChannels": "bad"},
+                    {
+                        "type": "GRID",
+                        "updateChannels": {
+                            "activePower": {
+                                "protocol": "MQTT",
+                                "name": "servicelocation/site/power",
+                                "aspectPaths": [{"path": "$.wrong"}],
+                            }
+                        },
                     },
-                },
-            ]
+                ]
+            }
         }
-    })
+    )
     assert mapping["servicelocation/site/power"]["grid"]["power"] == []
     coord._power_index_maps_by_topic = mapping
     assert coord._handle_power("servicelocation/site/power", {"channelData": [999]}) is False
@@ -544,36 +550,38 @@ def test_station_shared_topic_merges_grid_pv_and_connector_without_overwrite(has
     coord = _station_coordinator(hass)
     topic = "servicelocation/shared/power"
     coord._power_index_maps_by_topic = (
-        coord._build_measurement_index_maps_by_topic_from_highlevel_configs({
-            100: {
-                "measurements": [
-                    {
-                        "type": "GRID",
-                        "updateChannels": {
-                            "activePower": _channel(topic, "channelData", 0, 1, 2),
+        coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+            {
+                100: {
+                    "measurements": [
+                        {
+                            "type": "GRID",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "channelData", 0, 1, 2),
+                            },
+                        }
+                    ]
+                },
+                200: {
+                    "measurements": [
+                        {
+                            "type": "PRODUCTION",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "channelData", 3, 4, 5),
+                            },
                         },
-                    }
-                ]
-            },
-            200: {
-                "measurements": [
-                    {
-                        "type": "PRODUCTION",
-                        "updateChannels": {
-                            "activePower": _channel(topic, "channelData", 3, 4, 5),
+                        {
+                            "type": "APPLIANCE",
+                            "category": "CAR_CHARGER",
+                            "name": "EV Wall - 1",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "activePowerData", 0, 1, 2),
+                            },
                         },
-                    },
-                    {
-                        "type": "APPLIANCE",
-                        "category": "CAR_CHARGER",
-                        "name": "EV Wall - 1",
-                        "updateChannels": {
-                            "activePower": _channel(topic, "activePowerData", 0, 1, 2),
-                        },
-                    },
-                ]
-            },
-        })
+                    ]
+                },
+            }
+        )
     )
 
     changed = coord._handle_power(
@@ -597,22 +605,24 @@ def test_station_power_payload_missing_current_and_energy_arrays_zero_fills_safe
     coord.data.connectors["conn-1"].current_phases = [1.0, 2.0, 3.0]
     coord.data.connectors["conn-1"].energy_import_kwh = 12.3
     coord._power_index_maps_by_topic = (
-        coord._build_measurement_index_maps_by_topic_from_highlevel_configs({
-            200: {
-                "measurements": [
-                    {
-                        "type": "APPLIANCE",
-                        "category": "CAR_CHARGER",
-                        "name": "EV Wall - 1",
-                        "updateChannels": {
-                            "activePower": _channel(topic, "activePowerData", 0, 1, 2),
-                            "current": _channel(topic, "currentData", 0, 1, 2),
-                            "meterReadings": _channel(topic, "importActiveEnergyData", 0, 1, 2),
-                        },
-                    }
-                ]
+        coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+            {
+                200: {
+                    "measurements": [
+                        {
+                            "type": "APPLIANCE",
+                            "category": "CAR_CHARGER",
+                            "name": "EV Wall - 1",
+                            "updateChannels": {
+                                "activePower": _channel(topic, "activePowerData", 0, 1, 2),
+                                "current": _channel(topic, "currentData", 0, 1, 2),
+                                "meterReadings": _channel(topic, "importActiveEnergyData", 0, 1, 2),
+                            },
+                        }
+                    ]
+                }
             }
-        })
+        )
     )
 
     assert coord._handle_power(topic, {"activePowerData": [100, 200, 300]}) is True
@@ -626,20 +636,22 @@ def test_station_power_payload_missing_current_and_energy_arrays_zero_fills_safe
 def test_station_highlevel_ignores_ambiguous_connector_and_uses_single_fallback(hass):
     coord = _station_coordinator(hass)
     topic = "servicelocation/control/power"
-    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs({
-        200: {
-            "measurements": [
-                "bad",
-                {"type": "APPLIANCE", "category": "CAR_CHARGER", "updateChannels": "bad"},
-                {
-                    "type": "APPLIANCE",
-                    "category": "CAR_CHARGER",
-                    "name": "EV Wall",
-                    "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
-                },
-            ]
+    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs(
+        {
+            200: {
+                "measurements": [
+                    "bad",
+                    {"type": "APPLIANCE", "category": "CAR_CHARGER", "updateChannels": "bad"},
+                    {
+                        "type": "APPLIANCE",
+                        "category": "CAR_CHARGER",
+                        "name": "EV Wall",
+                        "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
+                    },
+                ]
+            }
         }
-    })
+    )
 
     assert mapping is None
 
@@ -656,18 +668,20 @@ def test_station_highlevel_ignores_ambiguous_connector_and_uses_single_fallback(
         connectors={"sole-connector": ConnectorState(connector_number=1)},
     )
 
-    mapping = coord_one._build_measurement_index_maps_by_topic_from_highlevel_configs({
-        200: {
-            "measurements": [
-                {
-                    "type": "APPLIANCE",
-                    "category": "CAR_CHARGER",
-                    "name": "EV Wall",
-                    "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
-                }
-            ]
+    mapping = coord_one._build_measurement_index_maps_by_topic_from_highlevel_configs(
+        {
+            200: {
+                "measurements": [
+                    {
+                        "type": "APPLIANCE",
+                        "category": "CAR_CHARGER",
+                        "name": "EV Wall",
+                        "updateChannels": {"activePower": _channel(topic, "channelData", 0, 1, 2)},
+                    }
+                ]
+            }
         }
-    })
+    )
 
     car_map = mapping[topic]["cars"]["sole-connector"]
     assert car_map["power"] == [0, 1, 2]

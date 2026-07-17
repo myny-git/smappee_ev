@@ -35,6 +35,7 @@ class ConnectorMeasurementResolution:
     method: str
     position: int | None = None
     name_match_count: int = 0
+    name_match_evaluated: bool = False
 
 
 _MQTT_PATH_RE = re.compile(r"\$\.([A-Za-z0-9_]+)\[(\d+)\]")
@@ -302,16 +303,28 @@ class PowerMixin(CoordinatorMixin):
         """Resolve a Dashboard highlevel APPLIANCE measurement to a connector.
 
         Tried in order: (1) a direct identifier match (uuid/smartDeviceUuid/
-        deviceUuid on the measurement or its nested ``appliance``), (2) a
-        position/connector-number match, (3) an exact, unambiguous match
+        deviceUuid on the measurement or its nested ``appliance``), (2) an
+        explicit position/connector-number field on the measurement
+        (``method="explicit_position"``) or, failing that, a trailing number
+        parsed from the measurement ``name``
+        (``method="name_trailing_position"``), (3) an exact, unambiguous match
         between the measurement's ``name`` and a known connector's Dashboard
         device name (``ConnectorState.dashboard_device_name``, populated from
         the charging-station-details REST call), (4) a single-connector
         fallback. Returns ``method="unresolved"`` if none apply (#251: this is
         the case observed for multi-location setups where neither identifiers
         nor a recognizable position are present on the measurement).
+
+        ``name_match_count``/``name_match_evaluated`` are only meaningful once
+        the name-matching strategy actually ran (i.e. neither an identifier
+        nor a position match resolved the measurement); when it never ran,
+        ``name_match_evaluated`` stays ``False`` so a count of ``0`` can't be
+        misread as "no connector has this name" for diagnostics purposes.
         """
-        position = self._connector_position_from_measurement(meas)
+        explicit_position = self._explicit_position_from_measurement(meas)
+        position = explicit_position
+        if position is None:
+            position = self._name_trailing_position_from_measurement(meas)
 
         direct_values = [
             meas.get("uuid"),
@@ -320,11 +333,13 @@ class PowerMixin(CoordinatorMixin):
         ]
         appliance = meas.get("appliance")
         if isinstance(appliance, dict):
-            direct_values.extend([
-                appliance.get("uuid"),
-                appliance.get("smartDeviceUuid"),
-                appliance.get("deviceUuid"),
-            ])
+            direct_values.extend(
+                [
+                    appliance.get("uuid"),
+                    appliance.get("smartDeviceUuid"),
+                    appliance.get("deviceUuid"),
+                ]
+            )
         for value in direct_values:
             text = str(value).strip() if value is not None else ""
             if text and text in self.connector_clients:
@@ -333,18 +348,31 @@ class PowerMixin(CoordinatorMixin):
         if position is not None:
             for uuid, client in self.connector_clients.items():
                 if getattr(client, "connector_number", None) == position:
-                    return ConnectorMeasurementResolution(uuid, "position", position)
+                    method = (
+                        "explicit_position"
+                        if explicit_position is not None
+                        else "name_trailing_position"
+                    )
+                    return ConnectorMeasurementResolution(uuid, method, position)
 
         name_uuid, name_match_count = self._connector_uuid_by_measurement_name(meas)
         if name_uuid is not None:
-            return ConnectorMeasurementResolution(name_uuid, "name", position, name_match_count)
+            return ConnectorMeasurementResolution(
+                name_uuid, "name", position, name_match_count, name_match_evaluated=True
+            )
 
         if len(self.connector_clients) == 1:
             return ConnectorMeasurementResolution(
-                next(iter(self.connector_clients)), "single_connector", position, name_match_count
+                next(iter(self.connector_clients)),
+                "single_connector",
+                position,
+                name_match_count,
+                name_match_evaluated=True,
             )
 
-        return ConnectorMeasurementResolution(None, "unresolved", position, name_match_count)
+        return ConnectorMeasurementResolution(
+            None, "unresolved", position, name_match_count, name_match_evaluated=True
+        )
 
     def _connector_uuid_by_measurement_name(self, meas: DashboardObject) -> tuple[str | None, int]:
         """Match a measurement's ``name`` to exactly one connector's Dashboard device name.
@@ -379,18 +407,32 @@ class PowerMixin(CoordinatorMixin):
         return text or None
 
     @staticmethod
-    def _connector_position_from_measurement(meas: DashboardObject) -> int | None:
+    def _explicit_position_from_measurement(meas: DashboardObject) -> int | None:
+        """Return the connector position from an explicit measurement field, if present."""
         for key in ("position", "connectorNumber"):
             value = meas.get(key)
             if value is not None:
                 with suppress(TypeError, ValueError):
                     return int(value)
+        return None
+
+    @staticmethod
+    def _name_trailing_position_from_measurement(meas: DashboardObject) -> int | None:
+        """Return the connector position parsed from a trailing number in the ``name``."""
         name = str(meas.get("name") or "")
         match = re.search(r"(?:^|\s-\s|\s)(\d+)\s*$", name)
         if match:
             with suppress(TypeError, ValueError):
                 return int(match.group(1))
         return None
+
+    @staticmethod
+    def _connector_position_from_measurement(meas: DashboardObject) -> int | None:
+        """Return the connector position, preferring an explicit field over the name."""
+        position = PowerMixin._explicit_position_from_measurement(meas)
+        if position is not None:
+            return position
+        return PowerMixin._name_trailing_position_from_measurement(meas)
 
     def _handle_power(self, topic: str, payload: dict) -> bool:
         data = self.data
