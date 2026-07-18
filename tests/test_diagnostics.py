@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinators.power import PowerMixin
 from custom_components.smappee_ev.diagnostics import (
     REDACT_KEYS,
@@ -126,19 +127,37 @@ def mock_runtime_data():
                         control_location_id=12345,
                         station_uuid="station-uuid-1",
                         coordinator=coordinator,
-                        station_client=MagicMock(serial_id="STATION001"),
+                        station_client=SmappeeDeviceHandle(
+                            serial="STATION001",
+                            smart_device_uuid="station-uuid-1",
+                            smart_device_id="station-device-1",
+                            service_location_id=12345,
+                            is_station=True,
+                        ),
                         connectors={
                             "connector-uuid-1": make_connector_runtime(
                                 connector_key="connector-uuid-1",
                                 connector_uuid="connector-uuid-1",
                                 connector_position=1,
-                                connector_client=MagicMock(),
+                                connector_client=SmappeeDeviceHandle(
+                                    serial="STATION001",
+                                    smart_device_uuid="connector-uuid-1",
+                                    smart_device_id="connector-device-1",
+                                    service_location_id=12345,
+                                    connector_number=1,
+                                ),
                             ),
                             "connector-uuid-2": make_connector_runtime(
                                 connector_key="connector-uuid-2",
                                 connector_uuid="connector-uuid-2",
                                 connector_position=2,
-                                connector_client=MagicMock(),
+                                connector_client=SmappeeDeviceHandle(
+                                    serial="STATION001",
+                                    smart_device_uuid="connector-uuid-2",
+                                    smart_device_id="connector-device-2",
+                                    service_location_id=12345,
+                                    connector_number=2,
+                                ),
                             ),
                         },
                     )
@@ -149,34 +168,30 @@ def mock_runtime_data():
     )
 
     # Configure coordinator data
-    station_data = MagicMock()
-    station_data.mqtt_connected = True
-    station_data.led_brightness = 50
-    station_data.grid_power_total = 1000
-    station_data.pv_power_total = 2000
-    station_data.house_consumption_power = 500
-    station_data.last_mqtt_rx = 1634567890
-
-    connector1_data = MagicMock()
-    connector1_data.connector_number = 1
-    connector1_data.available = True
-    connector1_data.session_state = "AVAILABLE"
-    connector1_data.power_total = 0
-
-    connector2_data = MagicMock()
-    connector2_data.connector_number = 2
-    connector2_data.available = True
-    connector2_data.session_state = "CHARGING"
-    connector2_data.power_total = 7200
-
-    coordinator_data = MagicMock()
-    coordinator_data.station = station_data
-    coordinator_data.connectors = {
-        "connector-uuid-1": connector1_data,
-        "connector-uuid-2": connector2_data,
-    }
-
-    coordinator.data = coordinator_data
+    coordinator.data = IntegrationData(
+        station=StationState(
+            mqtt_connected=True,
+            led_brightness=50,
+            grid_power_total=1000,
+            pv_power_total=2000,
+            house_consumption_power=500,
+            last_mqtt_rx=1634567890,
+        ),
+        connectors={
+            "connector-uuid-1": ConnectorState(
+                connector_number=1,
+                available=True,
+                session_state="AVAILABLE",
+                power_total=0,
+            ),
+            "connector-uuid-2": ConnectorState(
+                connector_number=2,
+                available=True,
+                session_state="CHARGING",
+                power_total=7200,
+            ),
+        },
+    )
 
     return runtime
 
