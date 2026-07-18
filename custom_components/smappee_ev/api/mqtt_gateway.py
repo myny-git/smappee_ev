@@ -87,6 +87,7 @@ class SmappeeMqtt:
         self._runner_task: asyncio.Task | None = None
         self._track_task: asyncio.Task | None = None
         self._mqtt_was_connected: bool | None = None
+        self._routing_diagnostics: object | None = None
 
     # ---------- helpers ----------
 

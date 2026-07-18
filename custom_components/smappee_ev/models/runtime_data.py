@@ -14,6 +14,7 @@ from .state import HighLevelConfigMap
 if TYPE_CHECKING:
     from ..api.device_handle import SmappeeDeviceHandle
     from ..coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
+    from ..mqtt_setup import MqttRoutingDiagnostics
 
 type MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
 
@@ -89,6 +90,7 @@ class RuntimeData:
     mqtt: dict[int, MqttRuntimeValue]
     dashboard: object | None = None
     background_tasks: set[asyncio.Task] = field(default_factory=set)
+    mqtt_diagnostics: dict[int, list[MqttRoutingDiagnostics]] = field(default_factory=dict)
     shutdown_task: asyncio.Task[None] | None = None
 
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from inspect import isawaitable
 import logging
+import time
 from typing import cast
 
 from .api.discovery import MqttChannelSpec
@@ -70,6 +71,76 @@ class MqttFreshnessState:
             self.last_real_site_power_rx = now
         if real_charger:
             self.last_real_charger_rx = now
+
+
+@dataclass(frozen=True, slots=True)
+class MqttRouteDiagnosticTarget:
+    """Identity-only snapshot of one configured MQTT route target."""
+
+    target_type: str
+    coordinator_id: int
+    station_key: str | None = None
+
+
+@dataclass(slots=True)
+class MqttRoutingDiagnostics:
+    """Runtime counters and route snapshots exposed through HA diagnostics."""
+
+    site_location_id: int | str
+    control_location_ids: tuple[int, ...]
+    site_coordinator_id: int | None
+    station_coordinator_ids: dict[str, int]
+    configured_routes: dict[str, list[MqttRouteDiagnosticTarget]] = field(default_factory=dict)
+    observed_routes: dict[str, list[MqttRouteDiagnosticTarget]] = field(default_factory=dict)
+    client_count: int = 0
+    started: bool = False
+    messages_received: int = 0
+    heartbeat_messages: int = 0
+    routed_messages: int = 0
+    unrouted_messages: int = 0
+    target_deliveries: int = 0
+    delivery_failures: int = 0
+    messages_received_by_topic: dict[str, int] = field(default_factory=dict)
+    last_message_rx: float | None = None
+    last_routed_rx: float | None = None
+    last_unrouted_rx: float | None = None
+
+
+def _diagnostic_targets(
+    targets: list[MqttRouteTarget],
+    site_coordinator: SmappeeSiteCoordinator | None,
+    stations: dict[str, SmappeeStationRuntime],
+) -> list[MqttRouteDiagnosticTarget]:
+    """Describe route targets without retaining coordinator objects."""
+    station_keys_by_id = {
+        id(bucket.station_coordinator): station_key
+        for station_key, bucket in stations.items()
+        if bucket.station_coordinator is not None
+    }
+    described: list[MqttRouteDiagnosticTarget] = []
+    for target in targets:
+        target_id = id(target)
+        station_key = station_keys_by_id.get(target_id)
+        described.append(
+            MqttRouteDiagnosticTarget(
+                target_type="site" if target is site_coordinator else "station",
+                coordinator_id=target_id,
+                station_key=station_key,
+            )
+        )
+    return described
+
+
+def _diagnostic_control_location_ids(
+    stations: dict[str, SmappeeStationRuntime],
+) -> tuple[int, ...]:
+    """Return control ids when available on complete or partial runtime buckets."""
+    control_ids: set[int] = set()
+    for bucket in stations.values():
+        control_id = getattr(bucket, "control_location_id", None)
+        if isinstance(control_id, int):
+            control_ids.add(control_id)
+    return tuple(sorted(control_ids))
 
 
 def _build_mqtt_routes(
@@ -258,6 +329,16 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         return None
 
     freshness = MqttFreshnessState()
+    routing_diagnostics = MqttRoutingDiagnostics(
+        site_location_id=sid,
+        control_location_ids=_diagnostic_control_location_ids(stations),
+        site_coordinator_id=id(site_coordinator) if site_coordinator is not None else None,
+        station_coordinator_ids={
+            station_key: id(bucket.station_coordinator)
+            for station_key, bucket in stations.items()
+            if bucket.station_coordinator is not None
+        },
+    )
 
     def _sync_freshness() -> None:
         if site_coordinator is not None:
@@ -274,7 +355,14 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
             coord.last_heartbeat_rx = freshness.last_heartbeat_rx
 
     def _on_props(topic: str, payload: MqttPayload) -> None:
+        now = time.time()
+        routing_diagnostics.messages_received += 1
+        routing_diagnostics.messages_received_by_topic[topic] = (
+            routing_diagnostics.messages_received_by_topic.get(topic, 0) + 1
+        )
+        routing_diagnostics.last_message_rx = now
         if topic.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
+            routing_diagnostics.heartbeat_messages += 1
             freshness.record_message(topic)
             _sync_freshness()
             return
@@ -288,6 +376,16 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                 for bucket in stations.values()
                 if bucket.station_coordinator is not None
             )
+        routing_diagnostics.observed_routes[topic] = _diagnostic_targets(
+            targets, site_coordinator, stations
+        )
+        if targets:
+            routing_diagnostics.routed_messages += 1
+            routing_diagnostics.target_deliveries += len(targets)
+            routing_diagnostics.last_routed_rx = now
+        else:
+            routing_diagnostics.unrouted_messages += 1
+            routing_diagnostics.last_unrouted_rx = now
         station_coordinator_ids = {
             id(bucket.station_coordinator)
             for bucket in stations.values()
@@ -308,6 +406,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                 try:
                     coord.apply_mqtt_properties(topic, payload)
                 except Exception:
+                    routing_diagnostics.delivery_failures += 1
                     _LOGGER.exception("Failed to apply MQTT properties from %s", topic)
 
     refresh_tasks: dict[int, asyncio.Task] = {}
@@ -354,6 +453,10 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         return _on_conn
 
     mqtt_routes = _build_mqtt_routes(mqtt_specs, site_coordinator, stations)
+    routing_diagnostics.configured_routes = {
+        topic: _diagnostic_targets(targets, site_coordinator, stations)
+        for topic, targets in mqtt_routes.items()
+    }
 
     mqtt_clients = _build_mqtt_clients(
         suuid=suuid,
@@ -366,6 +469,9 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         on_connection_change_factory=_connection_callback,
     )
     freshness.clients_connected.update(dict.fromkeys(range(len(mqtt_clients)), False))
+    routing_diagnostics.client_count = len(mqtt_clients)
+    for mqtt_client in mqtt_clients:
+        mqtt_client._routing_diagnostics = routing_diagnostics
     _sync_freshness()
     # MQTT starts disconnected. Keep the REST safety net active from the outset,
     # without scheduling a redundant refresh after the required first refresh.
@@ -387,7 +493,23 @@ def _start_mqtt_clients(hass, value: MqttRuntimeValue) -> None:
     """Start prepared MQTT clients after topology commit."""
     for mqtt in _iter_mqtt_clients(value):
         mqtt_client = cast(SmappeeMqtt, mqtt)
+        diagnostics = getattr(mqtt_client, "_routing_diagnostics", None)
+        if isinstance(diagnostics, MqttRoutingDiagnostics):
+            diagnostics.started = True
         mqtt_client.track_start_task(hass.async_create_task(mqtt_client.start()))
+
+
+def _mqtt_routing_diagnostics(value: MqttRuntimeValue) -> list[MqttRoutingDiagnostics]:
+    """Return distinct routing diagnostic states attached to MQTT clients."""
+    states: list[MqttRoutingDiagnostics] = []
+    seen: set[int] = set()
+    for mqtt in _iter_mqtt_clients(value):
+        state = getattr(mqtt, "_routing_diagnostics", None)
+        if not isinstance(state, MqttRoutingDiagnostics) or id(state) in seen:
+            continue
+        seen.add(id(state))
+        states.append(state)
+    return states
 
 
 def _iter_mqtt_clients(value: object) -> list[object]:

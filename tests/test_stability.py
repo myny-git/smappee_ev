@@ -21,6 +21,7 @@ from custom_components.smappee_ev.models.state import (
 from custom_components.smappee_ev.mqtt_setup import (
     MqttFreshnessState,
     _handle_mqtt_connection_change,
+    _mqtt_routing_diagnostics,
     _setup_mqtt,
 )
 from custom_components.smappee_ev.runtime_assembly import _create_coordinators
@@ -277,6 +278,20 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
             assert coordinator.last_heartbeat_rx > charger_rx
             on_properties("servicelocation/x/power", {"activePowerData": [1]})
             assert coordinator.last_real_power_rx > coordinator.last_heartbeat_rx
+
+        (routing,) = _mqtt_routing_diagnostics(mqtt_runtime)
+        assert routing.started is True
+        assert routing.messages_received == 3
+        assert routing.heartbeat_messages == 1
+        assert routing.routed_messages == 2
+        assert routing.unrouted_messages == 0
+        assert routing.target_deliveries == 2
+        assert routing.delivery_failures == 0
+        assert routing.messages_received_by_topic["servicelocation/x/power"] == 1
+        assert set(routing.observed_routes) == {
+            "servicelocation/x/etc/carcharger/acchargingcontroller/v1/devices/y/state",
+            "servicelocation/x/power",
+        }
 
         # Ten heartbeat-only minutes never disabled the slow REST safety net.
         assert coordinator.update_interval == timedelta(seconds=60)

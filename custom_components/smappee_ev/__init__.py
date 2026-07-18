@@ -32,7 +32,7 @@ from .models.runtime_data import (
     SmappeeSiteRuntime,
     SmappeeStationRuntime,
 )
-from .mqtt_setup import _start_mqtt_clients
+from .mqtt_setup import MqttRoutingDiagnostics, _mqtt_routing_diagnostics, _start_mqtt_clients
 from .runtime_assembly import _log_stored_runtime_shape, _prepare_topology
 from .runtime_devices import _current_station_device_identifiers, _register_runtime_devices
 from .runtime_lifecycle import (
@@ -173,6 +173,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
     sites: dict[int, SmappeeSiteRuntime] = {}
     mqtt_clients: dict[int, MqttRuntimeValue] = {}
+    mqtt_diagnostics: dict[int, list[MqttRoutingDiagnostics]] = {}
     background_tasks: set[asyncio.Task] = set()
 
     # 2) Prepare each site in parallel
@@ -206,6 +207,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
                 continue
             stations_map, mqtt = res
             sid = topology.site_location_id
+            mqtt_diagnostics.setdefault(sid, []).extend(_mqtt_routing_diagnostics(mqtt))
             if mqtt:
                 mqtt_clients[sid] = mqtt
             if not stations_map:
@@ -255,6 +257,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
                 mqtt=mqtt_clients,
                 dashboard=dashboard_client,
                 background_tasks=background_tasks,
+                mqtt_diagnostics=mqtt_diagnostics,
             )
         )
         raise
@@ -266,6 +269,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         mqtt=mqtt_clients,
         dashboard=dashboard_client,
         background_tasks=background_tasks,
+        mqtt_diagnostics=mqtt_diagnostics,
     )
     entry.runtime_data = runtime
     _register_runtime_stop_cleanup(hass, entry, runtime)

@@ -14,6 +14,7 @@ from custom_components.smappee_ev.diagnostics import (
     _handle_info,
     _mqtt_client_count,
     _mqtt_info,
+    _mqtt_routing_info,
     _obfuscate,
     _power_mapping_info,
     _redact_nested_text_values,
@@ -23,6 +24,10 @@ from custom_components.smappee_ev.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
+from custom_components.smappee_ev.mqtt_setup import (
+    MqttRouteDiagnosticTarget,
+    MqttRoutingDiagnostics,
+)
 from tests.factories import (
     make_config_entry,
     make_connector_runtime,
@@ -965,3 +970,84 @@ def test_power_mapping_info_surfaces_real_251_unresolved_and_name_match_cases():
     serialized = json.dumps(resolved_info, sort_keys=True)
     assert "Garage Charger" not in serialized
     assert "Driveway Charger" not in serialized
+
+
+def test_mqtt_routing_info_exposes_duplicate_partial_and_replaced_setups():
+    """Routing diagnostics must make the multi-location coordinator split visible."""
+    current_a = MagicMock()
+    current_b = MagicMock()
+    replaced_a = MagicMock()
+    current_site = MagicMock()
+    replaced_site = MagicMock()
+    site = SimpleNamespace(
+        site_coordinator=current_site,
+        stations={
+            "station-secret-a": SimpleNamespace(station_coordinator=current_a),
+            "station-secret-b": SimpleNamespace(station_coordinator=current_b),
+        },
+    )
+    topic = "servicelocation/PRIVATE-TOPIC-UUID/power"
+    active_partial = MqttRoutingDiagnostics(
+        site_location_id=12345,
+        control_location_ids=(12345,),
+        site_coordinator_id=id(current_site),
+        station_coordinator_ids={"station-secret-a": id(current_a)},
+        configured_routes={
+            topic: [MqttRouteDiagnosticTarget("station", id(current_a), "station-secret-a")]
+        },
+        client_count=1,
+        started=True,
+        messages_received=12,
+        routed_messages=10,
+        heartbeat_messages=2,
+        target_deliveries=10,
+        messages_received_by_topic={topic: 10},
+    )
+    discarded_full = MqttRoutingDiagnostics(
+        site_location_id=12345,
+        control_location_ids=(12345, 12346),
+        site_coordinator_id=id(replaced_site),
+        station_coordinator_ids={
+            "station-secret-a": id(replaced_a),
+            "station-secret-b": id(current_b),
+        },
+        configured_routes={
+            topic: [
+                MqttRouteDiagnosticTarget("station", id(replaced_a), "station-secret-a"),
+                MqttRouteDiagnosticTarget("station", id(current_b), "station-secret-b"),
+            ]
+        },
+        client_count=2,
+        started=False,
+    )
+
+    info = _mqtt_routing_info([active_partial, discarded_full], site)
+
+    assert info["setup_count"] == 2
+    assert info["started_setup_count"] == 1
+    assert info["duplicate_setup_detected"] is True
+    first, second = info["setups"]
+    assert first["missing_runtime_station_count"] == 1
+    assert first["runtime_stations"] == [
+        {
+            "station_alias": "station_1",
+            "captured_by_setup": True,
+            "coordinator_status": "current",
+        },
+        {
+            "station_alias": "station_2",
+            "captured_by_setup": False,
+            "coordinator_status": "not_captured",
+        },
+    ]
+    assert first["traffic"]["messages_received"] == 12
+    assert first["configured_routes"][0]["messages_received"] == 10
+    assert second["orphaned_station_target_count"] == 1
+    assert second["site_coordinator_in_final_runtime"] is False
+    targets = second["configured_routes"][0]["targets"]
+    assert [target["runtime_status"] for target in targets] == ["replaced", "current"]
+
+    serialized = json.dumps(info, sort_keys=True)
+    assert "station-secret-a" not in serialized
+    assert "station-secret-b" not in serialized
+    assert "PRIVATE-TOPIC-UUID" not in serialized

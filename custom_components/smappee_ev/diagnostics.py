@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry, SmappeeStationRuntime
+from .mqtt_setup import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics, _mqtt_routing_diagnostics
 
 REDACT_KEYS = {
     "access_token",
@@ -237,6 +238,165 @@ def _mqtt_client_count(mqtt_by_site: object) -> int:
         elif value is not None:
             count += 1
     return count
+
+
+def _routing_target_info(
+    target: MqttRouteDiagnosticTarget,
+    *,
+    station_aliases: dict[str, str],
+    current_station_ids: dict[str, int],
+    current_site_id: int | None,
+) -> dict[str, Any]:
+    """Describe whether a captured route target belongs to the final runtime."""
+    if target.target_type == "site":
+        status = "current" if target.coordinator_id == current_site_id else "replaced"
+        return {
+            "target_type": "site",
+            "runtime_status": status,
+            "target_in_final_runtime": status == "current",
+        }
+
+    station_key = target.station_key
+    current_id = current_station_ids.get(station_key) if station_key is not None else None
+    if current_id is None:
+        status = "missing"
+    elif current_id == target.coordinator_id:
+        status = "current"
+    else:
+        status = "replaced"
+    return {
+        "target_type": "station",
+        "station_alias": station_aliases.get(station_key) if station_key else None,
+        "runtime_status": status,
+        "target_in_final_runtime": status == "current",
+    }
+
+
+def _routing_topics_info(
+    routes: dict[str, list[MqttRouteDiagnosticTarget]],
+    *,
+    message_counts: dict[str, int],
+    station_aliases: dict[str, str],
+    current_station_ids: dict[str, int],
+    current_site_id: int | None,
+) -> list[dict[str, Any]]:
+    """Return redacted route topics and final-runtime membership details."""
+    return [
+        {
+            "topic": _obfuscate(topic, keep=18),
+            "messages_received": message_counts.get(topic, 0),
+            "target_count": len(targets),
+            "targets": [
+                _routing_target_info(
+                    target,
+                    station_aliases=station_aliases,
+                    current_station_ids=current_station_ids,
+                    current_site_id=current_site_id,
+                )
+                for target in targets
+            ],
+        }
+        for topic, targets in sorted(routes.items())
+    ]
+
+
+def _mqtt_routing_info(
+    states: list[MqttRoutingDiagnostics],
+    site: object,
+) -> dict[str, Any]:
+    """Return route snapshots and counters for every setup attempted for one site."""
+    stations = getattr(site, "stations", {}) or {}
+    station_aliases = {
+        station_key: f"station_{index}"
+        for index, station_key in enumerate(sorted(stations, key=_sort_as_text), start=1)
+    }
+    current_station_ids = {
+        station_key: id(bucket.station_coordinator)
+        for station_key, bucket in stations.items()
+        if bucket.station_coordinator is not None
+    }
+    site_coordinator = getattr(site, "site_coordinator", None)
+    current_site_id = id(site_coordinator) if site_coordinator is not None else None
+
+    setups: list[dict[str, Any]] = []
+    for index, state in enumerate(states, start=1):
+        captured_station_keys = set(state.station_coordinator_ids)
+        runtime_stations = []
+        for station_key, alias in station_aliases.items():
+            captured_id = state.station_coordinator_ids.get(station_key)
+            current_id = current_station_ids.get(station_key)
+            if captured_id is None:
+                status = "not_captured"
+            elif captured_id == current_id:
+                status = "current"
+            else:
+                status = "replaced"
+            runtime_stations.append(
+                {
+                    "station_alias": alias,
+                    "captured_by_setup": captured_id is not None,
+                    "coordinator_status": status,
+                }
+            )
+
+        orphaned_station_targets = sum(
+            1
+            for station_key, coordinator_id in state.station_coordinator_ids.items()
+            if current_station_ids.get(station_key) != coordinator_id
+        )
+        setups.append(
+            {
+                "setup_index": index,
+                "started": state.started,
+                "client_count": state.client_count,
+                "control_location_count": len(state.control_location_ids),
+                "captured_station_count": len(captured_station_keys),
+                "final_runtime_station_count": len(current_station_ids),
+                "missing_runtime_station_count": len(
+                    set(current_station_ids) - captured_station_keys
+                ),
+                "orphaned_station_target_count": orphaned_station_targets,
+                "site_coordinator_in_final_runtime": (
+                    state.site_coordinator_id is not None
+                    and state.site_coordinator_id == current_site_id
+                ),
+                "runtime_stations": runtime_stations,
+                "configured_routes": _routing_topics_info(
+                    state.configured_routes,
+                    message_counts=state.messages_received_by_topic,
+                    station_aliases=station_aliases,
+                    current_station_ids=current_station_ids,
+                    current_site_id=current_site_id,
+                ),
+                "observed_routes": _routing_topics_info(
+                    state.observed_routes,
+                    message_counts=state.messages_received_by_topic,
+                    station_aliases=station_aliases,
+                    current_station_ids=current_station_ids,
+                    current_site_id=current_site_id,
+                ),
+                "traffic": {
+                    "messages_received": state.messages_received,
+                    "observed_topic_count": len(state.messages_received_by_topic),
+                    "heartbeat_messages": state.heartbeat_messages,
+                    "routed_messages": state.routed_messages,
+                    "unrouted_messages": state.unrouted_messages,
+                    "target_deliveries": state.target_deliveries,
+                    "delivery_failures": state.delivery_failures,
+                    "last_message_rx": state.last_message_rx,
+                    "last_routed_rx": state.last_routed_rx,
+                    "last_unrouted_rx": state.last_unrouted_rx,
+                },
+            }
+        )
+
+    return {
+        "available": bool(states),
+        "setup_count": len(states),
+        "started_setup_count": sum(state.started for state in states),
+        "duplicate_setup_detected": len(states) > 1,
+        "setups": setups,
+    }
 
 
 def _classify_appliance_measurement(meas: dict[str, Any]) -> dict[str, Any]:
@@ -642,6 +802,9 @@ async def async_get_config_entry_diagnostics(
         stations = site.stations
         # Defensive: RuntimeData.mqtt may contain one or more SmappeeMqtt clients per site.
         mqtt_obj = rt.mqtt.get(site_id) if rt else None
+        routing_states = list(getattr(rt, "mqtt_diagnostics", {}).get(site_id, [])) if rt else []
+        if not routing_states:
+            routing_states = _mqtt_routing_diagnostics(mqtt_obj)
         site_alias = site_aliases.get(site_id, _obfuscate(site_id))
         # Aggregate counts
         station_count = len(stations)
@@ -667,6 +830,7 @@ async def async_get_config_entry_diagnostics(
                 "mqtt_configured": mqtt_obj is not None,
                 "mqtt_connected_any": mqtt_connected_any,
                 "mqtt": _mqtt_info(mqtt_obj, sensitive_values),
+                "mqtt_routing": _mqtt_routing_info(routing_states, site),
             }
         )
         # per-station and connectors inside same site loop
