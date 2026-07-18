@@ -232,7 +232,7 @@ class TestDiagnostics:
         assert "dashboard" in diagnostics
 
         # Check sites list
-        assert diagnostics["sites"] == [12345]
+        assert diagnostics["sites"] == ["site_1"]
 
         # Verify sensitive data is redacted
         for key in REDACT_KEYS:
@@ -263,7 +263,9 @@ class TestDiagnostics:
         # Check site details
         assert len(diagnostics["sites_detail"]) == 1
         site_detail = diagnostics["sites_detail"][0]
-        assert site_detail["service_location_id"] == 12345
+        assert site_detail["site_alias"] == "site_1"
+        # Raw numeric service-location id must never appear verbatim (#251 follow-up).
+        assert site_detail["service_location_id"] == "1***5"
         assert site_detail["name_present"] is True
         assert site_detail["uuid"] == "test...uuid"
         assert site_detail["serial"] == "SERI...L123"
@@ -312,6 +314,10 @@ class TestDiagnostics:
         assert len(available_connectors) >= 1
         available = available_connectors[0]
         assert available["power_total"] == 0
+
+        # Privacy: the raw numeric service-location id must never leak (#251 follow-up).
+        serialized = json.dumps(diagnostics, sort_keys=True)
+        assert "12345" not in serialized
 
     @pytest.mark.asyncio
     async def test_diagnostics_with_empty_runtime(self, hass):
@@ -888,8 +894,8 @@ def test_power_mapping_info_surfaces_real_251_unresolved_and_name_match_cases():
     `resolution_method: "unresolved"` for both, matching the observed
     `car_mapping_count: 0` / `topics: []`. Once connector Dashboard device
     names are known, the same shared resolver (reused by both the live power
-    map and diagnostics) surfaces `resolution_method: "name"` instead - never
-    a diverging outcome.
+    map and diagnostics) surfaces `resolution_method: "unique_dashboard_name"`
+    instead - never a diverging outcome.
     """
     connector_clients = {
         "connector-uuid-1": SimpleNamespace(connector_number=1),
@@ -935,8 +941,8 @@ def test_power_mapping_info_surfaces_real_251_unresolved_and_name_match_cases():
     )
     resolved_info = _power_mapping_info(resolved_coord)
     resolved_by_alias = {m["resolved_connector"]: m for m in resolved_info["measurements"]}
-    assert resolved_by_alias["connector_1"]["resolution_method"] == "name"
-    assert resolved_by_alias["connector_2"]["resolution_method"] == "name"
+    assert resolved_by_alias["connector_1"]["resolution_method"] == "unique_dashboard_name"
+    assert resolved_by_alias["connector_2"]["resolution_method"] == "unique_dashboard_name"
     assert resolved_by_alias["connector_1"]["name_match_evaluated"] is True
     assert resolved_by_alias["connector_2"]["name_match_evaluated"] is True
 

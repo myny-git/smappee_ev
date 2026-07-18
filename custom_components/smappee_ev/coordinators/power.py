@@ -310,10 +310,13 @@ class PowerMixin(CoordinatorMixin):
         (``method="name_trailing_position"``), (3) an exact, unambiguous match
         between the measurement's ``name`` and a known connector's Dashboard
         device name (``ConnectorState.dashboard_device_name``, populated from
-        the charging-station-details REST call), (4) a single-connector
-        fallback. Returns ``method="unresolved"`` if none apply (#251: this is
-        the case observed for multi-location setups where neither identifiers
-        nor a recognizable position are present on the measurement).
+        the charging-station-details REST call) - ``method="unique_dashboard_name"``,
+        named for the safety condition that matters: not just an exact string
+        match, but that exactly *one* connector candidate has that name - (4) a
+        single-connector fallback. Returns ``method="unresolved"`` if none apply
+        (#251: this is the case observed for multi-location setups where
+        neither identifiers nor a recognizable position are present on the
+        measurement).
 
         ``name_match_count``/``name_match_evaluated`` are only meaningful once
         the name-matching strategy actually ran (i.e. neither an identifier
@@ -358,7 +361,11 @@ class PowerMixin(CoordinatorMixin):
         name_uuid, name_match_count = self._connector_uuid_by_measurement_name(meas)
         if name_uuid is not None:
             return ConnectorMeasurementResolution(
-                name_uuid, "name", position, name_match_count, name_match_evaluated=True
+                name_uuid,
+                "unique_dashboard_name",
+                position,
+                name_match_count,
+                name_match_evaluated=True,
             )
 
         if len(self.connector_clients) == 1:

@@ -735,12 +735,12 @@ def test_station_highlevel_connector_name_match_activates_after_dashboard_merge(
 
     # Step 3: rebuild the highlevel mapping -> name-based resolution kicks in.
     resolution_1 = coord._resolve_highlevel_measurement(cfg["measurements"][0])
-    assert resolution_1.method == "name"
+    assert resolution_1.method == "unique_dashboard_name"
     assert resolution_1.connector_uuid == "conn-1"
     assert resolution_1.name_match_count == 1
 
     resolution_2 = coord._resolve_highlevel_measurement(cfg["measurements"][1])
-    assert resolution_2.method == "name"
+    assert resolution_2.method == "unique_dashboard_name"
     assert resolution_2.connector_uuid == "conn-2"
 
     coord._power_index_maps_by_topic = (
@@ -763,6 +763,98 @@ def test_station_highlevel_connector_name_match_rejects_ambiguous_duplicate_name
     assert resolution.method == "unresolved"
     assert resolution.connector_uuid is None
     assert resolution.name_match_count == 2
+
+
+def test_station_full_production_chain_two_connectors_dashboard_name_resolution(hass):
+    """End-to-end regression test for #251 through the *real* production chain.
+
+    Reproduces the exact real-world fixture shape reported by the bug
+    reporter: 2 ``ConnectorState``s with Dashboard device names populated (as
+    `_merge_dashboard_station_details` does), 2 highlevel APPLIANCE
+    measurements carrying only a matching ``name`` - no uuid/smartDeviceUuid/
+    deviceUuid, no explicit position/connectorNumber field, and no trailing
+    number in the name - and connector 2 additionally using a non-sequential
+    phase-label order for its ``current`` channel (aspectPaths listed
+    B, C, A instead of A, B, C, as seen on some real Smappee accounts).
+
+    Drives the whole thing through the exact live code path: the highlevel
+    config is fed into
+    ``_build_measurement_index_maps_by_topic_from_highlevel`` (which calls the
+    shared resolver and writes the resolved channel indexes into
+    ``topic_map["cars"]``), the resulting map is applied to an actual MQTT
+    payload via ``_handle_power``, and the resulting per-connector
+    power/current/energy values are asserted - so this test would fail if
+    *any* step of the real chain regressed, not just the resolver in
+    isolation.
+    """
+    coord = _station_coordinator(hass)
+    coord.data.connectors["conn-1"].dashboard_device_name = "Garage Charger"
+    coord.data.connectors["conn-2"].dashboard_device_name = "Driveway Charger"
+
+    topic = "servicelocation/control/power"
+    cfg = {
+        "measurements": [
+            {
+                "type": "APPLIANCE",
+                "category": "CAR_CHARGER",
+                "name": "Garage Charger",
+                "updateChannels": {
+                    "activePower": _channel(topic, "channelData", 0, 1, 2),
+                    "current": _channel(topic, "currentData", 0, 1, 2),
+                    "meterReadings": _channel(topic, "importActiveEnergyData", 0, 1, 2),
+                },
+            },
+            {
+                "type": "APPLIANCE",
+                "category": "CAR_CHARGER",
+                "name": "Driveway Charger",
+                "updateChannels": {
+                    "activePower": _channel(topic, "channelData", 3, 4, 5),
+                    # Real-world phase-label order mismatch: B, C, A instead of A, B, C.
+                    "current": _channel(topic, "currentData", 4, 5, 3),
+                    "meterReadings": _channel(topic, "importActiveEnergyData", 3, 4, 5),
+                },
+            },
+        ]
+    }
+
+    # No identifiers, no explicit/trailing position on either measurement -> only
+    # the unique-Dashboard-name resolver strategy can resolve these.
+    for meas in cfg["measurements"]:
+        resolution = coord._resolve_highlevel_measurement(meas)
+        assert resolution.method == "unique_dashboard_name"
+        assert resolution.name_match_count == 1
+
+    mapping = coord._build_measurement_index_maps_by_topic_from_highlevel_configs({200: cfg})
+    cars = mapping[topic]["cars"]
+    assert set(cars) == {"conn-1", "conn-2"}
+    assert cars["conn-1"]["power"] == [0, 1, 2]
+    assert cars["conn-2"]["power"] == [3, 4, 5]
+    # Channel indexes are written in the exact (mismatched) aspectPath order.
+    assert cars["conn-2"]["current"] == [4, 5, 3]
+
+    coord._power_index_maps_by_topic = mapping
+
+    payload = {
+        "channelData": [500, 510, 520, 700, 710, 720],
+        "currentData": [111, 112, 113, 3333, 1111, 2222],
+        "importActiveEnergyData": [5000, 5000, 5000, 8000, 8000, 8000],
+    }
+    assert coord._handle_power(topic, payload) is True
+
+    conn1 = coord.data.connectors["conn-1"]
+    conn2 = coord.data.connectors["conn-2"]
+
+    assert conn1.power_phases == [500, 510, 520]
+    assert conn1.power_total == 1530
+    assert conn1.current_phases == [0.111, 0.112, 0.113]
+    assert conn1.energy_import_kwh == 5.0
+
+    assert conn2.power_phases == [700, 710, 720]
+    assert conn2.power_total == 2130
+    # Picked in the exact order the (mismatched) aspectPaths declared: idx 4, 5, 3.
+    assert conn2.current_phases == [1.111, 2.222, 3.333]
+    assert conn2.energy_import_kwh == 8.0
 
 
 @pytest.mark.asyncio

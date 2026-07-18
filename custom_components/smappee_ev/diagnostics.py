@@ -153,7 +153,7 @@ def _handle_info(client: object | None) -> dict[str, Any]:
     if client is None:
         return {}
     return {
-        "service_location_id": getattr(client, "service_location_id", None),
+        "service_location_id": _obfuscate(getattr(client, "service_location_id", None)),
         "serial": _obfuscate(getattr(client, "serial", None)),
         "serial_id": _obfuscate(getattr(client, "serial_id", None)),
         "charging_station_serial": _obfuscate(getattr(client, "charging_station_serial", None)),
@@ -184,14 +184,14 @@ def _mqtt_info(
     return {
         "configured": True,
         "service_location_uuid": _obfuscate(getattr(mqtt_obj, "_slu", None)),
-        "service_location_id": getattr(mqtt_obj, "_slu_id", None),
+        "service_location_id": _obfuscate(getattr(mqtt_obj, "_slu_id", None)),
         "client_id": _obfuscate(getattr(mqtt_obj, "_client_id", None)),
         "serial_number": _obfuscate(getattr(mqtt_obj, "_serial", None)),
         "spec_count": _safe_len(specs),
         "service_location_uuids": [_obfuscate(slu) for slu in getattr(mqtt_obj, "_slus", ()) or ()],
         "specs": [
             {
-                "service_location_id": getattr(spec, "service_location_id", None),
+                "service_location_id": _obfuscate(getattr(spec, "service_location_id", None)),
                 "role": getattr(spec, "role", None),
                 "metric": getattr(spec, "metric", None),
                 "topic": _obfuscate(getattr(spec, "topic", None), keep=18),
@@ -300,11 +300,16 @@ def _measurement_identifiers(meas: dict[str, Any]) -> dict[str, Any]:
         "appliance_smart_device_id": appliance.get("smartDeviceId"),
         "appliance_device_id": appliance.get("deviceId"),
     }
+    identifier_fields_present = [
+        key for key, value in raw_fields.items() if value not in (None, "")
+    ]
     return {
         "identifiers": {key: _obfuscate(value) for key, value in raw_fields.items()},
-        "identifier_fields_present": [
-            key for key, value in raw_fields.items() if value not in (None, "")
-        ],
+        "identifier_fields_present": identifier_fields_present,
+        # Explicit summary flag so a reader doesn't have to scan the (mostly
+        # null) `identifiers` dict just to know whether ANY direct identifier
+        # was present on this measurement.
+        "direct_identifier_available": bool(identifier_fields_present),
     }
 
 
@@ -336,6 +341,179 @@ def _connector_aliases(connector_clients: dict[str, Any]) -> dict[str, str]:
     return {uuid: f"connector_{index}" for index, (uuid, _client) in enumerate(ordered, start=1)}
 
 
+def _site_aliases(sites: dict[Any, Any]) -> dict[Any, str]:
+    """Return a stable local alias (site_1, site_2, ...) per service-location id.
+
+    Service-location/site ids are otherwise stable, low-entropy numeric
+    identifiers that are fully identifying for a specific Smappee account
+    when shared verbatim in a public GitHub issue - so diagnostics should
+    never expose them raw (#251 follow-up).
+    """
+    ordered = sorted(sites.keys(), key=_sort_as_text)
+    return {site_id: f"site_{index}" for index, site_id in enumerate(ordered, start=1)}
+
+
+def _resolve_measurement_for_diagnostics(coord: object, meas: dict[str, Any]) -> dict[str, Any]:
+    """Resolve position/connector info for one candidate measurement via the live resolver.
+
+    These private resolver hooks are looked up dynamically (``coord`` may be
+    any coordinator-like object, including test doubles) instead of via direct
+    attribute access. Reusing the *same* resolver that builds the live power
+    map means diagnostics can never disagree with the actual mapping outcome
+    (#251).
+    """
+    info: dict[str, Any] = {
+        "explicit_position": None,
+        "name_trailing_position": None,
+        "effective_position": None,
+        "resolved_uuid": None,
+        "resolution_method": None,
+        "name_match_count": 0,
+        "name_match_evaluated": False,
+    }
+    explicit_fn = getattr(coord, "_explicit_position_from_measurement", None)
+    if callable(explicit_fn):
+        with suppress(Exception):
+            info["explicit_position"] = explicit_fn(meas)
+    trailing_fn = getattr(coord, "_name_trailing_position_from_measurement", None)
+    if callable(trailing_fn):
+        with suppress(Exception):
+            info["name_trailing_position"] = trailing_fn(meas)
+
+    resolve_fn = getattr(coord, "_resolve_highlevel_measurement", None)
+    if callable(resolve_fn):
+        with suppress(Exception):
+            resolution = resolve_fn(meas)
+            info["effective_position"] = getattr(resolution, "position", None)
+            info["resolved_uuid"] = getattr(resolution, "connector_uuid", None)
+            info["resolution_method"] = getattr(resolution, "method", None)
+            info["name_match_count"] = getattr(resolution, "name_match_count", 0)
+            info["name_match_evaluated"] = getattr(resolution, "name_match_evaluated", False)
+    return info
+
+
+def _build_power_mapping_measurements(
+    coord: object,
+    highlevel_configs: dict[Any, Any],
+    aliases: dict[str, str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build the per-measurement diagnostics list and its summary counters.
+
+    Split out of ``_power_mapping_info`` purely to keep cyclomatic complexity
+    manageable; behavior is unchanged.
+    """
+    measurements_out: list[dict[str, Any]] = []
+    car_charger_measurement_count = 0
+    candidate_count = 0
+    resolved_count = 0
+    ambiguous_name_count = 0
+    classification_mismatch_count = 0
+    resolution_method_counts: dict[str, int] = {}
+    index = 0
+    for cfg in highlevel_configs.values():
+        if not isinstance(cfg, dict):
+            continue
+        for meas in cfg.get("measurements") or []:
+            if not isinstance(meas, dict):
+                continue
+            if str(meas.get("type") or "").upper() != "APPLIANCE":
+                continue
+            index += 1
+            classification = _classify_appliance_measurement(meas)
+            if classification["discovery_classification"] == "car_charger":
+                car_charger_measurement_count += 1
+                if not classification["would_enter_power_car_branch"]:
+                    classification_mismatch_count += 1
+
+            is_candidate = (
+                classification["discovery_classification"] == "car_charger"
+                or classification["power_classification"] == "car_charger"
+            )
+            if is_candidate:
+                resolution_info = _resolve_measurement_for_diagnostics(coord, meas)
+                candidate_count += 1
+                if resolution_info["resolved_uuid"] is not None:
+                    resolved_count += 1
+                if (
+                    resolution_info["name_match_evaluated"]
+                    and resolution_info["name_match_count"] > 1
+                ):
+                    ambiguous_name_count += 1
+                method = resolution_info["resolution_method"]
+                if method:
+                    resolution_method_counts[method] = resolution_method_counts.get(method, 0) + 1
+            else:
+                resolution_info = {
+                    "explicit_position": None,
+                    "name_trailing_position": None,
+                    "effective_position": None,
+                    "resolved_uuid": None,
+                    "resolution_method": None,
+                    "name_match_count": 0,
+                    "name_match_evaluated": False,
+                }
+
+            resolved_uuid = resolution_info["resolved_uuid"]
+            measurements_out.append(
+                {
+                    "measurement_index": index,
+                    "type": "APPLIANCE",
+                    **classification,
+                    "name_present": bool(meas.get("name")),
+                    "explicit_position": resolution_info["explicit_position"],
+                    "name_trailing_position": resolution_info["name_trailing_position"],
+                    "effective_position": resolution_info["effective_position"],
+                    **_measurement_identifiers(meas),
+                    **_measurement_field_inventory(meas),
+                    "resolution_method": resolution_info["resolution_method"],
+                    "name_match_count": resolution_info["name_match_count"],
+                    "name_match_evaluated": resolution_info["name_match_evaluated"],
+                    "resolved": resolved_uuid is not None,
+                    "resolved_connector": aliases.get(resolved_uuid) if resolved_uuid else None,
+                }
+            )
+
+    summary = {
+        "car_charger_measurement_count": car_charger_measurement_count,
+        "mapping_summary": {
+            "resolution_method_counts": resolution_method_counts,
+            "resolved_measurement_count": resolved_count,
+            "unresolved_measurement_count": candidate_count - resolved_count,
+            "ambiguous_name_measurement_count": ambiguous_name_count,
+            "classification_mismatch_count": classification_mismatch_count,
+        },
+    }
+    return measurements_out, summary
+
+
+def _build_power_mapping_topics(
+    idx_maps: dict[str, Any],
+    aliases: dict[str, str],
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Build the per-topic diagnostics list plus car/unique-connector counts."""
+    topics_out: list[dict[str, Any]] = []
+    car_mapping_count = 0
+    unique_mapped_connectors: set[str] = set()
+    for topic, topic_map in idx_maps.items():
+        if not isinstance(topic_map, dict):
+            continue
+        cars = topic_map.get("cars") or {}
+        grid = topic_map.get("grid") or {}
+        pv = topic_map.get("pv") or {}
+        car_mapping_count += len(cars)
+        unique_mapped_connectors.update(cars.keys())
+        topics_out.append(
+            {
+                "topic": _obfuscate(topic, keep=18),
+                "grid_present": bool(any((grid or {}).values())),
+                "pv_present": bool(any((pv or {}).values())),
+                "car_mapping_count": len(cars),
+                "mapped_connectors": sorted(aliases.get(uuid, _obfuscate(uuid)) for uuid in cars),
+            }
+        )
+    return topics_out, car_mapping_count, len(unique_mapped_connectors)
+
+
 def _power_mapping_info(coord: object | None) -> dict[str, Any]:
     """Return redacted diagnostics for the car-charger MQTT power mapping (#251).
 
@@ -364,64 +542,9 @@ def _power_mapping_info(coord: object | None) -> dict[str, Any]:
     highlevel_configs = getattr(coord, "_highlevel_configs", None)
     if not isinstance(highlevel_configs, dict):
         highlevel_configs = {}
-
-    measurements_out: list[dict[str, Any]] = []
-    car_charger_measurement_count = 0
-    index = 0
-    for cfg in highlevel_configs.values():
-        if not isinstance(cfg, dict):
-            continue
-        for meas in cfg.get("measurements") or []:
-            if not isinstance(meas, dict):
-                continue
-            if str(meas.get("type") or "").upper() != "APPLIANCE":
-                continue
-            index += 1
-            classification = _classify_appliance_measurement(meas)
-            if classification["discovery_classification"] == "car_charger":
-                car_charger_measurement_count += 1
-
-            is_candidate = (
-                classification["discovery_classification"] == "car_charger"
-                or classification["power_classification"] == "car_charger"
-            )
-            position: int | None = None
-            resolved_uuid: str | None = None
-            resolution_method: str | None = None
-            name_match_count = 0
-            name_match_evaluated = False
-            if is_candidate:
-                # `coord` is typed as `object` here (it may be any coordinator-like
-                # object, including test doubles), so this private resolver hook is
-                # looked up dynamically instead of via direct attribute access. Reusing
-                # the *same* resolver that builds the live power map means diagnostics
-                # can never disagree with the actual mapping outcome (#251).
-                resolve_fn = getattr(coord, "_resolve_highlevel_measurement", None)
-                if callable(resolve_fn):
-                    with suppress(Exception):
-                        resolution = resolve_fn(meas)
-                        position = getattr(resolution, "position", None)
-                        resolved_uuid = getattr(resolution, "connector_uuid", None)
-                        resolution_method = getattr(resolution, "method", None)
-                        name_match_count = getattr(resolution, "name_match_count", 0)
-                        name_match_evaluated = getattr(resolution, "name_match_evaluated", False)
-
-            measurements_out.append(
-                {
-                    "measurement_index": index,
-                    "type": "APPLIANCE",
-                    **classification,
-                    "name_present": bool(meas.get("name")),
-                    "position": position,
-                    **_measurement_identifiers(meas),
-                    **_measurement_field_inventory(meas),
-                    "resolution_method": resolution_method,
-                    "name_match_count": name_match_count,
-                    "name_match_evaluated": name_match_evaluated,
-                    "resolved": resolved_uuid is not None,
-                    "resolved_connector": aliases.get(resolved_uuid) if resolved_uuid else None,
-                }
-            )
+    measurements_out, measurement_summary = _build_power_mapping_measurements(
+        coord, highlevel_configs, aliases
+    )
 
     idx_maps = getattr(coord, "_power_index_maps_by_topic", None)
     if idx_maps is None:
@@ -432,33 +555,23 @@ def _power_mapping_info(coord: object | None) -> dict[str, Any]:
     else:
         mapping_cache_state = "not_initialized"
         idx_maps = {}
-
-    topics_out: list[dict[str, Any]] = []
-    car_mapping_count = 0
-    for topic, topic_map in idx_maps.items():
-        if not isinstance(topic_map, dict):
-            continue
-        cars = topic_map.get("cars") or {}
-        grid = topic_map.get("grid") or {}
-        pv = topic_map.get("pv") or {}
-        car_mapping_count += len(cars)
-        topics_out.append(
-            {
-                "topic": _obfuscate(topic, keep=18),
-                "grid_present": bool(any((grid or {}).values())),
-                "pv_present": bool(any((pv or {}).values())),
-                "car_mapping_count": len(cars),
-                "mapped_connectors": sorted(aliases.get(uuid, _obfuscate(uuid)) for uuid in cars),
-            }
-        )
+    topics_out, car_mapping_count, unique_mapped_connector_count = _build_power_mapping_topics(
+        idx_maps, aliases
+    )
 
     return {
         "available": True,
         "mapping_cache_state": mapping_cache_state,
         "known_connector_count": len(connector_clients),
         "known_connectors": known_connectors,
-        "car_charger_measurement_count": car_charger_measurement_count,
+        "car_charger_measurement_count": measurement_summary["car_charger_measurement_count"],
         "car_mapping_count": car_mapping_count,
+        # Unique connector count across all topics - `car_mapping_count` sums
+        # per-topic entries, so a connector whose power/current/energy ever
+        # end up split across different topics could otherwise be counted
+        # more than once here.
+        "unique_mapped_connector_count": unique_mapped_connector_count,
+        "mapping_summary": measurement_summary["mapping_summary"],
         "measurements": measurements_out,
         "topics": topics_out,
     }
@@ -474,8 +587,13 @@ async def async_get_config_entry_diagnostics(
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
     sites = rt.sites if rt else {}
     sensitive_values = _entry_sensitive_values(entry) + _runtime_sensitive_values(rt)
+    # Stable local aliases instead of raw service-location ids (#251 follow-up):
+    # those numeric ids are otherwise stable, low-entropy identifiers that fully
+    # identify a specific Smappee account when a diagnostics dump is attached to
+    # a public GitHub issue.
+    site_aliases = _site_aliases(sites)
     # Stable ordering for diffs / logs
-    out["sites"] = sorted(sites.keys(), key=_sort_as_text)
+    out["sites"] = [site_aliases[s] for s in sorted(sites.keys(), key=_sort_as_text)]
 
     out["config_entry_data"] = async_redact_data(dict(entry.data), REDACT_KEYS)
     out["options"] = async_redact_data(dict(entry.options), REDACT_KEYS)
@@ -524,6 +642,7 @@ async def async_get_config_entry_diagnostics(
         stations = site.stations
         # Defensive: RuntimeData.mqtt may contain one or more SmappeeMqtt clients per site.
         mqtt_obj = rt.mqtt.get(site_id) if rt else None
+        site_alias = site_aliases.get(site_id, _obfuscate(site_id))
         # Aggregate counts
         station_count = len(stations)
         connector_count = sum(len(bucket.connectors) for bucket in stations.values())
@@ -532,13 +651,17 @@ async def async_get_config_entry_diagnostics(
 
         sites_detail.append(
             {
-                "service_location_id": site_id,
-                "service_location_id_obfuscated": _obfuscate(site_id),
+                "site_alias": site_alias,
+                "service_location_id": _obfuscate(site_id),
                 "name_present": site.site_name is not None,
                 "uuid": _obfuscate(site.site_uuid),
                 "serial": _obfuscate(site.gateway_serial),
-                "control_location_ids": _safe_sorted(site.control_location_ids),
-                "measurement_location_ids": _safe_sorted(site.measurement_location_ids),
+                "control_location_ids": [
+                    _obfuscate(v) for v in _safe_sorted(site.control_location_ids)
+                ],
+                "measurement_location_ids": [
+                    _obfuscate(v) for v in _safe_sorted(site.measurement_location_ids)
+                ],
                 "station_count": station_count,
                 "connector_count": connector_count,
                 "mqtt_configured": mqtt_obj is not None,
@@ -557,7 +680,8 @@ async def async_get_config_entry_diagnostics(
             st = data.station if data else None
             stations_out.append(
                 {
-                    "service_location_id": site_id,
+                    "site_alias": site_alias,
+                    "service_location_id": _obfuscate(site_id),
                     "station_uuid": _obfuscate(st_uuid),
                     "station_handle": _handle_info(st_client),
                     "available": getattr(st, "available", None) if st else None,
@@ -584,7 +708,8 @@ async def async_get_config_entry_diagnostics(
                 cstate = state_by_uuid.get(cuuid)
                 connectors_out.append(
                     {
-                        "service_location_id": site_id,
+                        "site_alias": site_alias,
+                        "service_location_id": _obfuscate(site_id),
                         "station_uuid": _obfuscate(st_uuid),
                         "connector_uuid": _obfuscate(cuuid),
                         "connector_handle": _handle_info(client),
@@ -655,7 +780,7 @@ async def async_get_config_entry_diagnostics(
     )
     out["summary"] = {
         "service_location_ids_count": len(sites or {}),
-        "service_location_ids": sorted(sites.keys(), key=_sort_as_text)
+        "service_location_ids": [site_aliases[s] for s in sorted(sites.keys(), key=_sort_as_text)]
         if isinstance(sites, dict)
         else [],
         "station_buckets_count": len(stations_out),
