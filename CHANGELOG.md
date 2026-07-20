@@ -7,6 +7,42 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.7.3] - 2026-07-20
+
+- Added `initialize` to the supported charging-state enum and its English,
+  Dutch, French and German translations, preventing Home Assistant listener
+  errors during charger startup or reconnects.
+- Fixed connector power, current and energy sensors remaining `unknown` when a
+  Dashboard measurement does not expose a direct connector identifier or
+  position. Measurements can now be resolved through an exact, unambiguous
+  Dashboard device-name match, with a safe single-connector fallback.
+- Centralized car-charger measurement classification and made it accept common
+  `CAR_CHARGER` and `CARCHARGER` category variants consistently in discovery,
+  live power mapping and diagnostics.
+- Reworked multi-location setup so all control locations belonging to one
+  physical site are collected and merged before coordinators and MQTT clients
+  are created. Physical stations are deduplicated deterministically and each
+  physical site now has one routing setup using the complete station map.
+- Made MQTT routing station-specific: mapped power routes take priority,
+  control-location matching provides the safe fallback, and unresolved power
+  measurements are no longer broadcast to every station.
+- Correctly route wildcard charger and LED `/devices/updated` topics using the
+  payload `deviceUUID` instead of treating `updated` as a device identifier.
+- Made MQTT freshness tracking route-aware so only coordinators that received a
+  relevant charger or power message are refreshed.
+- Expanded diagnostics with power-mapping resolution details, multi-location
+  topology and setup counts, configured and observed MQTT routes, coordinator
+  identity checks, per-topic traffic, unrouted messages and delivery failures.
+  Diagnostic identifiers and topics remain redacted.
+- Added regression coverage for multi-location setup order, coordinator
+  identity, targeted routing, `/devices/updated`, unload cleanup, ambiguous
+  connector names and route-aware freshness. Also removed cyclic-import and
+  static-analysis warnings introduced during the diagnostics work.
+
+References:
+[Issue #251](https://github.com/myny-git/smappee_ev/issues/251) and
+[Issue #252](https://github.com/myny-git/smappee_ev/issues/252).
+
 ## [2026.7.2] - 2026-07-16
 
 - Fixed site-level MQTT routing so aggregate consumption, solar and always-on

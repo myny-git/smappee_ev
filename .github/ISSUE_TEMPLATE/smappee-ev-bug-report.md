@@ -1,7 +1,6 @@
 ---
 name: Smappee EV Bug Report
-about: Please report any technical issue or feature request for the Smappee EV Home
-  Assistant integration.
+about: Report a technical issue with the Smappee EV Home Assistant integration.
 title: "[BUG]"
 labels: bug
 assignees: myny-git
@@ -32,6 +31,7 @@ Please confirm **all** of the following before submitting:
 - [ ] I am using the **latest version** of this integration (verified via HACS).
 - [ ] I have reviewed [open and closed issues](https://github.com/myny-git/smappee_ev/issues?q=is%3Aissue) to avoid duplicates.
 - [ ] I have enabled and prepared DEBUG log output (for bug reports).
+- [ ] I have attached Smappee EV diagnostics below, or explained why diagnostics are unavailable.
 - [ ] This is a bug report — not a general usage question.
 
 ## 📋 What are the steps to reproduce this issue?
@@ -47,6 +47,20 @@ Please confirm **all** of the following before submitting:
 ## ✅ What were you expecting to happen?
 
 ...
+
+## 🩺 Smappee EV diagnostics
+
+Please attach diagnostics for the affected Smappee EV config entry whenever possible:
+
+1. Go to `Settings` > `Devices & services`.
+2. Select the Smappee EV integration.
+3. Open the three-dot menu for the affected config entry and select `Download diagnostics`.
+4. Open the downloaded JSON file in a text editor and verify that sensitive values are redacted.
+5. Drag and drop the diagnostics JSON file below.
+
+_Diagnostics provide the runtime topology, connector mapping and MQTT routing information needed to investigate most issues. Reports without diagnostics may take longer to diagnose._
+
+<!-- Drag and drop the diagnostics JSON file here. -->
 
 ## 🪵 Any logs, error output, etc?
 
