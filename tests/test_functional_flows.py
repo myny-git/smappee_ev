@@ -127,11 +127,15 @@ class _FakeDashboard:
         )
 
 
-class _MultiLocationDashboard(_FakeDashboard):
+class _MultiLocationDashboard:
     """Dashboard fixture reproducing one parent and one overlapping child control."""
 
+    username = "user"
+    password = "pass"  # noqa: S105 - fake test password
+    refresh_token = "refresh"  # noqa: S105 - fake test token
+    _token = "token"  # noqa: S105 - fake test token
+
     def __init__(self, *, reverse: bool = False):
-        super().__init__()
         locations = [
             {
                 "id": 278001,
