@@ -15,6 +15,7 @@ from .api.discovery import MqttChannelSpec
 from .api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
 from .const import MQTT_HEARTBEAT_TOPIC_SUFFIX
 from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
+from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import MqttRuntimeValue, SmappeeStationRuntime
 from .models.state import MqttPayload
 from .mqtt_specs import _group_mqtt_specs_by_credentials
@@ -73,39 +74,6 @@ class MqttFreshnessState:
             self.last_real_charger_rx = now
 
 
-@dataclass(frozen=True, slots=True)
-class MqttRouteDiagnosticTarget:
-    """Identity-only snapshot of one configured MQTT route target."""
-
-    target_type: str
-    coordinator_id: int
-    station_key: str | None = None
-
-
-@dataclass(slots=True)
-class MqttRoutingDiagnostics:
-    """Runtime counters and route snapshots exposed through HA diagnostics."""
-
-    site_location_id: int | str
-    control_location_ids: tuple[int, ...]
-    site_coordinator_id: int | None
-    station_coordinator_ids: dict[str, int]
-    configured_routes: dict[str, list[MqttRouteDiagnosticTarget]] = field(default_factory=dict)
-    observed_routes: dict[str, list[MqttRouteDiagnosticTarget]] = field(default_factory=dict)
-    client_count: int = 0
-    started: bool = False
-    messages_received: int = 0
-    heartbeat_messages: int = 0
-    routed_messages: int = 0
-    unrouted_messages: int = 0
-    target_deliveries: int = 0
-    delivery_failures: int = 0
-    messages_received_by_topic: dict[str, int] = field(default_factory=dict)
-    last_message_rx: float | None = None
-    last_routed_rx: float | None = None
-    last_unrouted_rx: float | None = None
-
-
 def _diagnostic_targets(
     targets: list[MqttRouteTarget],
     site_coordinator: SmappeeSiteCoordinator | None,
@@ -143,6 +111,32 @@ def _diagnostic_control_location_ids(
     return tuple(sorted(control_ids))
 
 
+def _station_targets_for_power_spec(
+    spec: MqttChannelSpec,
+    stations: dict[str, SmappeeStationRuntime],
+) -> list[SmappeeStationCoordinator]:
+    """Return only stations whose finalized power mapping owns the topic."""
+    targets: list[SmappeeStationCoordinator] = []
+    for bucket in stations.values():
+        coord = bucket.station_coordinator
+        if coord is None:
+            continue
+        topic_maps = getattr(coord, "_power_index_maps_by_topic", None)
+        if isinstance(topic_maps, dict):
+            topic_map = topic_maps.get(spec.topic)
+            if isinstance(topic_map, dict) and topic_map.get("cars"):
+                targets.append(coord)
+    if targets:
+        return targets
+
+    return [
+        bucket.station_coordinator
+        for bucket in stations.values()
+        if bucket.station_coordinator is not None
+        and getattr(bucket, "control_location_id", None) == spec.service_location_id
+    ]
+
+
 def _build_mqtt_routes(
     mqtt_specs: list[MqttChannelSpec] | None,
     site_coordinator: SmappeeSiteCoordinator | None,
@@ -150,11 +144,6 @@ def _build_mqtt_routes(
 ) -> dict[str, list[MqttRouteTarget]]:
     """Build explicit MQTT topic routes for site and station coordinators."""
     routes: dict[str, list[MqttRouteTarget]] = {}
-    station_coordinators: list[SmappeeStationCoordinator] = []
-    for bucket in stations.values():
-        coordinator = bucket.station_coordinator
-        if coordinator is not None:
-            station_coordinators.append(coordinator)
     for spec in mqtt_specs or []:
         if spec.role in _SITE_MEASUREMENT_ROLES:
             if site_coordinator is not None:
@@ -168,7 +157,7 @@ def _build_mqtt_routes(
                 routes.setdefault(spec.topic, []).append(site_coordinator)
             continue
         if spec.role == "car_charger":
-            for coord in station_coordinators:
+            for coord in _station_targets_for_power_spec(spec, stations):
                 routes.setdefault(spec.topic, []).append(coord)
 
     deduped_routes: dict[str, list[MqttRouteTarget]] = {}
@@ -183,6 +172,72 @@ def _build_mqtt_routes(
             deduped_targets.append(target)
         deduped_routes[topic] = deduped_targets
     return deduped_routes
+
+
+def _topic_device_id(topic: str) -> str | None:
+    """Return the device identifier embedded in a wildcard MQTT topic."""
+    marker = "/devices/"
+    if marker not in topic:
+        return None
+    value = topic.split(marker, 1)[1].split("/", 1)[0]
+    if not value or value.casefold() == "updated":
+        return None
+    return value
+
+
+def _topic_station_serial(topic: str) -> str | None:
+    """Return the station serial embedded in a station-properties topic."""
+    marker = "/acchargingstation/v1/"
+    if marker not in topic:
+        return None
+    value = topic.split(marker, 1)[1].split("/", 1)[0]
+    return value or None
+
+
+def _dynamic_mqtt_targets(
+    topic: str,
+    payload: MqttPayload,
+    site_coordinator: SmappeeSiteCoordinator | None,
+    stations: dict[str, SmappeeStationRuntime],
+    *,
+    legacy_power: bool,
+) -> list[MqttRouteTarget]:
+    """Resolve wildcard device topics to only their owning coordinator."""
+    if topic.endswith("/power") and legacy_power:
+        targets: list[MqttRouteTarget] = []
+        if site_coordinator is not None:
+            targets.append(site_coordinator)
+        targets.extend(
+            bucket.station_coordinator
+            for bucket in stations.values()
+            if bucket.station_coordinator is not None
+        )
+        return targets
+
+    device_id = _topic_device_id(topic)
+    payload_device_id = payload.get("deviceUUID")
+    if device_id is None and payload_device_id is not None:
+        device_id = str(payload_device_id)
+    station_serial = _topic_station_serial(topic)
+
+    targets = []
+    for bucket in stations.values():
+        coord = bucket.station_coordinator
+        if coord is None:
+            continue
+        if device_id is not None:
+            if device_id in bucket.connectors:
+                targets.append(coord)
+                continue
+            if any(
+                device_id in {led_key, led.led_device_id, led.led_device_uuid}
+                for led_key, led in bucket.led_devices.items()
+            ):
+                targets.append(coord)
+                continue
+        if station_serial is not None and station_serial == bucket.charging_station_serial:
+            targets.append(coord)
+    return targets
 
 
 def _mqtt_runtime_value(mqtt_clients: list[SmappeeMqtt]) -> MqttRuntimeValue:
@@ -343,15 +398,12 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     def _sync_freshness() -> None:
         if site_coordinator is not None:
             site_coordinator.mqtt_transport_connected = freshness.mqtt_transport_connected
-            site_coordinator.last_real_power_rx = freshness.last_real_site_power_rx
             site_coordinator.last_heartbeat_rx = freshness.last_heartbeat_rx
         for bucket in stations.values():
             coord = bucket.station_coordinator
             if coord is None:
                 continue
             coord.mqtt_transport_connected = freshness.mqtt_transport_connected
-            coord.last_real_charger_rx = freshness.last_real_charger_rx
-            coord.last_real_power_rx = freshness.last_real_power_rx
             coord.last_heartbeat_rx = freshness.last_heartbeat_rx
 
     def _on_props(topic: str, payload: MqttPayload) -> None:
@@ -368,13 +420,12 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
             return
         targets = mqtt_routes.get(topic)
         if targets is None:
-            targets = []
-            if site_coordinator is not None and topic.endswith("/power") and not mqtt_specs:
-                targets.append(site_coordinator)
-            targets.extend(
-                bucket.station_coordinator
-                for bucket in stations.values()
-                if bucket.station_coordinator is not None
+            targets = _dynamic_mqtt_targets(
+                topic,
+                payload,
+                site_coordinator,
+                stations,
+                legacy_power=not mqtt_specs,
             )
         routing_diagnostics.observed_routes[topic] = _diagnostic_targets(
             targets, site_coordinator, stations
@@ -394,13 +445,28 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         is_site_power = site_coordinator is not None and any(
             target is site_coordinator for target in targets
         )
+        has_station_target = any(id(target) in station_coordinator_ids for target in targets)
+        is_real_charger = has_station_target and (
+            "/etc/carcharger/" in topic
+            or "/etc/chargingstation/" in topic
+            or topic.endswith("/power")
+        )
         freshness.record_message(
             topic,
-            real_power=is_site_power or topic.endswith("/power"),
+            real_power=is_site_power or (has_station_target and topic.endswith("/power")),
             site_power=is_site_power,
-            real_charger=any(id(target) in station_coordinator_ids for target in targets),
+            real_charger=is_real_charger,
         )
         _sync_freshness()
+        if is_site_power and site_coordinator is not None:
+            site_coordinator.last_real_power_rx = freshness.last_real_site_power_rx
+        for target in targets:
+            if id(target) not in station_coordinator_ids:
+                continue
+            if is_real_charger:
+                target.last_real_charger_rx = freshness.last_real_charger_rx
+            if topic.endswith("/power"):
+                target.last_real_power_rx = freshness.last_real_power_rx
         for coord in targets:
             if coord:
                 try:

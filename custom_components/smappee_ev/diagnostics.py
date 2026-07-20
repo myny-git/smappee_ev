@@ -7,14 +7,18 @@ from __future__ import annotations
 
 from collections.abc import Sized
 from contextlib import suppress
+from hashlib import sha256
+import re
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
+from .api.discovery import _measurement_role
+from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry, SmappeeStationRuntime
-from .mqtt_setup import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics, _mqtt_routing_diagnostics
+from .mqtt_setup import _mqtt_routing_diagnostics
 
 REDACT_KEYS = {
     "access_token",
@@ -57,6 +61,28 @@ def _obfuscate(value: object, *, keep: int = 4) -> str | None:
     if len(text) <= keep * 2:
         return f"{text[:1]}***{text[-1:]}" if len(text) > 1 else "***"
     return f"{text[:keep]}...{text[-keep:]}"
+
+
+_SERVICE_LOCATION_TOPIC_RE = re.compile(r"(?<=servicelocation/)[^/]+")
+_DEVICE_TOPIC_RE = re.compile(r"(?<=devices/)[^/]+")
+
+
+def _diagnostic_topic(topic: str) -> str:
+    """Return a correlatable MQTT topic without retaining identifier fragments."""
+
+    def alias(prefix: str, value: str) -> str:
+        digest = sha256(value.encode()).hexdigest()[:10]
+        return f"{prefix}_{digest}"
+
+    redacted, location_count = _SERVICE_LOCATION_TOPIC_RE.subn(
+        lambda match: alias("location", match.group(0)), topic
+    )
+    redacted, device_count = _DEVICE_TOPIC_RE.subn(
+        lambda match: alias("device", match.group(0)), redacted
+    )
+    if location_count or device_count:
+        return redacted
+    return alias("topic", topic)
 
 
 def _safe_len(value: object) -> int:
@@ -195,7 +221,7 @@ def _mqtt_info(
                 "service_location_id": _obfuscate(getattr(spec, "service_location_id", None)),
                 "role": getattr(spec, "role", None),
                 "metric": getattr(spec, "metric", None),
-                "topic": _obfuscate(getattr(spec, "topic", None), keep=18),
+                "topic": _diagnostic_topic(str(getattr(spec, "topic", ""))),
                 "username_present": bool(getattr(spec, "username", None)),
                 "password_present": bool(getattr(spec, "password", None)),
                 "aspect_path_count": _safe_len(getattr(spec, "aspect_paths", None)),
@@ -283,7 +309,7 @@ def _routing_topics_info(
     """Return redacted route topics and final-runtime membership details."""
     return [
         {
-            "topic": _obfuscate(topic, keep=18),
+            "topic": _diagnostic_topic(topic),
             "messages_received": message_counts.get(topic, 0),
             "target_count": len(targets),
             "targets": [
@@ -400,40 +426,22 @@ def _mqtt_routing_info(
 
 
 def _classify_appliance_measurement(meas: dict[str, Any]) -> dict[str, Any]:
-    """Return both known classification outcomes for one highlevel measurement.
-
-    This is a read-only, side-effect-free re-implementation, used only for
-    observability (see issue #251). It intentionally mirrors two existing
-    code paths that disagree on precedence between `category` and
-    `appliance.type`:
-
-    - ``discovery_classification`` mirrors ``api.discovery._measurement_role``
-      (appliance.type wins whenever ``appliance`` is itself a dict).
-    - ``power_classification`` mirrors the inline classification currently
-      used in ``coordinators.power`` (measurement-level ``category`` wins).
-
-    A mismatch between the two is a strong signal that a car-charger
-    measurement is silently skipped while building the MQTT power index map.
-    """
+    """Return the shared production classification for diagnostics."""
     category = meas.get("category")
     appliance_raw = meas.get("appliance")
     appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
     appliance_type = appliance.get("type") if isinstance(appliance_raw, dict) else None
 
-    discovery_source = appliance.get("type") if isinstance(appliance_raw, dict) else category
-    discovery_classification = (
-        "car_charger" if str(discovery_source or "").upper() == "CAR_CHARGER" else None
-    )
-
-    power_category = str(category or appliance.get("type") or "").upper()
-    power_classification = "car_charger" if power_category == "CAR_CHARGER" else None
+    classification = _measurement_role(meas)
 
     return {
         "category": category,
         "appliance_type": appliance_type,
-        "discovery_classification": discovery_classification,
-        "power_classification": power_classification,
-        "would_enter_power_car_branch": power_classification == "car_charger",
+        # Preserve existing diagnostics keys while both production paths now
+        # use the same classifier.
+        "discovery_classification": classification,
+        "power_classification": classification,
+        "would_enter_power_car_branch": classification == "car_charger",
     }
 
 
@@ -664,7 +672,7 @@ def _build_power_mapping_topics(
         unique_mapped_connectors.update(cars.keys())
         topics_out.append(
             {
-                "topic": _obfuscate(topic, keep=18),
+                "topic": _diagnostic_topic(topic),
                 "grid_present": bool(any((grid or {}).values())),
                 "pv_present": bool(any((pv or {}).values())),
                 "car_mapping_count": len(cars),

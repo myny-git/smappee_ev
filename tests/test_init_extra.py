@@ -389,7 +389,7 @@ class TestMqttSetup:
             on_props_callback = mock_mqtt_class.call_args[1]["on_properties"]
 
             # Test the callback
-            test_topic = "test/topic"
+            test_topic = "servicelocation/test-service-uuid/power"
             test_payload = {"property": "value"}
             on_props_callback(test_topic, test_payload)
 

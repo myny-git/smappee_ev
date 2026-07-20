@@ -13,6 +13,7 @@ from typing import Any
 from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
+from ..api.discovery import _measurement_role
 from ..api.errors import SmappeeError
 from ..api.mqtt_gateway import redact_mqtt_topic
 from ..models.state import DashboardObject, HighLevelConfigMap, MqttPayload
@@ -227,10 +228,6 @@ class PowerMixin(CoordinatorMixin):
             energy_topic = _mqtt_channel_topic(channels.get("meterReadings"))
 
             mtype = str(meas.get("type") or "").upper()
-            appliance_raw = meas.get("appliance")
-            appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
-            category = str(meas.get("category") or appliance.get("type") or "").upper()
-
             if mtype == "GRID":
                 if power_topic:
                     topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
@@ -257,7 +254,7 @@ class PowerMixin(CoordinatorMixin):
                     topic_map["pv"]["energy"] = energy_idx
                 continue
 
-            if mtype == "APPLIANCE" and category == "CAR_CHARGER":
+            if _measurement_role(meas) == "car_charger":
                 resolution = self._resolve_highlevel_measurement(meas)
                 uuid = resolution.connector_uuid
                 if not uuid:

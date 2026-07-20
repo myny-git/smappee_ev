@@ -20,13 +20,20 @@ from custom_components.smappee_ev.models.state import (
 )
 from custom_components.smappee_ev.mqtt_setup import (
     MqttFreshnessState,
+    _dynamic_mqtt_targets,
     _handle_mqtt_connection_change,
     _mqtt_routing_diagnostics,
     _setup_mqtt,
+    _station_targets_for_power_spec,
 )
 from custom_components.smappee_ev.runtime_assembly import _create_coordinators
 from custom_components.smappee_ev.runtime_lifecycle import ensure_runtime_shutdown
-from tests.factories import make_site_runtime, make_station_runtime
+from tests.factories import (
+    make_connector_runtime,
+    make_led_runtime,
+    make_site_runtime,
+    make_station_runtime,
+)
 
 
 @pytest.mark.asyncio
@@ -240,7 +247,13 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
     coordinator.async_shutdown = AsyncMock()
     coordinator.cancel_delayed_refreshes = MagicMock()
     coordinator.async_request_refresh = AsyncMock()
-    station = make_station_runtime(coordinator=coordinator)
+    coordinator.last_real_charger_rx = None
+    coordinator.last_real_power_rx = None
+    coordinator.last_heartbeat_rx = None
+    station = make_station_runtime(
+        coordinator=coordinator,
+        connectors={"y": make_connector_runtime(connector_key="y", connector_uuid="y")},
+    )
     stations = {"station": station}
     mqtt = MagicMock()
     mqtt.start = AsyncMock()
@@ -313,6 +326,7 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
 def test_route_aware_power_freshness_is_copied_to_site_coordinator(hass):
     station_coordinator = MagicMock()
     station_coordinator.update_interval = timedelta(seconds=60)
+    station_coordinator.last_real_power_rx = None
     site_coordinator = MagicMock()
     station = make_station_runtime(coordinator=station_coordinator)
     topic = "custom/realtime/grid-values"
@@ -338,10 +352,116 @@ def test_route_aware_power_freshness_is_copied_to_site_coordinator(hass):
         on_properties(topic, {"activePowerData": [100]})
 
     assert site_coordinator.last_real_power_rx is not None
-    assert station_coordinator.last_real_power_rx == site_coordinator.last_real_power_rx
+    assert station_coordinator.last_real_power_rx is None
     site_coordinator.apply_mqtt_properties.assert_called_once_with(
         topic, {"activePowerData": [100]}
     )
+
+
+def test_power_route_uses_mapping_then_control_location_without_broadcast():
+    topic = "servicelocation/child/power"
+    first = MagicMock()
+    first._power_index_maps_by_topic = {}
+    second = MagicMock()
+    second._power_index_maps_by_topic = {}
+    stations = {
+        "first": make_station_runtime(control_location_id=1, coordinator=first),
+        "second": make_station_runtime(control_location_id=2, coordinator=second),
+    }
+    spec = MqttChannelSpec(2, "car_charger", "activePower", topic, None, None, [])
+
+    assert _station_targets_for_power_spec(spec, stations) == [second]
+
+    first._power_index_maps_by_topic = {topic: {"cars": {"connector": {}}}}
+    assert _station_targets_for_power_spec(spec, stations) == [first]
+
+    unmatched = MqttChannelSpec(3, "car_charger", "activePower", topic, None, None, [])
+    first._power_index_maps_by_topic = {}
+    assert _station_targets_for_power_spec(unmatched, stations) == []
+
+
+def test_connector_devices_updated_routes_by_payload_device_uuid():
+    first = MagicMock()
+    second = MagicMock()
+    stations = {
+        "first": make_station_runtime(
+            coordinator=first,
+            connectors={"connector-a": make_connector_runtime(connector_uuid="connector-a")},
+        ),
+        "second": make_station_runtime(
+            coordinator=second,
+            connectors={"connector-b": make_connector_runtime(connector_uuid="connector-b")},
+        ),
+    }
+    topic = "servicelocation/site/etc/carcharger/acchargingcontroller/v1/devices/updated"
+
+    assert _dynamic_mqtt_targets(
+        topic,
+        {"deviceUUID": "connector-b"},
+        None,
+        stations,
+        legacy_power=False,
+    ) == [second]
+
+
+def test_led_devices_updated_routes_by_payload_device_uuid():
+    first = MagicMock()
+    second = MagicMock()
+    stations = {
+        "first": make_station_runtime(
+            coordinator=first,
+            led_devices={"led-a": make_led_runtime(led_key="led-a", led_device_uuid="led-a")},
+        ),
+        "second": make_station_runtime(
+            coordinator=second,
+            led_devices={"led-b": make_led_runtime(led_key="led-b", led_device_uuid="led-b")},
+        ),
+    }
+    topic = "servicelocation/site/etc/led/acledcontroller/v1/devices/updated"
+
+    assert _dynamic_mqtt_targets(
+        topic,
+        {"deviceUUID": "led-b"},
+        None,
+        stations,
+        legacy_power=False,
+    ) == [second]
+
+
+def test_unrouted_power_does_not_refresh_any_coordinator(hass):
+    """An unrelated power topic must not mask stale data on this site."""
+    station_coordinator = MagicMock()
+    station_coordinator.update_interval = timedelta(seconds=60)
+    station_coordinator.last_real_power_rx = None
+    site_coordinator = MagicMock()
+    site_coordinator.last_real_power_rx = None
+    station = make_station_runtime(coordinator=station_coordinator)
+    configured_topic = "custom/realtime/grid-values"
+    spec = MqttChannelSpec(1, "grid", "activePower", configured_topic, None, None, [])
+    mqtt = MagicMock()
+    mqtt.start = AsyncMock()
+    mqtt.track_start_task = MagicMock()
+
+    with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", return_value=mqtt) as cls:
+        _setup_mqtt(
+            hass,
+            "site-uuid",
+            "station",
+            1,
+            {"station": station},
+            "client",
+            60,
+            mqtt_specs=[spec],
+            site_coordinator=site_coordinator,
+        )
+        cls.call_args.kwargs["on_properties"](
+            "servicelocation/unrelated/power", {"activePowerData": [100]}
+        )
+
+    assert site_coordinator.last_real_power_rx is None
+    assert station_coordinator.last_real_power_rx is None
+    site_coordinator.apply_mqtt_properties.assert_not_called()
+    station_coordinator.apply_mqtt_properties.assert_not_called()
 
 
 @pytest.mark.parametrize(

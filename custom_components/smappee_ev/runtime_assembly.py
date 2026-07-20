@@ -23,6 +23,7 @@ from .models.runtime_data import (
     MqttRuntimeValue,
     RuntimeData,
     SmappeeEvConfigEntry,
+    SmappeeSiteRuntime,
     SmappeeStationRuntime,
 )
 from .models.state import HighLevelConfigMap
@@ -107,7 +108,10 @@ async def _create_coordinators(
             if dashboard_client is not None:
                 kwargs["dashboard_client"] = dashboard_client
             if highlevel_configs is not None:
-                kwargs["highlevel_configs"] = highlevel_configs
+                own_config = highlevel_configs.get(bucket.control_location_id)
+                kwargs["highlevel_configs"] = (
+                    {bucket.control_location_id: own_config} if own_config is not None else {}
+                )
             for key in (
                 "site_name",
                 "gateway_serial",
@@ -167,30 +171,96 @@ async def _create_site_coordinator(
     return coord
 
 
-async def _prepare_topology(  # noqa: C901 - topology validation is intentionally linear
-    hass: HomeAssistant,
+def _topology_sort_key(topology: SmappeeLocationTopology) -> tuple[str, str]:
+    """Return a stable order independent of Dashboard response timing."""
+    return str(topology.control_location_id), topology.charging_station_serial or ""
+
+
+def _station_identity(station_key: str, bucket: SmappeeStationRuntime) -> str:
+    """Return the best stable physical identity available for a station."""
+    serial = str(bucket.charging_station_serial or "").strip().casefold()
+    return f"serial:{serial}" if serial else f"uuid:{station_key.casefold()}"
+
+
+def _merge_station_metadata(
+    preferred: SmappeeStationRuntime,
+    fallback: SmappeeStationRuntime,
+) -> None:
+    """Fill missing metadata without changing the preferred station identity."""
+    for attr in (
+        "site_name",
+        "gateway_serial",
+        "gateway_type",
+        "control_name",
+        "control_uuid",
+        "control_function_type",
+        "station_name",
+        "charging_station_model",
+    ):
+        if getattr(preferred, attr) is None:
+            setattr(preferred, attr, getattr(fallback, attr))
+    for connector_key, connector in fallback.connectors.items():
+        preferred.connectors.setdefault(connector_key, connector)
+    for led_key, led in fallback.led_devices.items():
+        preferred.led_devices.setdefault(led_key, led)
+
+
+def _deduplicate_stations(
+    candidates: list[tuple[SmappeeLocationTopology, dict[str, SmappeeStationRuntime]]],
+) -> dict[str, SmappeeStationRuntime]:
+    """Choose one deterministic runtime bucket for every physical station."""
+    selected: dict[str, tuple[str, SmappeeStationRuntime, bool]] = {}
+    for topology, stations in candidates:
+        direct_serial = str(topology.charging_station_serial or "").strip().casefold()
+        for station_key, bucket in sorted(stations.items()):
+            identity = _station_identity(station_key, bucket)
+            is_direct = bool(
+                direct_serial
+                and str(bucket.charging_station_serial or "").strip().casefold() == direct_serial
+            )
+            current = selected.get(identity)
+            if current is None:
+                selected[identity] = (station_key, bucket, is_direct)
+                continue
+
+            current_key, current_bucket, current_is_direct = current
+            if is_direct and not current_is_direct:
+                _merge_station_metadata(bucket, current_bucket)
+                selected[identity] = (station_key, bucket, True)
+                continue
+
+            _merge_station_metadata(current_bucket, bucket)
+            if (
+                is_direct
+                and current_is_direct
+                and bucket.control_location_id != (current_bucket.control_location_id)
+            ):
+                _LOGGER.warning(
+                    "Station was advertised as direct control by multiple service locations; "
+                    "using the deterministic first match"
+                )
+            selected[identity] = (current_key, current_bucket, current_is_direct)
+
+    return {
+        station_key: bucket
+        for station_key, bucket, _is_direct in sorted(
+            selected.values(), key=lambda item: (item[0], item[1].control_location_id)
+        )
+    }
+
+
+async def _prepare_control_stations(
     topology: SmappeeLocationTopology,
-    update_interval: int,
-    client_id_prefix: str,
-    config_entry: SmappeeEvConfigEntry | None = None,
-    dashboard_client: SmappeeDashboardClient | None = None,
-    background_tasks: set[asyncio.Task] | None = None,
-    start_runtime: bool = True,
-) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
-    """Prepare one site-first Dashboard topology."""
+    dashboard_client: SmappeeDashboardClient | None,
+    station_highlevel_configs: HighLevelConfigMap,
+) -> tuple[dict[str, SmappeeStationRuntime], str]:
+    """Prepare station candidates for one control location without coordinators."""
     site_sid = topology.site_location_id
     control_sid = topology.control_location_id
-    measurement_sids = topology.measurement_location_ids
-
-    highlevel_configs = await _dashboard_fetch_highlevel_configs(dashboard_client, measurement_sids)
-    site_highlevel_configs, station_highlevel_configs = _split_highlevel_configs_by_scope(
-        highlevel_configs
-    )
-    mqtt_specs = _mqtt_specs_from_highlevel_configs(highlevel_configs)
 
     devices = await _dashboard_fetch_devices(dashboard_client, control_sid)
     if devices is None:
-        return None, None
+        return {}, f"smappee-{site_sid}"
 
     station_devs, car_devs = _split_devices(devices)
     station_serial = topology.charging_station_serial
@@ -218,7 +288,7 @@ async def _prepare_topology(  # noqa: C901 - topology validation is intentionall
 
     if not station_devs and not car_devs and not station_serial:
         _LOGGER.info("No chargers at %s (%s); skipping", topology.control_name, control_sid)
-        return None, None
+        return {}, serial_str
 
     station_serial_to_connectors = await _fetch_dashboard_connector_mapping(
         dashboard_client, station_devs
@@ -302,10 +372,74 @@ async def _prepare_topology(  # noqa: C901 - topology validation is intentionall
                 len(stations),
             )
     _log_station_runtime_shape("site-topology", stations)
+    return stations, serial_str
+
+
+async def _prepare_site_topologies(
+    hass: HomeAssistant,
+    topologies: list[SmappeeLocationTopology],
+    update_interval: int,
+    client_id_prefix: str,
+    config_entry: SmappeeEvConfigEntry | None = None,
+    dashboard_client: SmappeeDashboardClient | None = None,
+    background_tasks: set[asyncio.Task] | None = None,
+    start_runtime: bool = True,
+) -> tuple[SmappeeSiteRuntime | None, MqttRuntimeValue]:
+    """Prepare one complete physical site from all of its control topologies."""
+    if not topologies:
+        return None, None
+
+    ordered = sorted(topologies, key=_topology_sort_key)
+    primary = ordered[0]
+    site_sid = primary.site_location_id
+    if any(topology.site_location_id != site_sid for topology in ordered):
+        raise ValueError("Cannot prepare topologies from different physical sites together")
+
+    measurement_sids = list(
+        dict.fromkeys(
+            measurement_sid
+            for topology in ordered
+            for measurement_sid in topology.measurement_location_ids
+        )
+    )
+    highlevel_configs = await _dashboard_fetch_highlevel_configs(dashboard_client, measurement_sids)
+    site_highlevel_configs, station_highlevel_configs = _split_highlevel_configs_by_scope(
+        highlevel_configs
+    )
+
+    station_candidates: list[tuple[SmappeeLocationTopology, dict[str, SmappeeStationRuntime]]] = []
+    serials: list[str] = []
+    for topology in ordered:
+        stations, serial_str = await _prepare_control_stations(
+            topology,
+            dashboard_client,
+            station_highlevel_configs,
+        )
+        if stations:
+            station_candidates.append((topology, stations))
+        serials.append(serial_str)
+
+    stations = _deduplicate_stations(station_candidates)
+    if not stations:
+        return None, None
+    _log_station_runtime_shape("merged-site", stations)
+
+    site = SmappeeSiteRuntime(
+        site_location_id=site_sid,
+        site_name=primary.site_name,
+        site_function_type=primary.site_function_type,
+        site_uuid=primary.site_location_uuid,
+        gateway_serial=primary.site_gateway_serial,
+        gateway_type=primary.site_gateway_type,
+        control_location_ids=list(dict.fromkeys(t.control_location_id for t in ordered)),
+        measurement_location_ids=measurement_sids,
+        highlevel_configs=highlevel_configs,
+        stations=stations,
+    )
 
     site_coordinator = await _create_site_coordinator(
         hass,
-        topology=topology,
+        topology=primary,
         update_interval=update_interval,
         config_entry=config_entry,
         highlevel_configs=site_highlevel_configs,
@@ -323,9 +457,15 @@ async def _prepare_topology(  # noqa: C901 - topology validation is intentionall
             start_tracking=start_runtime,
         )
         coordinators_ready = True
+        mqtt_specs = _mqtt_specs_from_highlevel_configs(highlevel_configs)
+        serial_str = (
+            primary.site_gateway_serial
+            or next((serial for serial in serials if serial), None)
+            or f"smappee-{site_sid}"
+        )
         mqtt = _setup_mqtt(
             hass,
-            topology.site_location_uuid or topology.control_location_uuid,
+            primary.site_location_uuid or primary.control_location_uuid,
             serial_str,
             site_sid,
             stations,
@@ -361,6 +501,35 @@ async def _prepare_topology(  # noqa: C901 - topology validation is intentionall
     for bucket in stations.values():
         bucket.mqtt = mqtt
         bucket.site_coordinator = site_coordinator
-        bucket.highlevel_configs = highlevel_configs
+        own_config = station_highlevel_configs.get(bucket.control_location_id)
+        bucket.highlevel_configs = (
+            {bucket.control_location_id: own_config} if own_config is not None else {}
+        )
 
-    return stations, mqtt
+    site.site_coordinator = site_coordinator
+    site.mqtt_clients = mqtt
+    return site, mqtt
+
+
+async def _prepare_topology(
+    hass: HomeAssistant,
+    topology: SmappeeLocationTopology,
+    update_interval: int,
+    client_id_prefix: str,
+    config_entry: SmappeeEvConfigEntry | None = None,
+    dashboard_client: SmappeeDashboardClient | None = None,
+    background_tasks: set[asyncio.Task] | None = None,
+    start_runtime: bool = True,
+) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
+    """Compatibility wrapper for preparing one Dashboard topology."""
+    site, mqtt = await _prepare_site_topologies(
+        hass,
+        [topology],
+        update_interval,
+        client_id_prefix,
+        config_entry=config_entry,
+        dashboard_client=dashboard_client,
+        background_tasks=background_tasks,
+        start_runtime=start_runtime,
+    )
+    return (site.stations if site is not None else None), mqtt

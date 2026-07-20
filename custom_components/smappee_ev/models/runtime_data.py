@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 
 from ..api.mqtt_gateway import SmappeeMqtt
+from .mqtt_diagnostics import MqttRoutingDiagnostics
 from .state import HighLevelConfigMap
 
 if TYPE_CHECKING:
     from ..api.device_handle import SmappeeDeviceHandle
     from ..coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
-    from ..mqtt_setup import MqttRoutingDiagnostics
 
 type MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
 

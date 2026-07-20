@@ -1,6 +1,9 @@
 """Tests for Dashboard topology and highlevel MQTT parsing."""
 
+import pytest
+
 from custom_components.smappee_ev.api.discovery import (
+    _measurement_role,
     build_topologies_from_full_details,
     parse_mqtt_channel_specs_from_highlevel,
     unique_mqtt_channel_specs,
@@ -19,6 +22,30 @@ def _mqtt_channel(topic: str, path: str, username: str | None = "user") -> dict:
         channel.pop("userName")
         channel.pop("password")
     return channel
+
+
+@pytest.mark.parametrize(
+    "measurement",
+    [
+        {"type": "APPLIANCE", "appliance": {"type": "CAR_CHARGER"}},
+        {"type": "APPLIANCE", "appliance": {"type": "CARCHARGER"}},
+        {"type": "APPLIANCE", "appliance": {}, "category": "CAR_CHARGER"},
+        {"type": "APPLIANCE", "appliance": {"type": "car-charger"}},
+        {"type": "APPLIANCE", "category": "car charger"},
+    ],
+)
+def test_measurement_role_accepts_car_charger_variants(measurement):
+    assert _measurement_role(measurement) == "car_charger"
+
+
+def test_measurement_role_prefers_usable_appliance_type_over_category():
+    measurement = {
+        "type": "APPLIANCE",
+        "appliance": {"type": "OTHER"},
+        "category": "CAR_CHARGER",
+    }
+
+    assert _measurement_role(measurement) is None
 
 
 def test_build_topology_default_with_charging_station():

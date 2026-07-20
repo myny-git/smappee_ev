@@ -63,3 +63,13 @@ def test_coordinator_does_not_import_runtime_data_models():
     imports = _module_imports(PACKAGE_ROOT / "coordinator.py", f"{PACKAGE}.coordinator")
 
     assert f"{PACKAGE}.models.runtime_data" not in imports
+
+
+def test_runtime_data_does_not_import_mqtt_setup():
+    """Keep MQTT diagnostics models from recreating the CodeQL import cycle."""
+    imports = _module_imports(
+        PACKAGE_ROOT / "models" / "runtime_data.py",
+        f"{PACKAGE}.models.runtime_data",
+    )
+
+    assert f"{PACKAGE}.mqtt_setup" not in imports

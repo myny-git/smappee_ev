@@ -353,11 +353,12 @@ class TestErrorHandling:
             assert mock_coordinator.async_set_updated_data.call_count == 0
             assert mock_log_exception.call_count == 0
 
-            on_props_callback("test/topic", {"property": "value"})
+            topic = "servicelocation/test-service-uuid/power"
+            on_props_callback(topic, {"property": "value"})
 
             # Verify apply_mqtt_properties was called
             mock_coordinator.apply_mqtt_properties.assert_called_once_with(
-                "test/topic", {"property": "value"}
+                topic, {"property": "value"}
             )
 
             # Verify async_set_updated_data was not called due to the exception

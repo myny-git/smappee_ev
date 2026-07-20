@@ -105,7 +105,12 @@ def test_mqtt_routes_parent_power_to_site_and_child_power_to_station():
     routes = _build_mqtt_routes(
         specs,
         site_coord,
-        {"station": make_station_runtime(coordinator=station_coord)},
+        {
+            "station": make_station_runtime(
+                control_location_id=317443,
+                coordinator=station_coord,
+            )
+        },
     )
 
     assert routes["servicelocation/uuid317418/power"] == [site_coord]
@@ -131,7 +136,12 @@ def test_mqtt_routes_shared_power_topic_to_site_and_station_once():
     routes = _build_mqtt_routes(
         specs,
         site_coord,
-        {"station": make_station_runtime(coordinator=station_coord)},
+        {
+            "station": make_station_runtime(
+                control_location_id=123,
+                coordinator=station_coord,
+            )
+        },
     )
 
     assert routes[topic] == [station_coord, site_coord]
@@ -770,6 +780,16 @@ class TestDomainSetup:
             )
         }
         mqtt_client = MagicMock()
+        prepared_site = make_site_runtime(
+            site_location_id=12345,
+            site_name="Home",
+            site_uuid="sl_uuid_1",
+            control_location_ids=[12345],
+            measurement_location_ids=[12345],
+            highlevel_configs={12345: {"channels": []}},
+            site_coordinator=site_coordinator,
+            stations=stations,
+        )
 
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
@@ -778,8 +798,8 @@ class TestDomainSetup:
                 return_value=[self._topology()],
             ),
             patch(
-                "custom_components.smappee_ev._prepare_topology",
-                return_value=(stations, mqtt_client),
+                "custom_components.smappee_ev._prepare_site_topologies",
+                return_value=(prepared_site, mqtt_client),
             ),
             patch.object(
                 hass.config_entries, "async_forward_entry_setups", return_value=None
@@ -845,6 +865,7 @@ class TestDomainSetup:
                 },
             )
         }
+        prepared_site = make_site_runtime(site_location_id=12345, stations=stations)
 
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
@@ -852,7 +873,10 @@ class TestDomainSetup:
                 "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
                 return_value=[self._topology()],
             ),
-            patch("custom_components.smappee_ev._prepare_topology", return_value=(stations, None)),
+            patch(
+                "custom_components.smappee_ev._prepare_site_topologies",
+                return_value=(prepared_site, None),
+            ),
             patch.object(hass.config_entries, "async_forward_entry_setups", return_value=None),
             patch.object(hass.config_entries, "async_update_entry") as update_entry,
         ):
@@ -910,7 +934,10 @@ class TestDomainSetup:
             patch(
                 "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies"
             ) as mock_discover,
-            patch("custom_components.smappee_ev._prepare_topology", return_value=(None, None)),
+            patch(
+                "custom_components.smappee_ev._prepare_site_topologies",
+                return_value=(None, None),
+            ),
         ):
             # Return some service locations
             mock_discover.return_value = [self._topology()]
@@ -940,17 +967,22 @@ class TestDomainSetup:
             )
         }
         mqtt_client = MagicMock()
+        prepared_site = make_site_runtime(site_location_id=12345, stations=stations)
+        second_topology = self._topology()
+        second_topology.site_location_id = 54321
+        second_topology.control_location_id = 54321
+        second_topology.measurement_location_ids = [54321]
 
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
                 "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
-                return_value=[self._topology(), self._topology()],
+                return_value=[self._topology(), second_topology],
             ),
             patch(
-                "custom_components.smappee_ev._prepare_topology",
+                "custom_components.smappee_ev._prepare_site_topologies",
                 side_effect=[
-                    (stations, mqtt_client),
+                    (prepared_site, mqtt_client),
                     ConfigEntryAuthFailed("dashboard auth failed"),
                 ],
             ),

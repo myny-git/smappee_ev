@@ -12,6 +12,7 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
+from .api.discovery import SmappeeLocationTopology
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
@@ -25,15 +26,15 @@ from .dashboard_discovery import (
     _dashboard_client_configured,
     _load_dashboard_topologies,
 )
+from .models.mqtt_diagnostics import MqttRoutingDiagnostics
 from .models.runtime_data import (
     MqttRuntimeValue,
     RuntimeData,
     SmappeeEvConfigEntry,
     SmappeeSiteRuntime,
-    SmappeeStationRuntime,
 )
-from .mqtt_setup import MqttRoutingDiagnostics, _mqtt_routing_diagnostics, _start_mqtt_clients
-from .runtime_assembly import _log_stored_runtime_shape, _prepare_topology
+from .mqtt_setup import _mqtt_routing_diagnostics, _start_mqtt_clients
+from .runtime_assembly import _log_stored_runtime_shape, _prepare_site_topologies
 from .runtime_devices import _current_station_device_identifiers, _register_runtime_devices
 from .runtime_lifecycle import (
     _async_shutdown_runtime_resources,
@@ -176,12 +177,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
     mqtt_diagnostics: dict[int, list[MqttRoutingDiagnostics]] = {}
     background_tasks: set[asyncio.Task] = set()
 
-    # 2) Prepare each site in parallel
+    # 2) Merge discovery records by physical site before creating runtime objects.
+    topologies_by_site: dict[int, list[SmappeeLocationTopology]] = {}
+    for topology in topologies:
+        topologies_by_site.setdefault(topology.site_location_id, []).append(topology)
+
+    # Prepare different physical sites in parallel. Controls belonging to one
+    # site are prepared together so coordinators and MQTT capture the final map.
     client_id_prefix = f"ha-{entry.entry_id[-6:]}"
     prep_tasks = [
-        _prepare_topology(
+        _prepare_site_topologies(
             hass,
-            topology,
+            site_topologies,
             update_interval,
             client_id_prefix,
             config_entry=entry,
@@ -189,12 +196,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             background_tasks=background_tasks,
             start_runtime=False,
         )
-        for topology in topologies
+        for site_topologies in topologies_by_site.values()
     ]
     try:
         results = await asyncio.gather(*prep_tasks, return_exceptions=True)
         hard_error: BaseException | None = None
-        for topology, res in zip(topologies, results, strict=True):
+        for (sid, _site_topologies), res in zip(topologies_by_site.items(), results, strict=True):
             if isinstance(res, asyncio.CancelledError):
                 hard_error = hard_error or res
                 continue
@@ -203,38 +210,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
                 continue
             if isinstance(res, BaseException):
                 hard_error = hard_error or res
-                _LOGGER.warning("Site %s preparation failed: %s", topology.site_location_id, res)
+                _LOGGER.warning("Site %s preparation failed: %s", sid, res)
                 continue
-            stations_map, mqtt = res
-            sid = topology.site_location_id
+            site, mqtt = res
             mqtt_diagnostics.setdefault(sid, []).extend(_mqtt_routing_diagnostics(mqtt))
             if mqtt:
                 mqtt_clients[sid] = mqtt
-            if not stations_map:
-                continue
-            site = sites.get(sid)
             if site is None:
-                site = SmappeeSiteRuntime(
-                    site_location_id=sid,
-                    site_name=topology.site_name,
-                    site_function_type=topology.site_function_type,
-                    site_uuid=topology.site_location_uuid,
-                    gateway_serial=topology.site_gateway_serial,
-                    gateway_type=topology.site_gateway_type,
-                )
-                sites[sid] = site
-            first_bucket: SmappeeStationRuntime | None = next(iter(stations_map.values()), None)
-            if site.site_coordinator is None:
-                site.site_coordinator = first_bucket.site_coordinator if first_bucket else None
-            site.stations.update(stations_map)
-            site.control_location_ids = list(
-                dict.fromkeys([*site.control_location_ids, topology.control_location_id])
-            )
-            site.measurement_location_ids = list(
-                dict.fromkeys([*site.measurement_location_ids, *topology.measurement_location_ids])
-            )
-            if first_bucket is not None:
-                site.highlevel_configs.update(first_bucket.highlevel_configs)
+                continue
+            sites[sid] = site
 
         if hard_error is not None:
             if isinstance(hard_error, asyncio.CancelledError | ConfigEntryAuthFailed):

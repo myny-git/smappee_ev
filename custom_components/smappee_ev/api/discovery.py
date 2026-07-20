@@ -201,10 +201,10 @@ def _measurement_role(measurement: dict[str, Any]) -> str | None:
     if mtype == "PRODUCTION":
         return "production"
     appliance = measurement.get("appliance")
-    appliance_type = (
-        appliance.get("type") if isinstance(appliance, dict) else measurement.get("category")
-    )
-    if mtype == "APPLIANCE" and str(appliance_type or "").upper() == "CAR_CHARGER":
+    appliance_type = appliance.get("type") if isinstance(appliance, dict) else None
+    category = appliance_type or measurement.get("category")
+    normalized = "".join(char for char in str(category or "").upper() if char.isalnum())
+    if mtype == "APPLIANCE" and normalized == "CARCHARGER":
         return "car_charger"
     return None
 

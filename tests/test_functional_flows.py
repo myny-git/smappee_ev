@@ -127,6 +127,136 @@ class _FakeDashboard:
         )
 
 
+class _MultiLocationDashboard(_FakeDashboard):
+    """Dashboard fixture reproducing one parent and one overlapping child control."""
+
+    def __init__(self, *, reverse: bool = False):
+        super().__init__()
+        locations = [
+            {
+                "id": 278001,
+                "serviceLocationUuid": "site-uuid",
+                "name": "Customer Site",
+                "functionType": "ELECTRICITY",
+                "chargingStation": {"serialNumber": "STATION-B"},
+                "gateway": {"serialNumber": "SITE-GATEWAY", "deviceType": "Infinity"},
+            },
+            {
+                "id": 278008,
+                "parentId": 278001,
+                "serviceLocationUuid": "child-uuid",
+                "name": "Rear Charger",
+                "functionType": "CHARGINGSTATION",
+                "chargingStation": {"serialNumber": "STATION-A"},
+                "gateway": {"serialNumber": "CHILD-GATEWAY", "deviceType": "Connect"},
+            },
+        ]
+        self.async_get_service_locations_full_details = AsyncMock(
+            return_value=list(reversed(locations)) if reverse else locations
+        )
+
+        def channel(topic, index, username, password):
+            return {
+                "protocol": "MQTT",
+                "name": topic,
+                "aspectPaths": [{"path": f"$.activePowerData[{index}]"}],
+                "userName": username,
+                "password": password,
+            }
+
+        self.async_get_highlevel_configuration = AsyncMock(
+            side_effect=lambda sid: {
+                278001: {
+                    "measurements": [
+                        {
+                            "type": "GRID",
+                            "updateChannels": {
+                                "activePower": channel(
+                                    "servicelocation/site-uuid/power", 0, "parent", "parent-pw"
+                                )
+                            },
+                        },
+                        {
+                            "type": "APPLIANCE",
+                            "name": "Front Charger 1",
+                            "appliance": {"type": "CAR_CHARGER"},
+                            "updateChannels": {
+                                "activePower": channel(
+                                    "servicelocation/site-uuid/power", 2, "parent", "parent-pw"
+                                )
+                            },
+                        },
+                    ]
+                },
+                278008: {
+                    "measurements": [
+                        {
+                            "type": "APPLIANCE",
+                            "name": "Rear Charger 1",
+                            "appliance": {"type": "CAR_CHARGER"},
+                            "updateChannels": {
+                                "activePower": channel(
+                                    "servicelocation/child-uuid/power", 1, "child", "child-pw"
+                                )
+                            },
+                        }
+                    ]
+                },
+            }[sid]
+        )
+
+        station_a = {
+            "uuid": "station-a",
+            "id": "station-a-device",
+            "serialNumber": "STATION-A",
+            "type": {"category": "CHARGINGSTATION"},
+        }
+        station_b = {
+            "uuid": "station-b",
+            "id": "station-b-device",
+            "serialNumber": "STATION-B",
+            "type": {"category": "CHARGINGSTATION"},
+        }
+        connector_a = {
+            "uuid": "connector-a",
+            "id": "connector-a-device",
+            "position": 1,
+            "type": {"category": "CARCHARGER"},
+        }
+        connector_b = {
+            "uuid": "connector-b",
+            "id": "connector-b-device",
+            "position": 1,
+            "type": {"category": "CARCHARGER"},
+        }
+        self.async_get_smart_devices = AsyncMock(
+            side_effect=lambda sid: (
+                [station_a, station_b, connector_a, connector_b]
+                if sid == 278001
+                else [station_a, connector_a]
+            )
+        )
+
+        def details(serial):
+            suffix = "a" if serial == "STATION-A" else "b"
+            return {
+                "name": "Rear Charger" if suffix == "a" else "Front Charger",
+                "chargingStation": {"model": "EV Wall"},
+                "modules": [
+                    {
+                        "position": 1,
+                        "smartDevice": {
+                            "uuid": f"connector-{suffix}",
+                            "id": f"connector-{suffix}-device",
+                            "type": {"category": "CARCHARGER"},
+                        },
+                    }
+                ],
+            }
+
+        self.async_get_charging_station_details = AsyncMock(side_effect=details)
+
+
 class _FakeSiteCoordinator:
     def __init__(self, hass, **kwargs):
         self.hass = hass
@@ -134,6 +264,7 @@ class _FakeSiteCoordinator:
         self.data = SiteData(site=SimpleNamespace(mqtt_connected=None))
         self.last_update_success = True
         self.mqtt_connection_changes = []
+        self.shutdown_called = False
 
     async def async_config_entry_first_refresh(self):
         return None
@@ -146,7 +277,7 @@ class _FakeSiteCoordinator:
         self.data.site.mqtt_connected = up
 
     async def async_shutdown(self):
-        return None
+        self.shutdown_called = True
 
 
 class _FakeStationCoordinator:
@@ -169,6 +300,8 @@ class _FakeStationCoordinator:
         self.mqtt_properties = []
         self.mqtt_connection_changes = []
         self.refresh_requested = AsyncMock()
+        self.delayed_refreshes_cancelled = False
+        self.shutdown_called = False
 
     async def async_config_entry_first_refresh(self):
         return None
@@ -187,10 +320,10 @@ class _FakeStationCoordinator:
         await self.refresh_requested()
 
     def cancel_delayed_refreshes(self):
-        return None
+        self.delayed_refreshes_cancelled = True
 
     async def async_shutdown(self):
-        return None
+        self.shutdown_called = True
 
 
 class _FakeMqtt:
@@ -320,6 +453,106 @@ async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass):
     ]
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.asyncio
+async def test_setup_entry_merges_multi_location_before_coordinators_and_mqtt(hass, reverse):
+    """One physical site must own one final coordinator graph in either API order."""
+    dashboard = _MultiLocationDashboard(reverse=reverse)
+    entry = MagicMock()
+    entry.data = {
+        CONF_USERNAME: "user",
+        CONF_PASSWORD: "pass",
+        CONF_DASHBOARD_REFRESH_TOKEN: "refresh",
+    }
+    entry.options = {}
+    entry.entry_id = "setup_entry_654321"
+    entry.title = "Smappee EV"
+    entry.state = ConfigEntryState.LOADED
+    entry.runtime_data = None
+    entry.async_on_unload = MagicMock()
+
+    with (
+        patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
+        patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeSiteCoordinator",
+            _FakeSiteCoordinator,
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeCoordinator",
+            _FakeStationCoordinator,
+        ),
+        patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
+        patch("custom_components.smappee_ev._register_runtime_devices"),
+        patch.object(hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
+    ):
+        assert await async_setup_entry(hass, entry) is True
+
+    runtime = entry.runtime_data
+    site = runtime.sites[278001]
+    assert set(site.stations) == {"station-a", "station-b"}
+    assert site.control_location_ids == [278001, 278008]
+    assert site.measurement_location_ids == [278001, 278008]
+    assert site.stations["station-a"].control_location_id == 278008
+    assert site.stations["station-a"].station_name == "Rear Charger"
+    assert site.stations["station-b"].control_location_id == 278001
+    assert site.stations["station-b"].station_name == "Front Charger"
+
+    mqtt_clients = runtime.mqtt[278001]
+    assert isinstance(mqtt_clients, list)
+    assert len(mqtt_clients) == 2
+    (routing,) = runtime.mqtt_diagnostics[278001]
+    assert routing.started is True
+
+    station_a_coord = site.stations["station-a"].station_coordinator
+    station_b_coord = site.stations["station-b"].station_coordinator
+    assert set(station_a_coord.highlevel_configs) == {278008}
+    assert set(station_b_coord.highlevel_configs) == {278001}
+    assert routing.station_coordinator_ids == {
+        key: id(bucket.station_coordinator) for key, bucket in site.stations.items()
+    }
+    final_coordinator_ids = {
+        id(site.site_coordinator),
+        *(id(bucket.station_coordinator) for bucket in site.stations.values()),
+    }
+    assert all(
+        target.coordinator_id in final_coordinator_ids
+        for targets in routing.configured_routes.values()
+        for target in targets
+    )
+    callback = mqtt_clients[0].kwargs["on_properties"]
+    callback("servicelocation/site-uuid/power", {"activePowerData": [10, 20, 30]})
+    assert len(station_a_coord.mqtt_properties) == 0
+    assert len(station_b_coord.mqtt_properties) == 1
+
+    callback = mqtt_clients[1].kwargs["on_properties"]
+    callback("servicelocation/child-uuid/power", {"activePowerData": [10, 20, 30]})
+    assert len(station_a_coord.mqtt_properties) == 1
+    assert len(station_b_coord.mqtt_properties) == 1
+
+    callback(
+        "servicelocation/child-uuid/etc/carcharger/acchargingcontroller/v1/"
+        "devices/connector-a/state",
+        {"connectionStatus": "CONNECTED"},
+    )
+    assert len(station_a_coord.mqtt_properties) == 2
+    assert len(station_b_coord.mqtt_properties) == 1
+
+    with patch.object(
+        hass.config_entries, "async_unload_platforms", new_callable=AsyncMock, return_value=True
+    ):
+        assert await async_unload_entry(hass, entry) is True
+
+    assert site.site_coordinator.shutdown_called is True
+    assert station_a_coord.delayed_refreshes_cancelled is True
+    assert station_b_coord.delayed_refreshes_cancelled is True
+    assert station_a_coord.shutdown_called is True
+    assert station_b_coord.shutdown_called is True
+    assert all(client.begin_shutdown_called for client in mqtt_clients)
+    assert all(client.stopped for client in mqtt_clients)
+    assert not runtime.background_tasks
+
+
 @pytest.mark.asyncio
 async def test_setup_entry_dashboard_auth_failure_propagates_reauth(hass):
     dashboard = MagicMock()
@@ -416,7 +649,10 @@ def test_mqtt_routes_deliver_properties_to_site_and_station_coordinators(hass):
     station_coordinator._shutting_down = False
     station_coordinator.update_interval = 30
     station_coordinator.async_request_refresh = AsyncMock()
-    station_bucket = SimpleNamespace(station_coordinator=station_coordinator)
+    station_bucket = SimpleNamespace(
+        station_coordinator=station_coordinator,
+        control_location_id=317443,
+    )
     specs = [
         MqttChannelSpec(
             317418, "grid", "activePower", "servicelocation/site-uuid/power", None, None, []

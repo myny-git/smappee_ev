@@ -761,7 +761,7 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
     assert bucket.led_devices["led-id"].led_device_uuid == "led-uuid"
     assert bucket.led_devices["led-id"].led_device_name == "LED Ring"
     assert bucket.site_coordinator is site_coord
-    assert bucket.highlevel_configs.keys() == {100, 200}
+    assert bucket.highlevel_configs.keys() == {200}
     assert create_site.await_args.kwargs["highlevel_configs"]
     assert create_stations.await_args.kwargs["highlevel_configs"]
     assert setup_mqtt.call_args.kwargs["mqtt_specs"]

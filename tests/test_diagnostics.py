@@ -23,11 +23,11 @@ from custom_components.smappee_ev.diagnostics import (
     _safe_sorted,
     async_get_config_entry_diagnostics,
 )
-from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
-from custom_components.smappee_ev.mqtt_setup import (
+from custom_components.smappee_ev.models.mqtt_diagnostics import (
     MqttRouteDiagnosticTarget,
     MqttRoutingDiagnostics,
 )
+from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from tests.factories import (
     make_config_entry,
     make_connector_runtime,
@@ -818,17 +818,8 @@ class _FakePowerCoord:
         self.data = data
 
 
-def test_power_mapping_info_reveals_discovery_power_classification_mismatch():
-    """Regression test for #251.
-
-    A car-charger measurement whose `category` is not "CAR_CHARGER" but whose
-    `appliance.type` is must still show up as a car-charger measurement in
-    diagnostics (`discovery_classification`), even though the current
-    `coordinators.power` inline classification (`power_classification`) skips
-    it - proving the MQTT power index map is never populated for this
-    measurement because of the classification precedence mismatch, not
-    because the connector-uuid resolver fails.
-    """
+def test_power_mapping_info_uses_shared_car_charger_classification():
+    """Discovery, diagnostics and live power mapping must classify identically."""
     connector_clients = {"connector-uuid-1": SimpleNamespace(connector_number=1)}
     measurement = {
         "type": "APPLIANCE",
@@ -854,10 +845,8 @@ def test_power_mapping_info_reveals_discovery_power_classification_mismatch():
 
     (meas_out,) = info["measurements"]
     assert meas_out["discovery_classification"] == "car_charger"
-    assert meas_out["power_classification"] is None
-    assert meas_out["would_enter_power_car_branch"] is False
-    # The resolver itself works fine - it is never reached in production
-    # because `power_classification` is None for this measurement.
+    assert meas_out["power_classification"] == "car_charger"
+    assert meas_out["would_enter_power_car_branch"] is True
     assert meas_out["resolved"] is True
     assert meas_out["resolved_connector"] == "connector_1"
     assert meas_out["resolution_method"] == "identifier"
