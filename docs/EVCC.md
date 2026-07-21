@@ -15,6 +15,17 @@ All details can be found in following link: 🔗 [Home Assistant as EVCC Source]
 ### ✅ Step 2: Collect Sensor Names
 - Identify all relevant `sensor.*`, `switch.*` and `number.*` entities created by your Smappee integration.
 
+> [!IMPORTANT]
+> Entity IDs follow Home Assistant's `has_entity_name` + translation-key convention:
+> `<domain>.smappee_ev_<station serial>_<metric>_<connector number>` (e.g.
+> `sensor.smappee_ev_YOURSERIAL_evcc_state_1`). The **charging station** has its own
+> serial number, separate from the site/service-location serial used by the grid and PV
+> meter entities — grab `YOURSERIAL` from an actual `..._evcc_state_1`/`..._charging_1`
+> style entity, not from the site meters. The most reliable way to confirm the exact IDs
+> for your installation is **Developer Tools → States**, filtered on `smappee_ev`, since
+> renaming your station in the Smappee app changes the device name and thus the entity_id
+> (see the README's breaking-changes notes).
+
 ### ✅ Step 3: Define Your Charger in `evcc.yaml`
 
 Below, you can find a full example for a Smappee EV Wallbox. The configuration was recently set up and is currently undergoing testing. The main idea is following:
@@ -32,7 +43,7 @@ chargers:
     type: custom
     status:
       source: http
-      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_evcc_state
+      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_evcc_state_1
       method: GET
       auth:
         type: bearer
@@ -42,7 +53,7 @@ chargers:
 
     enabled:
       source: http
-      uri: http://192.168.LOCALIP:8123/api/states/switch.smappee_ev_YOURSERIAL_connector_1_evcc_charging
+      uri: http://192.168.LOCALIP:8123/api/states/switch.smappee_ev_YOURSERIAL_charging_1
       method: GET
       auth:
         type: bearer
@@ -59,7 +70,7 @@ chargers:
         token: YOUR BEARER TOKEN HERE
       headers:
         - content-type: application/json
-      body: '{"entity_id":"switch.smappee_ev_YOURSERIAL_connector_1_evcc_charging"}'
+      body: '{"entity_id":"switch.smappee_ev_YOURSERIAL_charging_1"}'
 
     # fallback: integer A
     maxcurrent:
@@ -71,7 +82,7 @@ chargers:
         token: YOUR BEARER TOKEN HERE
       headers:
         - content-type: application/json
-      body: '{"entity_id":"number.smappee_ev_YOURSERIAL_max_charging_speed_1","value":${maxcurrent}}'
+      body: '{"entity_id":"number.smappee_ev_YOURSERIAL_current_1","value":${maxcurrent}}'
 
     # fine control: decimal A, e.g. 6.4
     maxcurrentmillis:
@@ -83,11 +94,11 @@ chargers:
         token: YOUR BEARER TOKEN HERE
       headers:
         - content-type: application/json
-      body: '{"entity_id":"number.smappee_ev_YOURSERIAL_max_charging_speed_1","value":${maxcurrentmillis}}'
+      body: '{"entity_id":"number.smappee_ev_YOURSERIAL_current_1","value":${maxcurrentmillis}}'
 
     power:
       source: http
-      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_power
+      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_power_total_1
       method: GET
       auth:
         type: bearer
@@ -97,7 +108,7 @@ chargers:
 
     energy:
       source: http
-      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_energy_import
+      uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_energy_import_kwh_1
       method: GET
       auth:
         type: bearer
@@ -107,7 +118,7 @@ chargers:
 
     currents:
       - source: http
-        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_current_l1
+        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_current_l1_1
         method: GET
         auth:
           type: bearer
@@ -115,7 +126,7 @@ chargers:
         jq: .state | tonumber
         timeout: 10s
       - source: http
-        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_current_l2
+        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_current_l2_1
         method: GET
         auth:
           type: bearer
@@ -123,7 +134,7 @@ chargers:
         jq: .state | tonumber
         timeout: 10s
       - source: http
-        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_connector_1_current_l3
+        uri: http://192.168.LOCALIP:8123/api/states/sensor.smappee_ev_YOURSERIAL_current_l3_1
         method: GET
         auth:
           type: bearer
