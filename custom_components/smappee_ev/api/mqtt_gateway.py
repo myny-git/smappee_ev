@@ -197,7 +197,7 @@ class SmappeeMqtt:
             return
         try:
             task.result()
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("MQTT startup failed: %s", err)
 
     def _runner_done(self, task: asyncio.Task) -> None:
@@ -207,7 +207,7 @@ class SmappeeMqtt:
             return
         try:
             task.result()
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("MQTT runner stopped unexpectedly: %s", err)
             self._notify_conn(False)
 
@@ -354,7 +354,7 @@ class SmappeeMqtt:
             ssl_ctx = await _build_ssl_ctx()
         except asyncio.CancelledError:
             raise
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("MQTT startup failed: %s", err)
             self._notify_conn(False)
             return
