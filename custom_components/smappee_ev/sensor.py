@@ -915,10 +915,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
             return None
 
         value = getattr(st, "session_state", None)
-        if value is None:
-            return None
-        lowered = str(value).lower()
-        return lowered if lowered in self._attr_options else None
+        return str(value).lower() if value is not None else None
 
 
 class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
@@ -1026,8 +1023,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         st = self._conn_state
         value = getattr(st, "status_current", None) if st else None
         if value is not None:
-            lowered = str(value).lower()
-            return lowered if lowered in self._attr_options else None
+            return str(value).lower()
         return self._restored_value
 
     async def async_added_to_hass(self) -> None:
@@ -1037,8 +1033,9 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         # Restore previous state if available
         last_data = await self.async_get_last_sensor_data()
         restored_value = last_data.native_value if last_data else None
-        if isinstance(restored_value, str) and restored_value not in self._attr_options:
-            restored_value = None
+        if isinstance(restored_value, str):
+            lowered = restored_value.lower()
+            restored_value = lowered if lowered in self._attr_options else None
         if restored_value is not None:
             self._restored_value = str(restored_value)
             _safe_write_ha_state(self)
