@@ -39,7 +39,8 @@ ignore = [
   "COM812","COM819", # comma/whitespace (formatter)
   "ISC001",          # implicit string concat (formatter)
   "W191","E111","E114","E117",  # edge indentation noise
-  "D206","D300"      # docstring formatting quirks
+  "D206","D300",     # docstring formatting quirks
+  "BLE001",          # rollback/cleanup handlers intentionally catch Exception
 ]
 
 [lint.isort]
