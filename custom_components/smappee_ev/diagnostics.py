@@ -771,14 +771,14 @@ async def async_get_config_entry_diagnostics(
     try:  # best effort
         integration = await async_get_integration(hass, entry.domain)
         manifest_version = getattr(integration, "version", None)
-    except Exception:  # noqa: BLE001
+    except Exception:
         manifest_version = None
 
     state_name = None
     try:
         st = getattr(entry, "state", None)
         state_name = getattr(st, "name", None) or str(st) if st is not None else None
-    except Exception:  # noqa: BLE001
+    except Exception:
         state_name = None
 
     out["meta"] = {

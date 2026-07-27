@@ -324,11 +324,11 @@ class TestRestoreEntityFunctionality:
         ):
             await entity.async_added_to_hass()
 
-        # Verify state was restored
-        assert entity._restored_value == "AVAILABLE"
+        # Verify state was restored (normalized to lowercase to match _attr_options)
+        assert entity._restored_value == "available"
 
         # Test that native_value returns the restored value
-        assert entity.native_value == "AVAILABLE"
+        assert entity.native_value == "available"
 
     @pytest.mark.asyncio
     async def test_evse_status_sensor_no_restore_when_real_data(

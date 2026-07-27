@@ -138,7 +138,7 @@ async def _create_coordinators(
                     result = shutdown()
                     if isawaitable(result):
                         await result
-                except Exception:  # noqa: BLE001 - rollback must continue
+                except Exception:
                     _LOGGER.debug("Station coordinator rollback failed", exc_info=True)
         raise
 
@@ -486,7 +486,7 @@ async def _prepare_site_topologies(
                         result = shutdown()
                         if isawaitable(result):
                             await result
-                    except Exception:  # noqa: BLE001 - rollback must continue
+                    except Exception:
                         _LOGGER.debug("Station coordinator rollback failed", exc_info=True)
         shutdown = getattr(site_coordinator, "async_shutdown", None)
         if callable(shutdown):
@@ -494,7 +494,7 @@ async def _prepare_site_topologies(
                 result = shutdown()
                 if isawaitable(result):
                     await result
-            except Exception:  # noqa: BLE001 - rollback must preserve original failure
+            except Exception:
                 _LOGGER.debug("Site coordinator rollback failed", exc_info=True)
         raise
 

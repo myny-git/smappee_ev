@@ -1033,8 +1033,9 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         # Restore previous state if available
         last_data = await self.async_get_last_sensor_data()
         restored_value = last_data.native_value if last_data else None
-        if isinstance(restored_value, str) and restored_value in ("unknown", "unavailable"):
-            restored_value = None
+        if isinstance(restored_value, str):
+            lowered = restored_value.lower()
+            restored_value = lowered if lowered in self._attr_options else None
         if restored_value is not None:
             self._restored_value = str(restored_value)
             _safe_write_ha_state(self)

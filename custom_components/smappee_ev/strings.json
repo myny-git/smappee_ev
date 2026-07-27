@@ -363,6 +363,7 @@
       "evse_status": {
         "name": "EVSE status",
         "state": {
+          "initialize": "Initializing",
           "available": "Available",
           "cable_connected": "Cable connected",
           "charging": "Charging",

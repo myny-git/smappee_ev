@@ -81,7 +81,7 @@ def _restore_real_socket() -> None:
         real = getattr(socket, "__real_socket__", None)
         if real and isinstance(socket.socket, type):
             socket.socket = real  # type: ignore[assignment]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logging.getLogger(__name__).debug("restore socket failed: %s", exc)
 
 
@@ -96,6 +96,6 @@ def pytest_fixture_setup(fixturedef, request):  # type: ignore[override]
             from pytest_socket import enable_socket as _en  # type: ignore
 
             _en()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logging.getLogger(__name__).debug("enable_socket call failed: %s", exc)
     yield

@@ -61,7 +61,7 @@ async def _shutdown_site_coordinator(site: SmappeeSiteRuntime) -> None:
                 await result
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001 - shutdown must continue for other resources
+        except Exception as exc:
             _LOGGER.debug("Site coordinator shutdown issue: %s", exc)
 
 
@@ -82,7 +82,7 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
                         await result
                 except asyncio.CancelledError:
                     raise
-                except Exception as exc:  # noqa: BLE001 - shutdown must continue
+                except Exception as exc:
                     _LOGGER.debug("Coordinator shutdown issue: %s", exc)
 
     for sid, mqtt in (rd.mqtt or {}).items():
@@ -96,7 +96,7 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
                     await result
             except asyncio.CancelledError:
                 raise
-            except Exception as err:  # noqa: BLE001 - shutdown must continue
+            except Exception as err:
                 _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
 
     pending_tasks = [task for task in rd.background_tasks if not task.done()]
