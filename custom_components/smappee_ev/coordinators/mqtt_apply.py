@@ -252,7 +252,21 @@ class MqttMixin(CoordinatorMixin):
         changed |= self._merge_cs_limits_availability(conn, payload)
 
         changed |= self._update_evcc(conn)
+
+        if was_active and not self._is_session_active(conn):
+            changed |= self._clear_connector_power(conn)
+
         self._handle_session_tracking_transition(conn, was_active, connector_uuid)
+        return changed
+
+    @staticmethod
+    def _clear_connector_power(conn: ConnectorState) -> bool:
+        """Clear stale power/current readings when a charging session ends."""
+        changed = False
+        for attr, zero in (("power_total", 0), ("power_phases", None), ("current_phases", None)):
+            if getattr(conn, attr) not in (zero, None):
+                setattr(conn, attr, zero)
+                changed = True
         return changed
 
     def _merge_cs_primary(self, conn: ConnectorState, payload: dict) -> bool:
