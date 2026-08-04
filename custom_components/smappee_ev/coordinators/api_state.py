@@ -89,7 +89,9 @@ class StationApiMixin(CoordinatorMixin):
         return replace(
             prev,
             connector_number=rest.connector_number,
-            session_state=rest.session_state,
+            session_state=rest.session_state
+            if rest.session_state != "Initialize"
+            else prev.session_state,
             selected_current_limit=rest.selected_current_limit
             if rest.selected_current_limit is not None
             else prev.selected_current_limit,
