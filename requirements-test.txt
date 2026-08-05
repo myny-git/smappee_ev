@@ -1,11 +1,12 @@
 ############################################################
 # Test / Dev requirements for Smappee EV integration
-# Pin versions to avoid resolver conflicts and flaky CI.
+# Constrain versions to avoid resolver conflicts and flaky CI.
 ############################################################
 
-# Pytest + async support (choose latest plugin variant requiring pytest-asyncio 0.24.0)
+# Pytest + async support. Let the resolver select the plugin release that pins
+# the configured Home Assistant version.
 pytest-cov>=7.1.0,<8
-pytest-homeassistant-custom-component==0.13.346
+pytest-homeassistant-custom-component>=0.13.346,<0.14
 
 # Home Assistant core + type stubs (keep in sync!)
 homeassistant==2026.7.2

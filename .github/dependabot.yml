@@ -15,9 +15,13 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      home-assistant-stack:
+      python-dependencies:
         patterns:
-          - "homeassistant"
-          - "homeassistant-stubs"
-          - "pytest-homeassistant-custom-component"
+          - "*"
+    ignore:
+      - dependency-name: "pytest-homeassistant-custom-component"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
 
