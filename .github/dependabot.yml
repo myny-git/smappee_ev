@@ -5,9 +5,19 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      home-assistant-stack:
+        patterns:
+          - "homeassistant"
+          - "homeassistant-stubs"
+          - "pytest-homeassistant-custom-component"
 
