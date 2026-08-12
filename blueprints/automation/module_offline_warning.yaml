@@ -1,0 +1,71 @@
+blueprint:
+  name: 'Smappee: Module Offline Warning'
+  description: Send a notification when a Smappee sensor goes offline, indicating a probable loss of connection.
+  domain: automation
+  input:
+    smappee_sensor:
+      name: Smappee Sensor
+      description: The Smappee sensor to monitor (e.g., house consumption or P1 power sensor).
+      selector:
+        entity:
+          filter:
+          - domain:
+            - sensor
+            integration: smappee_ev
+          multiple: false
+    offline_delay:
+      name: Delay Time
+      description: How long the sensor must remain unavailable before sending the notification.
+      default: 5
+      selector:
+        number:
+          min: 1.0
+          max: 60.0
+          unit_of_measurement: minutes
+          mode: slider
+          step: 1.0
+    notify_service:
+      name: Notification Target
+      description: Select the device or group that should receive the alert.
+      selector:
+        target:
+          entity:
+            domain: notify
+    notification_title:
+      name: Notification Title
+      description: The title header text of the push notification message.
+      default: '⚠️ Smappee: Connection Lost'
+      selector:
+        text:
+          multiple: false
+          multiline: false
+    notification_message:
+      name: Notification Message
+      description: The body text of the message. Use {{ delay_minutes }} to inject the dynamic countdown value.
+      default: The Smappee module has been unreachable for {{ delay_minutes }} minutes. Please check the P1 module and your network connection.
+      selector:
+        text:
+          multiple: false
+          multiline: false
+
+variables:
+  delay_minutes: !input offline_delay
+  notification_message: !input notification_message
+
+trigger:
+  - platform: state
+    entity_id: !input smappee_sensor
+    to:
+      - unavailable
+      - unknown
+    for:
+      minutes: !input offline_delay
+
+action:
+  - action: notify.send_message
+    target: !input notify_service
+    data:
+      title: !input notification_title
+      message: '{{ notification_message }}'
+
+mode: single
