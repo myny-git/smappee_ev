@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later
 
 from ..const import DASHBOARD_REFRESH_AFTER_WRITE_DELAY, DASHBOARD_REFRESH_INTERVAL
-from ..helpers import anonymize_uuid
+from ..helpers import anonymize_uuid, dashboard_property_value
 from ..models.state import (
     ConnectorState,
     DashboardObject,
@@ -447,13 +447,6 @@ class DashboardMixin(CoordinatorMixin):
 
     def _dashboard_prop_int(self, props: list[Any], spec_name: str) -> int | None:
         raw = self._dashboard_prop_value(props, spec_name)
-        if isinstance(raw, dict):
-            if "Quantity" in raw and isinstance(raw["Quantity"], dict):
-                raw = raw["Quantity"].get("value")
-            elif "Integer" in raw:
-                raw = raw["Integer"]
-            elif "value" in raw:
-                raw = raw["value"]
         return self._as_int(raw)
 
     @staticmethod
@@ -464,11 +457,7 @@ class DashboardMixin(CoordinatorMixin):
             spec = prop.get("spec") or {}
             if not isinstance(spec, dict) or spec.get("name") != spec_name:
                 continue
-            if "value" in prop:
-                return prop.get("value")
-            values = prop.get("values")
-            if isinstance(values, list) and values:
-                return values[0]
+            return dashboard_property_value(prop)
         return None
 
     @staticmethod

@@ -1,6 +1,23 @@
 import custom_components.smappee_ev.helpers as helpers
 
 
+def test_dashboard_property_value_supports_value_and_values_payloads():
+    assert helpers.dashboard_property_value({"value": {"value": "7"}}) == "7"
+    assert helpers.dashboard_property_value({"values": [{"Integer": "66"}]}) == "66"
+    assert (
+        helpers.dashboard_property_value(
+            {"values": [{"Quantity": {"value": "24", "unit": "A"}}]}
+        )
+        == "24"
+    )
+
+
+def test_dashboard_property_value_rejects_missing_or_malformed_payloads():
+    assert helpers.dashboard_property_value({}) is None
+    assert helpers.dashboard_property_value({"values": []}) is None
+    assert helpers.dashboard_property_value({"value": {"unknown": "shape"}}) is None
+
+
 def test_make_unique_id_station():
     uid = helpers.make_unique_id(1, "SER123", "STUUID", None, "mqtt_connected")
     assert uid == "1:SER123:STUUID:mqtt_connected"

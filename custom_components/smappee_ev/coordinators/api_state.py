@@ -13,7 +13,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from ..api.device_handle import SmappeeDeviceHandle
 from ..api.errors import SmappeeError
 from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
-from ..helpers import anonymize_uuid
+from ..helpers import anonymize_uuid, dashboard_property_value
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
 from .power import _to_int
@@ -101,8 +101,12 @@ class StationApiMixin(CoordinatorMixin):
             else prev.selected_mode,
             min_current=rest.min_current,
             max_current=rest.max_current,
-            min_surpluspct=rest.min_surpluspct,
-            support_grid=rest.support_grid,
+            min_surpluspct=rest.min_surpluspct
+            if rest.min_surpluspct is not None
+            else prev.min_surpluspct,
+            support_grid=rest.support_grid
+            if rest.support_grid is not None
+            else prev.support_grid,
             api_available=rest.api_available,
         )
 
@@ -126,8 +130,7 @@ class StationApiMixin(CoordinatorMixin):
                         spec.get("name")
                         == "etc.smart.device.type.car.charger.led.config.brightness"
                     ):
-                        raw = prop.get("value")
-                        val = raw.get("value") if isinstance(raw, dict) else raw
+                        val = dashboard_property_value(prop)
                         if val is not None:
                             with suppress(TypeError, ValueError):
                                 led_brightness = int(val)
@@ -171,8 +174,7 @@ class StationApiMixin(CoordinatorMixin):
         for prop in data.get("configurationProperties", []):
             spec = prop.get("spec", {}) or {}
             name = spec.get("name")
-            raw = prop.get("value")
-            val = raw.get("value") if isinstance(raw, dict) else raw
+            val = dashboard_property_value(prop)
             if name == "etc.smart.device.type.car.charger.config.max.current":
                 with suppress(TypeError, ValueError):
                     max_current = _to_int(val, default=max_current)

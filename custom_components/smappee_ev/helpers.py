@@ -12,6 +12,30 @@ from homeassistant.helpers.entity import DeviceInfo
 from .const import CONFIGURATION_URL, DOMAIN, MANUFACTURER
 
 
+def dashboard_property_value(prop: object) -> Any:
+    """Return a scalar from Dashboard ``value`` or typed ``values`` payloads."""
+    if not isinstance(prop, dict):
+        return None
+
+    if "value" in prop:
+        raw = prop.get("value")
+    else:
+        values = prop.get("values")
+        raw = values[0] if isinstance(values, list) and values else None
+
+    if not isinstance(raw, dict):
+        return raw
+
+    quantity = raw.get("Quantity")
+    if isinstance(quantity, dict):
+        return quantity.get("value")
+    if "Integer" in raw:
+        return raw["Integer"]
+    if "value" in raw:
+        return raw["value"]
+    return None
+
+
 def dashboard_mode(mode: str | None) -> str | None:
     """Return a Dashboard v10 charging mode, accepting legacy/restored labels."""
     mode_up = str(mode or "").upper()

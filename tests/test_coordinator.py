@@ -705,6 +705,28 @@ class TestSmappeeCoordinator:
         assert result.support_grid is None
 
     @pytest.mark.asyncio
+    async def test_fetch_connector_state_supports_values_payload(self, coordinator):
+        """Test connector config supports Dashboard typed values payloads."""
+        client = coordinator.connector_clients["test_uuid"]
+        client.async_get_smartdevice = AsyncMock(
+            return_value={
+                "properties": [],
+                "configurationProperties": [
+                    {
+                        "spec": {
+                            "name": "etc.smart.device.type.car.charger.config.min.excesspct"
+                        },
+                        "values": [{"Integer": "66"}],
+                    }
+                ],
+            }
+        )
+
+        result = await coordinator._fetch_connector_state(client)
+
+        assert result.min_surpluspct == 66
+
+    @pytest.mark.asyncio
     async def test_fetch_connector_state_support_grid(self, coordinator):
         """Test connector state fetch derives support_grid from config properties."""
         client = coordinator.connector_clients["test_uuid"]
@@ -794,6 +816,40 @@ class TestSmappeeCoordinator:
         assert fallback_state.selected_mode == "SMART"
         assert fallback_state.min_surpluspct == 42
         assert fallback_state.api_available is False
+
+    @pytest.mark.asyncio
+    async def test_update_data_partial_recovery_preserves_connector_config(self, coordinator):
+        """Test recovery without optional config keeps last-known values."""
+        coordinator.data.connectors["test_uuid"].min_surpluspct = 42
+        coordinator.data.connectors["test_uuid"].support_grid = 4
+        coordinator._fetch_station_state = AsyncMock(
+            return_value=StationState(led_brightness=75, available=True)
+        )
+        coordinator._fetch_connector_state = AsyncMock(
+            side_effect=[
+                RuntimeError("Connection failed"),
+                ConnectorState(
+                    connector_number=1,
+                    session_state="Available",
+                    min_surpluspct=None,
+                    api_available=True,
+                ),
+            ]
+        )
+        coordinator._ensure_power_index_map = AsyncMock()
+
+        unavailable = await coordinator._async_update_data()
+
+        assert unavailable.connectors["test_uuid"].api_available is False
+        assert unavailable.connectors["test_uuid"].min_surpluspct == 42
+        assert unavailable.connectors["test_uuid"].support_grid == 4
+
+        coordinator.data = unavailable
+        recovered = await coordinator._async_update_data()
+
+        assert recovered.connectors["test_uuid"].api_available is True
+        assert recovered.connectors["test_uuid"].min_surpluspct == 42
+        assert recovered.connectors["test_uuid"].support_grid == 4
 
     @pytest.mark.asyncio
     async def test_update_data_station_exception(self, coordinator):

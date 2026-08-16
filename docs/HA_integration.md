@@ -209,6 +209,12 @@ These values are populated from MQTT. Depending on your installation, some senso
 | `pv_energy_import` | Total PV energy import. |
 | `pv_power` | Live PV power. |
 
+### Home Assistant Energy Dashboard
+
+The connector energy sensor can be used to track EV charging consumption in the Home Assistant Energy Dashboard. In the Energy Dashboard configuration, add `sensor.smappee_ev_YOURSERIAL_energy_import_kwh_1` under **Individual devices**.
+
+Replace `YOURSERIAL` with your charging station serial number. The final connector suffix, such as `_1`, may differ when the charging station has multiple connectors or when entity IDs have been customized.
+
 ## Removing the Integration
 
 1. In Home Assistant, go to **Settings -> Devices & services**.
