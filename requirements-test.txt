@@ -9,12 +9,12 @@ pytest-cov>=7.1.0,<8
 pytest-homeassistant-custom-component>=0.13.346,<0.14
 
 # Home Assistant core + type stubs (keep in sync!)
-homeassistant==2026.8.0
-homeassistant-stubs==2026.8.0
+homeassistant==2026.8.1
+homeassistant-stubs==2026.8.1
 
 # MQTT: pytest-homeassistant-custom-component currently pins paho-mqtt==1.6.1.
 # To avoid conflict with aiomqtt>=2 (needs paho>=2.1), we stub aiomqtt in tests.
 # (No explicit aiomqtt or paho-mqtt pin here; paho-mqtt 1.6.1 pulled transitively.)
 
 # Linting
-ruff>=0.16.1
+ruff>=0.16.2
