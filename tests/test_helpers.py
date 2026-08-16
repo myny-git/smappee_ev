@@ -5,9 +5,7 @@ def test_dashboard_property_value_supports_value_and_values_payloads():
     assert helpers.dashboard_property_value({"value": {"value": "7"}}) == "7"
     assert helpers.dashboard_property_value({"values": [{"Integer": "66"}]}) == "66"
     assert (
-        helpers.dashboard_property_value(
-            {"values": [{"Quantity": {"value": "24", "unit": "A"}}]}
-        )
+        helpers.dashboard_property_value({"values": [{"Quantity": {"value": "24", "unit": "A"}}]})
         == "24"
     )
 

@@ -713,9 +713,7 @@ class TestSmappeeCoordinator:
                 "properties": [],
                 "configurationProperties": [
                     {
-                        "spec": {
-                            "name": "etc.smart.device.type.car.charger.config.min.excesspct"
-                        },
+                        "spec": {"name": "etc.smart.device.type.car.charger.config.min.excesspct"},
                         "values": [{"Integer": "66"}],
                     }
                 ],

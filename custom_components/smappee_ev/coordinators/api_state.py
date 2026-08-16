@@ -104,9 +104,7 @@ class StationApiMixin(CoordinatorMixin):
             min_surpluspct=rest.min_surpluspct
             if rest.min_surpluspct is not None
             else prev.min_surpluspct,
-            support_grid=rest.support_grid
-            if rest.support_grid is not None
-            else prev.support_grid,
+            support_grid=rest.support_grid if rest.support_grid is not None else prev.support_grid,
             api_available=rest.api_available,
         )
 
