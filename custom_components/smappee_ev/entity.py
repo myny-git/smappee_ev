@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from homeassistant.helpers import update_coordinator
 
-from .const import DOMAIN, MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+from .const import MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
@@ -82,10 +82,6 @@ class SmappeeBaseEntity(update_coordinator.CoordinatorEntity[CoordinatorT]):
         self._device_scope = device_scope
         self._connector_key = connector_uuid
         unique_suffix = unique_suffix or "entity"
-        self.internal_integration_suggested_object_id = (
-            f"{DOMAIN}_{self._serial}_{unique_suffix.split(':')[-1]}"
-            f"{'_' + connector_label if connector_label else ''}"
-        )
         self._attr_unique_id = make_unique_id(
             sid,
             self._serial,

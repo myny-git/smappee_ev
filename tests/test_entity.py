@@ -1,11 +1,15 @@
 """Test the Smappee EV base entities."""
 
 from datetime import UTC, datetime, timedelta
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.entity_platform import EntityPlatform
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
@@ -200,13 +204,83 @@ class TestSmappeeBaseEntity:
         )
 
         assert entity.device_info == {"identifiers": {("test", "connector")}}
-        assert entity.internal_integration_suggested_object_id == "smappee_ev_SERIAL123_test_1"
         mock_make_device_info.assert_called_once_with(
             12345,
             "SERIAL123",
             "station-uuid",
             connector_label="1",
         )
+
+
+@pytest.mark.asyncio
+async def test_recreated_entity_id_uses_user_device_name(hass, mock_coordinator):
+    """Existing IDs stay stable while regenerated IDs follow the device name."""
+
+    class NamedConnectorEntity(SmappeeBaseEntity):
+        _attr_name = "Energy import"
+
+        @property
+        def device_info(self):
+            return {
+                "identifiers": {(DOMAIN, "connector:test")},
+                "name": "Smappee EV 5484125698 | Connector 1",
+            }
+
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+
+    with patch("custom_components.smappee_ev.entity.station_serial", return_value="5484125698"):
+        entity = NamedConnectorEntity(
+            mock_coordinator,
+            12345,
+            "station-uuid",
+            "sensor:energy_import_kwh",
+            connector_uuid="connector-uuid",
+            connector_label="1",
+            device_scope="connector",
+        )
+
+    original_unique_id = entity.unique_id
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        **entity.device_info,
+    )
+    entity_registry = er.async_get(hass)
+    old_entry = entity_registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        original_unique_id,
+        config_entry=entry,
+        device_id=device.id,
+        has_entity_name=True,
+        original_name="Energy import",
+        suggested_object_id="smappee_ev_5484125698_energy_import_kwh_1",
+    )
+    device_registry.async_update_device(device.id, name_by_user="Garage charger")
+
+    platform = EntityPlatform(
+        hass=hass,
+        logger=logging.getLogger(__name__),
+        domain="sensor",
+        platform_name=DOMAIN,
+        platform=None,
+        scan_interval=timedelta(seconds=30),
+        entity_namespace=None,
+    )
+    platform.config_entry = entry
+    await platform.async_add_entities([entity])
+
+    updated_entry = entity_registry.async_get(old_entry.entity_id)
+    assert updated_entry is not None
+    assert entity.entity_id == "sensor.smappee_ev_5484125698_energy_import_kwh_1"
+    assert entity.unique_id == original_unique_id
+    assert updated_entry.suggested_object_id is None
+    assert updated_entry.object_id_base == "Energy import"
+    assert (
+        entity_registry.async_regenerate_entity_id(updated_entry)
+        == "sensor.garage_charger_energy_import"
+    )
 
 
 class TestSmappeeStationEntity:
