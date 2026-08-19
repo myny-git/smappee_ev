@@ -172,7 +172,7 @@ class DashboardMixin(CoordinatorMixin):
 
         if errors:
             self._log_dashboard_refresh_errors(errors)
-        return cast(bool, changed)
+        return changed
 
     def _merge_dashboard_load_management(self, conn: ConnectorState, payload: MqttPayload) -> bool:
         changed = False
