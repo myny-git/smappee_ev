@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, override
 
 from homeassistant.helpers import update_coordinator
 
@@ -92,6 +92,7 @@ class SmappeeBaseEntity(update_coordinator.CoordinatorEntity[CoordinatorT]):
         super().__init__(coordinator)
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         station_client = getattr(self.coordinator, "station_client", None)
         site_name = _text_attr(self.coordinator, "site_name")
@@ -188,6 +189,7 @@ class SmappeeSitePowerEntity(SmappeeSiteEntity[CoordinatorT]):
     """Base for live site measurements backed by power MQTT data."""
 
     @property
+    @override
     def available(self) -> bool:
         """Return False when site power MQTT data is missing or stale."""
         if not super().available:
@@ -202,6 +204,7 @@ class SmappeeStationRestEntity(SmappeeStationEntity):
     """Base for station-scope entities that depend on REST reachability."""
 
     @property
+    @override
     def available(self) -> bool:
         """Return True when coordinator and station REST reachability are available."""
         if not super().available:
@@ -284,6 +287,7 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
         return self._connector_uuid
 
     @property
+    @override
     def available(self) -> bool:
         """Return True when coordinator and connector REST reachability are available."""
         if not super().available:
@@ -309,6 +313,7 @@ class SmappeeConnectorMqttEntity(SmappeeConnectorEntity):
     """Base for connector entities whose values are primarily MQTT-backed."""
 
     @property
+    @override
     def available(self) -> bool:
         """Return True when coordinator data exists and MQTT is not known down."""
         if not self._coordinator_available:

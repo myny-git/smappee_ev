@@ -116,8 +116,8 @@ def ensure_runtime_shutdown(
     if task is None:
         shutdown_coro = _async_shutdown_runtime_resources(runtime)
         created = hass.async_create_task(shutdown_coro)
-        if not isinstance(created, asyncio.Task):  # pragma: no cover - lightweight HA test doubles
-            shutdown_coro.close()
+        if not isinstance(created, asyncio.Task):  # pragma: no cover - test doubles
+            shutdown_coro.close()  # type: ignore[unreachable]
             created = asyncio.create_task(_async_shutdown_runtime_resources(runtime))
         task = created
         runtime.shutdown_task = task

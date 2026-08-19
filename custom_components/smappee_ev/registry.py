@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+
+from .models.runtime_data import SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 
 @callback
 def async_remove_config_entry_registry_entries(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: SmappeeEvConfigEntry
 ) -> tuple[int, int]:
     """Remove entity and device registry entries owned by a config entry."""
     entity_registry = er.async_get(hass)

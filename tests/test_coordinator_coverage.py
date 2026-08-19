@@ -1060,7 +1060,7 @@ async def test_station_dashboard_scheduled_refresh_reauth_and_cleanup(hass):
 
     await coord._async_delayed_dashboard_refresh(0)
 
-    entry.async_start_reauth.assert_called_once_with(hass)
+    entry.async_start_reauth_if_available.assert_called_once_with(hass)
     assert coord._dashboard_refresh_task is None
 
 
@@ -1169,7 +1169,7 @@ async def test_recent_session_refresh_lock_throttle_reauth_and_success(hass, mon
     coord.config_entry = MagicMock()
     coord._async_get_recent_sessions.side_effect = ConfigEntryAuthFailed("reauth")
     await coord._async_refresh_recent_sessions("reauth", force=True)
-    coord.config_entry.async_start_reauth.assert_called_once_with(hass)
+    coord.config_entry.async_start_reauth_if_available.assert_called_once_with(hass)
 
     coord._async_get_recent_sessions.side_effect = RuntimeError("offline")
     await coord._async_refresh_recent_sessions("offline", force=True)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, override
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -34,6 +34,7 @@ from .entity import (
 )
 from .helpers import format_as_hms, safe_sum, update_total_increasing
 from .models.runtime_data import SmappeeEvConfigEntry
+from .models.state import SiteState, StationState
 
 PARALLEL_UPDATES = 0
 
@@ -112,7 +113,9 @@ async def async_setup_entry(
 # --------------- Station sensors ---------------
 
 
-def _site_state(coordinator: SmappeeSiteCoordinator | SmappeeCoordinator):
+def _site_state(
+    coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
+) -> SiteState | StationState | None:
     data = getattr(coordinator, "data", None)
     if data is None:
         return None
@@ -161,6 +164,7 @@ class StationGridPower(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         v = getattr(st, "grid_power_total", None)
@@ -188,6 +192,7 @@ class StationHouseConsumptionPower(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         v = getattr(st, "house_consumption_power", None)
@@ -215,6 +220,7 @@ class StationAlwaysOnPower(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         v = getattr(st, "always_on_power", None)
@@ -242,6 +248,7 @@ class StationPvPower(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         v = getattr(st, "pv_power_total", None)
@@ -277,6 +284,7 @@ class RestoredEnergyStationSensor(SmappeeSiteEntity, RestoreSensor):
     def _total_increasing_value(self, candidate: object) -> float | None:
         return _total_increasing_value(self, candidate)
 
+    @override
     async def async_added_to_hass(self) -> None:
         await SmappeeSiteEntity.async_added_to_hass(self)
         await _async_restore_last_total_value(self)
@@ -293,6 +301,7 @@ class RestoredEnergyConnectorSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     def _total_increasing_value(self, candidate: object) -> float | None:
         return _total_increasing_value(self, candidate)
 
+    @override
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         await _async_restore_last_total_value(self)
@@ -316,6 +325,7 @@ class StationGridEnergyImport(RestoredEnergyStationSensor):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         return self._total_increasing_value(getattr(st, "grid_energy_import_kwh", None))
@@ -339,6 +349,7 @@ class StationGridEnergyExport(RestoredEnergyStationSensor):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         return self._total_increasing_value(getattr(st, "grid_energy_export_kwh", None))
@@ -362,6 +373,7 @@ class StationPvEnergyImport(RestoredEnergyStationSensor):
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         return self._total_increasing_value(getattr(st, "pv_energy_import_kwh", None))
@@ -395,7 +407,8 @@ class ConnCurrentL1(SmappeeConnectorMqttEntity, SensorEntity):
         self.api_client = api
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = self._conn_state
         vals = getattr(st, "current_phases", None) if st else None
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
@@ -421,7 +434,8 @@ class ConnCurrentL2(SmappeeConnectorMqttEntity, SensorEntity):
         self.api_client = api
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = self._conn_state
         vals = getattr(st, "current_phases", None) if st else None
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
@@ -447,7 +461,8 @@ class ConnCurrentL3(SmappeeConnectorMqttEntity, SensorEntity):
         self.api_client = api
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = self._conn_state
         vals = getattr(st, "current_phases", None) if st else None
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
@@ -473,6 +488,7 @@ class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
         self.api_client = api
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = self._conn_state
         v = getattr(st, "power_total", None) if st else None
@@ -499,6 +515,7 @@ class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
         self.api_client = api
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = self._conn_state
         vals = getattr(st, "current_phases", None) if st else None
@@ -528,6 +545,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
         self.api_client = api
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = self._conn_state
         v = getattr(st, "support_grid", None) if st else None
@@ -557,6 +575,7 @@ class ConnEnergyImport(RestoredEnergyConnectorSensor):
         self.api_client = api
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = self._conn_state
         return self._total_increasing_value(getattr(st, "energy_import_kwh", None) if st else None)
@@ -584,14 +603,16 @@ class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
         self._attr_name = "Grid current (L1-L3)"
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         total = safe_sum(vals)
         return round(total, 3) if isinstance(total, float) else None
 
     @property
-    def extra_state_attributes(self):
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return (
@@ -623,14 +644,16 @@ class StationPvCurrents(SmappeeSitePowerEntity, SensorEntity):
         self._attr_name = "PV current (L1-L3)"
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         total = safe_sum(vals)
         return round(total, 3) if isinstance(total, float) else None
 
     @property
-    def extra_state_attributes(self):
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
         st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return (
@@ -661,7 +684,8 @@ class StationGridCurrentL1(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
@@ -688,7 +712,8 @@ class StationGridCurrentL2(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
@@ -715,7 +740,8 @@ class StationGridCurrentL3(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_current_phases", None) if st else None
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
@@ -742,7 +768,8 @@ class StationPvCurrentL1(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
@@ -769,7 +796,8 @@ class StationPvCurrentL2(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
@@ -796,7 +824,8 @@ class StationPvCurrentL3(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "pv_current_phases", None) if st else None
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
@@ -823,7 +852,8 @@ class StationGridVoltageL1(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_voltage_phases", None) if st else None
         return float(vals[0]) if isinstance(vals, list) and len(vals) >= 1 else None
@@ -850,7 +880,8 @@ class StationGridVoltageL2(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_voltage_phases", None) if st else None
         return float(vals[1]) if isinstance(vals, list) and len(vals) >= 2 else None
@@ -877,7 +908,8 @@ class StationGridVoltageL3(SmappeeSitePowerEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         vals = getattr(st, "grid_voltage_phases", None) if st else None
         return float(vals[2]) if isinstance(vals, list) and len(vals) >= 3 else None
@@ -908,6 +940,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
         self.api_client = api
 
     @property
+    @override
     def native_value(self) -> str | None:
         """Return the current session state."""
         st = self._conn_state
@@ -938,7 +971,8 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         self._restored_attributes: dict[str, object] = {}
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> str | None:
         st = self._conn_state
         value = getattr(st, "evcc_state", None) if st else None
         if value is not None:
@@ -946,7 +980,8 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         return self._restored_value
 
     @property
-    def extra_state_attributes(self):
+    @override
+    def extra_state_attributes(self) -> dict[str, object] | None:
         st = self._conn_state
         if st:
             return {
@@ -962,6 +997,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
             return self._restored_attributes
         return None
 
+    @override
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added."""
         await super().async_added_to_hass()
@@ -1019,13 +1055,15 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         self._restored_value: str | None = None
 
     @property
-    def native_value(self):
+    @override
+    def native_value(self) -> str | None:
         st = self._conn_state
         value = getattr(st, "status_current", None) if st else None
         if value is not None:
             return str(value).lower()
         return self._restored_value
 
+    @override
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added."""
         await super().async_added_to_hass()
@@ -1172,6 +1210,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         return self._active_session_match()[0]
 
     @property
+    @override
     def native_value(self) -> float | None:
         energy_kwh = self._active_session_data.get("energy")
         if energy_kwh is None:
@@ -1181,6 +1220,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         return None
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes of the sensor."""
         session, connector_matched = self._active_session_match()

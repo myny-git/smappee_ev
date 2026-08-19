@@ -8,7 +8,7 @@ from datetime import datetime
 from inspect import iscoroutinefunction
 import logging
 from time import time as _now
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.core import CALLBACK_TYPE
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -172,7 +172,7 @@ class DashboardMixin(CoordinatorMixin):
 
         if errors:
             self._log_dashboard_refresh_errors(errors)
-        return changed
+        return cast(bool, changed)
 
     def _merge_dashboard_load_management(self, conn: ConnectorState, payload: MqttPayload) -> bool:
         changed = False
@@ -302,7 +302,7 @@ class DashboardMixin(CoordinatorMixin):
                 continue
             changed |= self._merge_dashboard_module(data, module)
 
-        return changed
+        return cast(bool, changed)
 
     def _merge_dashboard_module(self, data: IntegrationData, module: DashboardObject) -> bool:
         smart_device = module.get("smartDevice")
@@ -354,7 +354,7 @@ class DashboardMixin(CoordinatorMixin):
         if isinstance(car_charger, dict):
             changed |= self._merge_dashboard_car_charger_fallback(conn, car_charger)
 
-        return changed
+        return cast(bool, changed)
 
     def _merge_dashboard_led(self, station: StationState, smart_device: DashboardObject) -> bool:
         changed = self._set_if_changed(
@@ -365,7 +365,7 @@ class DashboardMixin(CoordinatorMixin):
             props, "etc.smart.device.type.car.charger.led.config.brightness"
         )
         changed |= self._set_if_changed(station, "led_brightness", value)
-        return changed
+        return cast(bool, changed)
 
     def _dashboard_connector_for_module(
         self,
@@ -417,7 +417,7 @@ class DashboardMixin(CoordinatorMixin):
             changed |= self._set_if_empty(conn, "selected_mode", base)
 
         changed |= self._update_evcc(conn)
-        return changed
+        return cast(bool, changed)
 
     @staticmethod
     def _as_bool(value: Any) -> bool | None:
@@ -438,16 +438,19 @@ class DashboardMixin(CoordinatorMixin):
         cur = getattr(obj, attr, None)
         if cur not in (None, "", "Initialize"):
             return False
-        return self._set_if_changed(obj, attr, str(value))
+        return cast(bool, self._set_if_changed(obj, attr, str(value)))
 
     def _set_dashboard_int_prop(
         self, obj: object, props: list[Any], attr: str, spec_name: str
     ) -> bool:
-        return self._set_if_changed(obj, attr, self._dashboard_prop_int(props, spec_name))
+        return cast(
+            bool,
+            self._set_if_changed(obj, attr, self._dashboard_prop_int(props, spec_name)),
+        )
 
     def _dashboard_prop_int(self, props: list[Any], spec_name: str) -> int | None:
         raw = self._dashboard_prop_value(props, spec_name)
-        return self._as_int(raw)
+        return cast(int | None, self._as_int(raw))
 
     @staticmethod
     def _dashboard_prop_value(props: list[Any], spec_name: str) -> Any:
@@ -487,7 +490,7 @@ class DashboardMixin(CoordinatorMixin):
                 changed |= self._set_if_changed(
                     station, "capacity_maximum_power_kw", round(float(value), 1)
                 )
-        return changed
+        return cast(bool, changed)
 
     def _merge_dashboard_overload(self, station: StationState, payload: DashboardObject) -> bool:
         changed = False
@@ -497,4 +500,4 @@ class DashboardMixin(CoordinatorMixin):
         changed |= self._set_if_changed(
             station, "overload_maximum_load_a", self._as_int(payload.get("maximumLoad"))
         )
-        return changed
+        return cast(bool, changed)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -61,12 +63,14 @@ class SmappeeMqttConnectivity(SmappeeSiteEntity, BinarySensorEntity):
         self._attr_name = "MQTT Connected"
 
     @property
+    @override
     def is_on(self) -> bool:
         data = self.coordinator.data if self.coordinator.data else None
         site = getattr(data, "site", None) or getattr(data, "station", None)
         return bool(getattr(site, "mqtt_connected", False))
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, object]:
         return {
             "service_location_id": self._sid,

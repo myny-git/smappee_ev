@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Mapping
 from inspect import isawaitable
 import logging
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -86,18 +87,18 @@ def _log_stored_runtime_shape(runtime: RuntimeData) -> None:
 
 
 async def _create_coordinators(
-    hass,
+    hass: HomeAssistant,
     stations: dict[str, SmappeeStationRuntime],
-    update_interval,
-    config_entry=None,
-    dashboard_client=None,
+    update_interval: int,
+    config_entry: SmappeeEvConfigEntry | None = None,
+    dashboard_client: SmappeeDashboardClient | None = None,
     highlevel_configs: HighLevelConfigMap | None = None,
     start_tracking: bool = True,
-):
+) -> None:
     created: list[SmappeeCoordinator] = []
     try:
         for bucket in stations.values():
-            kwargs = {
+            kwargs: dict[str, Any] = {
                 "station_client": bucket.station_client,
                 "connector_clients": {
                     key: connector.connector_client for key, connector in bucket.connectors.items()
@@ -148,13 +149,13 @@ async def _create_coordinators(
 
 
 async def _create_site_coordinator(
-    hass,
+    hass: HomeAssistant,
     *,
     topology: SmappeeLocationTopology,
     update_interval: int,
-    config_entry=None,
+    config_entry: SmappeeEvConfigEntry | None = None,
     highlevel_configs: HighLevelConfigMap | None = None,
-):
+) -> SmappeeSiteCoordinator:
     """Create the site-scoped coordinator for grid/PV/house data."""
     coord = SmappeeSiteCoordinator(
         hass,

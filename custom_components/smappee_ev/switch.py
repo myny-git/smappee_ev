@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, override
 
 from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
@@ -116,10 +116,12 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
     # ---------- HA hooks ----------
 
     @property
+    @override
     def is_on(self) -> bool:
         """Show last EVCC intent only (not physical session state)."""
         return self._is_on
 
+    @override
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         # Restore last EVCC intent across restarts
@@ -129,6 +131,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
 
     # ---------- Actions ----------
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Set charging mode to STANDARD via the configured API path."""
         try:
@@ -165,6 +168,7 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
             self.async_write_ha_state()
             raise
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Pause charging via the configured API path."""
         try:
@@ -229,13 +233,16 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
         return data.station if data else None
 
     @property
+    @override
     def is_on(self) -> bool:
         st = self._station_state()
         return bool(getattr(st, "available", True)) if st else True
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_available(True)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._set_available(False)
 
@@ -318,13 +325,16 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
         return data.station if data else None
 
     @property
+    @override
     def is_on(self) -> bool:
         st = self._station_state()
         return bool(getattr(st, "offline_charging_enabled", False)) if st else False
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._set_offline_charging(True)
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._set_offline_charging(False)
 

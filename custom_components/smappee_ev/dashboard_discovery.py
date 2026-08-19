@@ -280,7 +280,7 @@ def _create_dashboard_client(
 ) -> SmappeeDashboardClient:
     """Create the optional Dashboard API client for one config entry."""
 
-    def _store_dashboard_tokens(tokens: dict[str, object]) -> None:
+    def _store_dashboard_tokens(tokens: dict[str, str]) -> None:
         data = dict(entry.data)
         data.update(tokens)
         hass.config_entries.async_update_entry(entry, data=data)

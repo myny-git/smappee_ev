@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 import logging
 from time import time as _now
-from typing import Any
+from typing import Any, override
 
 from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
@@ -88,6 +88,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         self.last_real_power_rx: datetime | None = None
         self.last_heartbeat_rx: datetime | None = None
 
+    @override
     async def _async_update_data(self) -> SiteData:
         await self._ensure_power_index_map()
         return self.data or SiteData(site=SiteState())
@@ -164,7 +165,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
                     topic_map["pv"]["energy"] = energy_idx
         return maps_by_topic or None
 
-    def _set_if_changed(self, obj: object, attr: str, value) -> bool:
+    def _set_if_changed(self, obj: object, attr: str, value: object) -> bool:
         if value is None:
             return False
         cur = getattr(obj, attr, None)
@@ -365,6 +366,7 @@ class SmappeeStationCoordinator(
         self._dashboard_refresh_task: asyncio.Task | None = None
         self._shutting_down = False
 
+    @override
     async def _async_update_data(self) -> IntegrationData:
         try:
             # ---- Station snapshot (LED brightness) ----
@@ -425,6 +427,7 @@ class SmappeeStationCoordinator(
         self._schedule_session_refresh("startup", delay=0, force=True)
         self._sync_session_tracking_from_current_state()
 
+    @override
     async def async_shutdown(self) -> None:
         """Cancel session refresh callbacks and background tasks."""
         self.cancel_delayed_refreshes()
@@ -457,11 +460,7 @@ class SmappeeStationCoordinator(
         if entry is None:
             _LOGGER.warning("Smappee background task failed authentication")
             return
-        start_reauth = getattr(entry, "async_start_reauth", None)
-        if callable(start_reauth):
-            start_reauth(self.hass)
-            return
-        _LOGGER.warning("Smappee background task failed authentication")
+        entry.async_start_reauth_if_available(self.hass)
 
     def _log_background_task_exception(self, task: asyncio.Task) -> None:
         """Consume and log unexpected background task exceptions."""
@@ -476,7 +475,7 @@ class SmappeeStationCoordinator(
         _LOGGER.warning("Smappee background task failed", exc_info=exc)
 
     # ---------- split sub-helpers ----------
-    def _set_if_changed(self, obj: object, attr: str, value) -> bool:
+    def _set_if_changed(self, obj: object, attr: str, value: object) -> bool:
         """Set attr if value is not None and different; return True if changed."""
         if value is None:
             return False

@@ -226,7 +226,7 @@ def make_unique_id(
 # ----------------------------------------------------------------------------------
 
 
-def station_serial(coord) -> str:
+def station_serial(coord: Any) -> str:
     """Return the station serial from a coordinator (fallback 'unknown')."""
     station_client = getattr(coord, "station_client", None)
     if station_client is None:
@@ -238,7 +238,7 @@ def station_serial(coord) -> str:
     )
 
 
-def connector_state(coordinator, connector_uuid: str) -> Any | None:
+def connector_state(coordinator: Any, connector_uuid: str) -> Any | None:
     """Lookup a connector state object from coordinator data."""
     data = getattr(coordinator, "data", None)
     if not data:
@@ -246,13 +246,13 @@ def connector_state(coordinator, connector_uuid: str) -> Any | None:
     return (getattr(data, "connectors", None) or {}).get(connector_uuid)
 
 
-def build_connector_label(api_client, connector_uuid: str) -> str:
+def build_connector_label(api_client: Any, connector_uuid: str) -> str:
     """Return a human friendly connector label (prefers numeric connector number)."""
     num = getattr(api_client, "connector_number", None)
     return f"Connector {num}" if num is not None else f"Connector {connector_uuid[-4:]}"
 
 
-def build_connector_id(api_client, connector_uuid: str) -> str:
+def build_connector_id(api_client: Any, connector_uuid: str) -> str:
     """Return a human friendly connector label (prefers numeric connector number)."""
     num = getattr(api_client, "connector_number", None)
     return str(num) if num is not None else str(connector_uuid[-4:])

@@ -58,14 +58,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install mypy aiohttp voluptuous homeassistant "aiomqtt>=2.5.0,<3.0.0"
 
-
-      - name: Generate aiomqtt stubs
-        run: stubgen -m aiomqtt -o typings
-
       - name: Run mypy
-        env:
-          MYPYPATH: typings
-        run: mypy custom_components/smappee_ev
+        run: mypy --config-file=mypy.ini custom_components/smappee_ev
             
 
   codeql:

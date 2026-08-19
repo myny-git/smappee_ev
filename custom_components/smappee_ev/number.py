@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 import logging
-from typing import Any
+from typing import Any, override
 
 from aiohttp import ClientError
 from homeassistant.components.number import (
@@ -22,7 +22,7 @@ from .api.errors import SmappeeError
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
-from .models.runtime_data import SmappeeEvConfigEntry
+from .models.runtime_data import SmappeeEvConfigEntry, SmappeeSiteRuntime
 from .models.state import ConnectorState, IntegrationData, StationState
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def _active_or_true(value: bool | None) -> bool:
     return bool(value) if value is not None else True
 
 
-def _dashboard_coord_for_site(site) -> SmappeeCoordinator | None:
+def _dashboard_coord_for_site(site: SmappeeSiteRuntime) -> SmappeeCoordinator | None:
     """Return a station coordinator that can serve site-scoped Dashboard settings."""
     for bucket in site.stations.values():
         coord = bucket.station_coordinator
@@ -171,6 +171,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         return data.connectors.get(self.connector_uuid) if data else None
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = self._state()
         if not st:
@@ -191,6 +192,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         return round(max(float(st.min_current), min(float(st.max_current), cur)), 1)
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         st = self._state()
         if not st:
@@ -208,6 +210,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         pct = int(round((cur - st.min_current) * 100.0 / rng))
         return {"percentage": pct, "percentage_formatted": f"{pct}%", "fixed_range": False}
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         st = self._state()
         if not st:
@@ -231,6 +234,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
         self.coordinator.async_schedule_dashboard_refresh()
 
     @callback
+    @override
     def _handle_coordinator_update(self) -> None:
         st = self._state()
         if st:
@@ -256,6 +260,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
 
         super()._handle_coordinator_update()
 
+    @override
     async def async_added_to_hass(self) -> None:  # RestoreEntity
         await super().async_added_to_hass()
         last = await self.async_get_last_number_data()
@@ -326,18 +331,21 @@ class SmappeeConnectorMaxCurrentNumber(SmappeeConnectorEntity, _BaseNumber):
         return data.connectors.get(self.connector_uuid) if data else None
 
     @property
+    @override
     def native_value(self) -> int | None:
         st = self._state()
         value = getattr(st, "max_current", None) if st else None
         return int(value) if value is not None else None
 
     @callback
+    @override
     def _handle_coordinator_update(self) -> None:
         st = self._state()
         if st and st.min_current is not None:
             self._attr_native_min_value = float(st.min_current)
         super()._handle_coordinator_update()
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         st = self._state()
         if not st:
@@ -392,12 +400,14 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
         return data.connectors.get(self.connector_uuid) if data else None
 
     @property
+    @override
     def native_value(self) -> int | None:
         st = self._state()
         if not st or st.min_surpluspct is None:
             return None
         return int(st.min_surpluspct)
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         try:
             await self.api_client.set_min_surpluspct(int(value))
@@ -419,6 +429,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
                 self.coordinator.async_set_updated_data(data)
         self.coordinator.async_schedule_dashboard_refresh()
 
+    @override
     async def async_added_to_hass(self) -> None:  # RestoreEntity
         await super().async_added_to_hass()
         last = await self.async_get_last_number_data()
@@ -470,6 +481,7 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
         return data.station if data else None
 
     @property
+    @override
     def available(self) -> bool:
         st = self._station_state()
         return bool(
@@ -479,11 +491,13 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
         )
 
     @property
+    @override
     def native_value(self) -> float | None:
         st = self._station_state()
         value = getattr(st, "capacity_maximum_power_kw", None) if st else None
         return round(float(value), 1) if value is not None else None
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         dashboard = getattr(self.coordinator, "dashboard_client", None)
         data = self.coordinator.data
@@ -529,6 +543,7 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
         return data.station if data else None
 
     @property
+    @override
     def available(self) -> bool:
         st = self._station_state()
         return bool(
@@ -538,11 +553,13 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
         )
 
     @property
+    @override
     def native_value(self) -> int | None:
         st = self._station_state()
         value = getattr(st, "overload_maximum_load_a", None) if st else None
         return int(value) if value is not None else None
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         dashboard = getattr(self.coordinator, "dashboard_client", None)
         data = self.coordinator.data
@@ -590,6 +607,7 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
         return data.station if data else None
 
     @property
+    @override
     def available(self) -> bool:
         st = self._station_state()
         return bool(
@@ -600,11 +618,13 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
         )
 
     @property
+    @override
     def native_value(self) -> int | None:
         st = self._station_state()
         value = getattr(st, "offline_failsafe_current_a", None) if st else None
         return int(value) if value is not None else None
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         data = self.coordinator.data
         st = self._station_state()

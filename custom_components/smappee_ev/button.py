@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import override
 
 from aiohttp import ClientError
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
@@ -127,6 +128,7 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
         self.api_client = api_client
         self._action = action
 
+    @override
     async def async_press(self) -> None:
         """Execute the action on press."""
         if self._action == "restart_charging_station":
@@ -169,6 +171,7 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         self.api_client = api_client
         self._action = action
 
+    @override
     async def async_press(self) -> None:
         """Execute the action on press."""
         if self._action == "start_charging":

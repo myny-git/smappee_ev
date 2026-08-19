@@ -1,3 +1,5 @@
+from typing import override
+
 from aiohttp import ClientError
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
@@ -87,6 +89,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         return data.connectors.get(self._connector_uuid) if data else None
 
     @property
+    @override
     def current_option(self) -> str:
         st = self._state()
 
@@ -94,6 +97,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
             getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None) or "standard"
         ).lower()
 
+    @override
     async def async_select_option(self, option: str) -> None:
         data = self.coordinator.data
         conn = (data.connectors or {}).get(self.connector_uuid) if data else None
@@ -112,6 +116,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
         self.coordinator.async_schedule_dashboard_refresh()
         self.async_write_ha_state()
 
+    @override
     async def async_added_to_hass(self) -> None:  # RestoreEntity
         await super().async_added_to_hass()
         last = await self.async_get_last_state()

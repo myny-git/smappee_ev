@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import suppress
 import logging
 from time import time as _now
+from typing import Any, cast
 
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
@@ -16,7 +17,7 @@ class MqttMixin(CoordinatorMixin):
     """Station MQTT topic parsing and payload merge helpers."""
 
     @staticmethod
-    def _get_any(d: dict, *names: str):
+    def _get_any(d: dict[str, Any], *names: str) -> Any:
         for k in names:
             if k in d:
                 return d[k]
@@ -294,7 +295,7 @@ class MqttMixin(CoordinatorMixin):
         iec_cur = iec_obj.get("current") if isinstance(iec_obj, dict) else iec_obj
         changed |= self._set_if_changed(conn, "iec_status", str(iec_cur) if iec_cur else None)
 
-        return changed
+        return cast(bool, changed)
 
     def _merge_cs_limits_availability(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False
@@ -326,7 +327,7 @@ class MqttMixin(CoordinatorMixin):
         if avail is None:
             return False
 
-        return self._set_if_changed(data.station, "available", bool(avail))
+        return cast(bool, self._set_if_changed(data.station, "available", bool(avail)))
 
     def _merge_cs_modes(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False
@@ -347,7 +348,7 @@ class MqttMixin(CoordinatorMixin):
             changed |= self._set_if_changed(conn, "selected_mode", base)
         paused = self._is_paused(conn.raw_charging_mode, conn.session_state, conn.session_cause)
         changed |= self._set_if_changed(conn, "paused", paused)
-        return changed
+        return cast(bool, changed)
 
     def _update_evcc(self, conn: ConnectorState) -> bool:
         new_letter = self._derive_evcc_letter(conn.iec_status)
@@ -356,7 +357,7 @@ class MqttMixin(CoordinatorMixin):
         changed = self._set_if_changed(conn, "evcc_state", new_letter)
         new_code = self._evcc_code(new_letter)
         changed |= self._set_if_changed(conn, "evcc_state_code", new_code)
-        return changed
+        return cast(bool, changed)
 
     def _handle_station_properties(self, payload: dict) -> bool:
         changed = False

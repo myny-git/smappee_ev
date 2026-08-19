@@ -215,7 +215,7 @@ def _normalize_connector_mapping_station_keys(
 
     for station_serial, bucket in mapping.items():
         if not isinstance(bucket, dict):
-            continue
+            continue  # type: ignore[unreachable]
         connectors = bucket.get("connectors") or {}
         metadata = {key: value for key, value in bucket.items() if key != "connectors"}
         key = _safe_str(station_serial)
@@ -315,9 +315,9 @@ def _add_connector_runtime(
 
 
 def _make_station_clients(
-    serial_str,
+    serial_str: str,
     sid: int,
-    station_devs: list[dict],
+    station_devs: DashboardObjectList,
     *,
     site_location_id: int | None = None,
     site_name: str | None = None,
@@ -394,7 +394,11 @@ def _make_station_clients_with_mapping_fallback(
 
 
 def _assign_connectors(
-    stations: dict[str, SmappeeStationRuntime], car_devs, mapping, serial_str, sid: int
+    stations: dict[str, SmappeeStationRuntime],
+    car_devs: DashboardObjectList,
+    mapping: dict[str, DashboardObject],
+    serial_str: str,
+    sid: int,
 ) -> None:
     for bucket in stations.values():
         st_serial = bucket.charging_station_serial
@@ -431,7 +435,12 @@ def _assign_connectors(
             )
 
 
-def _fallback_assign(stations: dict[str, SmappeeStationRuntime], car_devs, serial_str, sid: int):
+def _fallback_assign(
+    stations: dict[str, SmappeeStationRuntime],
+    car_devs: DashboardObjectList,
+    serial_str: str,
+    sid: int,
+) -> None:
     total_assigned = sum(len(bucket.connectors) for bucket in stations.values())
     if total_assigned > 0:
         return

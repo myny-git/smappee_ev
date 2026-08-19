@@ -128,7 +128,7 @@ def build_topologies_from_full_details(
     locations_by_id: dict[int, dict[str, Any]] = {}
     for location in service_locations or []:
         if not isinstance(location, dict):
-            continue
+            continue  # type: ignore[unreachable]
         sid = _location_id(location)
         if sid is not None:
             locations_by_id[sid] = location

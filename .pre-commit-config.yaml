@@ -21,6 +21,8 @@ repos:
     hooks:
       - id: mypy
         files: ^custom_components/smappee_ev/
+        args:
+          - --config-file=mypy.ini
         additional_dependencies:
           - aiohttp
           - voluptuous

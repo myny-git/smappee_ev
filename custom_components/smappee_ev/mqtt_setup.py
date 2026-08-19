@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from inspect import isawaitable
 import logging
 import time
-from typing import cast
+from typing import Any, cast
+
+from homeassistant.core import HomeAssistant
 
 from .api.discovery import MqttChannelSpec
 from .api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
@@ -255,8 +257,8 @@ def _build_mqtt_clients(
     serial_str: str,
     sid: int | str,
     client_id_prefix: str,
-    on_properties,
-    on_connection_change,
+    on_properties: Callable[[str, MqttPayload], None],
+    on_connection_change: Callable[[bool], None] | None,
     mqtt_specs: list[MqttChannelSpec] | None,
     on_connection_change_factory: Callable[[int], Callable[[bool], None]] | None = None,
 ) -> list[SmappeeMqtt]:
@@ -351,7 +353,7 @@ def _handle_mqtt_connection_change(
     site_coordinator: SmappeeSiteCoordinator | None,
     stations: dict[str, SmappeeStationRuntime],
     update_interval: int,
-    schedule_refresh,
+    schedule_refresh: Callable[[SmappeeStationCoordinator], None],
 ) -> None:
     """Apply MQTT connection state to site and station coordinators."""
     if site_coordinator is not None:
@@ -367,11 +369,11 @@ def _handle_mqtt_connection_change(
 
 
 def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
-    hass,
-    suuid,
-    serial_str,
-    sid,
-    stations,
+    hass: HomeAssistant,
+    suuid: str | None,
+    serial_str: str,
+    sid: int | str,
+    stations: dict[str, SmappeeStationRuntime],
     client_id_prefix: str,
     update_interval: int,
     mqtt_specs: list[MqttChannelSpec] | None = None,
@@ -477,7 +479,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
 
     refresh_tasks: dict[int, asyncio.Task] = {}
 
-    def _schedule_refresh(coord) -> None:
+    def _schedule_refresh(coord: SmappeeStationCoordinator) -> None:
         if getattr(coord, "_shutting_down", False):
             return
         task_key = id(coord)
@@ -493,12 +495,13 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         if not isawaitable(refresh_result):
             return
 
-        task = hass.async_create_task(refresh_result)
+        refresh_coro = cast(Coroutine[Any, Any, None], refresh_result)
+        task: asyncio.Task[None] = hass.async_create_task(refresh_coro)
         refresh_tasks[task_key] = task
         if background_tasks is not None:
             background_tasks.add(task)
         task.add_done_callback(
-            lambda done_task, key=task_key: _handle_mqtt_refresh_done(refresh_tasks, done_task, key)
+            lambda done_task: _handle_mqtt_refresh_done(refresh_tasks, done_task, task_key)
         )
         if background_tasks is not None:
             task.add_done_callback(background_tasks.discard)
@@ -555,7 +558,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     return mqtt_runtime
 
 
-def _start_mqtt_clients(hass, value: MqttRuntimeValue) -> None:
+def _start_mqtt_clients(hass: HomeAssistant, value: MqttRuntimeValue) -> None:
     """Start prepared MQTT clients after topology commit."""
     for mqtt in _iter_mqtt_clients(value):
         mqtt_client = cast(SmappeeMqtt, mqtt)

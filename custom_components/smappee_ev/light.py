@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, override
 
 from aiohttp import ClientError
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
@@ -90,6 +90,7 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
         return brightness
 
     @property
+    @override
     def is_on(self) -> bool | None:
         brightness = self._station_brightness()
         if brightness is None:
@@ -97,12 +98,14 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
         return brightness > 0
 
     @property
+    @override
     def brightness(self) -> int | None:
         brightness = self._station_brightness()
         if not brightness:
             return None
         return round(brightness / 100 * 255)
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         if ATTR_BRIGHTNESS in kwargs:
             brightness = int(round((int(kwargs[ATTR_BRIGHTNESS]) / 255) * 100))
@@ -116,6 +119,7 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
 
         await self._set_brightness(max(1, min(100, brightness)))
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         brightness = self._station_brightness()
         if brightness and brightness > 0:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from contextlib import suppress
 import logging
 import time
@@ -39,7 +40,7 @@ class SmappeeDashboardClient:
         password: str | None,
         refresh_token: str | None,
         session: ClientSession,
-        token_update_callback,
+        token_update_callback: Callable[[dict[str, str]], None],
     ) -> None:
         self.username = username
         self.password = password

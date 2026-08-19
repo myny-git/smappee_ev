@@ -13,7 +13,7 @@ from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry
 
 
 def _remove_legacy_led_controller_devices(
-    registry,
+    registry: dr.DeviceRegistry,
     entry: SmappeeEvConfigEntry,
 ) -> None:
     """Remove old standalone LED Controller devices for this config entry."""
@@ -99,7 +99,7 @@ def _current_station_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]
     except AttributeError:
         return set()
     if not isinstance(rd, RuntimeData):
-        return set()
+        return set()  # type: ignore[unreachable]
 
     identifiers: set[str] = set()
     for sid, site in (rd.sites or {}).items():

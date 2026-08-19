@@ -4,7 +4,6 @@ import asyncio
 import logging
 
 from aiohttp import ClientSession
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -58,7 +57,7 @@ PLATFORMS = [
 CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_migrate_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Migrate older config entry versions to the current format.
 
     Version history:
@@ -293,7 +292,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         if isinstance(rd, RuntimeData):
             await ensure_runtime_shutdown(hass, rd)
         else:
-            _LOGGER.debug(
+            _LOGGER.debug(  # type: ignore[unreachable]
                 "Unload requested for %s but runtime_data is invalid (may have failed early)",
                 entry.entry_id,
             )

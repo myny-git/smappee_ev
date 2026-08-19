@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import logging
-from typing import Any
+from typing import Any, override
 
 import aiohttp
 from homeassistant import config_entries
@@ -94,6 +94,7 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 6
 
+    @override
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial setup step."""
         return await self._async_step_credentials(user_input, "user")

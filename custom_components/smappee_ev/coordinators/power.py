@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import logging
 import re
 from time import monotonic
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -16,7 +16,13 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from ..api.discovery import _measurement_role
 from ..api.errors import SmappeeError
 from ..api.mqtt_gateway import redact_mqtt_topic
-from ..models.state import DashboardObject, HighLevelConfigMap, MqttPayload
+from ..models.state import (
+    ConnectorState,
+    DashboardObject,
+    HighLevelConfigMap,
+    MqttPayload,
+    StationState,
+)
 from .base import CoordinatorMixin
 
 _LOGGER = logging.getLogger(__name__)
@@ -511,8 +517,8 @@ class PowerMixin(CoordinatorMixin):
 
     def _apply_station_group(
         self,
-        st,
-        payload: dict,
+        st: StationState,
+        payload: MqttPayload,
         power_idxs: list[int],
         current_idxs: list[int],
         energy_idxs: list[int] | str,
@@ -566,8 +572,8 @@ class PowerMixin(CoordinatorMixin):
 
     def _apply_connector_values(
         self,
-        conn,
-        payload: dict,
+        conn: ConnectorState,
+        payload: MqttPayload,
         power_idxs: list[int],
         current_idxs: list[int],
         energy_idxs: list[int] | None = None,
@@ -598,4 +604,4 @@ class PowerMixin(CoordinatorMixin):
         if i_ma:
             changed |= self._set_if_changed(conn, "current_phases", _amps_from_ma(i_ma))
         changed |= self._set_if_changed(conn, "energy_import_kwh", imp_kwh)
-        return changed
+        return cast(bool, changed)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import logging
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -345,7 +345,10 @@ class SmappeeDeviceHandle:
         if dashboard is None:
             return []
         try:
-            return await dashboard.async_get_recent_sessions(station_serial)
+            return cast(
+                list[dict[str, Any]],
+                await dashboard.async_get_recent_sessions(station_serial),
+            )
         except asyncio.CancelledError:
             raise
         except ConfigEntryAuthFailed:

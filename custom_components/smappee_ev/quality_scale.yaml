@@ -84,5 +84,5 @@ rules:
   async-dependency: done
   inject-websession: done
   strict-typing:
-    status: in_progress
-    comment: Mypy passes and the typed SmappeeEvConfigEntry alias is used for runtime data. Remaining work includes replacing broad DashboardObject/dict shapes with narrower TypedDicts or dataclasses and enabling a strict mypy configuration comparable to Home Assistant's .strict-typing checks.
+    status: done
+    comment: The integration passes the Home Assistant component strict mypy checks, enforced by the repository mypy configuration in CI and pre-commit. Runtime data uses the typed SmappeeEvConfigEntry alias, and aiomqtt provides PEP 561 inline typing.
