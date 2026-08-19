@@ -1190,7 +1190,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     def _active_session_match(self) -> tuple[dict[str, Any], bool]:
         if not self.coordinator.data:
             return {}, False
-        sessions = self.coordinator.data.recent_sessions
+        sessions: object = self.coordinator.data.recent_sessions
         if not isinstance(sessions, list):
             return {}, False
         for session in sessions:
