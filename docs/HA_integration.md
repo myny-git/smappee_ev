@@ -62,11 +62,16 @@ Use the `max_charging_speed` number entity or `smappee_ev.set_current` to contro
 
 ### `smappee_ev.start_charging`
 
-Starts a charging session for the selected connector.
+Starts a charging session for the selected connector at the current limit that is
+already configured, so starting a session no longer raises the connector to its
+maximum current.
 
-Use `smappee_ev.set_current` or the `max_charging_speed` number entity to set the charging current separately.
+Use `smappee_ev.set_current` or the `max_charging_speed` number entity to change the
+charging current.
 
-The MQTT topic observation for starting charging is: `startcharging = {"percentageLimit":100}`.
+The MQTT topic observation for starting charging is: `startcharging = {"percentageLimit":<limit>}`,
+where `<limit>` is the connector's active setpoint as a percentage of its
+minimum-maximum current range. When no setpoint is known yet, 100 is used.
 
 ### `smappee_ev.resume_charging`
 

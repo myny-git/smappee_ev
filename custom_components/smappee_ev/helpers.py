@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import CONFIGURATION_URL, DOMAIN, MANUFACTURER
+from .const import CONFIGURATION_URL, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN, MANUFACTURER
 
 
 def dashboard_property_value(prop: object) -> Any:
@@ -244,6 +244,40 @@ def connector_state(coordinator: Any, connector_uuid: str) -> Any | None:
     if not data:
         return None
     return (getattr(data, "connectors", None) or {}).get(connector_uuid)
+
+
+def percentage_to_current(percentage: int, min_current: int, max_current: int) -> float:
+    """Convert a Dashboard ``percentageLimit`` to Ampere within the connector range."""
+    rng = max(int(max_current) - int(min_current), 1)
+    return round((int(percentage) / 100.0) * rng + float(min_current), 1)
+
+
+def current_to_percentage(current: float, min_current: int, max_current: int) -> int:
+    """Convert Ampere to the nearest Dashboard ``percentageLimit`` in 0-100."""
+    rng = max(int(max_current) - int(min_current), 1)
+    pct = int(round((float(current) - float(min_current)) * 100.0 / rng))
+    return max(0, min(100, pct))
+
+
+def connector_percentage_setpoint(state: Any) -> int | None:
+    """Return the connector's charging setpoint as a Dashboard percentage.
+
+    Prefers the percentage the API reported and falls back to deriving it from
+    the Ampere setpoint. Returns ``None`` when neither representation is known.
+    """
+    if state is None:
+        return None
+    pct = getattr(state, "selected_percentage_limit", None)
+    if pct is not None:
+        return max(0, min(100, int(pct)))
+    current = getattr(state, "selected_current_limit", None)
+    if current is None:
+        return None
+    return current_to_percentage(
+        current,
+        getattr(state, "min_current", DEFAULT_MIN_CURRENT),
+        getattr(state, "max_current", DEFAULT_MAX_CURRENT),
+    )
 
 
 def build_connector_label(api_client: Any, connector_uuid: str) -> str:

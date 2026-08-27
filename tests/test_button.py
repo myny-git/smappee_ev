@@ -199,19 +199,22 @@ async def test_button_press_start_charging(mock_coordinator):
 
     await button.async_press()
 
-    api_client.start_charging.assert_awaited_once_with()
+    api_client.start_charging.assert_awaited_once_with(50)
     assert connector.selected_current_limit == 10
     assert connector.selected_percentage_limit == 50
     mock_coordinator.async_set_updated_data.assert_not_called()
     mock_coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
-async def test_button_press_start_charging_ignores_restored_slider_limit(mock_coordinator):
-    """Test pressing the start charging button ignores restored slider current."""
+async def test_button_press_start_charging_derives_percentage_from_slider_limit(
+    mock_coordinator,
+):
+    """Test the start button derives the percentage when only Ampere is known."""
     api_client = MagicMock()
     api_client.start_charging = AsyncMock()
     connector = mock_coordinator.data.connectors["conn1"]
     connector.selected_current_limit = 16.5
+    connector.selected_percentage_limit = None
 
     button = SmappeeActionButton(
         coordinator=mock_coordinator,
@@ -225,7 +228,35 @@ async def test_button_press_start_charging_ignores_restored_slider_limit(mock_co
 
     await button.async_press()
 
-    api_client.start_charging.assert_awaited_once_with()
+    # 16.5 A over the 6-32 A range is 40%.
+    api_client.start_charging.assert_awaited_once_with(40)
+
+
+async def test_button_press_start_charging_keeps_a_low_current_setpoint(mock_coordinator):
+    """Regression: starting must not raise the connector to its maximum current.
+
+    Pressing start used to send percentageLimit=100, which the device echoed
+    back over MQTT and the coordinator turned into the connector maximum.
+    """
+    api_client = MagicMock()
+    api_client.start_charging = AsyncMock()
+    connector = mock_coordinator.data.connectors["conn1"]
+    connector.selected_current_limit = 6.0
+    connector.selected_percentage_limit = 0
+
+    button = SmappeeActionButton(
+        coordinator=mock_coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station1",
+        connector_uuid="conn1",
+        name="Start Charging",
+        action="start_charging",
+    )
+
+    await button.async_press()
+
+    api_client.start_charging.assert_awaited_once_with(0)
 
 
 async def test_button_press_start_charging_no_connector(mock_coordinator):
@@ -245,7 +276,7 @@ async def test_button_press_start_charging_no_connector(mock_coordinator):
 
     await button.async_press()
 
-    api_client.start_charging.assert_awaited_once_with()
+    api_client.start_charging.assert_awaited_once_with(None)
 
 
 async def test_button_press_start_charging_no_coordinator_data(mock_coordinator):
@@ -268,7 +299,7 @@ async def test_button_press_start_charging_no_coordinator_data(mock_coordinator)
 
     await button.async_press()
 
-    api_client.start_charging.assert_awaited_once_with()
+    api_client.start_charging.assert_awaited_once_with(None)
 
 
 @pytest.mark.parametrize(

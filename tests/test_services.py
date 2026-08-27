@@ -422,7 +422,32 @@ class TestServiceHandlers:
 
         await services.handle_start_charging(call)
 
-        mock_api_client.start_charging.assert_called_once_with()
+        mock_api_client.start_charging.assert_called_once_with(percentage=None)
+
+    @pytest.mark.asyncio
+    async def test_handle_start_charging_forwards_the_connector_setpoint(self, mock_hass):
+        """The service must start at the configured limit, not the connector maximum."""
+        connector_client = make_connector_client(
+            service_location_id=44444,
+            connector_number=1,
+            smart_device_uuid="connector-setpoint",
+        )
+        runtime = make_runtime_for_connector(44444, connector_client)
+        coordinator = runtime.sites[44444].stations["station_44444"].station_coordinator
+        conn_state = coordinator.data.connectors["connector-setpoint"]
+        conn_state.selected_percentage_limit = 0
+        conn_state.selected_current_limit = 6.0
+        configure_loaded_entries(mock_hass, [make_loaded_config_entry("entry", runtime)])
+        call = ServiceCall(
+            domain="smappee_ev",
+            service="start_charging",
+            data={"service_location_id": 44444, "connector_id": 1},
+            hass=mock_hass,
+        )
+
+        await services.handle_start_charging(call)
+
+        connector_client.start_charging.assert_awaited_once_with(percentage=0)
 
     @pytest.mark.asyncio
     async def test_handle_pause_charging_success(
@@ -657,7 +682,7 @@ class TestServiceHandlers:
 
         await services.handle_start_charging(call)
 
-        site_a_client.start_charging.assert_awaited_once_with()
+        site_a_client.start_charging.assert_awaited_once_with(percentage=None)
         site_b_client.start_charging.assert_not_called()
 
     @pytest.mark.asyncio
@@ -690,7 +715,7 @@ class TestServiceHandlers:
         await services.handle_start_charging(call)
 
         site_a_client.start_charging.assert_not_called()
-        site_b_client.start_charging.assert_awaited_once_with()
+        site_b_client.start_charging.assert_awaited_once_with(percentage=None)
 
     @pytest.mark.asyncio
     async def test_connector_service_resolves_dataclass_runtime_station(self, mock_hass):

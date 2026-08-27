@@ -211,16 +211,19 @@ class SmappeeDeviceHandle:
         _LOGGER.debug("Charging mode set successfully (%s via Dashboard v10)", mode_up)
         return True
 
-    async def start_charging(self) -> None:
+    async def start_charging(self, percentage: int | None = None) -> None:
         """Start charging via Dashboard v10.
 
         This matches the Smappee app Start button:
-        startcharging = {"percentageLimit": 100}.
+        startcharging = {"percentageLimit": <limit>}.
 
-        Use set_current to adjust the current/percentage limit.
+        ``percentageLimit`` is the same device field the current slider writes,
+        so callers pass the connector's active setpoint to keep it. Without a
+        known setpoint we fall back to 100%.
         """
-        await self._require_dashboard_action("async_start_charging")
-        _LOGGER.debug("Started charging successfully via Dashboard v10")
+        pct = 100 if percentage is None else max(0, min(100, int(percentage)))
+        await self._require_dashboard_action("async_start_charging", pct)
+        _LOGGER.debug("Started charging successfully at %d%% via Dashboard v10", pct)
 
     async def pause_charging(self) -> None:
         """Pause charging via Dashboard v10.

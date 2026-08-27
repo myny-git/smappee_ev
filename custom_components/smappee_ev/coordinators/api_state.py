@@ -13,7 +13,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from ..api.device_handle import SmappeeDeviceHandle
 from ..api.errors import SmappeeError
 from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
-from ..helpers import anonymize_uuid, dashboard_property_value
+from ..helpers import anonymize_uuid, dashboard_property_value, percentage_to_current
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
 from .power import _to_int
@@ -80,6 +80,23 @@ class StationApiMixin(CoordinatorMixin):
         )
 
     @staticmethod
+    def _rest_selected_current_limit(prev: ConnectorState, rest: ConnectorState) -> float | None:
+        """Derive the Ampere setpoint from the polled percentage limit.
+
+        REST only exposes ``percentageLimit``, so without this a stale
+        MQTT-derived ``selected_current_limit`` could never be corrected by a
+        poll. Mirrors the MQTT gate: the percentage only drives the setpoint
+        while the connector runs without an optimization strategy.
+        """
+        if (prev.optimization_strategy or "").upper() != "NONE":
+            return prev.selected_current_limit
+        if rest.selected_percentage_limit is None:
+            return prev.selected_current_limit
+        return percentage_to_current(
+            rest.selected_percentage_limit, rest.min_current, rest.max_current
+        )
+
+    @staticmethod
     def _merge_connector_rest_state(
         prev: ConnectorState | None, rest: ConnectorState
     ) -> ConnectorState:
@@ -92,9 +109,7 @@ class StationApiMixin(CoordinatorMixin):
             session_state=rest.session_state
             if rest.session_state != "Initialize"
             else prev.session_state,
-            selected_current_limit=rest.selected_current_limit
-            if rest.selected_current_limit is not None
-            else prev.selected_current_limit,
+            selected_current_limit=StationApiMixin._rest_selected_current_limit(prev, rest),
             selected_percentage_limit=rest.selected_percentage_limit,
             selected_mode=rest.selected_mode
             if rest.selected_mode is not None
@@ -148,7 +163,6 @@ class StationApiMixin(CoordinatorMixin):
         """Read one connector's properties/config from its smartdevice."""
         session_state = "Initialize"
         selected_percentage: int | None = None
-        selected_current: int | None = None
         selected_mode: str | None = None
         min_current = DEFAULT_MIN_CURRENT
         max_current = DEFAULT_MAX_CURRENT
@@ -190,7 +204,7 @@ class StationApiMixin(CoordinatorMixin):
         return ConnectorState(
             connector_number=getattr(client, "connector_number", 1),
             session_state=session_state,
-            selected_current_limit=selected_current,
+            selected_current_limit=None,
             selected_percentage_limit=selected_percentage,
             selected_mode=selected_mode,
             min_current=min_current,
