@@ -1226,3 +1226,65 @@ async def test_session_tracking_shutdown_cancels_pending_scheduled_refreshes(has
     assert all(unsub.called for unsub in unsubs)
     active_loop_unsub.assert_called_once()
     coord.connector_clients["conn-1"].async_get_recent_sessions.assert_not_awaited()
+
+
+def test_rest_merge_repairs_a_stale_mqtt_derived_current_limit():
+    """A REST poll must be able to correct the Ampere setpoint it derives."""
+    prev_connector = ConnectorState(
+        connector_number=1,
+        session_state="Charging",
+        selected_current_limit=32.0,
+        selected_percentage_limit=100,
+        optimization_strategy="NONE",
+        min_current=6,
+        max_current=32,
+    )
+    rest_connector = ConnectorState(
+        connector_number=1,
+        session_state="Charging",
+        selected_percentage_limit=0,
+        min_current=6,
+        max_current=32,
+        api_available=True,
+    )
+
+    merged = SmappeeStationCoordinator._merge_connector_rest_state(prev_connector, rest_connector)
+
+    assert merged.selected_current_limit == 6.0
+    assert merged.selected_percentage_limit == 0
+
+
+def test_rest_merge_keeps_the_current_limit_under_an_optimization_strategy():
+    """In SMART/SOLAR the percentage is optimizer-driven, not the user setpoint."""
+    prev_connector = ConnectorState(
+        connector_number=1,
+        selected_current_limit=16.0,
+        optimization_strategy="EXCESS_ONLY",
+        min_current=6,
+        max_current=32,
+    )
+    rest_connector = ConnectorState(
+        connector_number=1,
+        selected_percentage_limit=100,
+        min_current=6,
+        max_current=32,
+    )
+
+    merged = SmappeeStationCoordinator._merge_connector_rest_state(prev_connector, rest_connector)
+
+    assert merged.selected_current_limit == 16.0
+
+
+def test_rest_merge_keeps_the_current_limit_without_a_percentage():
+    prev_connector = ConnectorState(
+        connector_number=1,
+        selected_current_limit=16.0,
+        optimization_strategy="NONE",
+        min_current=6,
+        max_current=32,
+    )
+    rest_connector = ConnectorState(connector_number=1, min_current=6, max_current=32)
+
+    merged = SmappeeStationCoordinator._merge_connector_rest_state(prev_connector, rest_connector)
+
+    assert merged.selected_current_limit == 16.0

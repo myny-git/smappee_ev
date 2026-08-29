@@ -14,7 +14,7 @@ from .api.errors import SmappeeError
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeStationEntity
-from .helpers import dashboard_mode, station_action_error
+from .helpers import connector_percentage_setpoint, dashboard_mode, station_action_error
 from .models.runtime_data import SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -175,8 +175,10 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Execute the action on press."""
         if self._action == "start_charging":
+            data = self.coordinator.data if self.coordinator else None
+            conn = (data.connectors or {}).get(self.connector_uuid) if data else None
             try:
-                await self.api_client.start_charging()
+                await self.api_client.start_charging(connector_percentage_setpoint(conn))
             except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("start_charging", err) from err
             self.coordinator.async_schedule_dashboard_refresh()

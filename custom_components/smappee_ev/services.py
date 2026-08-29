@@ -10,7 +10,7 @@ import voluptuous as vol
 
 from .api.device_handle import SmappeeDeviceHandle
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
-from .helpers import dashboard_mode
+from .helpers import connector_percentage_setpoint, dashboard_mode
 from .models.runtime_data import RuntimeData, SmappeeSiteRuntime
 from .models.state import ConnectorState
 
@@ -370,7 +370,26 @@ async def _async_call_connector_client(
 
 
 async def handle_start_charging(call: ServiceCall) -> None:
-    await async_handle_connector_service(call.hass, call, "start_charging")
+    connector_id = call.data.get("connector_id")
+    rt, sid = _resolve_sid(call.hass, call)
+    _raise_if_ambiguous_service_location(rt, sid)
+    client = get_connector_client(rt, sid, connector_id)
+    if not client:
+        raise _service_validation_error(
+            f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')}, connector_id={connector_id})",
+            "no_connector_client",
+            config_entry_id=call.data.get("config_entry_id"),
+            service_location_id=call.data.get("service_location_id"),
+            connector_id=connector_id,
+        )
+
+    percentage = connector_percentage_setpoint(_get_connector_state(rt, client))
+    await _async_call_connector_client(
+        call.hass,
+        client,
+        "start_charging",
+        {"percentage": percentage},
+    )
 
 
 async def handle_pause_charging(call: ServiceCall) -> None:

@@ -416,10 +416,10 @@ class SmappeeDashboardClient:
             )
         )
 
-    async def async_set_percentage_limit(
-        self, service_location_id: int | str, device_id: str, percentage: int
-    ) -> bool:
-        payload = [
+    @staticmethod
+    def _percentage_limit_payload(percentage: int) -> DashboardObjectList:
+        """Build the shared ``percentageLimit`` action payload."""
+        return [
             {
                 "spec": {
                     "name": "percentageLimit",
@@ -430,8 +430,15 @@ class SmappeeDashboardClient:
                 "values": [{"Integer": int(percentage)}],
             }
         ]
+
+    async def async_set_percentage_limit(
+        self, service_location_id: int | str, device_id: str, percentage: int
+    ) -> bool:
         return await self.async_execute_device_action(
-            service_location_id, device_id, "setPercentageLimit", payload
+            service_location_id,
+            device_id,
+            "setPercentageLimit",
+            self._percentage_limit_payload(percentage),
         )
 
     async def async_set_led_brightness(
@@ -464,20 +471,14 @@ class SmappeeDashboardClient:
             {"Quantity": {"value": int(max_current_a), "unit": "A"}},
         )
 
-    async def async_start_charging(self, service_location_id: int | str, device_id: str) -> bool:
-        payload = [
-            {
-                "spec": {
-                    "name": "percentageLimit",
-                    "species": "Integer",
-                    "unit": "%",
-                    "required": True,
-                },
-                "values": [{"Integer": 100}],
-            }
-        ]
+    async def async_start_charging(
+        self, service_location_id: int | str, device_id: str, percentage: int = 100
+    ) -> bool:
         return await self.async_execute_device_action(
-            service_location_id, device_id, "startCharging", payload
+            service_location_id,
+            device_id,
+            "startCharging",
+            self._percentage_limit_payload(percentage),
         )
 
     async def async_pause_charging(self, service_location_id: int | str, device_id: str) -> bool:

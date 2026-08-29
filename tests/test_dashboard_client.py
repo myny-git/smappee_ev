@@ -272,6 +272,25 @@ async def test_dashboard_start_charging_action_payload():
 
 
 @pytest.mark.asyncio
+async def test_dashboard_start_charging_sends_requested_percentage():
+    """startCharging must carry the caller's limit, not a hardcoded 100%."""
+    client = SmappeeDashboardClient(
+        username=None,
+        password=None,
+        refresh_token=None,
+        session=MagicMock(),
+        token_update_callback=MagicMock(),
+    )
+    client._request = AsyncMock(return_value=True)
+
+    assert await client.async_start_charging(236259, "device-1", 0) is True
+
+    payload = client._request.await_args.kwargs["json"]
+    assert payload[0]["values"] == [{"Integer": 0}]
+    assert payload[0]["spec"]["name"] == "percentageLimit"
+
+
+@pytest.mark.asyncio
 async def test_dashboard_percentage_limit_action_payload_and_false_result():
     client = _client()
     client._request = AsyncMock(side_effect=[True, None])

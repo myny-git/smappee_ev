@@ -32,8 +32,12 @@ class RecordingDashboard:
     ) -> bool:
         return await self._record("async_set_charging_mode", service_location_id, device_id, mode)
 
-    async def async_start_charging(self, service_location_id: int, device_id: str) -> bool:
-        return await self._record("async_start_charging", service_location_id, device_id)
+    async def async_start_charging(
+        self, service_location_id: int, device_id: str, percentage: int = 100
+    ) -> bool:
+        return await self._record(
+            "async_start_charging", service_location_id, device_id, percentage
+        )
 
     async def async_pause_charging(self, service_location_id: int, device_id: str) -> bool:
         return await self._record("async_pause_charging", service_location_id, device_id)
@@ -411,7 +415,32 @@ async def test_start_charging_sends_start_action():
 
     await client.start_charging()
 
-    assert dashboard.calls == [("async_start_charging", (100, "DASHBOARD_DEVICE"))]
+    assert dashboard.calls == [("async_start_charging", (100, "DASHBOARD_DEVICE", 100))]
+
+
+@pytest.mark.asyncio
+async def test_start_charging_keeps_the_configured_percentage():
+    """Starting must not raise the connector to its maximum current."""
+    dashboard = RecordingDashboard()
+    client = make_client(dashboard=dashboard)
+
+    await client.start_charging(0)
+
+    assert dashboard.calls == [("async_start_charging", (100, "DASHBOARD_DEVICE", 0))]
+
+
+@pytest.mark.parametrize(
+    ("percentage", "expected"),
+    [(-5, 0), (0, 0), (42, 42), (100, 100), (140, 100)],
+)
+@pytest.mark.asyncio
+async def test_start_charging_clamps_percentage(percentage, expected):
+    dashboard = RecordingDashboard()
+    client = make_client(dashboard=dashboard)
+
+    await client.start_charging(percentage)
+
+    assert dashboard.calls == [("async_start_charging", (100, "DASHBOARD_DEVICE", expected))]
 
 
 @pytest.mark.asyncio
