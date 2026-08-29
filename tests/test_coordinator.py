@@ -823,6 +823,68 @@ class TestSmappeeCoordinator:
         assert (connector.min_current, connector.max_current) == expected_bounds
 
     @pytest.mark.asyncio
+    async def test_partial_rest_range_derives_current_from_resolved_bounds(self, coordinator):
+        """A REST percentage must use the previous minimum when REST omits it."""
+        previous = coordinator.data.connectors["test_uuid"]
+        previous.min_current = 10
+        previous.max_current = 20
+        previous.optimization_strategy = "NONE"
+        coordinator._fetch_station_state = AsyncMock(
+            return_value=StationState(led_brightness=75, available=True)
+        )
+        coordinator.connector_clients["test_uuid"].async_get_smartdevice = AsyncMock(
+            return_value={
+                "properties": [
+                    {"spec": {"name": "percentageLimit"}, "value": 50},
+                ],
+                "configurationProperties": [
+                    {
+                        "spec": {
+                            "name": "etc.smart.device.type.car.charger.config.max.current"
+                        },
+                        "value": 18,
+                    }
+                ],
+            }
+        )
+        coordinator._ensure_power_index_map = AsyncMock()
+
+        result = await coordinator._async_update_data()
+
+        connector = result.connectors["test_uuid"]
+        assert (connector.min_current, connector.max_current) == (10, 18)
+        assert connector.selected_current_limit == 14.0
+
+    @pytest.mark.asyncio
+    async def test_invalid_partial_rest_range_keeps_previous_bounds(self, coordinator):
+        """An invalid partial REST range must retain the complete previous range."""
+        previous = coordinator.data.connectors["test_uuid"]
+        previous.min_current = 10
+        previous.max_current = 20
+        coordinator._fetch_station_state = AsyncMock(
+            return_value=StationState(led_brightness=75, available=True)
+        )
+        coordinator.connector_clients["test_uuid"].async_get_smartdevice = AsyncMock(
+            return_value={
+                "properties": [],
+                "configurationProperties": [
+                    {
+                        "spec": {
+                            "name": "etc.smart.device.type.car.charger.config.max.current"
+                        },
+                        "value": 8,
+                    }
+                ],
+            }
+        )
+        coordinator._ensure_power_index_map = AsyncMock()
+
+        result = await coordinator._async_update_data()
+
+        connector = result.connectors["test_uuid"]
+        assert (connector.min_current, connector.max_current) == (10, 20)
+
+    @pytest.mark.asyncio
     async def test_fetch_connector_state_api_error(self, coordinator):
         """Test connector state fetch with API error."""
         client = coordinator.connector_clients["test_uuid"]

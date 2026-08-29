@@ -1336,6 +1336,49 @@ def test_dashboard_merge_rejects_an_invalid_connector_current_range(hass):
     assert (conn.min_current, conn.max_current) == (6, 32)
 
 
+def test_dashboard_disjoint_range_updates_without_invalid_intermediate_state(hass):
+    """Dashboard must move max first when the new range is above the old range."""
+    coord = _station_coordinator(hass)
+    conn = coord.data.connectors["conn-1"]
+    conn.min_current = 6
+    conn.max_current = 10
+    observed_ranges = []
+    original_set_if_changed = coord._set_if_changed
+
+    def record_range_mutations(obj, attr, value):
+        changed = original_set_if_changed(obj, attr, value)
+        if changed and obj is conn and attr in {"min_current", "max_current"}:
+            observed_ranges.append((conn.min_current, conn.max_current))
+        return changed
+
+    module = {
+        "position": 1,
+        "smartDevice": {
+            "uuid": "conn-1",
+            "type": {"category": "CARCHARGER"},
+            "configurationProperties": [
+                {
+                    "spec": {"name": "etc.smart.device.type.car.charger.config.min.current"},
+                    "value": 15,
+                },
+                {
+                    "spec": {"name": "etc.smart.device.type.car.charger.config.max.current"},
+                    "value": 25,
+                },
+            ],
+        },
+    }
+
+    with patch.object(coord, "_set_if_changed", side_effect=record_range_mutations):
+        coord._merge_dashboard_module(coord.data, module)
+
+    assert observed_ranges == [
+        (6, 25),
+        (15, 25),
+    ]
+    assert (conn.min_current, conn.max_current) == (15, 25)
+
+
 def test_rest_merge_keeps_the_current_limit_under_an_optimization_strategy():
     """In SMART/SOLAR the percentage is optimizer-driven, not the user setpoint."""
     prev_connector = ConnectorState(
