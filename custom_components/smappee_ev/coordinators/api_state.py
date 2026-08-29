@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import logging
 
 from aiohttp import ClientError
@@ -24,6 +24,20 @@ from .base import CoordinatorMixin
 from .power import _to_int
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorRestSnapshot:
+    """Connector REST state with the bounds exactly as reported by the API.
+
+    ``ConnectorState`` always contains a valid range for runtime consumers. The
+    optional reported bounds keep a missing REST property distinguishable from
+    an explicitly reported default until the snapshot is merged.
+    """
+
+    state: ConnectorState
+    reported_min_current: int | None
+    reported_max_current: int | None
 
 
 class StationApiMixin(CoordinatorMixin):
@@ -106,39 +120,55 @@ class StationApiMixin(CoordinatorMixin):
 
     @staticmethod
     def _merge_connector_rest_state(
-        prev: ConnectorState | None, rest: ConnectorState
+        prev: ConnectorState | None,
+        rest: ConnectorState | ConnectorRestSnapshot,
     ) -> ConnectorState:
         """Merge REST connector fields into the previous MQTT-rich connector state."""
+        if isinstance(rest, ConnectorRestSnapshot):
+            rest_state = rest.state
+            reported_min = rest.reported_min_current
+            reported_max = rest.reported_max_current
+        else:
+            # Direct ConnectorState callers represent a complete REST range.
+            rest_state = rest
+            reported_min = rest.min_current
+            reported_max = rest.max_current
+
         min_current, max_current = resolve_connector_current_range(
             previous_min=prev.min_current if prev is not None else None,
             previous_max=prev.max_current if prev is not None else None,
-            reported_min=rest.min_current,
-            reported_max=rest.max_current,
+            reported_min=reported_min,
+            reported_max=reported_max,
         )
         if prev is None:
-            if (min_current, max_current) == (rest.min_current, rest.max_current):
-                return rest
-            return replace(rest, min_current=min_current, max_current=max_current)
+            if (min_current, max_current) == (
+                rest_state.min_current,
+                rest_state.max_current,
+            ):
+                return rest_state
+            return replace(rest_state, min_current=min_current, max_current=max_current)
         return replace(
             prev,
-            connector_number=rest.connector_number,
-            session_state=rest.session_state
-            if rest.session_state != "Initialize"
+            connector_number=rest_state.connector_number,
+            session_state=rest_state.session_state
+            if rest_state.session_state != "Initialize"
             else prev.session_state,
             selected_current_limit=StationApiMixin._rest_selected_current_limit(
-                prev, rest, min_current, max_current
+                prev, rest_state, min_current, max_current
             ),
-            selected_percentage_limit=rest.selected_percentage_limit,
-            selected_mode=rest.selected_mode
-            if rest.selected_mode is not None
+            selected_percentage_limit=rest_state.selected_percentage_limit,
+            selected_mode=rest_state.selected_mode
+            if rest_state.selected_mode is not None
             else prev.selected_mode,
             min_current=min_current,
             max_current=max_current,
-            min_surpluspct=rest.min_surpluspct
-            if rest.min_surpluspct is not None
+            min_surpluspct=rest_state.min_surpluspct
+            if rest_state.min_surpluspct is not None
             else prev.min_surpluspct,
-            support_grid=rest.support_grid if rest.support_grid is not None else prev.support_grid,
-            api_available=rest.api_available,
+            support_grid=rest_state.support_grid
+            if rest_state.support_grid is not None
+            else prev.support_grid,
+            api_available=rest_state.api_available,
         )
 
     async def _fetch_station_state(self, client: SmappeeDeviceHandle) -> StationState:
@@ -177,13 +207,15 @@ class StationApiMixin(CoordinatorMixin):
 
         return StationState(led_brightness=led_brightness, available=True, api_available=True)
 
-    async def _fetch_connector_state(self, client: SmappeeDeviceHandle) -> ConnectorState:
+    async def _fetch_connector_state(
+        self, client: SmappeeDeviceHandle
+    ) -> ConnectorRestSnapshot:
         """Read one connector's properties/config from its smartdevice."""
         session_state = "Initialize"
         selected_percentage: int | None = None
         selected_mode: str | None = None
-        min_current = DEFAULT_MIN_CURRENT
-        max_current = DEFAULT_MAX_CURRENT
+        reported_min_current: int | None = None
+        reported_max_current: int | None = None
         min_surpluspct: int | None = None
         support_grid: int | None = None
 
@@ -207,10 +239,10 @@ class StationApiMixin(CoordinatorMixin):
             val = dashboard_property_value(prop)
             if name == "etc.smart.device.type.car.charger.config.max.current":
                 with suppress(TypeError, ValueError):
-                    max_current = _to_int(val, default=max_current)
+                    reported_max_current = int(val)
             elif name == "etc.smart.device.type.car.charger.config.min.current":
                 with suppress(TypeError, ValueError):
-                    min_current = _to_int(val, default=min_current)
+                    reported_min_current = int(val)
             elif name == "etc.smart.device.type.car.charger.config.min.excesspct":
                 if val is not None:
                     with suppress(TypeError, ValueError):
@@ -219,15 +251,23 @@ class StationApiMixin(CoordinatorMixin):
                 with suppress(TypeError, ValueError):
                     support_grid = _to_int(val)
 
-        return ConnectorState(
-            connector_number=getattr(client, "connector_number", 1),
-            session_state=session_state,
-            selected_current_limit=None,
-            selected_percentage_limit=selected_percentage,
-            selected_mode=selected_mode,
-            min_current=min_current,
-            max_current=max_current,
-            min_surpluspct=min_surpluspct,
-            support_grid=support_grid,
-            api_available=True,
+        return ConnectorRestSnapshot(
+            state=ConnectorState(
+                connector_number=getattr(client, "connector_number", 1),
+                session_state=session_state,
+                selected_current_limit=None,
+                selected_percentage_limit=selected_percentage,
+                selected_mode=selected_mode,
+                min_current=reported_min_current
+                if reported_min_current is not None
+                else DEFAULT_MIN_CURRENT,
+                max_current=reported_max_current
+                if reported_max_current is not None
+                else DEFAULT_MAX_CURRENT,
+                min_surpluspct=min_surpluspct,
+                support_grid=support_grid,
+                api_available=True,
+            ),
+            reported_min_current=reported_min_current,
+            reported_max_current=reported_max_current,
         )

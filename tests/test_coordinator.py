@@ -16,6 +16,7 @@ from custom_components.smappee_ev.coordinator import (
     _pick,
     _to_int,
 )
+from custom_components.smappee_ev.coordinators.api_state import ConnectorRestSnapshot
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import ConnectorSessionEnergySensor
 
@@ -696,13 +697,13 @@ class TestSmappeeCoordinator:
 
         result = await coordinator._fetch_connector_state(client)
 
-        assert isinstance(result, ConnectorState)
-        assert result.session_state == "Available"
-        assert result.selected_percentage_limit == 80
-        assert result.max_current == 32
-        assert result.min_current == 6
-        assert result.min_surpluspct == 10
-        assert result.support_grid is None
+        assert isinstance(result, ConnectorRestSnapshot)
+        assert result.state.session_state == "Available"
+        assert result.state.selected_percentage_limit == 80
+        assert result.reported_max_current == 32
+        assert result.reported_min_current == 6
+        assert result.state.min_surpluspct == 10
+        assert result.state.support_grid is None
 
     @pytest.mark.asyncio
     async def test_fetch_connector_state_supports_values_payload(self, coordinator):
@@ -722,7 +723,7 @@ class TestSmappeeCoordinator:
 
         result = await coordinator._fetch_connector_state(client)
 
-        assert result.min_surpluspct == 66
+        assert result.state.min_surpluspct == 66
 
     @pytest.mark.asyncio
     async def test_fetch_connector_state_support_grid(self, coordinator):
@@ -744,7 +745,90 @@ class TestSmappeeCoordinator:
 
         result = await coordinator._fetch_connector_state(client)
 
-        assert result.support_grid == 4
+        assert result.state.support_grid == 4
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("configuration_properties", "reported_bounds", "expected_bounds"),
+        [
+            (
+                [
+                    {
+                        "spec": {
+                            "name": "etc.smart.device.type.car.charger.config.max.current"
+                        },
+                        "value": 18,
+                    }
+                ],
+                (None, 18),
+                (10, 18),
+            ),
+            (
+                [
+                    {
+                        "spec": {
+                            "name": "etc.smart.device.type.car.charger.config.min.current"
+                        },
+                        "value": 12,
+                    }
+                ],
+                (12, None),
+                (12, 20),
+            ),
+            ([], (None, None), (10, 20)),
+            (
+                [
+                    {
+                        "spec": {
+                            "name": "etc.smart.device.type.car.charger.config.min.current"
+                        },
+                        "value": 6,
+                    },
+                    {
+                        "spec": {
+                            "name": "etc.smart.device.type.car.charger.config.max.current"
+                        },
+                        "value": 32,
+                    },
+                ],
+                (6, 32),
+                (6, 32),
+            ),
+        ],
+    )
+    async def test_update_data_distinguishes_missing_from_reported_current_bounds(
+        self,
+        coordinator,
+        configuration_properties,
+        reported_bounds,
+        expected_bounds,
+    ):
+        """REST must preserve omitted bounds while accepting explicit defaults."""
+        coordinator.data.connectors["test_uuid"].min_current = 10
+        coordinator.data.connectors["test_uuid"].max_current = 20
+        coordinator._fetch_station_state = AsyncMock(
+            return_value=StationState(led_brightness=75, available=True)
+        )
+        client = coordinator.connector_clients["test_uuid"]
+        client.async_get_smartdevice = AsyncMock(
+            return_value={
+                "properties": [],
+                "configurationProperties": configuration_properties,
+            }
+        )
+        coordinator._ensure_power_index_map = AsyncMock()
+
+        snapshot = await coordinator._fetch_connector_state(client)
+
+        assert (
+            snapshot.reported_min_current,
+            snapshot.reported_max_current,
+        ) == reported_bounds
+
+        result = await coordinator._async_update_data()
+
+        connector = result.connectors["test_uuid"]
+        assert (connector.min_current, connector.max_current) == expected_bounds
 
     @pytest.mark.asyncio
     async def test_fetch_connector_state_api_error(self, coordinator):

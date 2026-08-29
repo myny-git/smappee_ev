@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.device_handle import SmappeeDeviceHandle
 from .api.errors import SmappeeError
-from .coordinators.api_state import StationApiMixin
+from .coordinators.api_state import ConnectorRestSnapshot, StationApiMixin
 from .coordinators.dashboard_merge import DashboardMixin
 from .coordinators.mqtt_apply import MqttMixin
 from .coordinators.power import (
@@ -397,7 +397,7 @@ class SmappeeStationCoordinator(
                             connector_number=getattr(client, "connector_number", 1),
                             api_available=False,
                         )
-                elif isinstance(res, ConnectorState):
+                elif isinstance(res, ConnectorState | ConnectorRestSnapshot):
                     self._log_connector_api_transition(uuid, True)
                     prev = (prev_data.connectors or {}).get(uuid) if prev_data else None
                     connectors_state[uuid] = self._merge_connector_rest_state(prev, res)
