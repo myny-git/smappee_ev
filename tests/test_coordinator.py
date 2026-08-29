@@ -1277,6 +1277,68 @@ class TestSmappeeCoordinator:
         assert changed_ranges == []
         assert (conn.min_current, conn.max_current) == (6, 32)
 
+    def test_mqtt_disjoint_valid_range_updates_without_invalid_intermediate_state(
+        self, coordinator
+    ):
+        """A valid range above the previous range must remain coherent while updating."""
+        conn = coordinator.data.connectors["test_uuid"]
+        conn.min_current = 6
+        conn.max_current = 10
+        observed_ranges = []
+        original_set_if_changed = coordinator._set_if_changed
+
+        def record_range_mutations(obj, attr, value):
+            changed = original_set_if_changed(obj, attr, value)
+            if changed and obj is conn and attr in {"min_current", "max_current"}:
+                observed_ranges.append((conn.min_current, conn.max_current))
+            return changed
+
+        with patch.object(coordinator, "_set_if_changed", side_effect=record_range_mutations):
+            coordinator._handle_connector_devices_updated(
+                {
+                    "deviceUUID": "test_uuid",
+                    "minimumCurrent": 15,
+                    "maximumCurrent": 25,
+                }
+            )
+
+        assert observed_ranges == [
+            (6, 25),
+            (15, 25),
+        ]
+        assert (conn.min_current, conn.max_current) == (15, 25)
+
+    def test_mqtt_disjoint_lower_range_updates_without_invalid_intermediate_state(
+        self, coordinator
+    ):
+        """A valid lower range must remain coherent while updating."""
+        conn = coordinator.data.connectors["test_uuid"]
+        conn.min_current = 15
+        conn.max_current = 25
+        observed_ranges = []
+        original_set_if_changed = coordinator._set_if_changed
+
+        def record_range_mutations(obj, attr, value):
+            changed = original_set_if_changed(obj, attr, value)
+            if changed and obj is conn and attr in {"min_current", "max_current"}:
+                observed_ranges.append((conn.min_current, conn.max_current))
+            return changed
+
+        with patch.object(coordinator, "_set_if_changed", side_effect=record_range_mutations):
+            coordinator._handle_connector_devices_updated(
+                {
+                    "deviceUUID": "test_uuid",
+                    "minimumCurrent": 6,
+                    "maximumCurrent": 10,
+                }
+            )
+
+        assert observed_ranges == [
+            (6, 25),
+            (6, 10),
+        ]
+        assert (conn.min_current, conn.max_current) == (6, 10)
+
     def test_mqtt_invalid_maximum_and_percentage_use_the_validated_range(self, coordinator):
         conn = coordinator.data.connectors["test_uuid"]
         conn.min_current = 6
