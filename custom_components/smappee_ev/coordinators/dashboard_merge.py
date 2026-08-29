@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later
 
 from ..const import DASHBOARD_REFRESH_AFTER_WRITE_DELAY, DASHBOARD_REFRESH_INTERVAL
-from ..helpers import anonymize_uuid, dashboard_property_value
+from ..helpers import anonymize_uuid, dashboard_property_value, resolve_connector_current_range
 from ..models.state import (
     ConnectorState,
     DashboardObject,
@@ -334,12 +334,24 @@ class DashboardMixin(CoordinatorMixin):
         )
 
         props = smart_device.get("configurationProperties") or []
-        changed |= self._set_dashboard_int_prop(
-            conn, props, "max_current", "etc.smart.device.type.car.charger.config.max.current"
+        reported_min = self._dashboard_prop_int(
+            props, "etc.smart.device.type.car.charger.config.min.current"
         )
-        changed |= self._set_dashboard_int_prop(
-            conn, props, "min_current", "etc.smart.device.type.car.charger.config.min.current"
+        reported_max = self._dashboard_prop_int(
+            props, "etc.smart.device.type.car.charger.config.max.current"
         )
+        min_current, max_current = resolve_connector_current_range(
+            previous_min=conn.min_current,
+            previous_max=conn.max_current,
+            reported_min=reported_min,
+            reported_max=reported_max,
+        )
+        if min_current > conn.max_current:
+            changed |= self._set_if_changed(conn, "max_current", max_current)
+            changed |= self._set_if_changed(conn, "min_current", min_current)
+        else:
+            changed |= self._set_if_changed(conn, "min_current", min_current)
+            changed |= self._set_if_changed(conn, "max_current", max_current)
         changed |= self._set_dashboard_int_prop(
             conn, props, "min_surpluspct", "etc.smart.device.type.car.charger.config.min.excesspct"
         )

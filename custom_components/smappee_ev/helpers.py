@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import timedelta
+import logging
 from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import CONFIGURATION_URL, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN, MANUFACTURER
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def dashboard_property_value(prop: object) -> Any:
@@ -246,9 +249,44 @@ def connector_state(coordinator: Any, connector_uuid: str) -> Any | None:
     return (getattr(data, "connectors", None) or {}).get(connector_uuid)
 
 
+def resolve_connector_current_range(
+    *,
+    previous_min: int | None,
+    previous_max: int | None,
+    reported_min: int | None,
+    reported_max: int | None,
+) -> tuple[int, int]:
+    """Resolve external connector bounds without storing an invalid range.
+
+    Missing reported bounds are combined with the last valid range. If the
+    resulting pair is invalid, the last valid range is retained; when no valid
+    previous pair exists, the integration defaults are used instead.
+    """
+    if previous_min is not None and previous_max is not None and previous_max >= previous_min:
+        fallback_min, fallback_max = int(previous_min), int(previous_max)
+    else:
+        fallback_min, fallback_max = DEFAULT_MIN_CURRENT, DEFAULT_MAX_CURRENT
+
+    candidate_min = fallback_min if reported_min is None else int(reported_min)
+    candidate_max = fallback_max if reported_max is None else int(reported_max)
+    if candidate_max >= candidate_min:
+        return candidate_min, candidate_max
+
+    _LOGGER.debug(
+        "Ignoring invalid connector current range %d-%d A; keeping valid range %d-%d A",
+        candidate_min,
+        candidate_max,
+        fallback_min,
+        fallback_max,
+    )
+    return fallback_min, fallback_max
+
+
 def percentage_to_current(percentage: int, min_current: int, max_current: int) -> float:
     """Convert a Dashboard ``percentageLimit`` to Ampere within the connector range."""
-    rng = max(int(max_current) - int(min_current), 1)
+    if max_current <= min_current:
+        return float(min_current)
+    rng = int(max_current) - int(min_current)
     return round((int(percentage) / 100.0) * rng + float(min_current), 1)
 
 

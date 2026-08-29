@@ -1233,6 +1233,92 @@ class TestSmappeeCoordinator:
         assert coordinator._handle_connector_devices_updated(payload) is False
         assert conn.selected_percentage_limit == 50  # Should not change
 
+    @pytest.mark.parametrize(
+        ("payload", "expected_range"),
+        [
+            ({"maximumCurrent": 0}, (6, 32)),
+            ({"maximumCurrent": 20}, (6, 20)),
+            ({"minimumCurrent": 10, "maximumCurrent": 20}, (10, 20)),
+            ({"minimumCurrent": 10, "maximumCurrent": 8}, (6, 32)),
+        ],
+    )
+    def test_mqtt_connector_current_range_matrix(self, coordinator, payload, expected_range):
+        conn = coordinator.data.connectors["test_uuid"]
+        conn.min_current = 6
+        conn.max_current = 32
+
+        coordinator._handle_connector_devices_updated({"deviceUUID": "test_uuid", **payload})
+
+        assert (conn.min_current, conn.max_current) == expected_range
+
+    def test_mqtt_invalid_pair_does_not_mutate_either_bound(self, coordinator):
+        """The complete candidate pair must be validated before either bound changes."""
+        conn = coordinator.data.connectors["test_uuid"]
+        conn.min_current = 6
+        conn.max_current = 32
+        changed_ranges = []
+        original_set_if_changed = coordinator._set_if_changed
+
+        def record_range_mutations(obj, attr, value):
+            changed = original_set_if_changed(obj, attr, value)
+            if changed and obj is conn and attr in {"min_current", "max_current"}:
+                changed_ranges.append((conn.min_current, conn.max_current))
+            return changed
+
+        with patch.object(coordinator, "_set_if_changed", side_effect=record_range_mutations):
+            coordinator._handle_connector_devices_updated(
+                {
+                    "deviceUUID": "test_uuid",
+                    "minimumCurrent": 10,
+                    "maximumCurrent": 8,
+                }
+            )
+
+        assert changed_ranges == []
+        assert (conn.min_current, conn.max_current) == (6, 32)
+
+    def test_mqtt_invalid_maximum_and_percentage_use_the_validated_range(self, coordinator):
+        conn = coordinator.data.connectors["test_uuid"]
+        conn.min_current = 6
+        conn.max_current = 32
+        conn.optimization_strategy = "NONE"
+
+        coordinator._handle_connector_devices_updated(
+            {
+                "deviceUUID": "test_uuid",
+                "maximumCurrent": 0,
+                "percentageLimit": 100,
+            }
+        )
+
+        assert (conn.min_current, conn.max_current) == (6, 32)
+        assert conn.selected_percentage_limit == 100
+        assert conn.selected_current_limit == 32.0
+
+    def test_mqtt_invalid_maximum_recovers_without_an_invalid_state(self, coordinator):
+        conn = coordinator.data.connectors["test_uuid"]
+        conn.min_current = 6
+        conn.max_current = 32
+        observed_ranges = [(conn.min_current, conn.max_current)]
+
+        for maximum in (0, 32):
+            coordinator._handle_connector_devices_updated(
+                {"deviceUUID": "test_uuid", "maximumCurrent": maximum}
+            )
+            observed_ranges.append((conn.min_current, conn.max_current))
+
+        assert observed_ranges == [(6, 32), (6, 32), (6, 32)]
+
+    def test_mqtt_chargingstate_percentage_uses_shared_conversion(self, coordinator):
+        conn = coordinator.data.connectors["test_uuid"]
+        conn.min_current = 6
+        conn.max_current = 6
+        conn.optimization_strategy = "NONE"
+
+        coordinator._merge_cs_limits_availability(conn, {"percentageLimit": 100})
+
+        assert conn.selected_current_limit == 6.0
+
     def test_handle_connector_state(self, coordinator):
         """Test _handle_connector_state method."""
         conn = coordinator.data.connectors["test_uuid"]

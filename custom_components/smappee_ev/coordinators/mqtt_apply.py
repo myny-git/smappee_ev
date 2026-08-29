@@ -7,6 +7,7 @@ import logging
 from time import time as _now
 from typing import Any, cast
 
+from ..helpers import percentage_to_current, resolve_connector_current_range
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
 
@@ -164,15 +165,27 @@ class MqttMixin(CoordinatorMixin):
         conn = data.connectors[dev_uuid]
         changed = False
 
-        if "minimumCurrent" in payload:
-            mc_min = self._as_int(payload.get("minimumCurrent"), conn.min_current)
-            if mc_min is not None:
-                changed |= self._set_if_changed(conn, "min_current", mc_min)
-
-        if "maximumCurrent" in payload:
-            mc_max = self._as_int(payload.get("maximumCurrent"), conn.max_current)
-            if mc_max is not None:
-                changed |= self._set_if_changed(conn, "max_current", mc_max)
+        if "minimumCurrent" in payload or "maximumCurrent" in payload:
+            reported_min = (
+                self._as_int(payload.get("minimumCurrent")) if "minimumCurrent" in payload else None
+            )
+            reported_max = (
+                self._as_int(payload.get("maximumCurrent")) if "maximumCurrent" in payload else None
+            )
+            min_current, max_current = resolve_connector_current_range(
+                previous_min=conn.min_current,
+                previous_max=conn.max_current,
+                reported_min=reported_min,
+                reported_max=reported_max,
+            )
+            # Apply a validated pair in an order that keeps the live object
+            # coherent even when two disjoint valid ranges replace each other.
+            if min_current > conn.max_current:
+                changed |= self._set_if_changed(conn, "max_current", max_current)
+                changed |= self._set_if_changed(conn, "min_current", min_current)
+            else:
+                changed |= self._set_if_changed(conn, "min_current", min_current)
+                changed |= self._set_if_changed(conn, "max_current", max_current)
 
         ccp = payload.get("customConfigurationProperties") or {}
         if isinstance(ccp, dict):
@@ -202,8 +215,7 @@ class MqttMixin(CoordinatorMixin):
                 if pct is not None:
                     if self._set_if_changed(conn, "selected_percentage_limit", pct):
                         changed = True
-                    rng = max(int(conn.max_current) - int(conn.min_current), 1)
-                    cur = round((pct / 100.0) * rng + float(conn.min_current), 1)
+                    cur = percentage_to_current(pct, conn.min_current, conn.max_current)
                     changed |= self._set_if_changed(conn, "selected_current_limit", cur)
 
         return changed
@@ -307,8 +319,7 @@ class MqttMixin(CoordinatorMixin):
                 if pct is not None:
                     if self._set_if_changed(conn, "selected_percentage_limit", pct):
                         changed = True
-                    rng = max(int(conn.max_current) - int(conn.min_current), 1)
-                    cur = round((pct / 100.0) * rng + float(conn.min_current), 1)
+                    cur = percentage_to_current(pct, conn.min_current, conn.max_current)
                     changed |= self._set_if_changed(conn, "selected_current_limit", cur)
 
         avail = self._get_any(payload, "available")

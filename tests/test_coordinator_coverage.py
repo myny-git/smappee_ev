@@ -8,6 +8,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 from custom_components.smappee_ev.coordinator import (
     SmappeeSiteCoordinator,
     SmappeeStationCoordinator,
@@ -1252,6 +1253,87 @@ def test_rest_merge_repairs_a_stale_mqtt_derived_current_limit():
 
     assert merged.selected_current_limit == 6.0
     assert merged.selected_percentage_limit == 0
+
+
+@pytest.mark.parametrize(
+    ("reported_min", "reported_max", "expected_min", "expected_max"),
+    [
+        (6, 0, 6, 32),
+        (6, 20, 6, 20),
+        (10, 20, 10, 20),
+        (10, 8, 6, 32),
+    ],
+)
+def test_rest_merge_resolves_connector_current_range(
+    reported_min, reported_max, expected_min, expected_max
+):
+    prev_connector = ConnectorState(connector_number=1, min_current=6, max_current=32)
+    rest_connector = ConnectorState(
+        connector_number=1,
+        min_current=reported_min,
+        max_current=reported_max,
+    )
+
+    merged = SmappeeStationCoordinator._merge_connector_rest_state(prev_connector, rest_connector)
+
+    assert (merged.min_current, merged.max_current) == (expected_min, expected_max)
+
+
+def test_rest_merge_derives_current_from_the_validated_range():
+    prev_connector = ConnectorState(
+        connector_number=1,
+        optimization_strategy="NONE",
+        min_current=6,
+        max_current=32,
+    )
+    rest_connector = ConnectorState(
+        connector_number=1,
+        selected_percentage_limit=50,
+        min_current=6,
+        max_current=0,
+    )
+
+    merged = SmappeeStationCoordinator._merge_connector_rest_state(prev_connector, rest_connector)
+
+    assert (merged.min_current, merged.max_current) == (6, 32)
+    assert merged.selected_current_limit == 19.0
+
+
+def test_rest_merge_invalid_startup_range_uses_defaults():
+    rest_connector = ConnectorState(connector_number=1, min_current=10, max_current=8)
+
+    merged = SmappeeStationCoordinator._merge_connector_rest_state(None, rest_connector)
+
+    assert (merged.min_current, merged.max_current) == (
+        DEFAULT_MIN_CURRENT,
+        DEFAULT_MAX_CURRENT,
+    )
+
+
+def test_dashboard_merge_rejects_an_invalid_connector_current_range(hass):
+    coord = _station_coordinator(hass)
+    module = {
+        "position": 1,
+        "smartDevice": {
+            "uuid": "conn-1",
+            "type": {"category": "CARCHARGER"},
+            "configurationProperties": [
+                {
+                    "spec": {"name": "etc.smart.device.type.car.charger.config.min.current"},
+                    "values": [{"Quantity": {"value": 10, "unit": "A"}}],
+                },
+                {
+                    "spec": {"name": "etc.smart.device.type.car.charger.config.max.current"},
+                    "values": [{"Quantity": {"value": 8, "unit": "A"}}],
+                },
+            ],
+        },
+    }
+
+    coord._merge_dashboard_module(coord.data, module)
+
+    conn = coord.data.connectors["conn-1"]
+    assert (conn.min_current, conn.max_current) == (6, 32)
 
 
 def test_rest_merge_keeps_the_current_limit_under_an_optimization_strategy():

@@ -450,6 +450,41 @@ def test_current_slider_updates_range_from_coordinator(coordinator, api_client):
     assert slider.native_max_value == 8
 
 
+@pytest.mark.asyncio
+async def test_current_slider_remains_usable_after_transient_invalid_rest_maximum(
+    coordinator, api_client
+):
+    slider = SmappeeCombinedCurrentSlider(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+        connector_uuid="uuid",
+    )
+    previous = coordinator.data.connectors["uuid"]
+    previous.optimization_strategy = "NONE"
+    rest = ConnectorState(
+        connector_number=1,
+        selected_percentage_limit=50,
+        min_current=6,
+        max_current=0,
+    )
+    coordinator.data.connectors["uuid"] = SmappeeCoordinator._merge_connector_rest_state(
+        previous, rest
+    )
+
+    with patch.object(SmappeeCombinedCurrentSlider.__mro__[1], "_handle_coordinator_update"):
+        slider._handle_coordinator_update()
+
+    assert slider.native_min_value == 6
+    assert slider.native_max_value == 32
+    api_client.set_current = AsyncMock(return_value=(13.0, 27))
+
+    await slider.async_set_native_value(13)
+
+    api_client.set_current.assert_awaited_once_with(13, min_current=6, max_current=32)
+
+
 def test_dashboard_station_number_ranges(coordinator, dashboard_client):
     coordinator.dashboard_client = dashboard_client
 

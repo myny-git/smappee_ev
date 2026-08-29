@@ -1,3 +1,6 @@
+import pytest
+
+from custom_components.smappee_ev.const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 import custom_components.smappee_ev.helpers as helpers
 from custom_components.smappee_ev.models.state import ConnectorState
 
@@ -51,16 +54,61 @@ def test_safe_sum_invalid():
     assert helpers.safe_sum({"a": 1}) is None  # type: ignore[arg-type]
 
 
-def test_percentage_to_current_maps_across_the_connector_range():
-    assert helpers.percentage_to_current(0, 6, 32) == 6.0
-    assert helpers.percentage_to_current(50, 6, 32) == 19.0
-    assert helpers.percentage_to_current(100, 6, 32) == 32.0
+@pytest.mark.parametrize(
+    ("reported_min", "reported_max", "expected"),
+    [
+        (6, 20, (6, 20)),
+        (10, 20, (10, 20)),
+        (6, 0, (6, 32)),
+        (6, 4, (6, 32)),
+        (10, 8, (6, 32)),
+    ],
+)
+def test_resolve_connector_current_range_uses_valid_pair_or_previous(
+    reported_min, reported_max, expected
+):
+    assert (
+        helpers.resolve_connector_current_range(
+            previous_min=6,
+            previous_max=32,
+            reported_min=reported_min,
+            reported_max=reported_max,
+        )
+        == expected
+    )
 
 
-def test_percentage_to_current_survives_a_collapsed_range():
-    # A connector reporting max <= min must not divide by zero.
-    assert helpers.percentage_to_current(100, 6, 6) == 7.0
-    assert helpers.percentage_to_current(100, 6, 0) == 7.0
+@pytest.mark.parametrize(
+    ("previous_min", "previous_max", "reported_min", "reported_max"),
+    [
+        (None, None, 6, 0),
+        (10, 8, 10, 8),
+        (None, None, None, None),
+    ],
+)
+def test_resolve_connector_current_range_falls_back_to_defaults_on_startup(
+    previous_min, previous_max, reported_min, reported_max
+):
+    assert helpers.resolve_connector_current_range(
+        previous_min=previous_min,
+        previous_max=previous_max,
+        reported_min=reported_min,
+        reported_max=reported_max,
+    ) == (DEFAULT_MIN_CURRENT, DEFAULT_MAX_CURRENT)
+
+
+@pytest.mark.parametrize(("percentage", "expected"), [(0, 6.0), (50, 19.0), (100, 32.0)])
+def test_percentage_to_current_maps_across_the_connector_range(percentage, expected):
+    assert helpers.percentage_to_current(percentage, 6, 32) == expected
+
+
+@pytest.mark.parametrize("percentage", [0, 50, 100])
+def test_percentage_to_current_keeps_a_fixed_range_fixed(percentage):
+    assert helpers.percentage_to_current(percentage, 6, 6) == 6.0
+
+
+def test_percentage_to_current_safely_handles_an_invalid_range():
+    assert helpers.percentage_to_current(100, 6, 0) == 6.0
 
 
 def test_current_to_percentage_is_the_inverse_and_clamps():

@@ -13,7 +13,12 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from ..api.device_handle import SmappeeDeviceHandle
 from ..api.errors import SmappeeError
 from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
-from ..helpers import anonymize_uuid, dashboard_property_value, percentage_to_current
+from ..helpers import (
+    anonymize_uuid,
+    dashboard_property_value,
+    percentage_to_current,
+    resolve_connector_current_range,
+)
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
 from .power import _to_int
@@ -80,7 +85,12 @@ class StationApiMixin(CoordinatorMixin):
         )
 
     @staticmethod
-    def _rest_selected_current_limit(prev: ConnectorState, rest: ConnectorState) -> float | None:
+    def _rest_selected_current_limit(
+        prev: ConnectorState,
+        rest: ConnectorState,
+        min_current: int,
+        max_current: int,
+    ) -> float | None:
         """Derive the Ampere setpoint from the polled percentage limit.
 
         REST only exposes ``percentageLimit``, so without this a stale
@@ -92,30 +102,38 @@ class StationApiMixin(CoordinatorMixin):
             return prev.selected_current_limit
         if rest.selected_percentage_limit is None:
             return prev.selected_current_limit
-        return percentage_to_current(
-            rest.selected_percentage_limit, rest.min_current, rest.max_current
-        )
+        return percentage_to_current(rest.selected_percentage_limit, min_current, max_current)
 
     @staticmethod
     def _merge_connector_rest_state(
         prev: ConnectorState | None, rest: ConnectorState
     ) -> ConnectorState:
         """Merge REST connector fields into the previous MQTT-rich connector state."""
+        min_current, max_current = resolve_connector_current_range(
+            previous_min=prev.min_current if prev is not None else None,
+            previous_max=prev.max_current if prev is not None else None,
+            reported_min=rest.min_current,
+            reported_max=rest.max_current,
+        )
         if prev is None:
-            return rest
+            if (min_current, max_current) == (rest.min_current, rest.max_current):
+                return rest
+            return replace(rest, min_current=min_current, max_current=max_current)
         return replace(
             prev,
             connector_number=rest.connector_number,
             session_state=rest.session_state
             if rest.session_state != "Initialize"
             else prev.session_state,
-            selected_current_limit=StationApiMixin._rest_selected_current_limit(prev, rest),
+            selected_current_limit=StationApiMixin._rest_selected_current_limit(
+                prev, rest, min_current, max_current
+            ),
             selected_percentage_limit=rest.selected_percentage_limit,
             selected_mode=rest.selected_mode
             if rest.selected_mode is not None
             else prev.selected_mode,
-            min_current=rest.min_current,
-            max_current=rest.max_current,
+            min_current=min_current,
+            max_current=max_current,
             min_surpluspct=rest.min_surpluspct
             if rest.min_surpluspct is not None
             else prev.min_surpluspct,
