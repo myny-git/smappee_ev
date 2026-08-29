@@ -207,9 +207,7 @@ class StationApiMixin(CoordinatorMixin):
 
         return StationState(led_brightness=led_brightness, available=True, api_available=True)
 
-    async def _fetch_connector_state(
-        self, client: SmappeeDeviceHandle
-    ) -> ConnectorRestSnapshot:
+    async def _fetch_connector_state(self, client: SmappeeDeviceHandle) -> ConnectorRestSnapshot:
         """Read one connector's properties/config from its smartdevice."""
         session_state = "Initialize"
         selected_percentage: int | None = None

@@ -754,9 +754,7 @@ class TestSmappeeCoordinator:
             (
                 [
                     {
-                        "spec": {
-                            "name": "etc.smart.device.type.car.charger.config.max.current"
-                        },
+                        "spec": {"name": "etc.smart.device.type.car.charger.config.max.current"},
                         "value": 18,
                     }
                 ],
@@ -766,9 +764,7 @@ class TestSmappeeCoordinator:
             (
                 [
                     {
-                        "spec": {
-                            "name": "etc.smart.device.type.car.charger.config.min.current"
-                        },
+                        "spec": {"name": "etc.smart.device.type.car.charger.config.min.current"},
                         "value": 12,
                     }
                 ],
@@ -779,15 +775,11 @@ class TestSmappeeCoordinator:
             (
                 [
                     {
-                        "spec": {
-                            "name": "etc.smart.device.type.car.charger.config.min.current"
-                        },
+                        "spec": {"name": "etc.smart.device.type.car.charger.config.min.current"},
                         "value": 6,
                     },
                     {
-                        "spec": {
-                            "name": "etc.smart.device.type.car.charger.config.max.current"
-                        },
+                        "spec": {"name": "etc.smart.device.type.car.charger.config.max.current"},
                         "value": 32,
                     },
                 ],
