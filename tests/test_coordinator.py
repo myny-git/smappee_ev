@@ -839,9 +839,7 @@ class TestSmappeeCoordinator:
                 ],
                 "configurationProperties": [
                     {
-                        "spec": {
-                            "name": "etc.smart.device.type.car.charger.config.max.current"
-                        },
+                        "spec": {"name": "etc.smart.device.type.car.charger.config.max.current"},
                         "value": 18,
                     }
                 ],
@@ -869,9 +867,7 @@ class TestSmappeeCoordinator:
                 "properties": [],
                 "configurationProperties": [
                     {
-                        "spec": {
-                            "name": "etc.smart.device.type.car.charger.config.max.current"
-                        },
+                        "spec": {"name": "etc.smart.device.type.car.charger.config.max.current"},
                         "value": 8,
                     }
                 ],
