@@ -7,6 +7,109 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.9.0] - 2026-09-06
+
+This release improves charging-current control, compatibility with Home Assistant
+and error reporting during Smappee Dashboard maintenance. It includes all changes
+tested in `2026.8.0-beta.0` through `2026.8.0-beta.2`, plus subsequent fixes.
+
+### Bug fixes
+
+- Starting charging from the button or `smappee_ev.start_charging` now preserves
+  the connector's configured current limit instead of resetting it to the maximum.
+  The last reported percentage is preferred, with the Ampere setpoint as a
+  fallback. When no setpoint is known, the existing 100% fallback is retained.
+  See [PR #292](https://github.com/myny-git/smappee_ev/pull/292).
+- REST polling can now correct a stale selected-current value from the reported
+  percentage limit in Standard mode, while preserving optimizer-driven behavior
+  in Smart and Solar modes.
+- Preserved known connector settings when partial REST updates omit the minimum
+  solar-surplus percentage, support-grid setting or current bounds. Dashboard
+  property parsing now handles both direct values and typed value lists.
+- Hardened minimum/maximum current handling across REST, Dashboard and MQTT
+  updates. Missing or invalid bounds no longer replace a valid known range, and
+  partial or disjoint range updates keep the connector limits coherent.
+- Fixed entity ID generation to follow Home Assistant device naming conventions,
+  including user-defined device names. Existing entity IDs and unique IDs remain
+  unchanged; newly generated or regenerated IDs use the standard naming rules.
+- Updated device relationships to use `via_device_id` where supported, with a
+  `via_device` fallback for older Home Assistant registry APIs. Centralized
+  site-to-station-to-connector registration and preserved device IDs across
+  repeated setup. Legacy LED-device cleanup still respects shared devices on
+  older Home Assistant versions.
+- Recognized the explicit Smappee Dashboard maintenance notice, case-insensitively,
+  before parsing login and token-refresh responses as JSON, including responses
+  with HTTP 200. HTTP 502/503 alone is not treated as proof of maintenance.
+- Replaced the misleading setup failure during recognized maintenance with a
+  translated reason in Settings > Devices & services:
+  "Smappee Dashboard under maintenance. Home Assistant will retry automatically."
+  Setup continues to retry without starting reauthentication or changing stored
+  credentials. Maintenance is logged once at WARNING and successful
+  authentication after maintenance once at INFO, without logging response HTML
+  or credentials. Existing handling of genuine authentication and other server
+  errors is preserved.
+
+### New blueprint
+
+- Added **Smappee: Module Offline Warning**, which notifies a selected notify
+  entity or group when a monitored Smappee sensor remains `unavailable` or
+  `unknown` for a configurable delay. Notification text is customizable.
+  See [PR #281](https://github.com/myny-git/smappee_ev/pull/281).
+
+### Documentation and maintenance
+
+- Added instructions for using connector energy consumption in the Home Assistant
+  Energy Dashboard under **Individual devices**.
+- Consolidated blueprint documentation in `docs/blueprints.md` and updated the
+  start-charging action documentation to explain current-limit preservation.
+- Modernized background reauthentication to use Home Assistant's supported
+  config-entry helper.
+- Strengthened typing and static analysis across API, coordinator, entity and
+  runtime code, aligned checks with Home Assistant's mypy settings, and updated
+  the Home Assistant test stack and GitHub Actions dependencies.
+- Expanded regression coverage for partial connector updates, current ranges,
+  charging setpoints, entity naming, device-registry compatibility, maintenance
+  detection, setup retries and recovery.
+
+Thanks to [@striekels](https://github.com/striekels) for the charging-current fix
+in PR #292 and [@geertmeersman](https://github.com/geertmeersman) for the offline
+warning blueprint and documentation in PR #281.
+
+## [2026.8.0] - 2026-08-05
+
+This release improves charging-session state handling and connector measurements
+after a charging session ends.
+
+### Bug fixes
+
+- Fixed Home Assistant `ValueError` errors caused by restoring unsupported
+  `unknown` or `unavailable` enum states. Restored EVSE states are normalized and
+  validated before use.
+  Fixes [#268](https://github.com/myny-git/smappee_ev/issues/268) via
+  [PR #269](https://github.com/myny-git/smappee_ev/pull/269).
+- Fixed connector power and current readings remaining at their last measured
+  values when charging is stopped from the vehicle. Connector power is reset
+  when the session ends, even without a final zero-power MQTT measurement.
+  Fixes [#270](https://github.com/myny-git/smappee_ev/issues/270) via
+  [PR #272](https://github.com/myny-git/smappee_ev/pull/272).
+- Fixed the charging-state sensor returning to `initialize` after a completed
+  session. REST updates without a meaningful charging state no longer overwrite
+  the more recent MQTT state.
+  Fixes [#271](https://github.com/myny-git/smappee_ev/issues/271) via
+  [PR #273](https://github.com/myny-git/smappee_ev/pull/273).
+
+### Documentation and maintenance
+
+- Updated EVCC documentation to use the current Home Assistant entity ID naming
+  scheme and clarified charging-station versus service-location serial numbers.
+  See [PR #257](https://github.com/myny-git/smappee_ev/pull/257).
+- Grouped related Dependabot updates for the Home Assistant test stack and
+  GitHub Actions dependencies.
+
+Thanks to [@geertmeersman](https://github.com/geertmeersman) for investigating and
+fixing the charging issues in PRs #269, #272 and #273, and to
+[@walterbrebels](https://github.com/walterbrebels) for the EVCC documentation.
+
 ## [2026.7.3] - 2026-07-20
 
 - Added `initialize` to the supported charging-state enum and its English,
