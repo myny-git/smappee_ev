@@ -14,6 +14,7 @@ from homeassistant.core import CALLBACK_TYPE
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later
 
+from ..api.errors import SmappeeMaintenanceError
 from ..const import DASHBOARD_REFRESH_AFTER_WRITE_DELAY, DASHBOARD_REFRESH_INTERVAL
 from ..helpers import anonymize_uuid, dashboard_property_value, resolve_connector_current_range
 from ..models.state import (
@@ -107,6 +108,9 @@ class DashboardMixin(CoordinatorMixin):
             if usable_response:
                 self._last_dashboard_refresh = now
             for label, result in responses.items():
+                if isinstance(result, SmappeeMaintenanceError):
+                    # The client logs maintenance transitions; retain cached data.
+                    continue
                 if isinstance(result, BaseException):
                     if isinstance(result, ConfigEntryAuthFailed):
                         raise result
@@ -160,6 +164,8 @@ class DashboardMixin(CoordinatorMixin):
         changed = False
         errors: list[str] = []
         for uuid, result in zip(calls.keys(), results, strict=True):
+            if isinstance(result, SmappeeMaintenanceError):
+                continue
             if isinstance(result, BaseException):
                 if isinstance(result, ConfigEntryAuthFailed):
                     raise result

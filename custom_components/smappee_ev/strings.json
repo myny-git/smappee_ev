@@ -45,6 +45,9 @@
     }
   },
   "exceptions": {
+    "dashboard_maintenance": {
+      "message": "Smappee Dashboard under maintenance. Home Assistant will retry automatically."
+    },
     "service_location_not_in_entry": {
       "message": "Service location {service_location_id} does not belong to config entry {config_entry_id}"
     },

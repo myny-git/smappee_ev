@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 import logging
 import time
 from typing import Any
@@ -23,11 +24,35 @@ from .errors import (
     SmappeeAuthenticationError,
     SmappeeConnectionError,
     SmappeeError,
+    SmappeeMaintenanceError,
     SmappeeProtocolError,
 )
 
 _LOGGER = logging.getLogger(__name__)
 _TOKEN_RENEW_SKEW_MS = 60_000
+_MAINTENANCE_TEXT = "the smappee dashboard is currently under maintenance."
+
+
+@dataclass
+class DashboardMaintenanceState:
+    """Remember maintenance across client recreation during setup retries."""
+
+    active: bool = False
+
+    def check_response(self, text: str) -> None:
+        """Recognize only the explicit maintenance notice, without logging its body."""
+        if _MAINTENANCE_TEXT not in text.casefold():
+            return
+        if not self.active:
+            self.active = True
+            _LOGGER.warning("Smappee Dashboard under maintenance; will retry automatically")
+        raise SmappeeMaintenanceError("Smappee Dashboard under maintenance")
+
+    def authentication_succeeded(self) -> None:
+        """Report recovery only after authentication actually succeeds."""
+        if self.active:
+            self.active = False
+            _LOGGER.info("Smappee Dashboard recovered from maintenance")
 
 
 class SmappeeDashboardClient:
@@ -41,6 +66,7 @@ class SmappeeDashboardClient:
         refresh_token: str | None,
         session: ClientSession,
         token_update_callback: Callable[[dict[str, str]], None],
+        maintenance_state: DashboardMaintenanceState | None = None,
     ) -> None:
         self.username = username
         self.password = password
@@ -52,6 +78,7 @@ class SmappeeDashboardClient:
         self._token_expires_at_ms = 0
         self._auth_lock = asyncio.Lock()
         self._missing_credentials_logged = False
+        self._maintenance_state = maintenance_state or DashboardMaintenanceState()
 
     def _token_valid(self) -> bool:
         return bool(
@@ -81,15 +108,18 @@ class SmappeeDashboardClient:
             json={"userName": self.username, "password": self.password},
             timeout=self._timeout,
         ) as resp:
+            text = await resp.text()
+            self._maintenance_state.check_response(text)
             if resp.status in (401, 403):
                 raise SmappeeAuthenticationError("Dashboard credentials rejected")
             if resp.status != 200:
-                text = await resp.text()
                 raise SmappeeProtocolError(f"Dashboard login failed {resp.status}: {text}")
             data = await resp.json()
         if not isinstance(data, dict):
             return False
         self._update_token_data(data)
+        if self._token:
+            self._maintenance_state.authentication_succeeded()
         return bool(self._token)
 
     async def async_refresh(self) -> bool:
@@ -102,6 +132,7 @@ class SmappeeDashboardClient:
             json={"refreshToken": self.refresh_token, "language": "nl"},
             timeout=self._timeout,
         ) as resp:
+            self._maintenance_state.check_response(await resp.text())
             if resp.status in (401, 403):
                 raise SmappeeAuthenticationError("Dashboard refresh token rejected")
             if resp.status != 200:
@@ -110,6 +141,8 @@ class SmappeeDashboardClient:
         if not isinstance(data, dict):
             return False
         self._update_token_data(data)
+        if self._token:
+            self._maintenance_state.authentication_succeeded()
         return bool(self._token)
 
     async def async_ensure_auth(self) -> bool:
@@ -134,7 +167,7 @@ class SmappeeDashboardClient:
                         )
                 if await self.async_login():
                     return True
-            except ConfigEntryAuthFailed:
+            except ConfigEntryAuthFailed, SmappeeMaintenanceError:
                 raise
             except (
                 SmappeeError,

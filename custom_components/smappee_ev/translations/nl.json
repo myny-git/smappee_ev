@@ -45,6 +45,9 @@
     }
   },
   "exceptions": {
+    "dashboard_maintenance": {
+      "message": "Smappee Dashboard is in onderhoud. Home Assistant probeert het automatisch opnieuw."
+    },
     "service_location_not_in_entry": {
       "message": "Service location {service_location_id} hoort niet bij config entry {config_entry_id}"
     },

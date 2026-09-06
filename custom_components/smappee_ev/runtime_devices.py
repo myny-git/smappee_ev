@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from inspect import signature
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -10,6 +11,17 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN, MANUFACTURER
 from .helpers import connector_device_identifier, site_device_identifier, station_device_identifier
 from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry
+
+_SUPPORTS_VIA_DEVICE_ID = (
+    "via_device_id" in signature(dr.DeviceRegistry.async_get_or_create).parameters
+)
+
+
+def _via_device_kwargs(device: dr.DeviceEntry, identifier: tuple[str, str]) -> dict[str, Any]:
+    """Use registry IDs when supported, otherwise the legacy identifier API."""
+    if _SUPPORTS_VIA_DEVICE_ID:
+        return {"via_device_id": device.id}
+    return {"via_device": identifier}
 
 
 def _remove_legacy_led_controller_devices(
@@ -24,6 +36,13 @@ def _remove_legacy_led_controller_devices(
         ):
             continue
 
+        config_entry_id = getattr(device, "config_entry_id", None)
+        if config_entry_id is not None:
+            if config_entry_id == entry.entry_id:
+                registry.async_remove_device(device.id)
+            continue
+
+        # Before HA 2026.8 devices could be shared by several config entries.
         if device.config_entries == {entry.entry_id}:
             registry.async_remove_device(device.id)
         else:
@@ -42,7 +61,7 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
         site_name = site.site_name or f"Smappee {site_sid}"
         gateway_serial = site.gateway_serial
         gateway_type = site.gateway_type
-        registry.async_get_or_create(
+        site_device = registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={site_identifier},
             manufacturer=MANUFACTURER,
@@ -61,14 +80,14 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
             station_client = bucket.station_client
             legacy_serial = getattr(station_client, "serial_id", None) or station_serial
             station_identifiers.add((DOMAIN, f"{site_sid}:{legacy_serial}:{station_uuid}"))
-            registry.async_get_or_create(
+            station_device = registry.async_get_or_create(
                 config_entry_id=entry.entry_id,
                 identifiers=station_identifiers,
                 manufacturer=MANUFACTURER,
                 name=bucket.station_name or f"Smappee EV {station_serial}",
                 model=bucket.charging_station_model or "EV Wall",
                 serial_number=str(station_serial),
-                via_device=site_identifier,
+                **_via_device_kwargs(site_device, site_identifier),
             )
 
             for connector_uuid, info in bucket.connectors.items():
@@ -88,7 +107,7 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
                     manufacturer=MANUFACTURER,
                     name=f"Smappee EV {station_serial} | Connector {label}",
                     model="Connector",
-                    via_device=station_identifier,
+                    **_via_device_kwargs(station_device, station_identifier),
                 )
 
 

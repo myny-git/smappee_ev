@@ -374,9 +374,7 @@ class TestSensorPlatform:
         assert power_sensor.device_info["identifiers"] == {
             connector_device_identifier(317418, 317443, "STATION123", "connector-uuid")
         }
-        assert power_sensor.device_info["via_device"] == station_device_identifier(
-            317418, 317443, "STATION123"
-        )
+        assert "via_device" not in power_sensor.device_info
 
 
 class TestLightPlatform:
@@ -471,7 +469,7 @@ class TestLightPlatform:
         assert not any(
             identifier.startswith("led:") for domain, identifier in identifiers if domain == DOMAIN
         )
-        assert led_light.device_info["via_device"] == (DOMAIN, "site:317418")
+        assert "via_device" not in led_light.device_info
 
 
 class TestSwitchPlatform:
@@ -536,7 +534,7 @@ class TestSwitchPlatform:
             station_device_identifier(317418, 317443, "STATION123"),
             ("smappee_ev", "317418:STATION123:station-uuid"),
         }
-        assert availability_switch.device_info["via_device"] == ("smappee_ev", "site:317418")
+        assert "via_device" not in availability_switch.device_info
 
 
 class TestSmappeeLedLight:

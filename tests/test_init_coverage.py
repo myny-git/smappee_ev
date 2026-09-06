@@ -1,11 +1,14 @@
 """Focused coverage tests for setup helper behavior."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smappee_ev import async_remove_config_entry_device, async_unload_entry
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec, SmappeeLocationTopology
@@ -21,11 +24,18 @@ from custom_components.smappee_ev.dashboard_discovery import (
     _load_dashboard_service_locations,
     _load_dashboard_topologies,
 )
+from custom_components.smappee_ev.helpers import (
+    make_connector_device_info,
+    make_station_device_info,
+)
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_clients
 from custom_components.smappee_ev.mqtt_specs import _group_mqtt_specs_by_credentials
 from custom_components.smappee_ev.runtime_assembly import _prepare_topology
-from custom_components.smappee_ev.runtime_devices import _register_runtime_devices
+from custom_components.smappee_ev.runtime_devices import (
+    _register_runtime_devices,
+    _remove_legacy_led_controller_devices,
+)
 from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
 from custom_components.smappee_ev.site_preparation import _prepare_site
 from custom_components.smappee_ev.topology import (
@@ -978,11 +988,15 @@ def test_create_dashboard_client_persists_refresh_token_updates():
     )
 
 
-def test_register_runtime_devices_creates_site_station_and_connector_devices():
-    hass = MagicMock()
-    entry = MagicMock()
-    entry.entry_id = "entry-1"
-    hass.config_entries.async_get_entry.return_value = entry
+@pytest.mark.parametrize("legacy_api", [False, True], ids=["modern", "legacy"])
+async def test_register_runtime_devices_creates_site_station_and_connector_devices(
+    hass, monkeypatch, legacy_api
+):
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.runtime_devices._SUPPORTS_VIA_DEVICE_ID", not legacy_api
+    )
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
     station_client = MagicMock()
     station_client.serial_id = "LEGACY-SERIAL"
     connector_client = MagicMock()
@@ -1019,23 +1033,92 @@ def test_register_runtime_devices_creates_site_station_and_connector_devices():
             )
         },
     )
-    registry = MagicMock()
+    registry = dr.async_get(hass)
+    if legacy_api:
+        create_device = registry.async_get_or_create
 
-    with (
-        patch("custom_components.smappee_ev.dr.async_get", return_value=registry),
-        patch("custom_components.smappee_ev.dr.async_entries_for_config_entry", return_value=[]),
-    ):
-        _register_runtime_devices(hass, entry)
+        def legacy_get_or_create(*, config_entry_id, via_device=None, **metadata):
+            # Emulate the old API: reject the new keyword and resolve identifiers.
+            assert "via_device_id" not in metadata
+            if via_device is not None:
+                parent = registry.async_get_device_by_identifier(via_device, config_entry_id)
+                assert parent is not None
+                metadata["via_device_id"] = parent.id
+            return create_device(config_entry_id=config_entry_id, **metadata)
 
-    identifiers = [
-        call.kwargs["identifiers"] for call in registry.async_get_or_create.call_args_list
-    ]
+        monkeypatch.setattr(registry, "async_get_or_create", legacy_get_or_create)
+    legacy_led = registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "led:100:200:STATION-1:led-id")},
+    )
+    _register_runtime_devices(hass, entry)
+    assert registry.async_get(legacy_led.id) is None
+
+    devices = list(dr.async_entries_for_config_entry(registry, entry.entry_id))
+    identifiers = [device.identifiers for device in devices]
     flattened = {identifier for group in identifiers for _, identifier in group}
     assert "site:100" in flattened
     assert "station:100:200:STATION-1" in flattened
     assert "100:LEGACY-SERIAL:station-uuid" in flattened
     assert "led:100:200:STATION-1:led-id" not in flattened
     assert "connector:100:200:STATION-1:conn-uuid" in flattened
+
+    site = registry.async_get_device_by_identifier((DOMAIN, "site:100"), entry.entry_id)
+    station = registry.async_get_device_by_identifier(
+        (DOMAIN, "station:100:200:STATION-1"), entry.entry_id
+    )
+    connector = registry.async_get_device_by_identifier(
+        (DOMAIN, "connector:100:200:STATION-1:conn-uuid"), entry.entry_id
+    )
+    assert site is not None
+    assert station is not None
+    assert connector is not None
+    assert station.via_device_id == site.id
+    assert connector.via_device_id == station.id
+
+    # Entity metadata and a subsequent setup must preserve links and device IDs.
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        **make_station_device_info(100, 200, "STATION-1"),
+    )
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        **make_connector_device_info(100, 200, "STATION-1", "conn-uuid"),
+    )
+    assert registry.async_get(station.id).via_device_id == site.id
+    assert registry.async_get(connector.id).via_device_id == station.id
+    _register_runtime_devices(hass, entry)
+    assert {
+        device.id for device in dr.async_entries_for_config_entry(registry, entry.entry_id)
+    } == {site.id, station.id, connector.id}
+    assert registry.async_get(station.id).via_device_id == site.id
+    assert registry.async_get(connector.id).via_device_id == station.id
+
+
+@pytest.mark.parametrize("shared", [False, True], ids=["owned", "shared"])
+def test_remove_legacy_led_devices_preserves_other_config_entries(shared):
+    registry = MagicMock(spec=dr.DeviceRegistry)
+    entry = SimpleNamespace(entry_id="smappee-entry")
+    config_entries = {entry.entry_id, "other-entry"} if shared else {entry.entry_id}
+    device = SimpleNamespace(
+        id="old-led",
+        identifiers={(DOMAIN, "led:100:200:STATION-1:led-id")},
+        config_entries=config_entries,
+    )
+    with patch(
+        "custom_components.smappee_ev.runtime_devices.dr.async_entries_for_config_entry",
+        return_value=[device],
+    ):
+        _remove_legacy_led_controller_devices(registry, entry)
+
+    if shared:
+        registry.async_remove_device.assert_not_called()
+        registry.async_update_device.assert_called_once_with(
+            device.id, remove_config_entry_id=entry.entry_id
+        )
+    else:
+        registry.async_remove_device.assert_called_once_with(device.id)
+        registry.async_update_device.assert_not_called()
 
 
 @pytest.mark.asyncio

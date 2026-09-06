@@ -12,6 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api.discovery import SmappeeLocationTopology
+from .api.errors import SmappeeMaintenanceError
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
@@ -151,6 +152,18 @@ def _start_runtime_background_work(
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
+    """Expose maintenance as a translated setup retry, never reauthentication."""
+    try:
+        return await _async_setup_entry(hass, entry)
+    except SmappeeMaintenanceError as err:
+        raise ConfigEntryNotReady(
+            "Smappee Dashboard under maintenance. Home Assistant will retry automatically.",
+            translation_domain=DOMAIN,
+            translation_key="dashboard_maintenance",
+        ) from err
+
+
+async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Set up a Smappee EV account entry that discovers all service locations with a charger."""
     _LOGGER.debug("Setting up Smappee EV account entry: %s", entry.title)
 
@@ -204,7 +217,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             if isinstance(res, asyncio.CancelledError):
                 hard_error = hard_error or res
                 continue
-            if isinstance(res, ConfigEntryAuthFailed):
+            if isinstance(res, ConfigEntryAuthFailed | SmappeeMaintenanceError):
                 hard_error = hard_error or res
                 continue
             if isinstance(res, BaseException):
@@ -220,7 +233,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
             sites[sid] = site
 
         if hard_error is not None:
-            if isinstance(hard_error, asyncio.CancelledError | ConfigEntryAuthFailed):
+            if isinstance(
+                hard_error, asyncio.CancelledError | ConfigEntryAuthFailed | SmappeeMaintenanceError
+            ):
                 raise hard_error
             raise ConfigEntryNotReady(
                 f"Preparing Smappee EV topology failed: {hard_error}"

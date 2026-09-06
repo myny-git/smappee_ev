@@ -5,6 +5,9 @@
 
 ## About
 
+Device registration supports both the newer Home Assistant registry API and the legacy API
+used before Home Assistant 2026.8.
+
 This Home Assistant integration provides extended local control and monitoring for Smappee EV chargers, including charging modes, current limits, availability control, LED brightness, and status feedback. It is intended for users who want to integrate their Smappee EV charger more deeply into Home Assistant, EVCC, or other energy management setups. Depending on your device and configuration, energy-related data may also be available.
 
 Feel free to join the Discord channel if you have questions, want to share feedback, or would like to contribute!

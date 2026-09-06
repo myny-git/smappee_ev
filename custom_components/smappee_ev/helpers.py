@@ -115,7 +115,7 @@ def make_station_device_info(
     station_model: str | None = None,
     legacy_identifier: str | None = None,
 ) -> DeviceInfo:
-    """Return Home Assistant device_info for a charging station."""
+    """Return station metadata; runtime registration owns the device hierarchy."""
     identifiers = {station_device_identifier(site_sid, control_sid, charging_station_serial)}
     if legacy_identifier:
         identifiers.add((DOMAIN, legacy_identifier))
@@ -126,7 +126,6 @@ def make_station_device_info(
         "configuration_url": CONFIGURATION_URL,
         "model": station_model or "EV Wall",
         "serial_number": charging_station_serial,
-        "via_device": site_device_identifier(site_sid),
     }
     return device_info
 
@@ -139,7 +138,7 @@ def make_connector_device_info(
     connector_label: str | None = None,
     station_name: str | None = None,
 ) -> DeviceInfo:
-    """Return Home Assistant device_info for a connector."""
+    """Return connector metadata; runtime registration owns the device hierarchy."""
     label = connector_label or connector_key
     base = station_name or f"{MANUFACTURER} EV {charging_station_serial}"
     device_info: DeviceInfo = {
@@ -152,7 +151,6 @@ def make_connector_device_info(
         "manufacturer": MANUFACTURER,
         "configuration_url": CONFIGURATION_URL,
         "model": "Connector",
-        "via_device": station_device_identifier(site_sid, control_sid, charging_station_serial),
     }
     return device_info
 

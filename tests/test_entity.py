@@ -57,7 +57,7 @@ def mock_coordinator():
 
 
 def test_scoped_device_info_hierarchy():
-    """Test site/station child devices point at the expected parent."""
+    """Entity metadata leaves hierarchy management to runtime registration."""
     station = make_station_device_info(
         317418,
         317443,
@@ -67,8 +67,8 @@ def test_scoped_device_info_hierarchy():
     connector = make_connector_device_info(317418, 317443, "6230010364", "connector-uuid", "1")
 
     assert station["identifiers"] == {(DOMAIN, "station:317418:317443:6230010364")}
-    assert station["via_device"] == (DOMAIN, "site:317418")
-    assert connector["via_device"] == (DOMAIN, "station:317418:317443:6230010364")
+    assert "via_device" not in station
+    assert "via_device" not in connector
 
 
 def test_led_entity_uses_station_device_info(mock_coordinator):

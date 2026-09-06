@@ -7,6 +7,10 @@ class SmappeeError(Exception):
     """Base error for expected remote Smappee failures."""
 
 
+class SmappeeMaintenanceError(SmappeeError):
+    """Smappee explicitly reports Dashboard maintenance."""
+
+
 class SmappeeAuthenticationError(ConfigEntryAuthFailed):
     """Smappee authentication failed."""
 
