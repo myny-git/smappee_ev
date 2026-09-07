@@ -753,6 +753,7 @@ async def async_get_config_entry_diagnostics(
     out: dict[str, Any] = {}
 
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
+    out["runtime_mode"] = rt.mode.value if rt is not None else None
     sites = rt.sites if rt else {}
     sensitive_values = _entry_sensitive_values(entry) + _runtime_sensitive_values(rt)
     # Stable local aliases instead of raw service-location ids (#251 follow-up):

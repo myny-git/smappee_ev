@@ -7,7 +7,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
-from custom_components.smappee_ev.api.errors import SmappeeConnectionError, SmappeeProtocolError
+from custom_components.smappee_ev.api.errors import SmappeeConnectionError, SmappeeServerError
 
 
 class _Response:
@@ -638,7 +638,7 @@ async def test_dashboard_login_and_refresh_handle_bad_payloads_and_statuses():
     login_session = _Session(posts=[_Response(500, text="server error")])
     client = _client(login_session, username="user", password="pass")  # noqa: S106
 
-    with pytest.raises(SmappeeProtocolError, match="Dashboard login failed 500"):
+    with pytest.raises(SmappeeServerError, match="500"):
         await client.async_login()
 
     bad_payload = _client(
@@ -652,7 +652,8 @@ async def test_dashboard_login_and_refresh_handle_bad_payloads_and_statuses():
         _Session(posts=[_Response(500, text="no refresh"), _Response(200, ["bad"])]),
         refresh_token="refresh",  # noqa: S106 - fake refresh token
     )
-    assert await refresh.async_refresh() is False
+    with pytest.raises(SmappeeServerError, match="500"):
+        await refresh.async_refresh()
     assert await refresh.async_refresh() is False
 
 
@@ -701,12 +702,11 @@ async def test_dashboard_request_raises_for_http_error_and_empty_json_body():
     error_client._token = "token"  # noqa: S105
     error_client._token_expires_at_ms = expires_at
 
-    with pytest.raises(SmappeeProtocolError) as err:
+    with pytest.raises(SmappeeServerError) as err:
         await error_client._request("GET", "v11/example", return_json=True)
     error_text = str(err.value)
-    assert "Dashboard request failed 503" in error_text
-    assert "GET https://dashboard.smappee.net/api/v11/example" in error_text
-    assert "unavailable" in error_text
+    assert "503" in error_text
+    assert "https://" not in error_text
 
     empty_client = _client(_Session(requests=[_Response(200, content_length=0)]))
     empty_client._token = "token"  # noqa: S105

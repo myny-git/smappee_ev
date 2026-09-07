@@ -19,5 +19,9 @@ class SmappeeConnectionError(SmappeeError):
     """Smappee network or transport failed."""
 
 
+class SmappeeServerError(SmappeeError):
+    """Smappee is temporarily unable to serve a request (HTTP 5xx)."""
+
+
 class SmappeeProtocolError(SmappeeError):
     """Smappee returned malformed or unsupported data."""

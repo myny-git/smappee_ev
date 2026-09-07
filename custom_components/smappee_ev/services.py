@@ -11,7 +11,7 @@ import voluptuous as vol
 from .api.device_handle import SmappeeDeviceHandle
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .helpers import connector_percentage_setpoint, dashboard_mode
-from .models.runtime_data import RuntimeData, SmappeeSiteRuntime
+from .models.runtime_data import RuntimeData, RuntimeMode, SmappeeSiteRuntime
 from .models.state import ConnectorState
 
 _LOGGER = logging.getLogger(__name__)
@@ -127,6 +127,15 @@ def _raise_service_location_not_found(sid: int) -> None:
 
 
 def _resolve_sid(hass: HomeAssistant, call: ServiceCall) -> tuple[RuntimeData | None, int | None]:
+    runtime, sid = _resolve_sid_unchecked(hass, call)
+    if runtime is not None and runtime.mode is RuntimeMode.MQTT_ONLY:
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="mqtt_only")
+    return runtime, sid
+
+
+def _resolve_sid_unchecked(
+    hass: HomeAssistant, call: ServiceCall
+) -> tuple[RuntimeData | None, int | None]:
     """Return (runtime, sid) based on optional config_entry_id + service_location_id.
 
     Precedence:

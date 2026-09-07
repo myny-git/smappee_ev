@@ -361,9 +361,12 @@ def _handle_mqtt_connection_change(
     for bucket in stations.values():
         coord = bucket.station_coordinator
         if coord:
-            if coord.update_interval is None:
+            if (
+                coord.update_interval is None
+                and getattr(coord, "monitoring_only", False) is not True
+            ):
                 object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
-            if not up:
+            if not up and getattr(coord, "monitoring_only", False) is not True:
                 schedule_refresh(coord)
             coord.apply_mqtt_connection_change(up)
 
@@ -467,6 +470,21 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                 continue
             if is_real_charger:
                 target.last_real_charger_rx = freshness.last_real_charger_rx
+                if (
+                    isinstance(target, SmappeeStationCoordinator)
+                    and getattr(target, "monitoring_only", False) is True
+                ):
+                    connector_id = _topic_device_id(topic) or payload.get("deviceUUID")
+                    keys = (
+                        [connector_id]
+                        if connector_id
+                        else list(
+                            (target._power_index_maps_by_topic or {}).get(topic, {}).get("cars", {})
+                        )
+                    )
+                    for key in keys:
+                        if key in target.connector_clients:
+                            target.last_connector_rx[key] = datetime.now(UTC)
             if topic.endswith("/power"):
                 target.last_real_power_rx = freshness.last_real_power_rx
         for coord in targets:
@@ -548,7 +566,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         coord = bucket.station_coordinator
         if coord is None:
             continue
-        if coord.update_interval is None:
+        if coord.update_interval is None and getattr(coord, "monitoring_only", False) is not True:
             object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
     mqtt_runtime = _mqtt_runtime_value(mqtt_clients)
     if start_clients:

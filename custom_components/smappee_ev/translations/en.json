@@ -86,6 +86,9 @@
     },
     "current_out_of_range": {
       "message": "Current {current} A is out of range {min_current}-{max_current} A for this connector."
+    },
+    "mqtt_only": {
+      "message": "Dashboard is unavailable. Only MQTT monitoring is active; controls are unavailable. Recovery is automatic."
     }
   },
   "services": {
@@ -377,6 +380,13 @@
       },
       "session_energy": {
         "name": "Session"
+      },
+      "connection_mode": {
+        "name": "Connection mode",
+        "state": {
+          "normal": "Dashboard and MQTT",
+          "mqtt_only": "MQTT monitoring only"
+        }
       }
     }
   }

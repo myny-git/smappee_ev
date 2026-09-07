@@ -81,6 +81,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         self.gateway_serial = gateway_serial
         self.gateway_type = gateway_type
         self._highlevel_configs = highlevel_configs or {}
+        self.monitoring_only = False
         self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
         self._power_map_retry_after = 0.0
         self.mqtt_transport_connected = False
@@ -333,12 +334,14 @@ class SmappeeStationCoordinator(
         self.station_client = station_client
         self.connector_clients = connector_clients
         self.dashboard_client = dashboard_client
+        self.monitoring_only = False
         self._highlevel_configs = highlevel_configs or {}
         self.site_name = site_name
         self.gateway_serial = gateway_serial
         self.gateway_type = gateway_type
         self.station_name = station_name
         self.station_model = station_model
+        self.last_connector_rx: dict[str, datetime] = {}
         self.station_client.dashboard_client = dashboard_client
         for client in self.connector_clients.values():
             client.dashboard_client = dashboard_client
@@ -368,6 +371,8 @@ class SmappeeStationCoordinator(
 
     @override
     async def _async_update_data(self) -> IntegrationData:
+        if self.monitoring_only:
+            return self.data
         try:
             # ---- Station snapshot (LED brightness) ----
             prev_data = self.data
@@ -431,6 +436,7 @@ class SmappeeStationCoordinator(
     async def async_shutdown(self) -> None:
         """Cancel session refresh callbacks and background tasks."""
         self.cancel_delayed_refreshes()
+        await super().async_shutdown()
         task = self._dashboard_refresh_task
 
         if task is not None:
@@ -452,7 +458,11 @@ class SmappeeStationCoordinator(
     @property
     def _is_stopping(self) -> bool:
         """Return True when the coordinator should avoid new background I/O."""
-        return self._shutting_down or getattr(self.hass, "is_stopping", False) is True
+        return (
+            self.monitoring_only
+            or self._shutting_down
+            or getattr(self.hass, "is_stopping", False) is True
+        )
 
     def _start_background_reauth(self) -> None:
         """Start reauth for auth failures raised outside coordinator polling."""

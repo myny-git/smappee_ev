@@ -50,6 +50,43 @@ This custom integration unlocks **more control over your Smappee** charger and c
 - Dashboard v10/v11 calls are used for charging mode, start, pause, stop, percentage/current limit, LED brightness, min surplus percentage and availability.
 - Dashboard configuration data refreshes at most every 30 minutes, with a forced refresh shortly after supported dashboard writes.
 
+### Monitoring during Dashboard outages
+
+After a successful setup, the integration saves the MQTT connection settings and
+device mapping in Home Assistant storage. If Dashboard is temporarily unavailable
+during a later reload or Home Assistant restart, this saved configuration lets
+MQTT monitoring start independently. Maintenance responses, connection failures,
+timeouts and HTTP 5xx responses can activate this fallback. Authentication errors
+still require reauthentication; they do not activate fallback during setup.
+
+The diagnostic **Connection mode** sensor shows `mqtt_only` when using this saved
+configuration. Dashboard controls and REST-only entities are unavailable, and
+service actions fail with an explanatory message. MQTT measurements become
+available after live data arrives for the site or connector. They become
+unavailable if the broker disconnects or no matching data arrives for five minutes
+(checked every 30 seconds). Stored device metadata is not used as live telemetry.
+
+Dashboard recovery runs in the background, starting after 30 seconds. Failed
+attempts increase the delay, with jitter, up to ten minutes. Once full discovery
+succeeds, the integration reloads automatically to restore normal operation. This
+reload briefly interrupts MQTT. If recovery discovers invalid credentials, Home
+Assistant requests reauthentication while the existing MQTT monitoring continues.
+During normal operation, MQTT updates also leave REST polling scheduled so that
+Dashboard can recover without a manual reload.
+
+Fallback requires at least one successful setup with this version and a valid
+saved configuration. Without it, Home Assistant retries setup normally. The last
+saved configuration has no expiry time and is refreshed on successful normal
+setup; changed device mappings or expired MQTT credentials can prevent monitoring
+until Dashboard returns. The MQTT broker and network must remain reachable, and
+missed measurements are not backfilled.
+
+The private storage file contains MQTT credentials and device routing metadata,
+but no saved live measurements or charging sessions. Like other Home Assistant
+storage files, it is not separately encrypted: protect access to the configuration
+directory and backups. Removing the integration entry deletes its saved MQTT
+configuration. Diagnostics do not include these credentials.
+
 ### ✅ Charging Mode Control
 
 - UI controls (select, number slider, **Set Charging Mode** button) use Dashboard v10 actions when a Dashboard token is available.

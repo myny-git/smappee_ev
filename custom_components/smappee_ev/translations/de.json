@@ -80,6 +80,9 @@
     },
     "current_out_of_range": {
       "message": "Strom {current} A liegt außerhalb des Bereichs {min_current}-{max_current} A für diesen Connector."
+    },
+    "mqtt_only": {
+      "message": "Dashboard ist nicht verfügbar. Nur die MQTT-Überwachung ist aktiv; die Steuerung ist nicht verfügbar. Die Wiederherstellung erfolgt automatisch."
     }
   },
   "services": {
@@ -371,6 +374,13 @@
       },
       "session_energy": {
         "name": "Sitzung"
+      },
+      "connection_mode": {
+        "name": "Verbindungsmodus",
+        "state": {
+          "normal": "Dashboard und MQTT",
+          "mqtt_only": "Nur MQTT-Überwachung"
+        }
       }
     }
   }

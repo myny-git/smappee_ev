@@ -33,7 +33,7 @@ from .entity import (
     SmappeeSitePowerEntity,
 )
 from .helpers import format_as_hms, safe_sum, update_total_increasing
-from .models.runtime_data import SmappeeEvConfigEntry
+from .models.runtime_data import RuntimeMode, SmappeeEvConfigEntry
 from .models.state import SiteState, StationState
 
 PARALLEL_UPDATES = 0
@@ -47,7 +47,7 @@ async def async_setup_entry(
     # Access runtime data directly (preferred over hass.data lookups)
     runtime = config_entry.runtime_data
 
-    entities: list[SensorEntity] = []
+    entities: list[SensorEntity] = [SmappeeConnectionModeSensor(config_entry)]
 
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
@@ -103,6 +103,21 @@ async def async_setup_entry(
 
 
 # --------------- Bases ---------------
+
+
+class SmappeeConnectionModeSensor(SensorEntity):
+    """Explain when only cached MQTT monitoring is available."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "connection_mode"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_should_poll = False
+    _attr_options = [mode.value for mode in RuntimeMode]
+
+    def __init__(self, entry: SmappeeEvConfigEntry) -> None:
+        self._attr_unique_id = f"{entry.entry_id}:connection_mode"
+        self._attr_native_value = entry.runtime_data.mode.value
 
 
 ############################################################
@@ -977,6 +992,8 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         value = getattr(st, "evcc_state", None) if st else None
         if value is not None:
             return str(value)
+        if not self._dashboard_available:
+            return None
         return self._restored_value
 
     @property
@@ -1061,6 +1078,8 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         value = getattr(st, "status_current", None) if st else None
         if value is not None:
             return str(value).lower()
+        if not self._dashboard_available:
+            return None
         return self._restored_value
 
     @override

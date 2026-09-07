@@ -21,7 +21,7 @@ from .api.device_handle import SmappeeDeviceHandle
 from .api.errors import SmappeeError
 from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
-from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationEntity
+from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationRestEntity
 from .models.runtime_data import SmappeeEvConfigEntry, SmappeeSiteRuntime
 from .models.state import ConnectorState, IntegrationData, StationState
 
@@ -485,7 +485,8 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
     def available(self) -> bool:
         st = self._station_state()
         return bool(
-            super().available
+            self._dashboard_available
+            and super().available
             and getattr(self.coordinator, "dashboard_client", None)
             and st is not None
         )
@@ -547,7 +548,8 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
     def available(self) -> bool:
         st = self._station_state()
         return bool(
-            super().available
+            self._dashboard_available
+            and super().available
             and getattr(self.coordinator, "dashboard_client", None)
             and st is not None
         )
@@ -577,7 +579,7 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
         self.coordinator.async_schedule_dashboard_refresh()
 
 
-class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
+class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationRestEntity, _BaseNumber):
     """Station-level offline charging failsafe current."""
 
     _attr_device_class = NumberDeviceClass.CURRENT
@@ -592,7 +594,7 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
         sid: int,
         station_uuid: str,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeStationRestEntity.__init__(
             self,
             coordinator,
             sid,
@@ -611,7 +613,8 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationEntity, _BaseNumber):
     def available(self) -> bool:
         st = self._station_state()
         return bool(
-            super().available
+            self._dashboard_available
+            and super().available
             and getattr(self.coordinator, "dashboard_client", None)
             and st is not None
             and st.offline_charging_enabled is True

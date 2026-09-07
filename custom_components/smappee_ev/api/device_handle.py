@@ -6,8 +6,9 @@ import logging
 from typing import Any, cast
 
 import aiohttp
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 
+from ..const import DOMAIN
 from ..helpers import anonymize_uuid
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class SmappeeDeviceHandle:
         self, method_name: str, *args: Any, **kwargs: Any
     ) -> bool | None:
         """Try a Dashboard v10 action when metadata is available."""
+        self._check_write_allowed()
         dashboard = self.dashboard_client
         device_id = self.dashboard_device_id
         if not self._dashboard_configured():
@@ -103,6 +105,7 @@ class SmappeeDeviceHandle:
         raise RuntimeError("Dashboard API is not configured for this device")
 
     async def _dashboard_charger_availability(self, available: bool) -> bool | None:
+        self._check_write_allowed()
         if not self._dashboard_configured():
             return None
         dashboard = self.dashboard_client
@@ -125,6 +128,7 @@ class SmappeeDeviceHandle:
         return True
 
     async def _dashboard_charging_station_restart(self) -> bool | None:
+        self._check_write_allowed()
         if not self._dashboard_configured():
             return None
         dashboard = self.dashboard_client
@@ -314,6 +318,7 @@ class SmappeeDeviceHandle:
         raise RuntimeError("Dashboard API is not configured for charging station restart")
 
     async def set_offline_charging_config(self, enabled: bool, failsafe_amps: int) -> None:
+        self._check_write_allowed()
         dashboard = self.dashboard_client
         if not self._dashboard_configured() or dashboard is None:
             raise RuntimeError("Dashboard API is not configured for offline charging")
@@ -358,3 +363,7 @@ class SmappeeDeviceHandle:
             raise
         except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
             raise RuntimeError(f"Dashboard recent sessions fetch failed: {err}") from err
+
+    def _check_write_allowed(self) -> None:
+        if getattr(self.dashboard_client, "monitoring_only", False) is True:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="mqtt_only")

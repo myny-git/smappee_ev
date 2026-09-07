@@ -121,7 +121,9 @@ class MqttMixin(CoordinatorMixin):
             _LOGGER.info("Station MQTT unavailable")
 
         if changed:
-            self.async_set_updated_data(data)
+            # Mutated the existing snapshot. Preserve the REST poll deadline so
+            # continuous MQTT traffic cannot postpone Dashboard recovery.
+            self.async_update_listeners()
 
     def apply_mqtt_properties(self, topic: str, payload: dict) -> None:
         """Merge incoming MQTT properties/state in the current snapshot."""
@@ -150,7 +152,7 @@ class MqttMixin(CoordinatorMixin):
             changed |= self._handle_led_updated(payload)
 
         if changed:
-            self.async_set_updated_data(data)
+            self.async_update_listeners()
 
     def _handle_connector_devices_updated(self, payload: dict) -> bool:
         """Process devices/updated for AC charging controller."""

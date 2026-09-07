@@ -142,6 +142,11 @@ class SmappeeBaseEntity(update_coordinator.CoordinatorEntity[CoordinatorT]):
         """Return the base CoordinatorEntity availability state."""
         return super().available
 
+    @property
+    def _dashboard_available(self) -> bool:
+        """Controls must never appear usable in a cached monitoring runtime."""
+        return getattr(self.coordinator, "monitoring_only", False) is not True
+
 
 class SmappeeStationEntity(SmappeeBaseEntity[SmappeeCoordinator]):
     """Base for station-scope entities (no connector)."""
@@ -169,6 +174,19 @@ class SmappeeStationEntity(SmappeeBaseEntity[SmappeeCoordinator]):
 
 class SmappeeSiteEntity(SmappeeBaseEntity[CoordinatorT]):
     """Base for site-scope entities."""
+
+    @property
+    @override
+    def available(self) -> bool:
+        if getattr(self.coordinator, "monitoring_only", False) is True:
+            last_rx = self.coordinator.last_real_power_rx
+            return bool(
+                self._coordinator_available
+                and self.coordinator.mqtt_transport_connected
+                and last_rx is not None
+                and _utcnow() - last_rx <= MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+            )
+        return super().available
 
     def __init__(
         self,
@@ -207,7 +225,7 @@ class SmappeeStationRestEntity(SmappeeStationEntity):
     @override
     def available(self) -> bool:
         """Return True when coordinator and station REST reachability are available."""
-        if not super().available:
+        if not self._dashboard_available or not super().available:
             return False
         data = getattr(self.coordinator, "data", None)
         if data is None:
@@ -290,7 +308,7 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
     @override
     def available(self) -> bool:
         """Return True when coordinator and connector REST reachability are available."""
-        if not super().available:
+        if not self._dashboard_available or not super().available:
             return False
         conn = self._conn_state
         if conn is None:
@@ -318,6 +336,14 @@ class SmappeeConnectorMqttEntity(SmappeeConnectorEntity):
         """Return True when coordinator data exists and MQTT is not known down."""
         if not self._coordinator_available:
             return False
+        if getattr(self.coordinator, "monitoring_only", False) is True:
+            last_rx = self.coordinator.last_connector_rx.get(self.connector_uuid)
+            if (
+                not self.coordinator.mqtt_transport_connected
+                or last_rx is None
+                or _utcnow() - last_rx > MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+            ):
+                return False
         conn = self._conn_state
         if conn is None:
             return False

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from contextlib import suppress
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 import logging
 import time
@@ -10,12 +10,13 @@ from typing import Any
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 
 from ..const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     DASHAPI_URL,
     DASHBOARD_API_URL,
+    DOMAIN,
     HTTP_CONNECT_TIMEOUT,
     HTTP_TOTAL_TIMEOUT,
 )
@@ -26,6 +27,7 @@ from .errors import (
     SmappeeError,
     SmappeeMaintenanceError,
     SmappeeProtocolError,
+    SmappeeServerError,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,6 +80,7 @@ class SmappeeDashboardClient:
         self._token_expires_at_ms = 0
         self._auth_lock = asyncio.Lock()
         self._missing_credentials_logged = False
+        self.monitoring_only = False
         self._maintenance_state = maintenance_state or DashboardMaintenanceState()
 
     def _token_valid(self) -> bool:
@@ -103,17 +106,19 @@ class SmappeeDashboardClient:
         if not self.username or not self.password:
             return False
 
-        async with self._session.post(
-            f"{DASHAPI_URL}/login",
-            json={"userName": self.username, "password": self.password},
-            timeout=self._timeout,
+        async with self._response(
+            self._session.post(
+                f"{DASHAPI_URL}/login",
+                json={"userName": self.username, "password": self.password},
+                timeout=self._timeout,
+            )
         ) as resp:
             text = await resp.text()
             self._maintenance_state.check_response(text)
             if resp.status in (401, 403):
                 raise SmappeeAuthenticationError("Dashboard credentials rejected")
             if resp.status != 200:
-                raise SmappeeProtocolError(f"Dashboard login failed {resp.status}: {text}")
+                raise SmappeeProtocolError(f"Dashboard login failed {resp.status}")
             data = await resp.json()
         if not isinstance(data, dict):
             return False
@@ -127,10 +132,12 @@ class SmappeeDashboardClient:
         if not self.refresh_token:
             return False
 
-        async with self._session.post(
-            f"{DASHAPI_URL}/refreshToken",
-            json={"refreshToken": self.refresh_token, "language": "nl"},
-            timeout=self._timeout,
+        async with self._response(
+            self._session.post(
+                f"{DASHAPI_URL}/refreshToken",
+                json={"refreshToken": self.refresh_token, "language": "nl"},
+                timeout=self._timeout,
+            )
         ) as resp:
             self._maintenance_state.check_response(await resp.text())
             if resp.status in (401, 403):
@@ -167,7 +174,12 @@ class SmappeeDashboardClient:
                         )
                 if await self.async_login():
                     return True
-            except ConfigEntryAuthFailed, SmappeeMaintenanceError:
+            except (
+                ConfigEntryAuthFailed,
+                SmappeeMaintenanceError,
+                SmappeeConnectionError,
+                SmappeeServerError,
+            ):
                 raise
             except (
                 SmappeeError,
@@ -189,6 +201,20 @@ class SmappeeDashboardClient:
     def _headers(self) -> dict[str, str]:
         return {"token": str(self._token), "content-type": "application/json"}
 
+    @asynccontextmanager
+    async def _response(self, context: Any) -> AsyncIterator[Any]:
+        """Classify outages, including failures while entering/reading a response."""
+        try:
+            async with context as response:
+                self._maintenance_state.check_response(await response.text())
+                if response.status >= 500:
+                    raise SmappeeServerError(f"Dashboard unavailable (HTTP {response.status})")
+                yield response
+        except aiohttp.ContentTypeError as err:
+            raise SmappeeProtocolError("Dashboard returned an unexpected content type") from err
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise SmappeeConnectionError("Dashboard connection failed") from err
+
     async def _request(
         self,
         method: str,
@@ -201,7 +227,11 @@ class SmappeeDashboardClient:
         retry_auth: bool = True,
     ) -> Any | None:
         """Run an authenticated Dashboard API request."""
+        if self.monitoring_only and method.upper() != "GET":
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="mqtt_only")
         if not await self.async_ensure_auth():
+            if method.upper() != "GET":
+                raise SmappeeConnectionError("Dashboard authentication unavailable")
             return None
 
         url = f"{DASHBOARD_API_URL}/{path.lstrip('/')}"
@@ -220,7 +250,7 @@ class SmappeeDashboardClient:
                 f"Dashboard request failed ({method} {url}): {err}"
             ) from err
 
-        async with response_context as resp:
+        async with self._response(response_context) as resp:
             if resp.status in (401, 403) and retry_auth:
                 async with self._auth_lock:
                     if self._token and self._token != failed_token and self._token_valid():
@@ -249,9 +279,8 @@ class SmappeeDashboardClient:
             if resp.status in (401, 403):
                 raise SmappeeAuthenticationError("Dashboard authorization failed")
             if resp.status not in expected:
-                text = await resp.text()
                 raise SmappeeProtocolError(
-                    f"Dashboard request failed {resp.status} ({method} {url}): {text}"
+                    f"Dashboard request failed (HTTP {resp.status}, {method})"
                 )
             if not return_json:
                 return True

@@ -11,8 +11,9 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
+from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology
-from .api.errors import SmappeeMaintenanceError
+from .api.errors import SmappeeConnectionError, SmappeeMaintenanceError, SmappeeServerError
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
@@ -30,9 +31,17 @@ from .models.mqtt_diagnostics import MqttRoutingDiagnostics
 from .models.runtime_data import (
     MqttRuntimeValue,
     RuntimeData,
+    RuntimeMode,
     SmappeeEvConfigEntry,
     SmappeeSiteRuntime,
 )
+from .mqtt_bootstrap import (
+    async_load_snapshot,
+    async_save_snapshot,
+    bootstrap_store,
+    build_cached_runtime,
+)
+from .mqtt_recovery import start_recovery
 from .mqtt_setup import _mqtt_routing_diagnostics, _start_mqtt_clients
 from .runtime_assembly import _log_stored_runtime_shape, _prepare_site_topologies
 from .runtime_devices import _current_station_device_identifiers, _register_runtime_devices
@@ -145,7 +154,10 @@ def _start_runtime_background_work(
     for site in sites.values():
         for bucket in site.stations.values():
             coordinator = bucket.station_coordinator
-            if coordinator is not None:
+            if (
+                coordinator is not None
+                and getattr(coordinator, "monitoring_only", False) is not True
+            ):
                 coordinator.async_start_session_tracking()
     for mqtt in mqtt_clients.values():
         _start_mqtt_clients(hass, mqtt)
@@ -170,8 +182,6 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
     # Use HA's aiohttp session
     session: ClientSession = async_get_clientsession(hass)
 
-    update_interval = UPDATE_INTERVAL_DEFAULT
-
     dashboard_client = _create_dashboard_client(hass, entry, session)
 
     if entry.data.get(CONF_NEEDS_DASHBOARD_REAUTH) or not _dashboard_client_configured(
@@ -180,6 +190,42 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         raise ConfigEntryAuthFailed(
             "Smappee Dashboard credentials are required after migration to API v10/v11"
         )
+
+    try:
+        runtime = await _async_prepare_runtime(hass, entry, dashboard_client)
+    except (SmappeeMaintenanceError, SmappeeConnectionError, SmappeeServerError) as err:
+        snapshot = await async_load_snapshot(hass, entry)
+        if snapshot is None:
+            if isinstance(err, SmappeeMaintenanceError):
+                raise
+            raise ConfigEntryNotReady(
+                "Dashboard temporarily unavailable; no MQTT bootstrap available"
+            ) from err
+        runtime = build_cached_runtime(hass, entry, dashboard_client, snapshot)
+        _LOGGER.warning("Dashboard unavailable; using saved MQTT configuration for monitoring only")
+
+    entry.runtime_data = runtime
+    _register_runtime_stop_cleanup(hass, entry, runtime)
+    _log_stored_runtime_shape(runtime)
+    try:
+        _register_runtime_devices(hass, entry)
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        _start_runtime_background_work(hass, runtime.sites, runtime.mqtt)
+        if runtime.mode is RuntimeMode.NORMAL:
+            await async_save_snapshot(hass, entry, runtime)
+        else:
+            start_recovery(hass, entry, runtime, _async_prepare_runtime)
+    except BaseException:
+        await _async_shutdown_runtime_resources(runtime)
+        raise
+    return True
+
+
+async def _async_prepare_runtime(
+    hass: HomeAssistant, entry: SmappeeEvConfigEntry, dashboard_client: SmappeeDashboardClient
+) -> RuntimeData:
+    """Prepare fresh discovery without starting MQTT, tracking or platforms."""
+    update_interval = UPDATE_INTERVAL_DEFAULT
 
     # 1) Discover site-first topologies
     topologies = await _load_dashboard_topologies(dashboard_client)
@@ -198,43 +244,45 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
     # site are prepared together so coordinators and MQTT capture the final map.
     client_id_prefix = f"ha-{entry.entry_id[-6:]}"
     prep_tasks = [
-        _prepare_site_topologies(
-            hass,
-            site_topologies,
-            update_interval,
-            client_id_prefix,
-            config_entry=entry,
-            dashboard_client=dashboard_client,
-            background_tasks=background_tasks,
-            start_runtime=False,
+        asyncio.create_task(
+            _prepare_site_topologies(
+                hass,
+                site_topologies,
+                update_interval,
+                client_id_prefix,
+                config_entry=entry,
+                dashboard_client=dashboard_client,
+                background_tasks=background_tasks,
+                start_runtime=False,
+            )
         )
         for site_topologies in topologies_by_site.values()
     ]
     try:
         results = await asyncio.gather(*prep_tasks, return_exceptions=True)
-        hard_error: BaseException | None = None
+        errors: list[BaseException] = []
         for (sid, _site_topologies), res in zip(topologies_by_site.items(), results, strict=True):
-            if isinstance(res, asyncio.CancelledError):
-                hard_error = hard_error or res
-                continue
-            if isinstance(res, ConfigEntryAuthFailed | SmappeeMaintenanceError):
-                hard_error = hard_error or res
-                continue
             if isinstance(res, BaseException):
-                hard_error = hard_error or res
-                _LOGGER.warning("Site %s preparation failed: %s", sid, res)
+                errors.append(res)
                 continue
             site, mqtt = res
             mqtt_diagnostics.setdefault(sid, []).extend(_mqtt_routing_diagnostics(mqtt))
             if mqtt:
                 mqtt_clients[sid] = mqtt
             if site is None:
+                errors.append(ConfigEntryNotReady("Incomplete site discovery"))
                 continue
             sites[sid] = site
 
-        if hard_error is not None:
+        if errors:
+            hard_error = min(errors, key=_bootstrap_error_priority)
             if isinstance(
-                hard_error, asyncio.CancelledError | ConfigEntryAuthFailed | SmappeeMaintenanceError
+                hard_error,
+                asyncio.CancelledError
+                | ConfigEntryAuthFailed
+                | SmappeeMaintenanceError
+                | SmappeeConnectionError
+                | SmappeeServerError,
             ):
                 raise hard_error
             raise ConfigEntryNotReady(
@@ -245,9 +293,20 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
             _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")
             raise ConfigEntryNotReady("No Smappee EV stations discovered (will retry)")
 
-        # Commit the complete topology before starting periodic/background work.
-        _start_runtime_background_work(hass, sites, mqtt_clients)
     except BaseException:
+        # A sibling may already have prepared resources when setup/recovery is
+        # cancelled. Gather those results as well before tearing everything down.
+        for task in prep_tasks:
+            if not task.done():
+                task.cancel()
+        rollback_results = await asyncio.gather(*prep_tasks, return_exceptions=True)
+        for sid, result in zip(topologies_by_site, rollback_results, strict=True):
+            if isinstance(result, tuple) and len(result) == 2:
+                prepared_site, prepared_mqtt = result
+                if prepared_site is not None:
+                    sites[sid] = prepared_site
+                if prepared_mqtt:
+                    mqtt_clients[sid] = prepared_mqtt
         await _async_shutdown_runtime_resources(
             RuntimeData(
                 api=dashboard_client,
@@ -261,7 +320,7 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         raise
 
     # Store runtime data only on the entry (preferred pattern); avoid duplicating in hass.data
-    runtime = RuntimeData(
+    return RuntimeData(
         api=dashboard_client,
         sites=sites,
         mqtt=mqtt_clients,
@@ -269,24 +328,24 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         background_tasks=background_tasks,
         mqtt_diagnostics=mqtt_diagnostics,
     )
-    entry.runtime_data = runtime
-    _register_runtime_stop_cleanup(hass, entry, runtime)
-    _log_stored_runtime_shape(runtime)
-    try:
-        _register_runtime_devices(hass, entry)
 
-        # Platforms start
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-        # Services already registered domain-wide in async_setup
-    except asyncio.CancelledError:
-        await _async_shutdown_runtime_resources(runtime)
-        raise
-    except Exception:
-        await _async_shutdown_runtime_resources(runtime)
-        raise
+def _bootstrap_error_priority(error: BaseException) -> int:
+    """Never let an outage mask cancellation, authentication or malformed discovery."""
+    if isinstance(error, asyncio.CancelledError):
+        return 0
+    if isinstance(error, ConfigEntryAuthFailed):
+        return 1
+    if isinstance(error, SmappeeMaintenanceError):
+        return 3
+    if isinstance(error, SmappeeConnectionError | SmappeeServerError):
+        return 4
+    return 2
 
-    return True
+
+async def async_remove_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> None:
+    """Remove persisted MQTT credentials when the integration entry is deleted."""
+    await bootstrap_store(hass, entry).async_remove()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:

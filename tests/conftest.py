@@ -15,6 +15,13 @@ import types
 
 def _install_pytest_socket_stub() -> None:
     if "pytest_socket" in sys.modules:  # already provided
+        if sys.platform == "win32":
+            # HA's plugin imports pytest_socket before conftest. Windows uses
+            # a loopback socketpair to create its event loop; allow it just as
+            # the fallback stub below does. Linux CI retains socket blocking.
+            socket_plugin = sys.modules["pytest_socket"]
+            socket_plugin.enable_socket()
+            socket_plugin.disable_socket = lambda **_kwargs: None
         return
     mod = types.ModuleType("pytest_socket")
 

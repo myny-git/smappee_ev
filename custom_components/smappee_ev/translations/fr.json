@@ -80,6 +80,9 @@
     },
     "current_out_of_range": {
       "message": "Le courant {current} A est hors de la plage {min_current}-{max_current} A pour ce connector."
+    },
+    "mqtt_only": {
+      "message": "Dashboard est indisponible. Seule la surveillance MQTT est active ; les commandes sont indisponibles. Le rétablissement est automatique."
     }
   },
   "services": {
@@ -371,6 +374,13 @@
       },
       "session_energy": {
         "name": "Session"
+      },
+      "connection_mode": {
+        "name": "Mode de connexion",
+        "state": {
+          "normal": "Dashboard et MQTT",
+          "mqtt_only": "Surveillance MQTT uniquement"
+        }
       }
     }
   }

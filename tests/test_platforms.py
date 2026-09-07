@@ -200,7 +200,6 @@ class TestButtonPlatform:
 
         await button.async_setup_entry(hass, entry, async_add_entities)
 
-        # Should add empty list with update_before_add=True
         async_add_entities.assert_called_once_with([], False)
 
     @pytest.mark.asyncio
@@ -245,8 +244,11 @@ class TestSensorPlatform:
 
         await sensor.async_setup_entry(hass, entry, async_add_entities)
 
-        # Should add empty list with update_before_add=True
-        async_add_entities.assert_called_once_with([], False)
+        entities, update_before_add = async_add_entities.call_args.args
+        assert len(entities) == 1
+        assert isinstance(entities[0], sensor.SmappeeConnectionModeSensor)
+        assert entities[0].native_value == "normal"
+        assert update_before_add is False
 
     @pytest.mark.asyncio
     async def test_site_sensors_created_once_per_site(self, hass: HomeAssistant):

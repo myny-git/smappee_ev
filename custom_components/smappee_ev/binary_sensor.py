@@ -44,6 +44,11 @@ class SmappeeMqttConnectivity(SmappeeSiteEntity, BinarySensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "mqtt_connected"
 
+    @property
+    @override
+    def available(self) -> bool:
+        return self._coordinator_available
+
     def __init__(
         self,
         coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,

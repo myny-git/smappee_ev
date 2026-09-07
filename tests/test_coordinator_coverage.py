@@ -168,30 +168,30 @@ def test_site_mqtt_connection_change_handles_no_data_and_up_down_transitions(has
 
 def test_station_mqtt_connection_change_logs_only_on_transitions(hass, caplog):
     coord = _station_coordinator(hass)
-    coord.async_set_updated_data = MagicMock()
+    coord.async_update_listeners = MagicMock()
     caplog.set_level(logging.INFO, logger="custom_components.smappee_ev.coordinator")
 
     coord.apply_mqtt_connection_change(True)
     assert coord.data.station.mqtt_connected is True
-    coord.async_set_updated_data.assert_called_once_with(coord.data)
+    coord.async_update_listeners.assert_called_once_with()
     assert caplog.text.count("Station MQTT availability recovered") == 1
 
     caplog.clear()
-    coord.async_set_updated_data.reset_mock()
+    coord.async_update_listeners.reset_mock()
     coord.apply_mqtt_connection_change(True)
-    coord.async_set_updated_data.assert_not_called()
+    coord.async_update_listeners.assert_not_called()
     assert "Station MQTT availability recovered" not in caplog.text
 
     caplog.clear()
     coord.apply_mqtt_connection_change(False)
     assert coord.data.station.mqtt_connected is False
-    coord.async_set_updated_data.assert_called_once_with(coord.data)
+    coord.async_update_listeners.assert_called_once_with()
     assert caplog.text.count("Station MQTT unavailable") == 1
 
     caplog.clear()
-    coord.async_set_updated_data.reset_mock()
+    coord.async_update_listeners.reset_mock()
     coord.apply_mqtt_connection_change(False)
-    coord.async_set_updated_data.assert_not_called()
+    coord.async_update_listeners.assert_not_called()
     assert "Station MQTT unavailable" not in caplog.text
 
 

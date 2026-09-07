@@ -61,6 +61,9 @@
       "charging_state": {
         "default": "mdi:ev-station"
       },
+      "connection_mode": {
+        "default": "mdi:connection"
+      },
       "current": {
         "default": "mdi:current-ac"
       },

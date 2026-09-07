@@ -17,6 +17,10 @@ _LOGGER = logging.getLogger(__name__)
 
 def _begin_runtime_shutdown(rd: RuntimeData) -> None:
     """Synchronously mark runtime resources as stopping."""
+    rd.stopping = True
+    for remove in rd.cleanup_callbacks:
+        remove()
+    rd.cleanup_callbacks.clear()
     for site in (rd.sites or {}).values():
         for bucket in site.stations.values():
             coord = bucket.station_coordinator

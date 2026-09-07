@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import CALLBACK_TYPE
 
 from ..api.mqtt_gateway import SmappeeMqtt
 from .mqtt_diagnostics import MqttRoutingDiagnostics
@@ -17,6 +19,13 @@ if TYPE_CHECKING:
     from ..coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
 
 type MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
+
+
+class RuntimeMode(StrEnum):
+    """Whether Dashboard controls are usable for this runtime."""
+
+    NORMAL = "normal"
+    MQTT_ONLY = "mqtt_only"
 
 
 @dataclass
@@ -92,6 +101,9 @@ class RuntimeData:
     background_tasks: set[asyncio.Task] = field(default_factory=set)
     mqtt_diagnostics: dict[int, list[MqttRoutingDiagnostics]] = field(default_factory=dict)
     shutdown_task: asyncio.Task[None] | None = None
+    mode: RuntimeMode = RuntimeMode.NORMAL
+    stopping: bool = False
+    cleanup_callbacks: list[CALLBACK_TYPE] = field(default_factory=list)
 
 
 type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]

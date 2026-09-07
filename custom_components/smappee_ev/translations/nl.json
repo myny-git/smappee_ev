@@ -83,6 +83,9 @@
     },
     "current_out_of_range": {
       "message": "Stroom {current} A valt buiten het bereik {min_current}-{max_current} A voor deze connector."
+    },
+    "mqtt_only": {
+      "message": "Dashboard is niet beschikbaar. Alleen MQTT-monitoring is actief; bediening is niet beschikbaar. Herstel gebeurt automatisch."
     }
   },
   "services": {
@@ -150,7 +153,7 @@
         },
         "service_location_id": {
           "name": "Service Location ID",
-          "description": "Optioneel: ID van de site (laat leeg als er maar \u00e9\u00e9n site is)."
+          "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
         },
         "connector_id": {
           "name": "Connector",
@@ -160,7 +163,7 @@
     },
     "set_current": {
       "name": "Stel stroom in",
-      "description": "Stel de laadstroom in Amp\u00e8re in (1 decimaal nauwkeurig). Wordt omgezet naar het dichtstbijzijnde percentage en verzonden via setPercentageLimit. De schuifregelaar en getalsentiteiten worden direct bijgewerkt.",
+      "description": "Stel de laadstroom in Ampère in (1 decimaal nauwkeurig). Wordt omgezet naar het dichtstbijzijnde percentage en verzonden via setPercentageLimit. De schuifregelaar en getalsentiteiten worden direct bijgewerkt.",
       "fields": {
         "config_entry_id": {
           "name": "Config entry ID",
@@ -168,15 +171,15 @@
         },
         "service_location_id": {
           "name": "Service Location ID",
-          "description": "Optioneel: ID van de site (laat leeg als er maar \u00e9\u00e9n site is)."
+          "description": "Optioneel: ID van de site (laat leeg als er maar één site is)."
         },
         "connector_id": {
           "name": "Connector",
-          "description": "Optioneel: connectornummer (1 of 2, laat leeg bij slechts \u00e9\u00e9n connector)."
+          "description": "Optioneel: connectornummer (1 of 2, laat leeg bij slechts één connector)."
         },
         "current": {
           "name": "Stroom (A)",
-          "description": "Laadstroom in Amp\u00e8re (1 decimaal, bijv. 11,4). Wordt begrensd tot het geconfigureerde min\u2013max bereik van de connector."
+          "description": "Laadstroom in Ampère (1 decimaal, bijv. 11,4). Wordt begrensd tot het geconfigureerde min–max bereik van de connector."
         }
       }
     },
@@ -374,6 +377,13 @@
       },
       "session_energy": {
         "name": "Sessie"
+      },
+      "connection_mode": {
+        "name": "Verbindingsmodus",
+        "state": {
+          "normal": "Dashboard en MQTT",
+          "mqtt_only": "Alleen MQTT-monitoring"
+        }
       }
     }
   }

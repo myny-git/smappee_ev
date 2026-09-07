@@ -1201,14 +1201,14 @@ class TestSmappeeCoordinator:
         mock_station = coordinator.data.station
         mock_station.mqtt_connected = False
 
-        # Mock async_set_updated_data
-        coordinator.async_set_updated_data = MagicMock()
+        # Mock async_update_listeners
+        coordinator.async_update_listeners = MagicMock()
 
         # Test connection up
         coordinator.apply_mqtt_connection_change(True)
         assert mock_station.mqtt_connected is True
         assert hasattr(mock_station, "last_mqtt_rx")
-        coordinator.async_set_updated_data.assert_called_with(coordinator.data)
+        coordinator.async_update_listeners.assert_called_with()
 
         # Transport callbacks are not proof that a real payload was received.
         old_timestamp = mock_station.last_mqtt_rx
@@ -1219,20 +1219,20 @@ class TestSmappeeCoordinator:
         # Test connection down (not yet implemented, should remain up)
         coordinator.apply_mqtt_connection_change(False)
         assert mock_station.mqtt_connected is False
-        coordinator.async_set_updated_data.assert_called_with(coordinator.data)
+        coordinator.async_update_listeners.assert_called_with()
 
     def test_mqtt_connection_change_up_does_not_notify_when_already_connected(self, coordinator):
         """Test repeated MQTT up events do not masquerade as received data."""
         station = coordinator.data.station
         station.mqtt_connected = True
         station.last_mqtt_rx = 1.0
-        coordinator.async_set_updated_data = MagicMock()
+        coordinator.async_update_listeners = MagicMock()
 
         coordinator.apply_mqtt_connection_change(True)
 
         assert station.mqtt_connected is True
         assert station.last_mqtt_rx == 1.0
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
     def test_mqtt_topic_parsing(self, coordinator):
         """Test MQTT topic parsing methods."""
@@ -1661,7 +1661,7 @@ class TestSmappeeCoordinator:
         station.available = True
         conn.available = True
 
-        coordinator.async_set_updated_data = MagicMock()
+        coordinator.async_update_listeners = MagicMock()
         coordinator.apply_mqtt_properties(
             "/etc/carcharger/acchargingcontroller/v1/devices/test_uuid/property/chargingstate",
             {
@@ -1682,7 +1682,7 @@ class TestSmappeeCoordinator:
 
         assert conn.available is False
         assert station.available is False
-        coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+        coordinator.async_update_listeners.assert_called_once_with()
 
     def test_update_evcc(self, coordinator):
         """Test _update_evcc method."""
@@ -2027,13 +2027,13 @@ class TestSmappeeCoordinator:
         """Test heartbeat-only MQTT messages only update last-seen state."""
         coordinator.data.station.mqtt_connected = True
         coordinator.data.station.last_mqtt_rx = 1.0
-        coordinator.async_set_updated_data = MagicMock()
+        coordinator.async_update_listeners = MagicMock()
 
         coordinator.apply_mqtt_properties("/homeassistant/heartbeat", {})
 
         assert coordinator.data.station.mqtt_connected is True
         assert coordinator.data.station.last_mqtt_rx > 1.0
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
     def test_apply_mqtt_properties_notifies_each_changed_power_message(self, coordinator):
         """Test frequent changed power messages still notify immediately."""
@@ -2046,13 +2046,13 @@ class TestSmappeeCoordinator:
                 "cars": {},
             }
         }
-        coordinator.async_set_updated_data = MagicMock()
+        coordinator.async_update_listeners = MagicMock()
 
         coordinator.apply_mqtt_properties(topic, {"channelData": [100]})
         coordinator.apply_mqtt_properties(topic, {"channelData": [101]})
 
         assert coordinator.data.station.grid_power_total == 101
-        assert coordinator.async_set_updated_data.call_count == 2
+        assert coordinator.async_update_listeners.call_count == 2
 
     def test_handle_connector_mqtt(self, coordinator):
         """Test _handle_connector_mqtt method."""

@@ -13,7 +13,7 @@ from .api.device_handle import SmappeeDeviceHandle
 from .api.errors import SmappeeError
 from .const import DOMAIN
 from .coordinator import SmappeeCoordinator
-from .entity import SmappeeConnectorEntity, SmappeeStationEntity
+from .entity import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .helpers import connector_percentage_setpoint, dashboard_mode, station_action_error
 from .models.runtime_data import SmappeeEvConfigEntry
 
@@ -100,7 +100,7 @@ async def async_setup_entry(
     async_add_entities(entities, False)
 
 
-class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
+class SmappeeStationActionButton(SmappeeStationRestEntity, ButtonEntity):
     """Generic action button for a station using shared base entity."""
 
     _attr_device_class = ButtonDeviceClass.RESTART
@@ -115,7 +115,7 @@ class SmappeeStationActionButton(SmappeeStationEntity, ButtonEntity):
         action: str,
         name: str | None = None,
     ) -> None:
-        SmappeeStationEntity.__init__(
+        SmappeeStationRestEntity.__init__(
             self,
             coordinator,
             sid,

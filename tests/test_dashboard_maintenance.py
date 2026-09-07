@@ -13,7 +13,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smappee_ev import async_setup_entry
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
-from custom_components.smappee_ev.api.errors import SmappeeMaintenanceError, SmappeeProtocolError
+from custom_components.smappee_ev.api.errors import SmappeeMaintenanceError, SmappeeServerError
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
     _dashboard_fetch_highlevel_configs,
@@ -66,11 +66,9 @@ async def test_generic_server_error_is_not_maintenance(status, refresh, caplog):
     client = make_client(
         _Session(posts=[_Response(status, text="<html>Bad Gateway</html>")]), refresh=refresh
     )
-    if refresh:
-        assert await client.async_refresh() is False
-    else:
-        with pytest.raises(SmappeeProtocolError, match=str(status)):
-            await client.async_login()
+    authenticate = client.async_refresh if refresh else client.async_login
+    with pytest.raises(SmappeeServerError, match=str(status)):
+        await authenticate()
     assert "maintenance" not in caplog.text.lower()
     client._token_update_callback.assert_not_called()
 
@@ -87,9 +85,10 @@ async def test_real_authentication_errors_still_raise(status, refresh):
             await client.async_ensure_auth()
 
 
-async def test_generic_login_502_still_returns_false_from_ensure_auth():
+async def test_generic_login_502_reaches_setup_as_temporary_outage():
     client = make_client(_Session(posts=[_Response(502, text="Bad Gateway")]))
-    assert await client.async_ensure_auth() is False
+    with pytest.raises(SmappeeServerError):
+        await client.async_ensure_auth()
 
 
 @pytest.mark.parametrize("refresh", [False, True], ids=["login", "refresh"])
