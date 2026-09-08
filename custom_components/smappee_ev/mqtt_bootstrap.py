@@ -208,15 +208,19 @@ def snapshot_from_runtime(runtime: RuntimeData, entry: SmappeeEvConfigEntry) -> 
     """Export only the metadata needed to recreate existing MQTT entities."""
     sites = []
     for site in runtime.sites.values():
+        # Discovery completeness is independent of the later live REST refresh.
+        expected = set(site.measurement_location_ids)
+        if not expected or not expected.issubset(site.highlevel_configs):
+            raise ValueError("Missing measurement location configuration")
+        if any(
+            not isinstance(site.highlevel_configs[sid], dict) or not site.highlevel_configs[sid]
+            for sid in expected
+        ):
+            raise ValueError("Invalid measurement location configuration")
         stations = {}
         for key, bucket in site.stations.items():
             coord = bucket.station_coordinator
-            if (
-                coord is None
-                or not coord.data
-                or not coord.data.station.api_available
-                or any(not conn.api_available for conn in coord.data.connectors.values())
-            ):
+            if coord is None or coord.data is None:
                 raise ValueError("Incomplete station bootstrap")
             stations[key] = {
                 "metadata": _fields(bucket, _STATION_FIELDS),

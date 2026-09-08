@@ -7,7 +7,11 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
-from custom_components.smappee_ev.api.errors import SmappeeConnectionError, SmappeeServerError
+from custom_components.smappee_ev.api.errors import (
+    SmappeeConnectionError,
+    SmappeeProtocolError,
+    SmappeeServerError,
+)
 
 
 class _Response:
@@ -646,7 +650,8 @@ async def test_dashboard_login_and_refresh_handle_bad_payloads_and_statuses():
         username="user",
         password="pass",  # noqa: S106
     )
-    assert await bad_payload.async_login() is False
+    with pytest.raises(SmappeeProtocolError):
+        await bad_payload.async_login()
 
     refresh = _client(
         _Session(posts=[_Response(500, text="no refresh"), _Response(200, ["bad"])]),
@@ -654,7 +659,8 @@ async def test_dashboard_login_and_refresh_handle_bad_payloads_and_statuses():
     )
     with pytest.raises(SmappeeServerError, match="500"):
         await refresh.async_refresh()
-    assert await refresh.async_refresh() is False
+    with pytest.raises(SmappeeProtocolError):
+        await refresh.async_refresh()
 
 
 @pytest.mark.asyncio
@@ -816,7 +822,8 @@ async def test_dashboard_refresh_rejects_bad_token_and_bad_payload():
         _Session(posts=[_Response(200, {"refreshToken": "new-only"})]),
         refresh_token="old-refresh",  # noqa: S106 - fake refresh token
     )
-    assert await malformed.async_refresh() is False
+    with pytest.raises(SmappeeProtocolError):
+        await malformed.async_refresh()
 
 
 @pytest.mark.asyncio

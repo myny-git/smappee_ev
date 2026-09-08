@@ -13,7 +13,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smappee_ev import async_setup_entry
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
-from custom_components.smappee_ev.api.errors import SmappeeMaintenanceError, SmappeeServerError
+from custom_components.smappee_ev.api.errors import (
+    SmappeeMaintenanceError,
+    SmappeeProtocolError,
+    SmappeeServerError,
+)
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
     _dashboard_fetch_highlevel_configs,
@@ -112,7 +116,8 @@ async def test_recovery_requires_successful_authentication_and_logs_once(refresh
     caplog.set_level(logging.INFO)
     with pytest.raises(SmappeeMaintenanceError):
         await authenticate()
-    assert await authenticate() is False
+    with pytest.raises(SmappeeProtocolError):
+        await authenticate()
     assert "recovered" not in caplog.text
     assert await authenticate() is True
     assert await client.async_ensure_auth() is True

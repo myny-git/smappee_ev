@@ -65,6 +65,7 @@ async def _async_recover(
             client = _create_dashboard_client(hass, entry, async_get_clientsession(hass))
             probe = await prepare(hass, entry, client)
             snapshot_from_runtime(probe, entry)
+            _validate_rest_recovery(probe)
         except ConfigEntryAuthFailed:
             entry.async_start_reauth_if_available(hass)
             _LOGGER.warning(
@@ -96,3 +97,18 @@ def _schedule_reload(
 ) -> None:
     if not runtime.stopping and not hass.is_stopping and entry.runtime_data is runtime:
         hass.async_create_task(hass.config_entries.async_reload(entry.entry_id))
+
+
+def _validate_rest_recovery(runtime: RuntimeData) -> None:
+    """Require reachable REST state before leaving the monitoring runtime."""
+    for site in runtime.sites.values():
+        for bucket in site.stations.values():
+            coord = bucket.station_coordinator
+            if (
+                coord is None
+                or coord.data is None
+                or not coord.data.station.api_available
+                or not set(bucket.connectors).issubset(coord.data.connectors)
+                or any(not conn.api_available for conn in coord.data.connectors.values())
+            ):
+                raise ValueError("Dashboard REST recovery is incomplete")

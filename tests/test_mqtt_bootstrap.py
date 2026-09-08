@@ -263,7 +263,7 @@ async def test_invalid_snapshot_is_ignored(hass, entry, snapshot, change, hass_s
 async def test_incomplete_bootstrap_keeps_previous_snapshot(hass, entry, online, hass_storage):
     await async_save_snapshot(hass, entry, online)
     before = await async_load_snapshot(hass, entry)
-    online.sites[1].stations["station-1"].station_coordinator.data.station.api_available = False
+    online.sites[1].measurement_location_ids.append(2)
     await async_save_snapshot(hass, entry, online)
     assert await async_load_snapshot(hass, entry) == before
 
@@ -714,3 +714,117 @@ async def test_cancelled_discovery_cleans_up_already_prepared_site(hass, entry, 
     for station in online.sites[1].stations.values():
         assert station.station_coordinator._shutting_down
         assert station.station_coordinator._shutdown_requested
+
+
+@pytest.mark.parametrize("unreachable", ["station", "connector"])
+async def test_first_cache_survives_rest_state_failure_and_next_outage(
+    hass, entry, online, hass_storage, unreachable
+):
+    coord = online.sites[1].stations["station-1"].station_coordinator
+    state = coord.data.station if unreachable == "station" else coord.data.connectors["connector-1"]
+    state.api_available = False
+    assert await async_load_snapshot(hass, entry) is None
+    with (
+        patch(
+            "custom_components.smappee_ev._async_prepare_runtime",
+            side_effect=[online, SmappeeServerError("outage")],
+        ),
+        patch("custom_components.smappee_ev._start_runtime_background_work"),
+        patch("custom_components.smappee_ev.start_recovery"),
+        patch.object(hass.config_entries, "async_forward_entry_setups", new=AsyncMock()),
+        patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
+    ):
+        assert await async_setup_entry(hass, entry)
+        assert await async_load_snapshot(hass, entry) is not None
+        assert await async_unload_entry(hass, entry)
+        assert await async_setup_entry(hass, entry)
+        assert entry.runtime_data.mode is RuntimeMode.MQTT_ONLY
+        mqtt = entry.runtime_data.mqtt[1]
+        mqtt._on_conn(True)
+        mqtt._on_properties(TOPIC, {"activePowerData": [100, 200, 300]})
+        assert entry.runtime_data.sites[1].site_coordinator.data.site.grid_power_total == 100
+        assert await async_unload_entry(hass, entry)
+
+
+@pytest.mark.parametrize("bad_config", [None, {}, SmappeeProtocolError("invalid response")])
+async def test_missing_measurement_configuration_cannot_replace_cache(
+    hass, entry, online, hass_storage, bad_config
+):
+    from custom_components.smappee_ev.dashboard_discovery import _dashboard_fetch_highlevel_configs
+
+    await async_save_snapshot(hass, entry, online)
+    before = await async_load_snapshot(hass, entry)
+    site = online.sites[1]
+    good = site.highlevel_configs[1]
+    site.measurement_location_ids = [1, 2]
+    with patch.object(
+        online.dashboard,
+        "async_get_highlevel_configuration",
+        new=AsyncMock(side_effect=[good, bad_config]),
+    ):
+        site.highlevel_configs = await _dashboard_fetch_highlevel_configs(online.dashboard, [1, 2])
+    await async_save_snapshot(hass, entry, online)
+    assert await async_load_snapshot(hass, entry) == before
+    await bootstrap_store(hass, entry).async_remove()
+    await async_save_snapshot(hass, entry, online)
+    assert await async_load_snapshot(hass, entry) is None
+
+
+@pytest.mark.parametrize("unreachable", ["station", "connector", "missing_connector"])
+async def test_usable_cache_does_not_mean_rest_recovered(
+    hass, entry, online, snapshot, unreachable
+):
+    coord = online.sites[1].stations["station-1"].station_coordinator
+    if unreachable == "station":
+        coord.data.station.api_available = False
+    elif unreachable == "connector":
+        coord.data.connectors["connector-1"].api_available = False
+    else:
+        coord.data.connectors.clear()
+    snapshot_from_runtime(online, entry)
+    cached = build_cached_runtime(hass, entry, dashboard(), snapshot)
+    entry.runtime_data = cached
+    prepare = AsyncMock(side_effect=[online, asyncio.CancelledError()])
+    try:
+        with (
+            patch("custom_components.smappee_ev.mqtt_recovery.asyncio.sleep", new=AsyncMock()),
+            patch.object(hass.config_entries, "async_reload", new=AsyncMock()) as reload,
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await _async_recover(hass, entry, cached, prepare)
+            assert prepare.await_count == 2
+            reload.assert_not_called()
+            assert online.stopping
+            assert not cached.stopping
+    finally:
+        await _async_shutdown_runtime_resources(cached)
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+@pytest.mark.parametrize(
+    "response",
+    [
+        _Response(200, payload=[]),
+        _Response(200, payload={}),
+        _Response(200, payload={"token": ""}),
+        _Response(200, json_exc=ValueError("private response")),
+        _Response(429),
+    ],
+)
+async def test_invalid_authentication_response_stays_protocol_error(refresh, response):
+    api = dashboard(_Session(posts=[response]))
+    if not refresh:
+        api.refresh_token = None
+    with pytest.raises(SmappeeProtocolError) as err:
+        await api.async_ensure_auth()
+    assert "private response" not in str(err.value)
+    assert len(api._session.post_calls) == 1
+
+
+async def test_complete_discovery_can_include_location_without_mqtt_channels(online, entry):
+    site = online.sites[1]
+    site.measurement_location_ids.append(2)
+    site.highlevel_configs[2] = {"measurements": []}
+    saved = snapshot_from_runtime(online, entry)
+    assert saved["sites"][0]["metadata"]["measurement_location_ids"] == [1, 2]
+    assert {spec["service_location_id"] for spec in saved["sites"][0]["specs"]} == {1}

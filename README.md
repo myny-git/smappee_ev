@@ -59,6 +59,12 @@ MQTT monitoring start independently. Maintenance responses, connection failures,
 timeouts and HTTP 5xx responses can activate this fallback. Authentication errors
 still require reauthentication; they do not activate fallback during setup.
 
+Saving the configuration requires valid discovery data for every expected
+measurement location. A temporary failure to refresh live station or connector
+REST state does not prevent this first cache from being saved. Incomplete
+measurement discovery does not replace an existing cache. Cache creation is
+attempted during normal setup, not periodically during operation.
+
 The diagnostic **Connection mode** sensor shows `mqtt_only` when using this saved
 configuration. Dashboard controls and REST-only entities are unavailable, and
 service actions fail with an explanatory message. MQTT measurements become
@@ -68,7 +74,8 @@ unavailable if the broker disconnects or no matching data arrives for five minut
 
 Dashboard recovery runs in the background, starting after 30 seconds. Failed
 attempts increase the delay, with jitter, up to ten minutes. Once full discovery
-succeeds, the integration reloads automatically to restore normal operation. This
+succeeds and station and connector REST state is reachable, the integration
+reloads automatically to restore normal operation. This
 reload briefly interrupts MQTT. If recovery discovers invalid credentials, Home
 Assistant requests reauthentication while the existing MQTT monitoring continues.
 During normal operation, MQTT updates also leave REST polling scheduled so that

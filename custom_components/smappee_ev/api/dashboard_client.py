@@ -120,8 +120,12 @@ class SmappeeDashboardClient:
             if resp.status != 200:
                 raise SmappeeProtocolError(f"Dashboard login failed {resp.status}")
             data = await resp.json()
-        if not isinstance(data, dict):
-            return False
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("token"), str)
+            or not data["token"].strip()
+        ):
+            raise SmappeeProtocolError("Dashboard authentication response has no valid token")
         self._update_token_data(data)
         if self._token:
             self._maintenance_state.authentication_succeeded()
@@ -143,10 +147,14 @@ class SmappeeDashboardClient:
             if resp.status in (401, 403):
                 raise SmappeeAuthenticationError("Dashboard refresh token rejected")
             if resp.status != 200:
-                return False
+                raise SmappeeProtocolError(f"Dashboard refresh failed {resp.status}")
             data = await resp.json()
-        if not isinstance(data, dict):
-            return False
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("token"), str)
+            or not data["token"].strip()
+        ):
+            raise SmappeeProtocolError("Dashboard authentication response has no valid token")
         self._update_token_data(data)
         if self._token:
             self._maintenance_state.authentication_succeeded()
@@ -176,20 +184,13 @@ class SmappeeDashboardClient:
                     return True
             except (
                 ConfigEntryAuthFailed,
-                SmappeeMaintenanceError,
-                SmappeeConnectionError,
-                SmappeeServerError,
+                SmappeeError,
             ):
                 raise
-            except (
-                SmappeeError,
-                aiohttp.ClientError,
-                TimeoutError,
-                RuntimeError,
-                ValueError,
-            ) as err:
-                _LOGGER.debug("Dashboard authentication failed: %s", err)
-                return False
+            except (aiohttp.ClientError, TimeoutError) as err:
+                raise SmappeeConnectionError("Dashboard authentication connection failed") from err
+            except (RuntimeError, ValueError) as err:
+                raise SmappeeProtocolError("Unexpected Dashboard authentication failure") from err
 
         if not self._missing_credentials_logged:
             _LOGGER.warning(
@@ -210,6 +211,8 @@ class SmappeeDashboardClient:
                 if response.status >= 500:
                     raise SmappeeServerError(f"Dashboard unavailable (HTTP {response.status})")
                 yield response
+        except ValueError as err:
+            raise SmappeeProtocolError("Dashboard returned invalid JSON") from err
         except aiohttp.ContentTypeError as err:
             raise SmappeeProtocolError("Dashboard returned an unexpected content type") from err
         except (aiohttp.ClientError, TimeoutError) as err:
