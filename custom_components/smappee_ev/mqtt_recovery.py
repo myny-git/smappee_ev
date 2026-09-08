@@ -109,6 +109,6 @@ def _validate_rest_recovery(runtime: RuntimeData) -> None:
                 or coord.data is None
                 or not coord.data.station.api_available
                 or not set(bucket.connectors).issubset(coord.data.connectors)
-                or any(not conn.api_available for conn in coord.data.connectors.values())
+                or any(not coord.data.connectors[key].api_available for key in bucket.connectors)
             ):
                 raise ValueError("Dashboard REST recovery is incomplete")

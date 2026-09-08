@@ -432,9 +432,15 @@ async def test_normal_setup_saves_bootstrap(hass, entry, online, hass_storage):
     assert await async_load_snapshot(hass, entry) is not None
 
 
+@pytest.mark.parametrize("extra_stale_connector", [False, True])
 async def test_recovery_requires_full_discovery_then_schedules_one_reload(
-    hass, entry, snapshot, online
+    hass, entry, snapshot, online, extra_stale_connector
 ):
+    if extra_stale_connector:
+        coord = online.sites[1].stations["station-1"].station_coordinator
+        coord.data.connectors["old-connector"] = ConnectorState(
+            connector_number=99, api_available=False
+        )
     cached = build_cached_runtime(hass, entry, dashboard(), snapshot)
     entry.runtime_data = cached
     prepare = AsyncMock(side_effect=[SmappeeServerError("offline"), online])
