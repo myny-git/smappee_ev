@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import suppress
 from datetime import timedelta
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
@@ -13,6 +13,23 @@ from homeassistant.helpers.entity import DeviceInfo
 from .const import CONFIGURATION_URL, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN, MANUFACTURER
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def charging_session_phase(
+    session_state: str | None,
+    status_current: str | None,
+    session_cause: str | None,
+) -> Literal["active", "paused", "finished"] | None:
+    """Resolve explicit session signals in order of authority."""
+    for value in (session_state, status_current, session_cause):
+        state = (value or "").strip().upper()
+        if state in {"STOPPED", "CHARGING_FINISHED", "FINISHED", "COMPLETED", "IDLE"}:
+            return "finished"
+        if state in {"STARTED", "CHARGING", "CHARGING_STARTED", "RUNNING"}:
+            return "active"
+        if state in {"SUSPENDED", "PAUSED"} or state.startswith("SUSPENDED_EVSE"):
+            return "paused"
+    return None
 
 
 def charging_session_paused(
@@ -24,12 +41,9 @@ def charging_session_paused(
     fallback: bool = False,
 ) -> bool:
     """Prefer session state, then status/cause, over a possibly stale mode."""
-    for value in (session_state, status_current, session_cause):
-        state = (value or "").strip().upper()
-        if state in {"STARTED", "CHARGING", "CHARGING_STARTED", "RUNNING"}:
-            return False
-        if state in {"SUSPENDED", "PAUSED"} or state.startswith("SUSPENDED_EVSE"):
-            return True
+    phase = charging_session_phase(session_state, status_current, session_cause)
+    if phase is not None:
+        return phase == "paused"
     return (raw_mode or "").strip().upper() == "PAUSED" or fallback
 
 

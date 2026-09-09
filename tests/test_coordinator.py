@@ -143,6 +143,67 @@ def test_live_session_state_overrides_stale_paused_mode(
     assert coordinator._session_loop_interval() == (900 if expected_paused else 300)
 
 
+@pytest.mark.parametrize("state", ["STOPPED", "CHARGING_FINISHED", "FINISHED", "COMPLETED", "IDLE"])
+def test_finished_mqtt_session_overrides_stale_paused_and_schedules_final_refreshes(
+    coordinator, state
+):
+    conn = coordinator.data.connectors["test_uuid"]
+    conn.session_state = "SUSPENDED"
+    conn.raw_charging_mode = "PAUSED"
+    conn.paused = True
+    conn.power_total = 2300
+    conn.current_phases = [10]
+    coordinator._session_tracking_started = True
+    with (
+        patch(
+            "custom_components.smappee_ev.coordinators.session_tracking.async_track_time_interval"
+        ) as track,
+        patch(
+            "custom_components.smappee_ev.coordinators.session_tracking.async_call_later"
+        ) as schedule,
+    ):
+        coordinator._ensure_active_session_loop()
+        coordinator.apply_mqtt_properties(
+            CHARGINGSTATE_TOPIC, {"chargingState": state, "status": {"current": "CHARGING"}}
+        )
+        assert coordinator._is_session_active(conn) is False
+        assert coordinator._is_session_finished(conn) is True
+        assert conn.paused is False
+        assert coordinator._is_session_paused(conn) is False
+        assert conn.power_total == 0
+        assert conn.current_phases is None
+        track.return_value.assert_called_once()
+        assert coordinator._session_active_loop_unsub is None
+        assert [call.args[1] for call in schedule.call_args_list] == [30, 120, 300]
+
+
+@pytest.mark.parametrize(
+    ("state", "status", "cause", "mode", "active", "paused"),
+    [
+        ("STARTED", "STOPPED", "FINISHED", "PAUSED", True, False),
+        ("SUSPENDED", "STOPPED", None, "NORMAL", True, True),
+        ("Initialize", "STOPPED", "CHARGING", "PAUSED", False, False),
+        ("Initialize", "CHARGING", "STOPPED", "PAUSED", True, False),
+        ("Initialize", None, "STOPPED", "PAUSED", False, False),
+        (" stopped ", None, None, "PAUSED", False, False),
+    ],
+)
+def test_session_helpers_share_status_priority(
+    coordinator, state, status, cause, mode, active, paused
+):
+    conn = ConnectorState(
+        connector_number=1,
+        session_state=state,
+        status_current=status,
+        session_cause=cause,
+        raw_charging_mode=mode,
+        paused=True,
+    )
+    assert coordinator._is_session_active(conn) is active
+    assert coordinator._is_session_paused(conn) is paused
+    assert coordinator._is_session_finished(conn) is (not active)
+
+
 def test_resumed_mqtt_session_reschedules_paused_polling(coordinator):
     conn = coordinator.data.connectors["test_uuid"]
     conn.raw_charging_mode = "PAUSED"

@@ -366,9 +366,11 @@ def _handle_mqtt_connection_change(
                 and getattr(coord, "monitoring_only", False) is not True
             ):
                 object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
+            coord.apply_mqtt_connection_change(up)
+            # HA can start the refresh eagerly; publish the transport state
+            # before it captures the previous snapshot for the REST merge.
             if not up and getattr(coord, "monitoring_only", False) is not True:
                 schedule_refresh(coord)
-            coord.apply_mqtt_connection_change(up)
 
 
 def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure

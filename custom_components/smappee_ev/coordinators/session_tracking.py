@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
 from ..api.errors import SmappeeError
-from ..helpers import anonymize_uuid, charging_session_paused
+from ..helpers import anonymize_uuid, charging_session_paused, charging_session_phase
 from ..models.state import ConnectorState, RecentSession
 from .base import CoordinatorMixin
 
@@ -26,10 +26,6 @@ SESSION_ACTIVE_REFRESH_INTERVAL = 5 * 60
 SESSION_PAUSED_REFRESH_INTERVAL = 15 * 60
 SESSION_MIN_REFRESH_INTERVAL = 2 * 60
 SESSION_FINAL_REFRESH_DELAYS = (30, 2 * 60, 5 * 60)
-
-_SESSION_ACTIVE_STATES = {"STARTED", "CHARGING", "CHARGING_STARTED", "RUNNING"}
-_SESSION_PAUSED_STATES = {"PAUSED", "SUSPENDED"}
-_SESSION_STOPPED_STATES = {"STOPPED", "CHARGING_FINISHED", "FINISHED", "COMPLETED", "IDLE"}
 
 
 class SessionTrackingMixin(CoordinatorMixin):
@@ -71,25 +67,11 @@ class SessionTrackingMixin(CoordinatorMixin):
         with suppress(RuntimeError):
             unsub()
 
-    @staticmethod
-    def _normalized_session_value(value: object) -> str:
-        return str(value or "").strip().upper()
-
     def _is_session_active(self, conn: ConnectorState) -> bool:
-        state = self._normalized_session_value(conn.session_state)
-        mode = self._normalized_session_value(conn.raw_charging_mode)
-        cause = self._normalized_session_value(conn.session_cause)
-        status = self._normalized_session_value(conn.status_current)
-        return (
-            state in _SESSION_ACTIVE_STATES
-            or state in _SESSION_PAUSED_STATES
-            or mode == "PAUSED"
-            or cause in _SESSION_ACTIVE_STATES
-            or cause in _SESSION_PAUSED_STATES
-            or status in _SESSION_ACTIVE_STATES
-            or status in _SESSION_PAUSED_STATES
-            or bool(conn.paused)
-        )
+        phase = charging_session_phase(conn.session_state, conn.status_current, conn.session_cause)
+        if phase is not None:
+            return phase != "finished"
+        return (conn.raw_charging_mode or "").strip().upper() == "PAUSED" or bool(conn.paused)
 
     def _is_session_paused(self, conn: ConnectorState) -> bool:
         return charging_session_paused(
@@ -101,13 +83,9 @@ class SessionTrackingMixin(CoordinatorMixin):
         )
 
     def _is_session_finished(self, conn: ConnectorState) -> bool:
-        state = self._normalized_session_value(conn.session_state)
-        cause = self._normalized_session_value(conn.session_cause)
-        status = self._normalized_session_value(conn.status_current)
         return (
-            state in _SESSION_STOPPED_STATES
-            or cause in _SESSION_STOPPED_STATES
-            or status in _SESSION_STOPPED_STATES
+            charging_session_phase(conn.session_state, conn.status_current, conn.session_cause)
+            == "finished"
         )
 
     def _active_session_connectors(self) -> list[ConnectorState]:
