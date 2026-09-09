@@ -13,7 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology
-from .api.errors import SmappeeConnectionError, SmappeeMaintenanceError, SmappeeServerError
+from .api.errors import SmappeeMaintenanceError, SmappeeTransientError
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
@@ -193,7 +193,7 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
 
     try:
         runtime = await _async_prepare_runtime(hass, entry, dashboard_client)
-    except (SmappeeMaintenanceError, SmappeeConnectionError, SmappeeServerError) as err:
+    except (SmappeeMaintenanceError, SmappeeTransientError) as err:
         snapshot = await async_load_snapshot(hass, entry)
         if snapshot is None:
             if isinstance(err, SmappeeMaintenanceError):
@@ -281,8 +281,7 @@ async def _async_prepare_runtime(
                 asyncio.CancelledError
                 | ConfigEntryAuthFailed
                 | SmappeeMaintenanceError
-                | SmappeeConnectionError
-                | SmappeeServerError,
+                | SmappeeTransientError,
             ):
                 raise hard_error
             raise ConfigEntryNotReady(
@@ -338,7 +337,7 @@ def _bootstrap_error_priority(error: BaseException) -> int:
         return 1
     if isinstance(error, SmappeeMaintenanceError):
         return 3
-    if isinstance(error, SmappeeConnectionError | SmappeeServerError):
+    if isinstance(error, SmappeeTransientError):
         return 4
     return 2
 

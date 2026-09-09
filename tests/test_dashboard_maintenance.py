@@ -14,9 +14,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.smappee_ev import async_setup_entry
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
 from custom_components.smappee_ev.api.errors import (
+    SmappeeConnectionError,
     SmappeeMaintenanceError,
     SmappeeProtocolError,
     SmappeeServerError,
+    SmappeeTransientError,
 )
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
@@ -127,7 +129,11 @@ async def test_recovery_requires_successful_authentication_and_logs_once(refresh
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 2
 
 
-async def test_optional_discovery_does_not_swallow_maintenance():
+@pytest.mark.parametrize(
+    "error",
+    [SmappeeMaintenanceError, SmappeeTransientError, SmappeeConnectionError, SmappeeServerError],
+)
+async def test_optional_discovery_does_not_swallow_outage(error):
     client = MagicMock()
     client.username = "user"
     client.password = "password"  # noqa: S105 - synthetic test credential
@@ -136,12 +142,12 @@ async def test_optional_discovery_does_not_swallow_maintenance():
         "async_get_charging_station_details",
         "async_get_service_locations_full_details",
     ):
-        setattr(client, method, AsyncMock(side_effect=SmappeeMaintenanceError("maintenance")))
-    with pytest.raises(SmappeeMaintenanceError):
+        setattr(client, method, AsyncMock(side_effect=error("outage")))
+    with pytest.raises(error):
         await _dashboard_fetch_highlevel_configs(client, [100])
-    with pytest.raises(SmappeeMaintenanceError):
+    with pytest.raises(error):
         await _fetch_dashboard_connector_mapping(client, [{"serialNumber": "station"}])
-    with pytest.raises(SmappeeMaintenanceError):
+    with pytest.raises(error):
         await _load_dashboard_topologies(client)
 
 

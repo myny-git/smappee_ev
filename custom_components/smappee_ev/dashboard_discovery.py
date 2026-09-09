@@ -11,12 +11,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .api.dashboard_client import DashboardMaintenanceState, SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology, build_topologies_from_full_details
-from .api.errors import (
-    SmappeeConnectionError,
-    SmappeeError,
-    SmappeeMaintenanceError,
-    SmappeeServerError,
-)
+from .api.errors import SmappeeError, SmappeeMaintenanceError, SmappeeTransientError
 from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import DashboardObjectList, HighLevelConfigMap
@@ -59,8 +54,7 @@ async def _dashboard_discover_service_locations(
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,
-        SmappeeConnectionError,
-        SmappeeServerError,
+        SmappeeTransientError,
     ):
         raise
     except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
@@ -110,8 +104,7 @@ async def _dashboard_discover_topologies(
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,
-        SmappeeConnectionError,
-        SmappeeServerError,
+        SmappeeTransientError,
     ):
         raise
     except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
@@ -151,8 +144,7 @@ async def _dashboard_fetch_devices(
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,
-        SmappeeConnectionError,
-        SmappeeServerError,
+        SmappeeTransientError,
     ):
         raise
     except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
@@ -182,8 +174,7 @@ async def _dashboard_fetch_highlevel_configs(
         except (
             ConfigEntryAuthFailed,
             SmappeeMaintenanceError,
-            SmappeeConnectionError,
-            SmappeeServerError,
+            SmappeeTransientError,
         ):
             raise
         except (
@@ -221,8 +212,7 @@ async def _fetch_dashboard_connector_mapping(  # noqa: C901 - validates nested r
         except (
             ConfigEntryAuthFailed,
             SmappeeMaintenanceError,
-            SmappeeConnectionError,
-            SmappeeServerError,
+            SmappeeTransientError,
         ):
             raise
         except (
@@ -336,8 +326,7 @@ async def _load_dashboard_service_locations(
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,
-        SmappeeConnectionError,
-        SmappeeServerError,
+        SmappeeTransientError,
     ):
         raise
     except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
@@ -361,8 +350,7 @@ async def _load_dashboard_topologies(
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,
-        SmappeeConnectionError,
-        SmappeeServerError,
+        SmappeeTransientError,
     ):
         raise
     except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:

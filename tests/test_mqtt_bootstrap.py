@@ -34,6 +34,7 @@ from custom_components.smappee_ev.api.errors import (
     SmappeeMaintenanceError,
     SmappeeProtocolError,
     SmappeeServerError,
+    SmappeeTransientError,
 )
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import (
@@ -382,7 +383,8 @@ async def test_domain_service_and_site_number_blocked(hass, entry, snapshot):
 
 
 @pytest.mark.parametrize(
-    "error", [SmappeeMaintenanceError, SmappeeConnectionError, SmappeeServerError]
+    "error",
+    [SmappeeMaintenanceError, SmappeeConnectionError, SmappeeServerError, SmappeeTransientError],
 )
 async def test_setup_outage_uses_saved_snapshot(hass, entry, online, error, hass_storage):
     await async_save_snapshot(hass, entry, online)
@@ -407,6 +409,7 @@ async def test_setup_outage_uses_saved_snapshot(hass, entry, online, error, hass
         SmappeeMaintenanceError,
         SmappeeConnectionError,
         SmappeeServerError,
+        SmappeeTransientError,
         ConfigEntryAuthFailed,
         SmappeeProtocolError,
     ],
@@ -548,6 +551,7 @@ async def test_bootstrap_auth_wins_over_outage_and_success_is_cleaned_up(
     assert _bootstrap_error_priority(asyncio.CancelledError()) < _bootstrap_error_priority(
         ConfigEntryAuthFailed()
     )
+    assert _bootstrap_error_priority(SmappeeTransientError()) == 4
     assert _bootstrap_error_priority(ValueError()) < _bootstrap_error_priority(SmappeeServerError())
 
 

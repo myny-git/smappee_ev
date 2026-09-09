@@ -15,11 +15,15 @@ class SmappeeAuthenticationError(ConfigEntryAuthFailed):
     """Smappee authentication failed."""
 
 
-class SmappeeConnectionError(SmappeeError):
+class SmappeeTransientError(SmappeeError):
+    """Temporary transport or server failure eligible for MQTT fallback."""
+
+
+class SmappeeConnectionError(SmappeeTransientError):
     """Smappee network or transport failed."""
 
 
-class SmappeeServerError(SmappeeError):
+class SmappeeServerError(SmappeeTransientError):
     """Smappee is temporarily unable to serve a request (HTTP 5xx)."""
 
 
