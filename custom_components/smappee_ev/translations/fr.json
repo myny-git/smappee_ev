@@ -106,8 +106,8 @@
           "description": "Optionnel : numéro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
         },
         "station_serial": {
-          "name": "Num?ro de s?rie de la borne",
-          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
+          "name": "Numéro de série de la borne",
+          "description": "Sélectionnez la borne lorsque plusieurs bornes ont le même numéro de connecteur."
         }
       }
     },
@@ -128,8 +128,8 @@
           "description": "Optionnel : numéro de connecteur (1 ou 2)."
         },
         "station_serial": {
-          "name": "Num?ro de s?rie de la borne",
-          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
+          "name": "Numéro de série de la borne",
+          "description": "Sélectionnez la borne lorsque plusieurs bornes ont le même numéro de connecteur."
         }
       }
     },
@@ -150,8 +150,8 @@
           "description": "Optionnel : numéro de connecteur (1 ou 2)."
         },
         "station_serial": {
-          "name": "Num?ro de s?rie de la borne",
-          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
+          "name": "Numéro de série de la borne",
+          "description": "Sélectionnez la borne lorsque plusieurs bornes ont le même numéro de connecteur."
         }
       }
     },
@@ -172,8 +172,8 @@
           "description": "Optionnel : numéro de connecteur (1 ou 2)."
         },
         "station_serial": {
-          "name": "Num?ro de s?rie de la borne",
-          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
+          "name": "Numéro de série de la borne",
+          "description": "Sélectionnez la borne lorsque plusieurs bornes ont le même numéro de connecteur."
         }
       }
     },
@@ -198,8 +198,8 @@
           "description": "Courant de charge en ampères (1 décimale, ex. 11,4). Limité à la plage min–max configurée du connecteur."
         },
         "station_serial": {
-          "name": "Num?ro de s?rie de la borne",
-          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
+          "name": "Numéro de série de la borne",
+          "description": "Sélectionnez la borne lorsque plusieurs bornes ont le même numéro de connecteur."
         }
       }
     },
@@ -224,8 +224,8 @@
           "description": "Mode de charge : Standard, intelligent ou solaire."
         },
         "station_serial": {
-          "name": "Num?ro de s?rie de la borne",
-          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
+          "name": "Numéro de série de la borne",
+          "description": "Sélectionnez la borne lorsque plusieurs bornes ont le même numéro de connecteur."
         }
       }
     }

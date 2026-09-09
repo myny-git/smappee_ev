@@ -59,6 +59,10 @@ def test_safe_sum_invalid():
     [
         (6, 20, (6, 20)),
         (10, 20, (10, 20)),
+        (0, 0, (6, 32)),
+        (-1, -1, (6, 32)),
+        (6, 6, (6, 6)),
+        (0, 32, (0, 32)),
         (6, 0, (6, 32)),
         (6, 4, (6, 32)),
         (10, 8, (6, 32)),
@@ -82,6 +86,10 @@ def test_resolve_connector_current_range_uses_valid_pair_or_previous(
     ("previous_min", "previous_max", "reported_min", "reported_max"),
     [
         (None, None, 6, 0),
+        (None, None, 0, 0),
+        (0, 0, None, None),
+        (0, 0, 0, 0),
+        (-1, -1, None, None),
         (10, 8, 10, 8),
         (None, None, None, None),
     ],

@@ -85,7 +85,7 @@
       "message": "Dashboard ist nicht verfügbar. Nur die MQTT-Überwachung ist aktiv; die Steuerung ist nicht verfügbar. Die Wiederherstellung erfolgt automatisch."
     },
     "ambiguous_connector": {
-      "message": "Mehrere Anschl?sse stimmen ?berein. Geben Sie station_serial und connector_id an."
+      "message": "Mehrere Anschlüsse stimmen überein. Geben Sie station_serial und connector_id an."
     }
   },
   "services": {
@@ -107,7 +107,7 @@
         },
         "station_serial": {
           "name": "Seriennummer der Ladestation",
-          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
+          "description": "Wählen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -129,7 +129,7 @@
         },
         "station_serial": {
           "name": "Seriennummer der Ladestation",
-          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
+          "description": "Wählen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -151,7 +151,7 @@
         },
         "station_serial": {
           "name": "Seriennummer der Ladestation",
-          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
+          "description": "Wählen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -173,7 +173,7 @@
         },
         "station_serial": {
           "name": "Seriennummer der Ladestation",
-          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
+          "description": "Wählen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -199,7 +199,7 @@
         },
         "station_serial": {
           "name": "Seriennummer der Ladestation",
-          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
+          "description": "Wählen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -225,7 +225,7 @@
         },
         "station_serial": {
           "name": "Seriennummer der Ladestation",
-          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
+          "description": "Wählen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     }
