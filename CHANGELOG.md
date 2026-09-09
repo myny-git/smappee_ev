@@ -7,6 +7,93 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.9.1] - 2026-09-09
+
+This release keeps MQTT monitoring available during temporary Smappee Dashboard
+outages and restores normal operation automatically when Dashboard recovers.
+It also improves charging-session status, connector targeting and measurement
+handling.
+
+### Monitoring during Dashboard outages
+
+- After successful setup, the integration saves MQTT connection settings and
+  device mappings locally. A later reload or Home Assistant restart can use this
+  configuration to resume MQTT monitoring during Dashboard maintenance,
+  connection failures, timeouts, HTTP 429 rate limits or server errors.
+- Added a diagnostic **Connection mode** sensor. In `mqtt_only` mode, live MQTT
+  measurements remain available while Dashboard controls and REST-only entities
+  are unavailable. Service actions explain why control is temporarily blocked.
+- Cached metadata is not presented as live telemetry. In `mqtt_only` mode,
+  measurements require fresh messages and become unavailable after a broker
+  disconnect or five minutes without matching data.
+- Dashboard recovery runs in the background with increasing retry delays. Once
+  discovery and REST access to the expected stations and connectors recover, an
+  automatic integration reload restores normal operation. This briefly
+  interrupts MQTT. Recovery probes do not start duplicate MQTT clients.
+- Temporary failures of individual live REST endpoints no longer prevent saving
+  valid bootstrap configuration. Incomplete discovery preserves an existing
+  valid cache, and recovery checks use the expected connector topology.
+- HTTP 408 and 429 are handled as transient failures. Dashboard requests and
+  recovery attempts respect `Retry-After`, including delays over ten minutes.
+  Genuine authentication failures retain Home Assistant's reauthentication flow.
+
+### Bug fixes
+
+- Fixed stale `PAUSED` charging modes overriding explicit session status. Active,
+  paused and finished detection now use the same priority: session state, then
+  status/cause, then the charging mode and fallback state.
+- Resumed sessions return to the five-minute refresh interval. Explicit finished
+  or idle states override stale pause flags, stop active-session polling when no
+  other sessions remain active, clear stale power/current readings and schedule
+  final session refreshes after 30 seconds, two minutes and five minutes.
+- Unknown charging modes no longer default to `standard`. Explicitly unknown
+  MQTT modes clear the previous selection; partial messages without mode fields
+  preserve the last known selection.
+- Continuous MQTT updates no longer postpone REST polling, allowing REST-only
+  connector settings to recover without a manual reload.
+- Fixed a disconnect race where a REST refresh could restore an outdated MQTT
+  connection status. The disconnect state is now applied before starting the
+  fallback refresh.
+- Power, current, voltage and energy measurements are processed independently,
+  including separately configured measurement topics. Missing, invalid or
+  incomplete mapped groups preserve previous values instead of introducing
+  synthetic zeros; valid single-phase voltage readings remain supported.
+- Connector services now reject ambiguous matches instead of silently selecting
+  the first station. Added optional `station_serial` targeting for start, pause,
+  stop, resume, charging-mode and current-limit actions.
+- Capacity and overload settings now use stable site-level unique IDs independent
+  of station ordering. Existing registry entries are migrated while preserving
+  entity IDs and user customizations. Pre-existing duplicates are retained with
+  a warning rather than deleted automatically.
+- Failed Dashboard writes now raise an error when authentication is unavailable,
+  preventing settings from appearing successfully changed when no write occurred.
+- Current-range validation now rejects negative minimums and nonpositive
+  maximums, including invalid previous ranges. Valid `0-32 A` and fixed positive
+  ranges such as `6-6 A` remain supported.
+- Repaired German and French connector-selection translations.
+
+### Upgrade notes
+
+- Outage startup requires a valid configuration saved by a successful setup with
+  this version, plus a reachable MQTT broker. Without that cache, Home Assistant
+  retries setup normally. Expired MQTT credentials or changed device mappings
+  can prevent monitoring until Dashboard returns; missed data is not backfilled.
+- Automations targeting connector numbers shared by multiple stations must add
+  `station_serial`. Automations reading the charging-mode select should handle
+  `unknown` when no supported mode can be determined.
+
+### Documentation and maintenance
+
+- Documented outage monitoring, recovery, connector targeting and measurement
+  handling. Consolidated transient API errors under a shared exception class.
+- Expanded regression coverage for cached startup, recovery, rate limiting,
+  service targeting, registry migration, partial measurements and session state.
+- Added a reconnect regression covering the MQTT transport, routing, coordinators
+  and Home Assistant entities: disconnect, cloud/network recovery, reconnect and
+  restoration without reload. It verifies both preservation and refresh of
+  `min_surpluspct`, using simulated broker and cloud responses.
+- Validation: 904 tests passed, together with Ruff, mypy and formatting checks.
+
 ## [2026.9.0] - 2026-09-06
 
 This release improves charging-current control, compatibility with Home Assistant
