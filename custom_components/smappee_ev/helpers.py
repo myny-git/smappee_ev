@@ -259,11 +259,13 @@ def resolve_connector_current_range(
     Missing reported bounds are combined with the last valid range. If the
     resulting pair is invalid, the last valid range is retained; when no valid
     previous pair exists, the integration defaults are used instead. A usable
-    charging range must have a positive maximum, including fixed ranges.
+    charging range must have a nonnegative minimum and a positive maximum,
+    including fixed ranges.
     """
     if (
         previous_min is not None
         and previous_max is not None
+        and previous_min >= 0
         and previous_max > 0
         and previous_max >= previous_min
     ):
@@ -273,7 +275,7 @@ def resolve_connector_current_range(
 
     candidate_min = fallback_min if reported_min is None else int(reported_min)
     candidate_max = fallback_max if reported_max is None else int(reported_max)
-    if candidate_max > 0 and candidate_max >= candidate_min:
+    if candidate_min >= 0 and candidate_max > 0 and candidate_max >= candidate_min:
         return candidate_min, candidate_max
 
     _LOGGER.debug(
