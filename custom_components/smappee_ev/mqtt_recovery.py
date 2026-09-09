@@ -77,7 +77,7 @@ async def _async_recover(
         except SmappeeRateLimitError as err:
             retry_after = err.retry_after
             _LOGGER.debug("Dashboard rate limited; delaying recovery while MQTT continues")
-        except SmappeeError, ConfigEntryNotReady, ValueError, TypeError, KeyError:
+        except (SmappeeError, ConfigEntryNotReady, ValueError, TypeError, KeyError):
             _LOGGER.debug("Dashboard recovery not yet complete; MQTT monitoring continues")
         except Exception:
             _LOGGER.exception("Unexpected Dashboard recovery failure")

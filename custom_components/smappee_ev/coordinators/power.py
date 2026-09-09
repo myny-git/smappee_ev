@@ -70,7 +70,7 @@ def _pick(seq: Sequence[int] | list, idxs: Iterable[int]) -> list[int]:
         return []
     try:
         return [int(seq[i]) for i in idxs]
-    except TypeError, ValueError, OverflowError:
+    except (TypeError, ValueError, OverflowError):
         return []
 
 

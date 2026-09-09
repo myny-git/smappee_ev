@@ -39,6 +39,9 @@ handling.
 
 ### Bug fixes
 
+- Restored Python 3.13-compatible exception syntax so the integration can import
+  on installations such as Home Assistant 2025.8.3. Ruff now targets Python 3.13,
+  with a syntax regression test and a separate Python 3.13 compilation CI check.
 - Fixed stale `PAUSED` charging modes overriding explicit session status. Active,
   paused and finished detection now use the same priority: session state, then
   status/cause, then the charging mode and fallback state.
@@ -92,7 +95,7 @@ handling.
   and Home Assistant entities: disconnect, cloud/network recovery, reconnect and
   restoration without reload. It verifies both preservation and refresh of
   `min_surpluspct`, using simulated broker and cloud responses.
-- Validation: 904 tests passed, together with Ruff, mypy and formatting checks.
+- Validation: 905 tests passed, together with Ruff, mypy and formatting checks.
 
 ## [2026.9.0] - 2026-09-06
 

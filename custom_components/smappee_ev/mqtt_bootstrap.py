@@ -270,7 +270,7 @@ async def async_load_snapshot(
     try:
         value = await bootstrap_store(hass, entry).async_load()
         return validate_snapshot(value, entry) if value is not None else None
-    except OSError, ValueError, TypeError, KeyError, vol.Invalid:
+    except (OSError, ValueError, TypeError, KeyError, vol.Invalid):
         _LOGGER.warning("Ignoring unavailable or invalid MQTT bootstrap snapshot")
         return None
 
@@ -282,7 +282,7 @@ async def async_save_snapshot(
     try:
         snapshot = snapshot_from_runtime(runtime, entry)
         await bootstrap_store(hass, entry).async_save(snapshot)
-    except OSError, ValueError, TypeError, KeyError, AttributeError, vol.Invalid:
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, vol.Invalid):
         _LOGGER.warning("MQTT bootstrap snapshot could not be saved; retaining previous snapshot")
 
 

@@ -78,7 +78,7 @@ def _retry_after_seconds(value: object) -> float:
         if deadline.tzinfo is None:
             return 30.0
         return max(0.0, (deadline - datetime.now(UTC)).total_seconds())
-    except ValueError, TypeError, OverflowError:
+    except (ValueError, TypeError, OverflowError):
         return 30.0
 
 
