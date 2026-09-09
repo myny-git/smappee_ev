@@ -144,7 +144,7 @@ class MqttMixin(CoordinatorMixin):
             changed |= self._handle_connector_devices_updated(payload)
         elif "/etc/carcharger/acchargingcontroller/" in topic and "/devices/" in topic:
             changed |= self._handle_connector_mqtt(topic, payload)
-        elif topic.endswith("/power"):
+        elif topic.endswith("/power") or topic in (self._power_index_maps_by_topic or {}):
             changed |= self._handle_power(topic, payload)
         elif "/etc/chargingstation/acchargingstation/" in topic and topic.endswith("/properties"):
             changed |= self._handle_station_properties(payload)

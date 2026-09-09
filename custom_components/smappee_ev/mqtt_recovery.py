@@ -14,7 +14,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 
 from .api.dashboard_client import SmappeeDashboardClient
-from .api.errors import SmappeeError
+from .api.errors import SmappeeError, SmappeeRateLimitError
 from .dashboard_discovery import _create_dashboard_client
 from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry
 from .mqtt_bootstrap import snapshot_from_runtime
@@ -55,8 +55,10 @@ async def _async_recover(
 ) -> None:
     """Probe full discovery without starting a second MQTT connection."""
     delay = 30.0
+    retry_after = 0.0
     while True:
-        await asyncio.sleep(delay)
+        await asyncio.sleep(max(delay, retry_after))
+        retry_after = 0.0
         if runtime.stopping or hass.is_stopping:
             return
         probe: RuntimeData | None = None
@@ -72,6 +74,9 @@ async def _async_recover(
                 "Dashboard recovery requires reauthentication; MQTT monitoring continues"
             )
             return
+        except SmappeeRateLimitError as err:
+            retry_after = err.retry_after
+            _LOGGER.debug("Dashboard rate limited; delaying recovery while MQTT continues")
         except SmappeeError, ConfigEntryNotReady, ValueError, TypeError, KeyError:
             _LOGGER.debug("Dashboard recovery not yet complete; MQTT monitoring continues")
         except Exception:

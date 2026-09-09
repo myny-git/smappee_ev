@@ -370,9 +370,9 @@ def test_site_aggregates_ignore_child_payloads_and_accept_parent_zero(hass):
         (
             (0, 2, 5),
             {"channelData": [10, 20, 30], "currentData": [1000, 2000, 3000]},
-            [10, 30, 0],
-            40,
-            [1.0, 3.0, 0.0],
+            None,
+            None,
+            None,
         ),
     ],
 )
@@ -405,7 +405,7 @@ def test_site_power_mapping_matrix_handles_phase_shapes(
         }
     )
 
-    assert coord._handle_power(topic, payload) is True
+    assert coord._handle_power(topic, payload) is (expected_total is not None)
 
     site = coord.data.site
     assert site.grid_power_phases == expected_phases
@@ -413,7 +413,7 @@ def test_site_power_mapping_matrix_handles_phase_shapes(
     assert site.grid_current_phases == expected_currents
 
 
-def test_site_power_mapping_empty_arrays_zero_fill_existing_state(hass):
+def test_site_power_mapping_empty_arrays_preserve_existing_state(hass):
     topic = "servicelocation/site/power"
     coord = SmappeeSiteCoordinator(
         hass,
@@ -439,9 +439,9 @@ def test_site_power_mapping_empty_arrays_zero_fill_existing_state(hass):
         }
     )
 
-    assert coord._handle_power(topic, {"channelData": []}) is True
-    assert coord.data.site.grid_power_total == 0
-    assert coord.data.site.grid_power_phases == [0, 0, 0]
+    assert coord._handle_power(topic, {"channelData": []}) is False
+    assert coord.data.site.grid_power_total == 999
+    assert coord.data.site.grid_power_phases == [9, 9, 9]
 
 
 def test_site_power_index_map_empty_or_invalid_highlevel_config_is_safe(hass):
@@ -600,7 +600,7 @@ def test_station_shared_topic_merges_grid_pv_and_connector_without_overwrite(has
     assert coord.data.connectors["conn-2"].power_total is None
 
 
-def test_station_power_payload_missing_current_and_energy_arrays_zero_fills_safely(hass):
+def test_station_power_payload_preserves_missing_current_and_energy(hass):
     coord = _station_coordinator(hass)
     topic = "servicelocation/control/power"
     coord.data.connectors["conn-1"].current_phases = [1.0, 2.0, 3.0]
@@ -630,8 +630,8 @@ def test_station_power_payload_missing_current_and_energy_arrays_zero_fills_safe
 
     connector = coord.data.connectors["conn-1"]
     assert connector.power_total == 600
-    assert connector.current_phases == [0.0, 0.0, 0.0]
-    assert connector.energy_import_kwh == 0.0
+    assert connector.current_phases == [1.0, 2.0, 3.0]
+    assert connector.energy_import_kwh == 12.3
 
 
 def test_station_highlevel_ignores_ambiguous_connector_and_uses_single_fallback(hass):

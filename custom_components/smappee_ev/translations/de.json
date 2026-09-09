@@ -83,6 +83,9 @@
     },
     "mqtt_only": {
       "message": "Dashboard ist nicht verfügbar. Nur die MQTT-Überwachung ist aktiv; die Steuerung ist nicht verfügbar. Die Wiederherstellung erfolgt automatisch."
+    },
+    "ambiguous_connector": {
+      "message": "Mehrere Anschl?sse stimmen ?berein. Geben Sie station_serial und connector_id an."
     }
   },
   "services": {
@@ -101,6 +104,10 @@
         "connector_id": {
           "name": "Connector-ID",
           "description": "Optional: Connector-Nummer (1 oder 2; leer lassen, wenn nur einer vorhanden ist)."
+        },
+        "station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -119,6 +126,10 @@
         "connector_id": {
           "name": "Connector-ID",
           "description": "Optional: Connector-Nummer (1 oder 2)."
+        },
+        "station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -137,6 +148,10 @@
         "connector_id": {
           "name": "Connector-ID",
           "description": "Optional: Connector-Nummer (1 oder 2)."
+        },
+        "station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -155,6 +170,10 @@
         "connector_id": {
           "name": "Connector-ID",
           "description": "Optional: Connector-Nummer (1 oder 2)."
+        },
+        "station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -177,6 +196,10 @@
         "current": {
           "name": "Strom (A)",
           "description": "Ladestrom in Ampere (1 Dezimalstelle, z. B. 11,4). Wird auf den konfigurierten Min–Max-Bereich des Connectors begrenzt."
+        },
+        "station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     },
@@ -199,6 +222,10 @@
         "mode": {
           "name": "Modus",
           "description": "Lademodus: Standard, Smart oder Solar."
+        },
+        "station_serial": {
+          "name": "Seriennummer der Ladestation",
+          "description": "W?hlen Sie die Ladestation, wenn Anschlussnummern bei mehreren Stationen vorkommen."
         }
       }
     }

@@ -30,6 +30,7 @@ from .coordinators.power import (
     _indexes_from_aspect_paths,
     _mqtt_channel_topic,
     _pick,
+    _sum_kwh,
     _to_int as _power_to_int,
     _volts_from_dv,
 )
@@ -195,11 +196,15 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         if p_ph:
             changed |= self._set_if_changed(site, f"{power_key_prefix}_power_phases", p_ph)
             changed |= self._set_if_changed(site, f"{power_key_prefix}_power_total", sum(p_ph))
-            i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
-            if i_ph:
-                changed |= self._set_if_changed(site, f"{power_key_prefix}_current_phases", i_ph)
+        i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
+        if i_ph:
+            changed |= self._set_if_changed(site, f"{power_key_prefix}_current_phases", i_ph)
         if power_key_prefix == "grid" and voltage_dv:
-            v_ph = _volts_from_dv(_pick(voltage_dv, [0, 1, 2]))
+            v_ph = _volts_from_dv(
+                _pick(voltage_dv, range(min(3, len(voltage_dv))))
+                if isinstance(voltage_dv, list)
+                else []
+            )
             if v_ph:
                 changed |= self._set_if_changed(site, "grid_voltage_phases", v_ph)
         if energy_idxs:
@@ -207,18 +212,18 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
                 changed |= self._set_if_changed(
                     site,
                     "grid_energy_import_kwh",
-                    round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3),
+                    _sum_kwh(imp_wh, energy_idxs),
                 )
                 changed |= self._set_if_changed(
                     site,
                     "grid_energy_export_kwh",
-                    round(sum(_pick(exp_wh, energy_idxs)) / 1000.0, 3),
+                    _sum_kwh(exp_wh, energy_idxs),
                 )
             else:
                 changed |= self._set_if_changed(
                     site,
                     "pv_energy_import_kwh",
-                    round(sum(_pick(imp_wh, energy_idxs)) / 1000.0, 3),
+                    _sum_kwh(imp_wh, energy_idxs),
                 )
         return changed
 

@@ -39,8 +39,8 @@ def test_helper_functions():
     seq = [1, 2, 3, 4, 5]
     idxs = [0, 2, 4]
     assert _pick(seq, idxs) == [1, 3, 5]
-    assert _pick(seq, [10, 20]) == [0, 0]  # Out of range indices return 0
-    assert _pick([], [0, 1]) == [0, 0]  # Empty sequence returns [0, 0] for the given indices
+    assert _pick(seq, [10, 20]) == []  # Missing indices are not measurements
+    assert _pick([], [0, 1]) == []  # Empty input must not create zero measurements
     assert _pick(seq, []) == []  # Empty indices returns empty list
     assert _pick("not a list", [0, 1]) == []  # Non-list sequence returns empty list
 
@@ -1798,19 +1798,19 @@ class TestSmappeeCoordinator:
 
         assert coordinator._handle_power(topic, payload) is True
 
-        # Grid and PV should update, but energy values are reset to 0.0 when not in payload
+        # Grid and PV update; omitted energy measurements remain unchanged
         assert station.grid_power_phases == [100, 200]
         assert station.grid_power_total == 300
         assert station.grid_current_phases == [1.0, 2.0]
-        # Energy values are reset when not provided in payload
-        assert station.grid_energy_import_kwh == 0.0  # Reset to 0
-        assert station.grid_energy_export_kwh == 0.0  # Reset to 0
-        assert station.pv_energy_import_kwh == 0.0  # Reset to 0
+        # Missing energy arrays do not represent zero measurements
+        assert station.grid_energy_import_kwh == 230.0
+        assert station.grid_energy_export_kwh == 23.0
+        assert station.pv_energy_import_kwh == 130.0
         # Connector power/current updates
         assert conn.power_phases == [400]
         assert conn.power_total == 400
         assert conn.current_phases == [4.0]
-        assert conn.energy_import_kwh == 0.0  # Reset to 0
+        assert conn.energy_import_kwh == 140.0
 
     def test_handle_power_uses_configured_active_power_array(self, coordinator):
         """Test active power indexes are read from their configured MQTT array."""

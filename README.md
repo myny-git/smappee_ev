@@ -50,13 +50,42 @@ This custom integration unlocks **more control over your Smappee** charger and c
 - Dashboard v10/v11 calls are used for charging mode, start, pause, stop, percentage/current limit, LED brightness, min surplus percentage and availability.
 - Dashboard configuration data refreshes at most every 30 minutes, with a forced refresh shortly after supported dashboard writes.
 
+### MQTT measurements and connector targeting
+
+Power, current, voltage and energy fields are processed independently. An omitted,
+empty, invalid or truncated mapped measurement group keeps its previous value; an
+explicit zero remains a valid measurement. Incomplete phase arrays are not filled
+with synthetic zeros. This does not change the existing energy-counter reset policy.
+
+Connector services require an unambiguous match. If two charging stations both
+have connector 1, include `station_serial` to identify the intended station:
+
+```yaml
+action: smappee_ev.set_current
+data:
+  service_location_id: 123
+  station_serial: "YOUR_STATION_SERIAL"
+  connector_id: 1
+  current: 10
+```
+
+The same optional field is available for start, pause, stop, resume and charging
+mode actions. Ambiguous calls now fail instead of selecting the first station;
+existing automations using ambiguous connector numbers must add the serial.
+
+Capacity and overload site settings now have unique IDs independent of the
+selected charging station. Existing registry entries are migrated in place during
+number platform setup, preserving entity IDs and user customizations. If duplicate
+entries already exist, they are retained and a warning is logged; they are not
+automatically deleted.
+
 ### Monitoring during Dashboard outages
 
 After a successful setup, the integration saves the MQTT connection settings and
 device mapping in Home Assistant storage. If Dashboard is temporarily unavailable
 during a later reload or Home Assistant restart, this saved configuration lets
 MQTT monitoring start independently. Maintenance responses, connection failures,
-timeouts and HTTP 5xx responses can activate this fallback. Authentication errors
+timeouts and HTTP 408, 429 and 5xx responses can activate this fallback. Authentication errors
 still require reauthentication; they do not activate fallback during setup.
 
 Saving the configuration requires valid discovery data for every expected
@@ -73,7 +102,9 @@ unavailable if the broker disconnects or no matching data arrives for five minut
 (checked every 30 seconds). Stored device metadata is not used as live telemetry.
 
 Dashboard recovery runs in the background, starting after 30 seconds. Failed
-attempts increase the delay, with jitter, up to ten minutes. Once full discovery
+attempts increase the delay, with jitter, up to ten minutes. For HTTP 429, the
+server's `Retry-After` delay is respected even when longer than ten minutes; new
+Dashboard requests are held back during that period. Once full discovery
 succeeds and station and connector REST state is reachable, the integration
 reloads automatically to restore normal operation. This
 reload briefly interrupts MQTT. If recovery discovers invalid credentials, Home

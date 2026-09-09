@@ -202,27 +202,37 @@ def get_station_client(rt: RuntimeData | None, sid: int | None) -> SmappeeDevice
     return first.station_client if first else None
 
 
-def _connector_clients_for_site(site: SmappeeSiteRuntime) -> list[SmappeeDeviceHandle]:
+def _connector_clients_for_site(
+    site: SmappeeSiteRuntime, station_serial: str | None = None
+) -> list[SmappeeDeviceHandle]:
     conns: list[SmappeeDeviceHandle] = []
     for bucket in site.stations.values():
+        if station_serial is not None and bucket.charging_station_serial != station_serial:
+            continue
         conns.extend(connector.connector_client for connector in bucket.connectors.values())
     return conns
 
 
 def get_connector_client(
-    rt: RuntimeData | None, sid: int | None, connector_id: int | None
+    rt: RuntimeData | None,
+    sid: int | None,
+    connector_id: int | None,
+    *,
+    station_serial: str | None = None,
 ) -> SmappeeDeviceHandle | None:
     if not rt or sid is None:
         return None
     site = rt.sites.get(sid)
     if site is None:
         return None
-    conns = _connector_clients_for_site(site)
+    conns = _connector_clients_for_site(site, station_serial)
     if connector_id is not None:
-        for client in conns:
-            if getattr(client, "connector_number", None) == connector_id:
-                return client
-        return None
+        conns = [client for client in conns if client.connector_number == connector_id]
+    if len(conns) > 1:
+        raise _service_validation_error(
+            "Multiple connectors match. Provide station_serial and connector_id.",
+            "ambiguous_connector",
+        )
     if len(conns) == 1:
         return conns[0]
     return None
@@ -332,7 +342,9 @@ async def async_handle_connector_service(
     rt, sid = _resolve_sid(hass, call)
     _raise_if_ambiguous_service_location(rt, sid)
     connector_id = call.data.get("connector_id")
-    client = get_connector_client(rt, sid, connector_id)
+    client = get_connector_client(
+        rt, sid, connector_id, station_serial=call.data.get("station_serial")
+    )
     if not client:
         raise _service_validation_error(
             f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')}, connector_id={connector_id})",
@@ -382,7 +394,9 @@ async def handle_start_charging(call: ServiceCall) -> None:
     connector_id = call.data.get("connector_id")
     rt, sid = _resolve_sid(call.hass, call)
     _raise_if_ambiguous_service_location(rt, sid)
-    client = get_connector_client(rt, sid, connector_id)
+    client = get_connector_client(
+        rt, sid, connector_id, station_serial=call.data.get("station_serial")
+    )
     if not client:
         raise _service_validation_error(
             f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, sid={call.data.get('service_location_id')}, connector_id={connector_id})",
@@ -413,7 +427,9 @@ async def handle_resume_charging(call: ServiceCall) -> None:
     connector_id = call.data.get("connector_id")
     rt, sid = _resolve_sid(call.hass, call)
     _raise_if_ambiguous_service_location(rt, sid)
-    client = get_connector_client(rt, sid, connector_id)
+    client = get_connector_client(
+        rt, sid, connector_id, station_serial=call.data.get("station_serial")
+    )
     if not client:
         raise _service_validation_error(
             "Cannot resolve connector client (provide connector_id if ambiguous)",
@@ -451,7 +467,9 @@ async def handle_set_current(call: ServiceCall) -> None:
     connector_id = call.data.get("connector_id")
     rt, sid = _resolve_sid(call.hass, call)
     _raise_if_ambiguous_service_location(rt, sid)
-    client = get_connector_client(rt, sid, connector_id)
+    client = get_connector_client(
+        rt, sid, connector_id, station_serial=call.data.get("station_serial")
+    )
     if not client:
         raise _service_validation_error(
             f"No matching connector client (config_entry_id={call.data.get('config_entry_id')}, "
@@ -488,6 +506,7 @@ START_CHARGING_SCHEMA = vol.Schema(
         vol.Optional("config_entry_id"): cv.string,
         vol.Optional("service_location_id"): cv.positive_int,
         vol.Optional("connector_id"): cv.positive_int,
+        vol.Optional("station_serial"): vol.All(cv.string, vol.Length(min=1)),
     }
 )
 
@@ -496,6 +515,7 @@ PAUSE_STOP_SCHEMA = vol.Schema(
         vol.Optional("config_entry_id"): cv.string,
         vol.Optional("service_location_id"): cv.positive_int,
         vol.Optional("connector_id"): cv.positive_int,
+        vol.Optional("station_serial"): vol.All(cv.string, vol.Length(min=1)),
     }
 )
 
@@ -504,6 +524,7 @@ SET_MODE_SCHEMA = vol.Schema(
         vol.Optional("config_entry_id"): cv.string,
         vol.Optional("service_location_id"): cv.positive_int,
         vol.Optional("connector_id"): cv.positive_int,
+        vol.Optional("station_serial"): vol.All(cv.string, vol.Length(min=1)),
         vol.Required("mode"): vol.All(
             str,
             str.upper,  # normalize to uppercase
@@ -518,6 +539,7 @@ SET_CURRENT_SCHEMA = vol.Schema(
         vol.Optional("config_entry_id"): cv.string,
         vol.Optional("service_location_id"): cv.positive_int,
         vol.Optional("connector_id"): cv.positive_int,
+        vol.Optional("station_serial"): vol.All(cv.string, vol.Length(min=1)),
         # Sane lower bound; upper bound validated dynamically against connector limits
         vol.Required("current"): vol.All(vol.Coerce(float), vol.Range(min=1.0)),
     }

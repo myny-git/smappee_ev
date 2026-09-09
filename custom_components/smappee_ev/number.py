@@ -24,6 +24,7 @@ from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationRestEntity
 from .models.runtime_data import SmappeeEvConfigEntry, SmappeeSiteRuntime
 from .models.state import ConnectorState, IntegrationData, StationState
+from .registry import async_migrate_site_setting_ids, site_setting_unique_id
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -49,6 +50,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Smappee EV number entities (multi-station)."""
+    async_migrate_site_setting_ids(hass, config_entry)
     runtime = config_entry.runtime_data
 
     entities: list[NumberEntity] = []
@@ -473,6 +475,7 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
             sid,
             unique_suffix="number:capacity_maximum_power",
         )
+        self._attr_unique_id = site_setting_unique_id(sid, "capacity_maximum_power")
         self._post_init(UnitOfPower.KILO_WATT, 0, 10, 0.1)
 
     def _station_state(self) -> StationState | None:
@@ -536,6 +539,7 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
             sid,
             unique_suffix="number:overload_maximum_load",
         )
+        self._attr_unique_id = site_setting_unique_id(sid, "overload_maximum_load")
         self._post_init(UnitOfElectricCurrent.AMPERE, 0, 32, 1)
 
     def _station_state(self) -> StationState | None:

@@ -818,7 +818,7 @@ async def test_usable_cache_does_not_mean_rest_recovered(
         _Response(200, payload={}),
         _Response(200, payload={"token": ""}),
         _Response(200, json_exc=ValueError("private response")),
-        _Response(429),
+        _Response(400),
     ],
 )
 async def test_invalid_authentication_response_stays_protocol_error(refresh, response):

@@ -83,6 +83,9 @@
     },
     "mqtt_only": {
       "message": "Dashboard est indisponible. Seule la surveillance MQTT est active ; les commandes sont indisponibles. Le rétablissement est automatique."
+    },
+    "ambiguous_connector": {
+      "message": "Plusieurs connecteurs correspondent. Indiquez station_serial et connector_id."
     }
   },
   "services": {
@@ -101,6 +104,10 @@
         "connector_id": {
           "name": "ID du connecteur",
           "description": "Optionnel : numéro de connecteur (1 ou 2, laisser vide s'il n'y en a qu'un)."
+        },
+        "station_serial": {
+          "name": "Num?ro de s?rie de la borne",
+          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
         }
       }
     },
@@ -119,6 +126,10 @@
         "connector_id": {
           "name": "ID du connecteur",
           "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        },
+        "station_serial": {
+          "name": "Num?ro de s?rie de la borne",
+          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
         }
       }
     },
@@ -137,6 +148,10 @@
         "connector_id": {
           "name": "ID du connecteur",
           "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        },
+        "station_serial": {
+          "name": "Num?ro de s?rie de la borne",
+          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
         }
       }
     },
@@ -155,6 +170,10 @@
         "connector_id": {
           "name": "ID du connecteur",
           "description": "Optionnel : numéro de connecteur (1 ou 2)."
+        },
+        "station_serial": {
+          "name": "Num?ro de s?rie de la borne",
+          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
         }
       }
     },
@@ -177,6 +196,10 @@
         "current": {
           "name": "Courant (A)",
           "description": "Courant de charge en ampères (1 décimale, ex. 11,4). Limité à la plage min–max configurée du connecteur."
+        },
+        "station_serial": {
+          "name": "Num?ro de s?rie de la borne",
+          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
         }
       }
     },
@@ -199,6 +222,10 @@
         "mode": {
           "name": "Mode",
           "description": "Mode de charge : Standard, intelligent ou solaire."
+        },
+        "station_serial": {
+          "name": "Num?ro de s?rie de la borne",
+          "description": "S?lectionnez la borne lorsque plusieurs bornes ont le m?me num?ro de connecteur."
         }
       }
     }

@@ -690,6 +690,7 @@ async def test_async_setup_entry_adds_connector_numbers(hass, coordinator, api_c
         )
     }
     entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "number-test-entry"
     entry.runtime_data = runtime
     async_add_entities = MagicMock()
 
@@ -746,6 +747,7 @@ async def test_async_setup_entry_adds_site_dashboard_numbers_once(hass, dashboar
         )
     }
     entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "number-test-entry"
     entry.runtime_data = runtime
     async_add_entities = MagicMock()
 
@@ -765,6 +767,7 @@ async def test_async_setup_entry_handles_empty_sites(hass):
     runtime = MagicMock(spec=RuntimeData)
     runtime.sites = {}
     entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "number-test-entry"
     entry.runtime_data = runtime
     async_add_entities = MagicMock()
 

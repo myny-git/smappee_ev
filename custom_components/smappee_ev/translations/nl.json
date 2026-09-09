@@ -86,6 +86,9 @@
     },
     "mqtt_only": {
       "message": "Dashboard is niet beschikbaar. Alleen MQTT-monitoring is actief; bediening is niet beschikbaar. Herstel gebeurt automatisch."
+    },
+    "ambiguous_connector": {
+      "message": "Meerdere connectors komen overeen. Geef station_serial en connector_id op."
     }
   },
   "services": {
@@ -104,6 +107,10 @@
         "connector_id": {
           "name": "Connector",
           "description": "Optioneel: connectornummer (1 of 2, laat leeg bij slechts één connector)."
+        },
+        "station_serial": {
+          "name": "Serienummer laadstation",
+          "description": "Selecteer het laadstation wanneer hetzelfde connectornummer op meerdere stations voorkomt."
         }
       }
     },
@@ -122,6 +129,10 @@
         "connector_id": {
           "name": "Connector",
           "description": "Optioneel: connectornummer (1 of 2)."
+        },
+        "station_serial": {
+          "name": "Serienummer laadstation",
+          "description": "Selecteer het laadstation wanneer hetzelfde connectornummer op meerdere stations voorkomt."
         }
       }
     },
@@ -140,6 +151,10 @@
         "connector_id": {
           "name": "Connector",
           "description": "Optioneel: connectornummer (1 of 2)."
+        },
+        "station_serial": {
+          "name": "Serienummer laadstation",
+          "description": "Selecteer het laadstation wanneer hetzelfde connectornummer op meerdere stations voorkomt."
         }
       }
     },
@@ -158,6 +173,10 @@
         "connector_id": {
           "name": "Connector",
           "description": "Optioneel: connectornummer (1 of 2)."
+        },
+        "station_serial": {
+          "name": "Serienummer laadstation",
+          "description": "Selecteer het laadstation wanneer hetzelfde connectornummer op meerdere stations voorkomt."
         }
       }
     },
@@ -180,6 +199,10 @@
         "current": {
           "name": "Stroom (A)",
           "description": "Laadstroom in Ampère (1 decimaal, bijv. 11,4). Wordt begrensd tot het geconfigureerde min–max bereik van de connector."
+        },
+        "station_serial": {
+          "name": "Serienummer laadstation",
+          "description": "Selecteer het laadstation wanneer hetzelfde connectornummer op meerdere stations voorkomt."
         }
       }
     },
@@ -202,6 +225,10 @@
         "mode": {
           "name": "Modus",
           "description": "Laadmodus: Standaard, Slim of Zon."
+        },
+        "station_serial": {
+          "name": "Serienummer laadstation",
+          "description": "Selecteer het laadstation wanneer hetzelfde connectornummer op meerdere stations voorkomt."
         }
       }
     }

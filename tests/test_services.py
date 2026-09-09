@@ -311,9 +311,9 @@ class TestServiceHelpers:
             )
         )
 
-        result = services.get_connector_client(mock_runtime_data, 12345, None)
-
-        assert result is None
+        with pytest.raises(ServiceValidationError) as err:
+            services.get_connector_client(mock_runtime_data, 12345, None)
+        assert err.value.translation_key == "ambiguous_connector"
 
     def test_connector_current_range_uses_live_state_and_clamps_bad_range(self, mock_api_client):
         """Test current ranges come from live connector state when available."""

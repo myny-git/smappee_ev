@@ -29,3 +29,11 @@ class SmappeeServerError(SmappeeTransientError):
 
 class SmappeeProtocolError(SmappeeError):
     """Smappee returned malformed or unsupported data."""
+
+
+class SmappeeRateLimitError(SmappeeTransientError):
+    """Dashboard rate limit, including the minimum delay before another request."""
+
+    def __init__(self, retry_after: float = 30.0) -> None:
+        super().__init__("Dashboard rate limit reached (HTTP 429)")
+        self.retry_after = retry_after

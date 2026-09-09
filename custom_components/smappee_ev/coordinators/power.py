@@ -59,12 +59,24 @@ def _to_int(value: object, default: int = 0) -> int:
 
 
 def _pick(seq: Sequence[int] | list, idxs: Iterable[int]) -> list[int]:
-    """Safe index selection with zero-fill. Returns [] if seq or idxs are empty."""
+    """Return a complete measurement group, or [] when missing/invalid.
+
+    Never invent zeros or shift phase positions for a truncated payload.
+    """
     idxs = list(idxs)
     if not isinstance(seq, list) or not idxs:
         return []
-    n = len(seq)
-    return [int(seq[i]) if 0 <= i < n else 0 for i in idxs]
+    if any(type(i) is not int or i < 0 or i >= len(seq) for i in idxs):
+        return []
+    try:
+        return [int(seq[i]) for i in idxs]
+    except TypeError, ValueError, OverflowError:
+        return []
+
+
+def _sum_kwh(seq: list, idxs: list[int]) -> float | None:
+    values = _pick(seq, idxs)
+    return round(sum(values) / 1000.0, 3) if values else None
 
 
 def _amps_from_ma(ma: list[int]) -> list[float]:
@@ -540,12 +552,16 @@ class PowerMixin(CoordinatorMixin):
         if p_ph:
             changed |= self._set_if_changed(st, f"{power_key_prefix}_power_phases", p_ph)
             changed |= self._set_if_changed(st, f"{power_key_prefix}_power_total", sum(p_ph))
-            i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
-            if i_ph:
-                changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
+        i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
+        if i_ph:
+            changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
 
         if power_key_prefix == "grid":
-            v_ph = _volts_from_dv(_pick(voltage_dv, [0, 1, 2]))
+            v_ph = _volts_from_dv(
+                _pick(voltage_dv, range(min(3, len(voltage_dv))))
+                if isinstance(voltage_dv, list)
+                else []
+            )
             if v_ph:
                 changed |= self._set_if_changed(st, "grid_voltage_phases", v_ph)
 
@@ -555,18 +571,18 @@ class PowerMixin(CoordinatorMixin):
                 changed |= self._set_if_changed(
                     st,
                     "grid_energy_import_kwh",
-                    round(sum(_pick(imp_wh, energy_idx_list)) / 1000.0, 3),
+                    _sum_kwh(imp_wh, energy_idx_list),
                 )
                 changed |= self._set_if_changed(
                     st,
                     "grid_energy_export_kwh",
-                    round(sum(_pick(exp_wh, energy_idx_list)) / 1000.0, 3),
+                    _sum_kwh(exp_wh, energy_idx_list),
                 )
             else:
                 changed |= self._set_if_changed(
                     st,
                     "pv_energy_import_kwh",
-                    round(sum(_pick(imp_wh, energy_idx_list)) / 1000.0, 3),
+                    _sum_kwh(imp_wh, energy_idx_list),
                 )
         return changed
 
@@ -589,9 +605,9 @@ class PowerMixin(CoordinatorMixin):
 
         p_ph = _pick(active, power_idxs)
         i_ma = _pick(currents_ma, current_idxs or power_idxs)
-        if energy_idxs:
-            energy_values = _pick(imp_wh, energy_idxs)
-            if energy_values and len(set(energy_values)) == 1:
+        energy_values = _pick(imp_wh, energy_idxs) if energy_idxs else []
+        if energy_values:
+            if len(set(energy_values)) == 1:
                 val = energy_values[0]
             else:
                 val = sum(energy_values)
@@ -599,8 +615,9 @@ class PowerMixin(CoordinatorMixin):
         else:
             imp_kwh = None
 
-        changed |= self._set_if_changed(conn, "power_phases", p_ph)
-        changed |= self._set_if_changed(conn, "power_total", sum(p_ph) if p_ph else None)
+        if p_ph:
+            changed |= self._set_if_changed(conn, "power_phases", p_ph)
+            changed |= self._set_if_changed(conn, "power_total", sum(p_ph))
         if i_ma:
             changed |= self._set_if_changed(conn, "current_phases", _amps_from_ma(i_ma))
         changed |= self._set_if_changed(conn, "energy_import_kwh", imp_kwh)

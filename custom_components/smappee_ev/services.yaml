@@ -12,6 +12,11 @@ set_current:
       selector:
         number:
           min: 1
+    station_serial:
+      description: "Optional: Charging station serial number. Required when connector numbers are ambiguous across stations."
+      required: false
+      selector:
+        text:
     connector_id:
       description: "Optional: Connector number."
       required: false
@@ -44,6 +49,11 @@ set_charging_mode:
       selector:
         number:
           min: 1
+    station_serial:
+      description: "Optional: Charging station serial number. Required when connector numbers are ambiguous across stations."
+      required: false
+      selector:
+        text:
     connector_id:
       description: "Optional: Connector number."
       required: false
@@ -75,6 +85,11 @@ pause_charging:
       selector:
         number:
           min: 1
+    station_serial:
+      description: "Optional: Charging station serial number. Required when connector numbers are ambiguous across stations."
+      required: false
+      selector:
+        text:
     connector_id:
       description: "Optional: Connector number."
       required: false
@@ -97,6 +112,11 @@ stop_charging:
       selector:
         number:
           min: 1
+    station_serial:
+      description: "Optional: Charging station serial number. Required when connector numbers are ambiguous across stations."
+      required: false
+      selector:
+        text:
     connector_id:
       description: "Optional: Connector number."
       required: false
@@ -119,6 +139,11 @@ resume_charging:
       selector:
         number:
           min: 1
+    station_serial:
+      description: "Optional: Charging station serial number. Required when connector numbers are ambiguous across stations."
+      required: false
+      selector:
+        text:
     connector_id:
       description: "Optional: Connector number."
       required: false
@@ -141,6 +166,11 @@ start_charging:
       selector:
         number:
           min: 1
+    station_serial:
+      description: "Optional: Charging station serial number. Required when connector numbers are ambiguous across stations."
+      required: false
+      selector:
+        text:
     connector_id:
       description: "Optional: Connector number."
       required: false

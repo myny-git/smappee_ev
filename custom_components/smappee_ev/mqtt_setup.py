@@ -455,6 +455,11 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
             "/etc/carcharger/" in topic
             or "/etc/chargingstation/" in topic
             or topic.endswith("/power")
+            or any(
+                isinstance(target, SmappeeStationCoordinator)
+                and topic in (target._power_index_maps_by_topic or {})
+                for target in targets
+            )
         )
         freshness.record_message(
             topic,

@@ -4,6 +4,8 @@ import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 import logging
 import time
 from typing import Any
@@ -27,6 +29,7 @@ from .errors import (
     SmappeeError,
     SmappeeMaintenanceError,
     SmappeeProtocolError,
+    SmappeeRateLimitError,
     SmappeeServerError,
 )
 
@@ -37,9 +40,15 @@ _MAINTENANCE_TEXT = "the smappee dashboard is currently under maintenance."
 
 @dataclass
 class DashboardMaintenanceState:
-    """Remember maintenance across client recreation during setup retries."""
+    """Remember maintenance and retry deadlines across client recreation."""
 
     active: bool = False
+    retry_after_monotonic: float = 0.0
+
+    def check_retry_deadline(self) -> None:
+        remaining = self.retry_after_monotonic - time.monotonic()
+        if remaining > 0:
+            raise SmappeeRateLimitError(remaining)
 
     def check_response(self, text: str) -> None:
         """Recognize only the explicit maintenance notice, without logging its body."""
@@ -55,6 +64,22 @@ class DashboardMaintenanceState:
         if self.active:
             self.active = False
             _LOGGER.info("Smappee Dashboard recovered from maintenance")
+
+
+def _retry_after_seconds(value: object) -> float:
+    """Accept Retry-After delay-seconds or HTTP-date; use 30s when absent/invalid."""
+    if not isinstance(value, str):
+        return 30.0
+    value = value.strip()
+    try:
+        if value.isascii() and value.isdecimal():
+            return float(int(value))
+        deadline = parsedate_to_datetime(value)
+        if deadline.tzinfo is None:
+            return 30.0
+        return max(0.0, (deadline - datetime.now(UTC)).total_seconds())
+    except ValueError, TypeError, OverflowError:
+        return 30.0
 
 
 class SmappeeDashboardClient:
@@ -105,6 +130,7 @@ class SmappeeDashboardClient:
         """Authenticate with dashboard username/password."""
         if not self.username or not self.password:
             return False
+        self._maintenance_state.check_retry_deadline()
 
         async with self._response(
             self._session.post(
@@ -135,6 +161,7 @@ class SmappeeDashboardClient:
         """Refresh the dashboard access token."""
         if not self.refresh_token:
             return False
+        self._maintenance_state.check_retry_deadline()
 
         async with self._response(
             self._session.post(
@@ -162,6 +189,7 @@ class SmappeeDashboardClient:
 
     async def async_ensure_auth(self) -> bool:
         """Return True when dashboard auth is available."""
+        self._maintenance_state.check_retry_deadline()
         if self._token_valid():
             return True
 
@@ -208,6 +236,16 @@ class SmappeeDashboardClient:
         try:
             async with context as response:
                 self._maintenance_state.check_response(await response.text())
+                if response.status == 429:
+                    delay = _retry_after_seconds(
+                        getattr(response, "headers", {}).get("Retry-After")
+                    )
+                    self._maintenance_state.retry_after_monotonic = max(
+                        self._maintenance_state.retry_after_monotonic, time.monotonic() + delay
+                    )
+                    raise SmappeeRateLimitError(delay)
+                if response.status == 408:
+                    raise SmappeeConnectionError("Dashboard request timed out (HTTP 408)")
                 if response.status >= 500:
                     raise SmappeeServerError(f"Dashboard unavailable (HTTP {response.status})")
                 yield response

@@ -89,6 +89,9 @@
     },
     "mqtt_only": {
       "message": "Dashboard is unavailable. Only MQTT monitoring is active; controls are unavailable. Recovery is automatic."
+    },
+    "ambiguous_connector": {
+      "message": "Multiple connectors match. Provide station_serial and connector_id."
     }
   },
   "services": {
@@ -107,6 +110,10 @@
         "connector_id": {
           "name": "Connector ID",
           "description": "Optional: connector number (1 or 2, leave empty if only one)."
+        },
+        "station_serial": {
+          "name": "Charging station serial number",
+          "description": "Select the station when connector numbers occur on multiple stations."
         }
       }
     },
@@ -125,6 +132,10 @@
         "connector_id": {
           "name": "Connector ID",
           "description": "Optional: connector number (1 or 2)."
+        },
+        "station_serial": {
+          "name": "Charging station serial number",
+          "description": "Select the station when connector numbers occur on multiple stations."
         }
       }
     },
@@ -143,6 +154,10 @@
         "connector_id": {
           "name": "Connector ID",
           "description": "Optional: connector number (1 or 2)."
+        },
+        "station_serial": {
+          "name": "Charging station serial number",
+          "description": "Select the station when connector numbers occur on multiple stations."
         }
       }
     },
@@ -161,6 +176,10 @@
         "connector_id": {
           "name": "Connector ID",
           "description": "Optional: connector number (1 or 2)."
+        },
+        "station_serial": {
+          "name": "Charging station serial number",
+          "description": "Select the station when connector numbers occur on multiple stations."
         }
       }
     },
@@ -183,6 +202,10 @@
         "current": {
           "name": "Current (A)",
           "description": "Charging current in Ampere (1 decimal, e.g. 11.4). Rejected when outside the connector's configured min-max range."
+        },
+        "station_serial": {
+          "name": "Charging station serial number",
+          "description": "Select the station when connector numbers occur on multiple stations."
         }
       }
     },
@@ -205,6 +228,10 @@
         "mode": {
           "name": "Mode",
           "description": "Charging mode: Standard, Smart or Solar."
+        },
+        "station_serial": {
+          "name": "Charging station serial number",
+          "description": "Select the station when connector numbers occur on multiple stations."
         }
       }
     }

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
+from .const import DOMAIN
 from .models.runtime_data import SmappeeEvConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,3 +47,41 @@ def async_remove_config_entry_registry_entries(
         )
 
     return entity_count, device_count
+
+
+_SITE_SETTING_ID = re.compile(
+    r"^(?P<sid>[0-9]+):.+:site-(?P=sid):number:"
+    r"(?P<metric>capacity_maximum_power|overload_maximum_load)$"
+)
+
+
+def site_setting_unique_id(sid: int, metric: str) -> str:
+    """Identify site settings independently of gateway and charging station."""
+    return f"{sid}:site-{sid}:number:{metric}"
+
+
+@callback
+def async_migrate_site_setting_ids(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> None:
+    """Update unique IDs in place, retaining entity IDs and user customizations."""
+    registry = er.async_get(hass)
+    entries = sorted(
+        er.async_entries_for_config_entry(registry, entry.entry_id),
+        key=lambda item: (item.disabled_by is not None, item.entity_id),
+    )
+    for entity in entries:
+        if entity.domain != "number" or entity.platform != DOMAIN:
+            continue
+        match = _SITE_SETTING_ID.fullmatch(entity.unique_id)
+        if match is None:
+            continue
+        new_id = site_setting_unique_id(int(match["sid"]), match["metric"])
+        if registry.async_get_entity_id("number", DOMAIN, new_id) is not None:
+            # Existing duplicates may have separate automations referring to them.
+            # Retain them rather than deleting user registry entries implicitly.
+            _LOGGER.warning(
+                "Site setting %s already has a canonical entity; retaining %s",
+                match["metric"],
+                entity.entity_id,
+            )
+            continue
+        registry.async_update_entity(entity.entity_id, new_unique_id=new_id)
