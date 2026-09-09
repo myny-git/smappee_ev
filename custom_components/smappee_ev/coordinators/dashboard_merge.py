@@ -185,9 +185,7 @@ class DashboardMixin(CoordinatorMixin):
         strategy = self._as_str(payload.get("optimizationStrategy"))
         if strategy:
             changed |= self._set_if_changed(conn, "optimization_strategy", strategy)
-            base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
-            changed |= self._set_if_changed(conn, "ui_mode_base", base)
-            changed |= self._set_if_changed(conn, "selected_mode", base)
+            changed |= self._sync_base_mode(conn)
         return changed
 
     def _sync_dashboard_client_metadata(self, data: IntegrationData) -> None:

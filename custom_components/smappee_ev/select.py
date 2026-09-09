@@ -90,12 +90,12 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
 
     @property
     @override
-    def current_option(self) -> str:
+    def current_option(self) -> str | None:
         st = self._state()
 
-        return (
-            getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None) or "standard"
-        ).lower()
+        mode = getattr(st, "selected_mode", None) or getattr(st, "ui_mode_base", None)
+        option = mode.lower() if mode else None
+        return option if option in MODES else None
 
     @override
     async def async_select_option(self, option: str) -> None:

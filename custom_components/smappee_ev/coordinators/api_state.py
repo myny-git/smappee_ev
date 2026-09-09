@@ -15,6 +15,7 @@ from ..api.errors import SmappeeError
 from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 from ..helpers import (
     anonymize_uuid,
+    charging_session_paused,
     dashboard_property_value,
     percentage_to_current,
     resolve_connector_current_range,
@@ -147,7 +148,7 @@ class StationApiMixin(CoordinatorMixin):
             ):
                 return rest_state
             return replace(rest_state, min_current=min_current, max_current=max_current)
-        return replace(
+        merged = replace(
             prev,
             connector_number=rest_state.connector_number,
             session_state=rest_state.session_state
@@ -170,6 +171,14 @@ class StationApiMixin(CoordinatorMixin):
             else prev.support_grid,
             api_available=rest_state.api_available,
         )
+        merged.paused = charging_session_paused(
+            merged.raw_charging_mode,
+            merged.session_state,
+            merged.session_cause,
+            merged.status_current,
+            fallback=merged.paused,
+        )
+        return merged
 
     async def _fetch_station_state(self, client: SmappeeDeviceHandle) -> StationState:
         """Read LED brightness by scanning all smartdevices for the station."""

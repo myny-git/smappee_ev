@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
 from ..api.errors import SmappeeError
-from ..helpers import anonymize_uuid
+from ..helpers import anonymize_uuid, charging_session_paused
 from ..models.state import ConnectorState, RecentSession
 from .base import CoordinatorMixin
 
@@ -92,16 +92,12 @@ class SessionTrackingMixin(CoordinatorMixin):
         )
 
     def _is_session_paused(self, conn: ConnectorState) -> bool:
-        state = self._normalized_session_value(conn.session_state)
-        mode = self._normalized_session_value(conn.raw_charging_mode)
-        cause = self._normalized_session_value(conn.session_cause)
-        status = self._normalized_session_value(conn.status_current)
-        return (
-            state in _SESSION_PAUSED_STATES
-            or mode == "PAUSED"
-            or cause in _SESSION_PAUSED_STATES
-            or status in _SESSION_PAUSED_STATES
-            or bool(conn.paused)
+        return charging_session_paused(
+            conn.raw_charging_mode,
+            conn.session_state,
+            conn.session_cause,
+            conn.status_current,
+            fallback=conn.paused,
         )
 
     def _is_session_finished(self, conn: ConnectorState) -> bool:

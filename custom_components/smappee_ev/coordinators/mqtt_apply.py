@@ -7,7 +7,11 @@ import logging
 from time import time as _now
 from typing import Any, cast
 
-from ..helpers import percentage_to_current, resolve_connector_current_range
+from ..helpers import (
+    charging_session_paused,
+    percentage_to_current,
+    resolve_connector_current_range,
+)
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
 
@@ -65,7 +69,7 @@ class MqttMixin(CoordinatorMixin):
         return default
 
     @staticmethod
-    def _derive_base_mode(mode: str | None, strategy: str | None) -> str:
+    def _derive_base_mode(mode: str | None, strategy: str | None) -> str | None:
         """Map raw API mode/strategy to the UI mode (STANDARD/SMART/SOLAR)."""
         m = (mode or "").upper()
         s = (strategy or "").upper()
@@ -78,20 +82,24 @@ class MqttMixin(CoordinatorMixin):
             return "SMART"
         if m == "SMART":
             return "SMART"
-        return "STANDARD"
+        return None
 
     @staticmethod
     def _is_paused(
-        raw_mode: str | None, charging_state: str | None, evse_cause: str | None
+        raw_mode: str | None,
+        charging_state: str | None,
+        evse_cause: str | None,
+        status_current: str | None = None,
     ) -> bool:
-        """Pause or not."""
-        if (raw_mode or "").upper() == "PAUSED":
-            return True
-        if (charging_state or "").upper() == "SUSPENDED" and (evse_cause or "").upper().startswith(
-            "SUSPENDED_EVSE"
-        ):
-            return True
-        return False
+        """Resolve pause state using the same priority as session polling."""
+        return charging_session_paused(raw_mode, charging_state, evse_cause, status_current)
+
+    def _sync_base_mode(self, conn: ConnectorState) -> bool:
+        """Update derived modes, including clearing an unrecognized mode."""
+        base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
+        changed = conn.ui_mode_base != base or conn.selected_mode != base
+        conn.ui_mode_base = conn.selected_mode = base
+        return changed
 
     @staticmethod
     def _derive_evcc_letter(iec: str | None, _charging_state: str | None = None) -> str | None:
@@ -345,21 +353,24 @@ class MqttMixin(CoordinatorMixin):
     def _merge_cs_modes(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False
         mode = self._get_any(payload, "chargingMode", "chargingmode")
-        if mode is not None:
-            changed |= self._set_if_changed(conn, "raw_charging_mode", str(mode))
-
         strategy = self._get_any(payload, "optimizationStrategy", "optimizationstrategy")
-        if strategy is not None:
-            changed |= self._set_if_changed(conn, "optimization_strategy", str(strategy))
+        mode_present = any(key.lower() == "chargingmode" for key in payload)
+        strategy_present = any(key.lower() == "optimizationstrategy" for key in payload)
+        for present, attr, value in (
+            (mode_present, "raw_charging_mode", mode),
+            (strategy_present, "optimization_strategy", strategy),
+        ):
+            if present:
+                normalized = str(value) if value is not None else None
+                if getattr(conn, attr) != normalized:
+                    setattr(conn, attr, normalized)
+                    changed = True
 
-        if (conn.raw_charging_mode or "").upper() == "PAUSED":
-            changed |= self._set_if_changed(conn, "ui_mode_base", "STANDARD")
-            changed |= self._set_if_changed(conn, "selected_mode", "STANDARD")
-        else:
-            base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
-            changed |= self._set_if_changed(conn, "ui_mode_base", base)
-            changed |= self._set_if_changed(conn, "selected_mode", base)
-        paused = self._is_paused(conn.raw_charging_mode, conn.session_state, conn.session_cause)
+        if mode_present or strategy_present:
+            changed |= self._sync_base_mode(conn)
+        paused = self._is_paused(
+            conn.raw_charging_mode, conn.session_state, conn.session_cause, conn.status_current
+        )
         changed |= self._set_if_changed(conn, "paused", paused)
         return cast(bool, changed)
 

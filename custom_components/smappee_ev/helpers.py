@@ -15,6 +15,24 @@ from .const import CONFIGURATION_URL, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, 
 _LOGGER = logging.getLogger(__name__)
 
 
+def charging_session_paused(
+    raw_mode: str | None,
+    session_state: str | None,
+    session_cause: str | None,
+    status_current: str | None = None,
+    *,
+    fallback: bool = False,
+) -> bool:
+    """Prefer session state, then status/cause, over a possibly stale mode."""
+    for value in (session_state, status_current, session_cause):
+        state = (value or "").strip().upper()
+        if state in {"STARTED", "CHARGING", "CHARGING_STARTED", "RUNNING"}:
+            return False
+        if state in {"SUSPENDED", "PAUSED"} or state.startswith("SUSPENDED_EVSE"):
+            return True
+    return (raw_mode or "").strip().upper() == "PAUSED" or fallback
+
+
 def dashboard_property_value(prop: object) -> Any:
     """Return a scalar from Dashboard ``value`` or typed ``values`` payloads."""
     if not isinstance(prop, dict):

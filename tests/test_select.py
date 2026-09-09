@@ -216,10 +216,13 @@ class TestSmappeeModeSelect:
         mock_connector_state.ui_mode_base = "SOLAR"
         assert entity.current_option == "solar"
 
-        # Test with neither set (falls back to STANDARD)
+        # Missing modes must not invent a Standard selection.
         mock_connector_state.selected_mode = None
         mock_connector_state.ui_mode_base = None
-        assert entity.current_option == "standard"
+        assert entity.current_option is None
+
+        mock_connector_state.selected_mode = "UNRECOGNIZED"
+        assert entity.current_option is None
 
     def test_current_option_no_data(self, mock_coordinator, mock_api_client):
         """Test current_option property with no data."""
@@ -237,7 +240,7 @@ class TestSmappeeModeSelect:
 
         # Test with no data
         mock_coordinator.data = None
-        assert entity.current_option == "standard"
+        assert entity.current_option is None
 
     @pytest.mark.asyncio
     async def test_async_select_option(

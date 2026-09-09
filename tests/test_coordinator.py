@@ -114,6 +114,96 @@ def coordinator(mock_hass, mock_station_client, mock_connector_client, mock_conf
     return coord
 
 
+@pytest.mark.parametrize(
+    ("state", "status", "expected_paused"),
+    [
+        ("STARTED", "CHARGING", False),
+        ("CHARGING", "SUSPENDED_EVSE_USER", False),
+        ("RUNNING", None, False),
+        ("CHARGING_STARTED", None, False),
+        ("Initialize", "CHARGING", False),
+        ("SUSPENDED", "CHARGING", True),
+        ("PAUSED", None, True),
+        ("Initialize", None, True),
+    ],
+)
+def test_live_session_state_overrides_stale_paused_mode(
+    coordinator, state, status, expected_paused
+):
+    conn = coordinator.data.connectors["test_uuid"]
+    conn.raw_charging_mode = "PAUSED"
+    conn.paused = True
+    coordinator.apply_mqtt_properties(
+        CHARGINGSTATE_TOPIC,
+        {"chargingState": state, "status": {"current": status}},
+    )
+    assert conn.raw_charging_mode == "PAUSED"
+    assert conn.paused is expected_paused
+    assert coordinator._is_session_paused(conn) is expected_paused
+    assert coordinator._session_loop_interval() == (900 if expected_paused else 300)
+
+
+def test_resumed_mqtt_session_reschedules_paused_polling(coordinator):
+    conn = coordinator.data.connectors["test_uuid"]
+    conn.raw_charging_mode = "PAUSED"
+    conn.session_state = "SUSPENDED"
+    conn.paused = True
+    coordinator._session_tracking_started = True
+    with patch(
+        "custom_components.smappee_ev.coordinators.session_tracking.async_track_time_interval"
+    ) as schedule:
+        coordinator._ensure_active_session_loop()
+        assert schedule.call_args.args[2] == timedelta(minutes=15)
+        old_unsub = schedule.return_value
+        coordinator.apply_mqtt_properties(
+            CHARGINGSTATE_TOPIC,
+            {"chargingState": "STARTED", "status": {"current": "CHARGING"}},
+        )
+        old_unsub.assert_called_once()
+        assert schedule.call_count == 2
+        assert schedule.call_args.args[2] == timedelta(minutes=5)
+
+
+def test_rest_started_clears_stale_paused_flag(coordinator):
+    previous = ConnectorState(
+        connector_number=1, raw_charging_mode="PAUSED", paused=True, session_state="SUSPENDED"
+    )
+    merged = coordinator._merge_connector_rest_state(
+        previous, ConnectorState(connector_number=1, session_state="STARTED")
+    )
+    assert merged.paused is False
+    assert coordinator._is_session_paused(merged) is False
+
+
+@pytest.mark.parametrize("mode", [None, "", "UNRECOGNIZED"])
+def test_explicit_unknown_mqtt_mode_clears_previous_selection(coordinator, mode):
+    conn = coordinator.data.connectors["test_uuid"]
+    conn.raw_charging_mode = "NORMAL"
+    conn.selected_mode = conn.ui_mode_base = "STANDARD"
+    coordinator.apply_mqtt_properties(
+        CHARGINGSTATE_TOPIC, {"chargingMode": mode, "optimizationStrategy": None}
+    )
+    assert conn.selected_mode is None
+    assert conn.ui_mode_base is None
+    assert coordinator._derive_base_mode(mode, None) is None
+
+
+def test_dashboard_unknown_mode_clears_previous_selection(coordinator):
+    conn = coordinator.data.connectors["test_uuid"]
+    conn.selected_mode = conn.ui_mode_base = "STANDARD"
+    assert coordinator._merge_dashboard_load_management(conn, {"optimizationStrategy": "NONE"})
+    assert conn.selected_mode is None
+    assert conn.ui_mode_base is None
+
+
+def test_partial_mqtt_message_retains_known_mode(coordinator):
+    conn = coordinator.data.connectors["test_uuid"]
+    conn.selected_mode = conn.ui_mode_base = "SOLAR"
+    coordinator.apply_mqtt_properties(CHARGINGSTATE_TOPIC, {"chargingState": "STARTED"})
+    assert conn.selected_mode == "SOLAR"
+    assert conn.ui_mode_base == "SOLAR"
+
+
 class TestSmappeeCoordinator:
     """Test cases for SmappeeCoordinator."""
 
@@ -476,6 +566,7 @@ class TestSmappeeCoordinator:
         async def pause_during_refresh(_reason, *, force=False):
             conn = coordinator.data.connectors["test_uuid"]
             conn.raw_charging_mode = "PAUSED"
+            conn.session_state = "SUSPENDED"
 
         with patch(
             "custom_components.smappee_ev.coordinators.session_tracking.async_track_time_interval",
