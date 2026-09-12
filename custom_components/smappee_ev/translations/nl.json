@@ -297,6 +297,11 @@
         "name": "Offline laden"
       }
     },
+    "lock": {
+      "cable_lock": {
+        "name": "Kabelvergrendeling"
+      }
+    },
     "light": {
       "led": {
         "name": "LED"

@@ -76,6 +76,9 @@ class RecordingDashboard:
     async def async_set_charger_availability(self, serial: str, available: bool) -> bool:
         return await self._record("async_set_charger_availability", serial, available)
 
+    async def async_set_cable_lock(self, serial: str, locked: bool) -> bool:
+        return await self._record("async_set_cable_lock", serial, locked)
+
     async def async_restart_charging_station(self, serial: str) -> bool:
         return await self._record("async_restart_charging_station", serial)
 
@@ -241,6 +244,10 @@ async def test_dashboard_authentication_errors_are_never_wrapped_or_converted_to
     with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
         await client.set_available()
 
+    dashboard.async_set_cable_lock = AsyncMock(side_effect=auth_error)
+    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
+        await client.set_cable_locked()
+
     dashboard.async_restart_charging_station = AsyncMock(side_effect=auth_error)
     with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
         await client.restart_charging_station()
@@ -339,6 +346,14 @@ async def test_station_level_dashboard_action_error_paths():
     dashboard.async_set_charger_availability = AsyncMock(side_effect=TimeoutError("timeout"))
     with pytest.raises(RuntimeError, match="availability failed"):
         await client.set_unavailable()
+
+    dashboard.async_set_cable_lock = None
+    with pytest.raises(RuntimeError, match="cable lock action is not available"):
+        await client.set_cable_locked()
+
+    dashboard.async_set_cable_lock = AsyncMock(side_effect=TimeoutError("timeout"))
+    with pytest.raises(RuntimeError, match="cable lock failed"):
+        await client.set_cable_unlocked()
 
     dashboard.async_restart_charging_station = None
     with pytest.raises(RuntimeError, match="restart action is not available"):
@@ -525,6 +540,32 @@ async def test_availability_requires_dashboard():
 
     with pytest.raises(RuntimeError, match="charger availability"):
         await client.set_available()
+
+
+@pytest.mark.asyncio
+async def test_cable_lock_uses_dashboard_v11_station_serial():
+    dashboard = RecordingDashboard()
+    client = make_client(
+        serial="CONNECTSERIAL",
+        station_serial="STATIONSERIAL",
+        dashboard=dashboard,
+    )
+
+    await client.set_cable_locked()
+    await client.set_cable_unlocked()
+
+    assert dashboard.calls == [
+        ("async_set_cable_lock", ("STATIONSERIAL", True)),
+        ("async_set_cable_lock", ("STATIONSERIAL", False)),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_cable_lock_requires_dashboard():
+    client = make_client()
+
+    with pytest.raises(RuntimeError, match="cable lock"):
+        await client.set_cable_locked()
 
 
 @pytest.mark.asyncio
