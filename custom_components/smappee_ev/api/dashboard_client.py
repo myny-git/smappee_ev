@@ -457,6 +457,16 @@ class SmappeeDashboardClient:
             )
         )
 
+    async def async_set_cable_lock(self, serial: str, locked: bool) -> bool:
+        return bool(
+            await self._request(
+                "PATCH",
+                f"v11/chargingstations/{serial}",
+                json={"cableLocked": bool(locked)},
+                expected=(200, 201, 204),
+            )
+        )
+
     async def async_restart_charging_station(self, serial: str) -> bool:
         return bool(
             await self._request(

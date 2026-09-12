@@ -300,6 +300,11 @@
         "name": "Offline charging"
       }
     },
+    "lock": {
+      "cable_lock": {
+        "name": "Cable lock"
+      }
+    },
     "light": {
       "led": {
         "name": "LED"

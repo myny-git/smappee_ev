@@ -127,6 +127,27 @@ class SmappeeDeviceHandle:
             raise RuntimeError("Dashboard charger availability returned no success")
         return True
 
+    async def _dashboard_cable_lock(self, locked: bool) -> bool | None:
+        self._check_write_allowed()
+        if not self._dashboard_configured():
+            return None
+        dashboard = self.dashboard_client
+        station_serial = self.charging_station_serial or self.serial
+        method = getattr(dashboard, "async_set_cable_lock", None)
+        if method is None:
+            raise RuntimeError("Dashboard cable lock action is not available")
+        try:
+            success = bool(await method(station_serial, locked))
+        except asyncio.CancelledError:
+            raise
+        except ConfigEntryAuthFailed:
+            raise
+        except (aiohttp.ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
+            raise RuntimeError(f"Dashboard cable lock failed for station {station_serial}") from err
+        if not success:
+            raise RuntimeError("Dashboard cable lock returned no success")
+        return True
+
     async def _dashboard_charging_station_restart(self) -> bool | None:
         self._check_write_allowed()
         if not self._dashboard_configured():
@@ -310,6 +331,18 @@ class SmappeeDeviceHandle:
             _LOGGER.debug("Set charger unavailable successfully via Dashboard v11")
             return
         raise RuntimeError("Dashboard API is not configured for charger availability")
+
+    async def set_cable_locked(self) -> None:
+        if await self._dashboard_cable_lock(True):
+            _LOGGER.debug("Locked charging cable successfully via Dashboard v11")
+            return
+        raise RuntimeError("Dashboard API is not configured for cable lock")
+
+    async def set_cable_unlocked(self) -> None:
+        if await self._dashboard_cable_lock(False):
+            _LOGGER.debug("Unlocked charging cable successfully via Dashboard v11")
+            return
+        raise RuntimeError("Dashboard API is not configured for cable lock")
 
     async def restart_charging_station(self) -> None:
         if await self._dashboard_charging_station_restart():

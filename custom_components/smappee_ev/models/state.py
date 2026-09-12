@@ -92,6 +92,7 @@ class StationState:
     maximum_capacity_a: int | None = None
     offline_charging_enabled: bool | None = None
     offline_failsafe_current_a: int | None = None
+    cable_locked: bool | None = None
     capacity_protection_active: bool | None = None
     capacity_maximum_power_kw: float | None = None
     overload_protection_active: bool | None = None

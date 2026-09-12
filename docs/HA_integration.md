@@ -165,6 +165,7 @@ Defines the maximum current in Ampere for the connector. This number is used to 
 | `switch.smappee_ev_YOURSERIAL_charging_1` | EVCC-friendly switch: on sets `STANDARD`, off pauses charging. |
 | `button.smappee_ev_YOURSERIAL_restart_charging_station` | Restart the charging station. |
 | `switch.smappee_ev_YOURSERIAL_offline_charging` | Enable offline charging mode, in case the Smappee is offline. |
+| `lock.smappee_ev_YOURSERIAL_cable_lock` | Permanently lock/unlock the charging cable in the connector socket. Only available on charging stations with a socket connector (not fixed-cable models); shows as unavailable otherwise. |
 
 ## Sensor Entities
 

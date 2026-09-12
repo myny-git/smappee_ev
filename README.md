@@ -143,6 +143,11 @@ configuration. Diagnostics do not include these credentials.
 
 - Adjust LED ring brightness (%) via Dashboard v10 config writes when a Dashboard token is available.
 
+### ✅ Cable Lock Control
+
+- Lock/unlock the charging cable in the connector socket via Dashboard v11 (`cableLocked`), matching the dashboard's charger configuration Lock/Unlock button.
+- Only available on charging stations with a socket connector (not fixed-cable models). The `lock` entity reports as unavailable when the Dashboard API never reports a cable lock state for your station.
+
 ### ✅ Charger State Feedback
 
 - Real-time **Session State**:
