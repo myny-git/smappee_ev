@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
+from aiohttp import ClientConnectionError
 from homeassistant.components.lock import LockEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -11,7 +12,12 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 import pytest
 
 from custom_components.smappee_ev import lock
-from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
+from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.api.errors import (
+    SmappeeAuthenticationError,
+    SmappeeConnectionError,
+    SmappeeServerError,
+)
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
@@ -349,7 +355,7 @@ async def test_pending_lock_preserves_current_snapshot(
             coordinator.async_set_updated_data.assert_called_once_with(current)
         else:
             coordinator.async_set_updated_data.assert_not_called()
-        if outcome in {"success", "cancel"}:
+        if outcome in {"success", "error", "cancel"}:
             coordinator.async_schedule_dashboard_refresh.assert_called_once()
         else:
             coordinator.async_schedule_dashboard_refresh.assert_not_called()
@@ -357,3 +363,75 @@ async def test_pending_lock_preserves_current_snapshot(
         if not task.done():
             task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("target", [True, False])
+async def test_lock_rejects_unknown_capability(mock_integration_data, target):
+    """Direct service calls must not write to a station without cableLocked."""
+    coordinator = MagicMock(spec=SmappeeCoordinator)
+    coordinator.data = mock_integration_data
+    mock_integration_data.station.cable_locked = None
+    api = MagicMock()
+    api.set_cable_locked = AsyncMock()
+    api.set_cable_unlocked = AsyncMock()
+    entity = lock.SmappeeCableLock(
+        coordinator=coordinator, api_client=api, sid=12345, station_uuid="station_uuid"
+    )
+
+    with pytest.raises(HomeAssistantError) as error:
+        await entity._set_locked(target)
+
+    assert error.value.translation_key == "station_unavailable"
+    api.set_cable_locked.assert_not_awaited()
+    api.set_cable_unlocked.assert_not_awaited()
+    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_schedule_dashboard_refresh.assert_not_called()
+
+
+@pytest.mark.parametrize("target", [True, False])
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        TimeoutError,
+        ClientConnectionError,
+        SmappeeConnectionError,
+        SmappeeServerError,
+        SmappeeAuthenticationError,
+    ],
+)
+async def test_failed_dashboard_write_schedules_reconciliation(
+    mock_integration_data, target, error_type
+):
+    """Exercise actual device-handle error wrapping after a server-side write."""
+    coordinator = MagicMock(spec=SmappeeCoordinator)
+    coordinator.data = mock_integration_data
+    mock_integration_data.station.cable_locked = not target
+    api = SmappeeDeviceHandle("serial", "uuid", "id", 12345, is_station=True)
+    dashboard = MagicMock()
+    server_state = {"locked": not target}
+
+    async def write(serial, locked):
+        if error_type is not SmappeeAuthenticationError:
+            server_state["locked"] = locked
+        raise error_type("response lost or rejected")
+
+    dashboard.async_set_cable_lock = AsyncMock(side_effect=write)
+    api.dashboard_client = dashboard
+    entity = lock.SmappeeCableLock(
+        coordinator=coordinator, api_client=api, sid=12345, station_uuid="station_uuid"
+    )
+
+    expected_error = (
+        ConfigEntryAuthFailed if error_type is SmappeeAuthenticationError else HomeAssistantError
+    )
+    with pytest.raises(expected_error):
+        await entity._set_locked(target)
+
+    dashboard.async_set_cable_lock.assert_awaited_once_with("serial", target)
+    assert entity.is_locked is not target
+    coordinator.async_set_updated_data.assert_not_called()
+    if error_type is SmappeeAuthenticationError:
+        coordinator.async_schedule_dashboard_refresh.assert_not_called()
+    else:
+        assert server_state["locked"] is target
+        coordinator.async_schedule_dashboard_refresh.assert_called_once()

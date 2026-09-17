@@ -109,7 +109,7 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
     async def _set_locked(self, value: bool) -> None:
         data: IntegrationData | None = self.coordinator.data
         st = self._station_state()
-        if data is None or st is None:
+        if data is None or st is None or st.cable_locked is None:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="station_unavailable",
@@ -137,6 +137,10 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
             RuntimeError,
             ValueError,
         ) as err:
+            # A failed response does not prove the server rejected the write.
+            # This also covers transport failures wrapped in RuntimeError by
+            # the device handle. Keep local state until Dashboard confirms it.
+            self.coordinator.async_schedule_dashboard_refresh()
             _LOGGER.warning("Set cable lock failed (sid=%s): %s", self._sid, err)
             if isinstance(err, HomeAssistantError):
                 raise
