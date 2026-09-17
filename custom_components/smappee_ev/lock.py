@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, override
 
@@ -114,21 +115,18 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
                 translation_key="station_unavailable",
             )
 
-        prev = st.cable_locked
-
-        if prev != value:
-            st.cable_locked = value
-            self.coordinator.async_set_updated_data(data)
-
         try:
             if value:
                 await self.api_client.set_cable_locked()
             else:
                 await self.api_client.set_cable_unlocked()
+        except asyncio.CancelledError:
+            # The server may have accepted the write before cancellation.
+            # Reconcile without claiming success or swallowing cancellation;
+            # the coordinator suppresses refreshes during shutdown/MQTT-only.
             self.coordinator.async_schedule_dashboard_refresh()
+            raise
         except ConfigEntryAuthFailed:
-            st.cable_locked = prev
-            self.coordinator.async_set_updated_data(data)
             raise
         except (
             SmappeeError,
@@ -140,8 +138,6 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
             ValueError,
         ) as err:
             _LOGGER.warning("Set cable lock failed (sid=%s): %s", self._sid, err)
-            st.cable_locked = prev
-            self.coordinator.async_set_updated_data(data)
             if isinstance(err, HomeAssistantError):
                 raise
             raise HomeAssistantError(
@@ -152,3 +148,11 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
                     "error": str(err),
                 },
             ) from err
+
+        # Polling may replace the snapshot while the request is in flight.
+        # Publish only the successful lock change on the current snapshot.
+        current: IntegrationData | None = self.coordinator.data
+        if current is not None and current.station.cable_locked != value:
+            current.station.cable_locked = value
+            self.coordinator.async_set_updated_data(current)
+        self.coordinator.async_schedule_dashboard_refresh()

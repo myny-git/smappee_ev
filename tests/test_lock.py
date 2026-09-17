@@ -1,5 +1,7 @@
 """Tests for the lock platform."""
 
+import asyncio
+from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.components.lock import LockEntity
@@ -200,7 +202,7 @@ class TestSmappeeCableLock:
         coordinator.async_set_updated_data.assert_called_once_with(mock_integration_data)
 
     @pytest.mark.asyncio
-    async def test_set_locked_error_reverts_state(self, mock_integration_data):
+    async def test_set_locked_error_preserves_state(self, mock_integration_data):
         coordinator = MagicMock(spec=SmappeeCoordinator)
         coordinator.data = mock_integration_data
         api_client = MagicMock()
@@ -219,10 +221,12 @@ class TestSmappeeCableLock:
             await cable_lock._set_locked(True)
 
         assert mock_integration_data.station.cable_locked is False
-        assert coordinator.async_set_updated_data.call_count == 2
+        coordinator.async_set_updated_data.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_set_locked_auth_error_reverts_and_propagates(self, mock_integration_data):
+    async def test_set_locked_auth_error_preserves_state_and_propagates(
+        self, mock_integration_data
+    ):
         coordinator = MagicMock(spec=SmappeeCoordinator)
         coordinator.data = mock_integration_data
         api_client = MagicMock()
@@ -241,7 +245,7 @@ class TestSmappeeCableLock:
             await cable_lock.async_lock()
 
         assert mock_integration_data.station.cable_locked is False
-        assert coordinator.async_set_updated_data.call_count == 2
+        coordinator.async_set_updated_data.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_set_locked_raises_when_station_state_missing(self):
@@ -260,3 +264,96 @@ class TestSmappeeCableLock:
             await cable_lock.async_lock()
 
         assert err.value.translation_key == "station_unavailable"
+
+
+@pytest.mark.parametrize("target", [True, False])
+@pytest.mark.parametrize("snapshot", ["same", "refreshed", "confirmed", "removed"])
+@pytest.mark.parametrize("outcome", ["success", "error", "auth", "cancel"])
+async def test_pending_lock_preserves_current_snapshot(
+    mock_integration_data, target, snapshot, outcome
+):
+    """A write must not claim success early or roll back concurrent updates."""
+    initial = not target
+    mock_integration_data.station.cable_locked = initial
+    mock_integration_data.connectors["connector_uuid1"].power_total = 100
+    coordinator = MagicMock(spec=SmappeeCoordinator)
+    coordinator.data = mock_integration_data
+    coordinator.async_set_updated_data.side_effect = lambda data: setattr(coordinator, "data", data)
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def write():
+        started.set()
+        await finish.wait()
+        if outcome == "error":
+            raise RuntimeError("write failed")
+        if outcome == "auth":
+            raise SmappeeAuthenticationError("reauth required")
+
+    api = MagicMock()
+    api.set_cable_locked = AsyncMock(side_effect=write)
+    api.set_cable_unlocked = AsyncMock(side_effect=write)
+    entity = lock.SmappeeCableLock(
+        coordinator=coordinator, api_client=api, sid=12345, station_uuid="station_uuid"
+    )
+    task = asyncio.create_task(entity.async_lock() if target else entity.async_unlock())
+    try:
+        await asyncio.wait_for(started.wait(), timeout=1)
+        assert entity.is_locked is initial
+        coordinator.async_set_updated_data.assert_not_called()
+
+        current = mock_integration_data
+        expected_state = initial
+        if snapshot in {"refreshed", "confirmed"}:
+            expected_state = target if snapshot == "confirmed" else initial
+            current = replace(
+                current,
+                station=replace(current.station, cable_locked=expected_state, led_brightness=75),
+                connectors={
+                    "connector_uuid1": replace(
+                        current.connectors["connector_uuid1"], power_total=3200
+                    )
+                },
+                recent_sessions=[{"energy": 12.5}],
+            )
+        elif snapshot == "same":
+            current.connectors["connector_uuid1"].power_total = 3200
+        else:
+            current = None
+        coordinator.data = current
+
+        if outcome == "cancel":
+            task.cancel()
+        else:
+            finish.set()
+        if outcome == "success":
+            await task
+            expected_state = target
+        else:
+            error = {
+                "error": HomeAssistantError,
+                "auth": ConfigEntryAuthFailed,
+                "cancel": asyncio.CancelledError,
+            }[outcome]
+            with pytest.raises(error):
+                await task
+
+        assert coordinator.data is current
+        if current is not None:
+            assert current.station.cable_locked is expected_state
+            assert current.connectors["connector_uuid1"].power_total == 3200
+            if snapshot in {"refreshed", "confirmed"}:
+                assert current.station.led_brightness == 75
+                assert current.recent_sessions == [{"energy": 12.5}]
+        if outcome == "success" and snapshot in {"same", "refreshed"}:
+            coordinator.async_set_updated_data.assert_called_once_with(current)
+        else:
+            coordinator.async_set_updated_data.assert_not_called()
+        if outcome in {"success", "cancel"}:
+            coordinator.async_schedule_dashboard_refresh.assert_called_once()
+        else:
+            coordinator.async_schedule_dashboard_refresh.assert_not_called()
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
