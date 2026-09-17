@@ -1,9 +1,8 @@
 """Pytest configuration and lightweight stubs.
 
-We stub both ``aiomqtt`` and (if necessary) ``pytest_socket``. The latter is
-installed transitively via pytest-homeassistant-custom-component and replaces
-``socket.socket`` causing Windows event loop creation to fail (needs
-``socketpair``). A benign stub prevents the real plugin from loading.
+We stub ``aiomqtt`` and keep pytest-socket's setup/teardown active. Windows
+needs a socket-creation exception for its asyncio socketpair; Linux retains
+the real guard, including its per-test cleanup to avoid stacking socket classes.
 """
 
 from __future__ import annotations
