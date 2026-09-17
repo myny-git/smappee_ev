@@ -294,6 +294,11 @@
         "name": "Charge hors ligne"
       }
     },
+    "lock": {
+      "cable_lock": {
+        "name": "Verrouillage du câble"
+      }
+    },
     "light": {
       "led": {
         "name": "LED"

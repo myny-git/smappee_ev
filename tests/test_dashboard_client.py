@@ -849,6 +849,28 @@ async def test_dashboard_charger_availability_uses_v11_patch():
 
 
 @pytest.mark.asyncio
+async def test_dashboard_set_cable_lock_uses_v11_patch():
+    client = SmappeeDashboardClient(
+        username=None,
+        password=None,
+        refresh_token=None,
+        session=MagicMock(),
+        token_update_callback=MagicMock(),
+    )
+    client._request = AsyncMock(return_value=True)
+
+    ok = await client.async_set_cable_lock("STATIONSERIAL", True)
+
+    assert ok is True
+    client._request.assert_awaited_once_with(
+        "PATCH",
+        "v11/chargingstations/STATIONSERIAL",
+        json={"cableLocked": True},
+        expected=(200, 201, 204),
+    )
+
+
+@pytest.mark.asyncio
 async def test_dashboard_restart_charging_station_uses_v11_post():
     client = SmappeeDashboardClient(
         username=None,

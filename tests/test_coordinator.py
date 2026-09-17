@@ -285,6 +285,7 @@ class TestSmappeeCoordinator:
                 "available": True,
                 "features": ["SOLAR_SURPLUS_CHARGING", "MAX_CURRENT"],
                 "maximumCapacity": 25,
+                "cableLocked": True,
                 "offlineCharging": {"enabled": True, "failSafe": 6},
                 "modules": [
                     {
@@ -367,6 +368,7 @@ class TestSmappeeCoordinator:
         assert changed
         assert data.station.station_features == ["SOLAR_SURPLUS_CHARGING", "MAX_CURRENT"]
         assert data.station.maximum_capacity_a == 25
+        assert data.station.cable_locked is True
         assert data.station.offline_charging_enabled is True
         assert data.station.capacity_protection_active is True
         assert data.station.capacity_maximum_power_kw == 5.0
