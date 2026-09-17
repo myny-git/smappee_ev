@@ -86,8 +86,12 @@ the site device. No extra integration option is needed. Battery power is negativ
 while charging and positive while discharging. The integration reads the configured
 MQTT topics, array positions and multipliers; it does not assume a fixed channel.
 Multiple battery measurements and phases are summed at site level.
+Battery power becomes unavailable when any contributing battery topic has not
+provided a complete, valid power measurement for five minutes (checked every
+30 seconds). Grid/PV traffic and energy-only updates do not renew this timeout.
 
-When cumulative meter readings are advertised, **Battery charged energy** and
+When cumulative meter readings have explicit, valid direction multipliers,
+**Battery charged energy** and
 **Battery discharged energy** are exposed in kWh for the Home Assistant Energy
 dashboard. Negative-direction counters represent charging and positive-direction
 counters represent discharging. In the supplied #301 configuration, these are

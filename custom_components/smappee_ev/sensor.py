@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol, override
 
 from homeassistant.components.sensor import (
@@ -20,8 +20,9 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .api.device_handle import SmappeeDeviceHandle
@@ -413,6 +414,24 @@ class SiteBatteryPower(SmappeeSitePowerEntity, SensorEntity):
 
     def __init__(self, coordinator: SmappeeSiteCoordinator, sid: int) -> None:
         super().__init__(coordinator, sid, unique_suffix="sensor:battery_power")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return super().available and self.coordinator.storage_measurements.power_available
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # MQTT-only startup disables coordinator polling. Re-evaluate expiry
+        # even if every MQTT topic goes silent; remove the timer with the entity.
+        self.async_on_remove(
+            async_track_time_interval(self.hass, self._check_power_freshness, timedelta(seconds=30))
+        )
+
+    @callback
+    def _check_power_freshness(self, now: datetime) -> None:
+        self.async_write_ha_state()
 
     @property
     @override

@@ -7,10 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 import pytest
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.smappee_ev import sensor
 from custom_components.smappee_ev.api.discovery import parse_mqtt_channel_specs_from_highlevel
 from custom_components.smappee_ev.coordinator import SmappeeSiteCoordinator
+from custom_components.smappee_ev.coordinators import storage as storage_module
 from custom_components.smappee_ev.coordinators.storage import StorageMeasurements
 from custom_components.smappee_ev.models.state import SiteData, SiteState
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_routes
@@ -305,6 +307,8 @@ async def test_battery_power_freshness_and_energy_restore(hass, monkeypatch):
     coord.mqtt_transport_connected = True
     coord.last_real_power_rx = datetime.now(UTC)
     power = sensor.SiteBatteryPower(coord, 1)
+    assert not power.available
+    coord.apply_mqtt_properties(TOPIC, {"channelData": [0] * 9 + [-318]})
     assert power.available
     coord.last_real_power_rx -= timedelta(hours=1)
     assert not power.available
@@ -319,3 +323,145 @@ async def test_battery_power_freshness_and_energy_restore(hass, monkeypatch):
     assert energy.native_value == 14.582
     coord.data.site.storage_charged_energy_kwh = 16.317
     assert energy.native_value == 16.317
+
+
+@pytest.mark.parametrize(
+    "missing_field", ["importActiveEnergyData", "exportActiveEnergyData", "both"]
+)
+async def test_directional_energy_requires_explicit_multiplier(hass, missing_field):
+    cfg = storage_config()
+    channels = cfg["measurements"][0]["updateChannels"]
+    del channels["activePower"]["aspectPaths"][0]["multiplier"]
+    for aspect in channels["meterReadings"]["aspectPaths"]:
+        if missing_field == "both" or missing_field in aspect["path"]:
+            del aspect["multiplier"]
+    coord = coordinator(hass, cfg)
+    keys = {entity.translation_key for entity in await entities(hass, coord)}
+    assert "battery_power" in keys
+    assert ("battery_charged_energy" in keys) == (missing_field == "importActiveEnergyData")
+    assert ("battery_discharged_energy" in keys) == (missing_field == "exportActiveEnergyData")
+    coord.apply_mqtt_properties(TOPIC, {"channelData": [0] * 9 + [-318]})
+    assert coord.data.site.storage_power_total == -318
+    # The same conservative discovery must be used after cached startup.
+    cached = StorageMeasurements.from_specs(parse_mqtt_channel_specs_from_highlevel(1, cfg))
+    assert cached.metrics == coord.storage_measurements.metrics
+    assert not cached.power_available
+
+
+@pytest.mark.parametrize("multiplier", [None, "invalid", True, 0, float("nan"), float("inf")])
+def test_invalid_energy_multipliers_do_not_create_directional_sensors(multiplier):
+    cfg = storage_config()
+    for aspect in cfg["measurements"][0]["updateChannels"]["meterReadings"]["aspectPaths"]:
+        aspect["multiplier"] = multiplier
+    assert StorageMeasurements({1: cfg}).metrics == {"power"}
+
+
+async def test_all_battery_topics_must_be_fresh_despite_grid_traffic(hass, monkeypatch):
+    cfg = storage_config()
+    cfg["measurements"].extend(
+        [
+            {
+                "type": "STORAGE",
+                "updateChannels": {
+                    "activePower": channel(("$.activePowerData[0]", 1), topic="second")
+                },
+            },
+            {
+                "type": "GRID",
+                "updateChannels": {
+                    "activePower": channel(("$.activePowerData[0]", 1), topic="grid")
+                },
+            },
+        ]
+    )
+    clock = MagicMock()
+    clock.now.return_value = datetime.now(UTC)
+    monkeypatch.setattr(storage_module, "datetime", clock)
+    coord = coordinator(hass, cfg)
+    await coord._ensure_power_index_map()
+    coord.last_real_power_rx = datetime.now(UTC)
+    power = sensor.SiteBatteryPower(coord, 1)
+    coord.apply_mqtt_properties(TOPIC, {"channelData": [0] * 9 + [2000]})
+    assert not power.available
+    coord.apply_mqtt_properties("second", {"activePowerData": [500]})
+    assert power.available
+    assert power.native_value == 2500
+    clock.now.return_value += timedelta(minutes=6)
+    coord.apply_mqtt_properties("grid", {"activePowerData": [100]})
+    coord.last_real_power_rx = datetime.now(UTC)
+    assert sensor.StationGridPower(coord, None, 1, "site-1").native_value == 100
+    coord.apply_mqtt_properties("second", {"activePowerData": [500]})
+    assert not power.available
+    listener = MagicMock()
+    remove = coord.async_add_listener(listener)
+    coord.apply_mqtt_properties(TOPIC, {"channelData": [0] * 9 + [2000]})
+    assert power.available
+    assert power.native_value == 2500
+    listener.assert_called_once()  # Same value must still publish recovery.
+    remove()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"channelData": []},
+        {"channelData": [0] * 9},
+        {"channelData": [0] * 9 + [None]},
+        {"channelData": [0] * 9 + [float("nan")]},
+        {"importActiveEnergyData": [0, 0, 0, 1000], "exportActiveEnergyData": [0, 0, 0, 2000]},
+    ],
+)
+def test_incomplete_power_or_energy_only_updates_do_not_renew_freshness(monkeypatch, payload):
+    clock = MagicMock()
+    clock.now.return_value = datetime.now(UTC)
+    monkeypatch.setattr(storage_module, "datetime", clock)
+    storage = StorageMeasurements({1: storage_config()})
+    site = SiteState()
+    storage.apply(site, TOPIC, {"channelData": [0] * 9 + [-318]})
+    last = storage.last_power_rx_by_topic[TOPIC]
+    clock.now.return_value += timedelta(minutes=6)
+    storage.apply(site, TOPIC, payload)
+    assert storage.last_power_rx_by_topic[TOPIC] == last
+    assert not storage.power_available
+    assert site.storage_power_total == -318
+
+
+def test_unchanged_valid_power_renews_freshness(monkeypatch):
+    clock = MagicMock()
+    clock.now.return_value = datetime.now(UTC)
+    monkeypatch.setattr(storage_module, "datetime", clock)
+    storage = StorageMeasurements({1: storage_config()})
+    site = SiteState()
+    payload = {"channelData": [0] * 10}
+    storage.apply(site, TOPIC, payload)
+    clock.now.return_value += timedelta(minutes=4)
+    assert not storage.apply(site, TOPIC, payload)  # No value/availability transition.
+    assert storage.last_power_rx_by_topic[TOPIC] == clock.now.return_value
+    clock.now.return_value += timedelta(minutes=4)
+    assert storage.power_available
+
+
+async def test_cached_battery_expires_without_messages_and_timer_is_removed(hass, monkeypatch):
+    coord = coordinator(hass, storage_config())
+    coord.monitoring_only = True
+    coord.mqtt_transport_connected = True
+    coord.last_real_power_rx = datetime.now(UTC)
+    coord.update_interval = None
+    coord.apply_mqtt_properties(TOPIC, {"channelData": [0] * 9 + [-318]})
+    power = sensor.SiteBatteryPower(coord, 1)
+    power.hass = hass
+    power.entity_id = "sensor.test_battery_power"
+    monkeypatch.setattr(sensor.SmappeeSitePowerEntity, "async_added_to_hass", AsyncMock())
+    writes = []
+    monkeypatch.setattr(power, "async_write_ha_state", lambda: writes.append(power.available))
+    await power.async_added_to_hass()
+    assert power.available
+    coord.storage_measurements.last_power_rx_by_topic[TOPIC] -= timedelta(minutes=6)
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=31))
+    await hass.async_block_till_done()
+    assert writes == [False]
+    await power.async_remove(force_remove=True)
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=65))
+    await hass.async_block_till_done()
+    assert writes == [False]

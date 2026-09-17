@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from math import isfinite
 
 from ..api.discovery import MqttChannelSpec, parse_mqtt_channel_specs_from_highlevel
+from ..const import MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 from ..models.state import HighLevelConfigMap, MqttPayload, SiteState
 from .power import _MQTT_PATH_RE, _mqtt_channel_topic
 
@@ -31,9 +33,9 @@ def _storage_paths(channel: object, fields: set[str]) -> list[StoragePath]:
         match = _MQTT_PATH_RE.fullmatch(str(aspect.get("path") or ""))
         if not match or match[1] not in fields:
             continue
-        # Import is the positive counter; export is the negative counter in the
-        # configured signed measurement. Explicit multipliers take precedence.
-        default = -1 if match[1] == "exportActiveEnergyData" else 1
+        # Power may omit its identity multiplier. Energy direction must be
+        # explicit; never infer charging/discharging from the array name alone.
+        default = 1 if match[1] in {"activePowerData", "channelData"} else None
         multiplier = aspect.get("multiplier", default)
         if (
             isinstance(multiplier, bool)
@@ -52,6 +54,7 @@ class StorageMeasurements:
     def __init__(self, configs: HighLevelConfigMap) -> None:
         self.paths: dict[str, list[StoragePath]] = {}
         self._values: dict[tuple[str, str], float] = {}
+        self.last_power_rx_by_topic: dict[str, datetime] = {}
         for sid, config in configs.items():
             for spec in parse_mqtt_channel_specs_from_highlevel(sid, config):
                 self._add_spec(spec)
@@ -68,6 +71,17 @@ class StorageMeasurements:
     def metrics(self) -> frozenset[str]:
         """Metrics that can be exposed, even before the first MQTT message."""
         return frozenset(self.paths)
+
+    @property
+    def power_available(self) -> bool:
+        """Require a recent complete power measurement from every battery topic."""
+        topics = {path.topic for path in self.paths.get("power", [])}
+        now = datetime.now(UTC)
+        return bool(topics) and all(
+            topic in self.last_power_rx_by_topic
+            and now - self.last_power_rx_by_topic[topic] <= MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+            for topic in topics
+        )
 
     def _add_spec(self, spec: MqttChannelSpec) -> None:
         if spec.role != "storage":
@@ -92,6 +106,7 @@ class StorageMeasurements:
     def apply(self, site: SiteState, topic: str, payload: MqttPayload) -> bool:
         """Apply complete groups only; missing/invalid values never become zero."""
         changed = False
+        was_available = self.power_available
         for metric, paths in self.paths.items():
             group = [path for path in paths if path.topic == topic]
             if not group:
@@ -99,6 +114,8 @@ class StorageMeasurements:
             total = self._group_total(group, payload, energy=metric != "power")
             if total is None:
                 continue
+            if metric == "power":
+                self.last_power_rx_by_topic[topic] = datetime.now(UTC)
             self._values[metric, topic] = total
             topics = {path.topic for path in paths}
             if any((metric, source) not in self._values for source in topics):
@@ -110,7 +127,8 @@ class StorageMeasurements:
             if getattr(site, attr) != value:
                 setattr(site, attr, value)
                 changed = True
-        return changed
+        # Recovery must notify entities even if the measured value is unchanged.
+        return changed or was_available != self.power_available
 
     @staticmethod
     def _group_total(
