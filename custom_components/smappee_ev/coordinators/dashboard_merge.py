@@ -288,9 +288,10 @@ class DashboardMixin(CoordinatorMixin):
         changed |= self._set_if_changed(
             station, "maximum_capacity_a", self._as_int(details.get("maximumCapacity"))
         )
-        changed |= self._set_if_changed(
-            station, "cable_locked", self._as_bool(details.get("cableLocked"))
-        )
+        if "cableLocked" in details:
+            changed |= self._set_if_changed(
+                station, "cable_locked", self._as_bool(details["cableLocked"])
+            )
         changed |= self._set_if_changed(station, "dashboard_charging_station_details", details)
 
         offline = details.get("offlineCharging")
