@@ -41,6 +41,7 @@ from custom_components.smappee_ev.coordinator import (
     SmappeeSiteCoordinator,
     SmappeeStationCoordinator,
 )
+from custom_components.smappee_ev.coordinators.storage import StorageMeasurements
 from custom_components.smappee_ev.models.runtime_data import (
     RuntimeData,
     RuntimeMode,
@@ -69,8 +70,43 @@ from custom_components.smappee_ev.mqtt_recovery import (
 )
 from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
 from tests.test_dashboard_client import _Response, _Session
+from tests.test_storage import storage_config
 
 TOPIC = "servicelocation/site-uuid/power"
+
+
+async def test_storage_survives_cached_bootstrap_without_changing_existing_entities(
+    hass, entry, online
+):
+    site = online.sites[1]
+    storage = storage_config()
+    site.highlevel_configs[1]["measurements"].extend(storage["measurements"])
+    site.site_coordinator.storage_measurements = StorageMeasurements(site.highlevel_configs)
+    before = MagicMock()
+    entry.runtime_data = online
+    await sensor.async_setup_entry(hass, entry, before)
+    snapshot = snapshot_from_runtime(online, entry)
+    cached = build_cached_runtime(hass, entry, dashboard(), snapshot)
+    entry.runtime_data = cached
+    after = MagicMock()
+    await sensor.async_setup_entry(hass, entry, after)
+    assert {entity.unique_id for entity in before.call_args.args[0]} == {
+        entity.unique_id for entity in after.call_args.args[0]
+    }
+    coord = cached.sites[1].site_coordinator
+    assert coord.data.site.storage_power_total is None
+    assert coord._handle_power("servicelocation/test/power", {"channelData": [0] * 9 + [-318]})
+    assert coord.data.site.storage_power_total == -318
+    assert (
+        len(
+            [
+                entity
+                for entity in after.call_args.args[0]
+                if isinstance(entity, sensor.SiteBatteryEnergy)
+            ]
+        )
+        == 2
+    )
 
 
 @pytest.fixture

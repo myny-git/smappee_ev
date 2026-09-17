@@ -306,6 +306,15 @@
       }
     },
     "sensor": {
+      "battery_power": {
+        "name": "Battery power"
+      },
+      "battery_charged_energy": {
+        "name": "Battery charged energy"
+      },
+      "battery_discharged_energy": {
+        "name": "Battery discharged energy"
+      },
       "grid_power": {
         "name": "Grid power"
       },

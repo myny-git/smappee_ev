@@ -26,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 
 MqttRouteTarget = SmappeeSiteCoordinator | SmappeeStationCoordinator
 
-_SITE_MEASUREMENT_ROLES = frozenset({"grid", "production"})
+_SITE_MEASUREMENT_ROLES = frozenset({"grid", "production", "storage"})
 _SITE_AGGREGATE_ROLES = frozenset({"consumption", "production_total", "always_on"})
 
 

@@ -300,6 +300,15 @@
       }
     },
     "sensor": {
+      "battery_power": {
+        "name": "Puissance de la batterie"
+      },
+      "battery_charged_energy": {
+        "name": "Énergie chargée de la batterie"
+      },
+      "battery_discharged_energy": {
+        "name": "Énergie déchargée de la batterie"
+      },
       "grid_power": {
         "name": "Puissance du réseau"
       },

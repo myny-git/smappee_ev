@@ -58,6 +58,15 @@
       }
     },
     "sensor": {
+      "battery_power": {
+        "default": "mdi:battery-sync"
+      },
+      "battery_charged_energy": {
+        "default": "mdi:battery-arrow-up"
+      },
+      "battery_discharged_energy": {
+        "default": "mdi:battery-arrow-down"
+      },
       "charging_state": {
         "default": "mdi:ev-station"
       },

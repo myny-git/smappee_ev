@@ -16,6 +16,7 @@ from .api.device_handle import SmappeeDeviceHandle
 from .api.discovery import MqttChannelSpec
 from .const import CONF_USERNAME, DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
+from .coordinators.storage import StorageMeasurements
 from .models.runtime_data import (
     RuntimeData,
     RuntimeMode,
@@ -313,6 +314,9 @@ def build_cached_runtime(
             config_entry=entry,
         )
         site_coord.monitoring_only = True
+        site_coord.storage_measurements = StorageMeasurements.from_specs(
+            [MqttChannelSpec(**spec) for spec in saved_site["specs"]]
+        )
         object.__setattr__(site_coord, "update_interval", None)
         site_coord._power_index_maps_by_topic = saved_site["power_maps"]
         site_coord.async_set_updated_data(SiteData(site=SiteState(mqtt_connected=False)))

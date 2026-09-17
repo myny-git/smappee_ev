@@ -75,6 +75,15 @@ async def async_setup_entry(
             entities.append(StationGridVoltageL2(site_coord, None, sid_int, f"site-{sid}"))
             entities.append(StationGridVoltageL3(site_coord, None, sid_int, f"site-{sid}"))
 
+        if isinstance(site_coord, SmappeeSiteCoordinator):
+            storage_metrics = site_coord.storage_measurements.metrics
+            if "power" in storage_metrics:
+                entities.append(SiteBatteryPower(site_coord, sid_int))
+            if "charged_energy" in storage_metrics:
+                entities.append(SiteBatteryEnergy(site_coord, sid_int, charging=True))
+            if "discharged_energy" in storage_metrics:
+                entities.append(SiteBatteryEnergy(site_coord, sid_int, charging=False))
+
         for st_uuid, bucket in site.stations.items():
             coord: SmappeeCoordinator | None = bucket.station_coordinator
             if coord is None:
@@ -392,6 +401,40 @@ class StationPvEnergyImport(RestoredEnergyStationSensor):
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
         return self._total_increasing_value(getattr(st, "pv_energy_import_kwh", None))
+
+
+class SiteBatteryPower(SmappeeSitePowerEntity, SensorEntity):
+    """Signed battery power: negative charging, positive discharging."""
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_translation_key = "battery_power"
+
+    def __init__(self, coordinator: SmappeeSiteCoordinator, sid: int) -> None:
+        super().__init__(coordinator, sid, unique_suffix="sensor:battery_power")
+
+    @property
+    @override
+    def native_value(self) -> float | None:
+        st = _site_state(self.coordinator)
+        return getattr(st, "storage_power_total", None)
+
+
+class SiteBatteryEnergy(RestoredEnergyStationSensor):
+    """One positive cumulative battery energy direction, in kWh."""
+
+    def __init__(self, coordinator: SmappeeSiteCoordinator, sid: int, *, charging: bool) -> None:
+        direction = "charged" if charging else "discharged"
+        self._attr_translation_key = f"battery_{direction}_energy"
+        self._state_field = f"storage_{direction}_energy_kwh"
+        super().__init__(coordinator, sid, unique_suffix=f"sensor:battery_{direction}_energy_kwh")
+
+    @property
+    @override
+    def native_value(self) -> float | None:
+        st = _site_state(self.coordinator)
+        return self._total_increasing_value(getattr(st, self._state_field, None))
 
 
 # --------------- Connector sensors ---------------

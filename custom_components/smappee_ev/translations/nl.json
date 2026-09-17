@@ -303,6 +303,15 @@
       }
     },
     "sensor": {
+      "battery_power": {
+        "name": "Batterijvermogen"
+      },
+      "battery_charged_energy": {
+        "name": "Geladen batterijenergie"
+      },
+      "battery_discharged_energy": {
+        "name": "Ontladen batterijenergie"
+      },
       "grid_power": {
         "name": "Netvermogen"
       },

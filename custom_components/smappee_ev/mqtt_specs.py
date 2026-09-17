@@ -52,7 +52,8 @@ def _split_highlevel_configs_by_scope(
     for sid, cfg in configs.items():
         specs = parse_mqtt_channel_specs_from_highlevel(sid, cfg)
         if any(
-            spec.role in {"grid", "production", "consumption", "production_total", "always_on"}
+            spec.role
+            in {"grid", "production", "storage", "consumption", "production_total", "always_on"}
             for spec in specs
         ):
             site_configs[sid] = cfg

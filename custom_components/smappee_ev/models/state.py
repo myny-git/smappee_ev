@@ -36,6 +36,10 @@ class SiteState:
     pv_energy_import_kwh: float | None = None
     pv_current_phases: list[float] | None = None
 
+    storage_power_total: float | None = None
+    storage_charged_energy_kwh: float | None = None
+    storage_discharged_energy_kwh: float | None = None
+
 
 @dataclass
 class ConnectorState:

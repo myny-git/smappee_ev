@@ -35,6 +35,7 @@ from .coordinators.power import (
     _volts_from_dv,
 )
 from .coordinators.session_tracking import SessionTrackingMixin
+from .coordinators.storage import StorageMeasurements
 from .helpers import anonymize_uuid
 from .models.state import (
     ConnectorState,
@@ -82,6 +83,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         self.gateway_serial = gateway_serial
         self.gateway_type = gateway_type
         self._highlevel_configs = highlevel_configs or {}
+        self.storage_measurements = StorageMeasurements(self._highlevel_configs)
         self.monitoring_only = False
         self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
         self._power_map_retry_after = 0.0
@@ -233,7 +235,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
             return False
         idx_map = (self._power_index_maps_by_topic or {}).get(topic)
         site = data.site
-        changed = False
+        changed = self.storage_measurements.apply(site, topic, payload)
         grid = idx_map.get("grid", {}) if idx_map else {}
         pv = idx_map.get("pv", {}) if idx_map else {}
         changed |= self._apply_site_group(

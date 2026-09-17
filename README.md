@@ -79,6 +79,23 @@ number platform setup, preserving entity IDs and user customizations. If duplica
 entries already exist, they are retained and a warning is logged; they are not
 automatically deleted.
 
+### Home battery measurements
+
+Smappee measurements configured as `STORAGE` automatically add battery sensors to
+the site device. No extra integration option is needed. Battery power is negative
+while charging and positive while discharging. The integration reads the configured
+MQTT topics, array positions and multipliers; it does not assume a fixed channel.
+Multiple battery measurements and phases are summed at site level.
+
+When cumulative meter readings are advertised, **Battery charged energy** and
+**Battery discharged energy** are exposed in kWh for the Home Assistant Energy
+dashboard. Negative-direction counters represent charging and positive-direction
+counters represent discharging. In the supplied #301 configuration, these are
+respectively `exportActiveEnergyData` and `importActiveEnergyData`. Compare their
+direction with the Smappee Dashboard when validating a new installation.
+These are measured counters, not estimates integrated from power. Sensors without
+configured measurement paths are not created. Existing sensors are unchanged.
+
 ### Monitoring during Dashboard outages
 
 After a successful setup, the integration saves the MQTT connection settings and

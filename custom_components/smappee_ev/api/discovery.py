@@ -200,6 +200,8 @@ def _measurement_role(measurement: dict[str, Any]) -> str | None:
         return "grid"
     if mtype == "PRODUCTION":
         return "production"
+    if mtype == "STORAGE":
+        return "storage"
     appliance = measurement.get("appliance")
     appliance_type = appliance.get("type") if isinstance(appliance, dict) else None
     category = appliance_type or measurement.get("category")
