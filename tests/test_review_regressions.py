@@ -252,11 +252,10 @@ def test_retry_after_http_date():
 async def test_http_408_is_connection_outage(method):
     api = dashboard(_Session(posts=[_Response(408)], requests=[_Response(408)]))
     api._token, api._token_expires_at_ms = "access", int(time.time() * 1000) + 600000
-    request = (
-        api._request("GET", "example") if method == "request" else getattr(api, f"async_{method}")()
-    )
+    request = api._request if method == "request" else getattr(api, f"async_{method}")
+    args = ("GET", "example") if method == "request" else ()
     with pytest.raises(SmappeeConnectionError):
-        await request
+        await request(*args)
 
 
 async def test_recovery_respects_retry_after_beyond_backoff_cap(hass, entry, online):

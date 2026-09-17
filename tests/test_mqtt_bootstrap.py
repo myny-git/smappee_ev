@@ -543,11 +543,10 @@ async def test_transport_failure_entering_response_propagates(failure, method):
     session.post.return_value = session.request.return_value = context
     api = dashboard(session)
     api.async_ensure_auth = AsyncMock(return_value=True)
-    request = (
-        api._request("GET", "example") if method == "request" else getattr(api, f"async_{method}")()
-    )
+    request = api._request if method == "request" else getattr(api, f"async_{method}")
+    args = ("GET", "example") if method == "request" else ()
     with pytest.raises(SmappeeConnectionError) as err:
-        await request
+        await request(*args)
     assert "private-network-details" not in str(err.value)
 
 
@@ -756,7 +755,7 @@ async def test_cancelled_discovery_cleans_up_already_prepared_site(hass, entry, 
         await pending_started.wait()
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await task
+            await asyncio.gather(task)
     for station in online.sites[1].stations.values():
         assert station.station_coordinator._shutting_down
         assert station.station_coordinator._shutdown_requested

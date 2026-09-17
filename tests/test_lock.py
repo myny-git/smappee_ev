@@ -327,7 +327,7 @@ async def test_pending_lock_preserves_current_snapshot(
         else:
             finish.set()
         if outcome == "success":
-            await task
+            await asyncio.gather(task)
             expected_state = target
         else:
             error = {
@@ -336,7 +336,7 @@ async def test_pending_lock_preserves_current_snapshot(
                 "cancel": asyncio.CancelledError,
             }[outcome]
             with pytest.raises(error):
-                await task
+                await asyncio.gather(task)
 
         assert coordinator.data is current
         if current is not None:

@@ -4,7 +4,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypeVar, override
 
-from homeassistant.helpers import update_coordinator
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
@@ -56,7 +56,7 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-class SmappeeBaseEntity(update_coordinator.CoordinatorEntity[CoordinatorT]):
+class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
     """Common base providing station/connector id storage and device_info."""
 
     _attr_has_entity_name = True
