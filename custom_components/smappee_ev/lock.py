@@ -56,6 +56,7 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "cable_lock"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
@@ -81,11 +82,10 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
     @property
     @override
     def available(self) -> bool:
-        """Hide as unavailable on stations that never report a cable lock state.
+        """Require a reported state, without claiming hardware support.
 
-        The Smappee dashboard only exposes ``cableLocked`` for stations with a
-        lockable socket connector (not fixed-cable models), and this integration
-        has no reliable way to tell those apart by model name alone.
+        Fixed-cable stations can also report ``cableLocked``. Users must enable
+        this optional entity only if their station supports cable locking.
         """
         if not super().available:
             return False

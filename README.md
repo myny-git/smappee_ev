@@ -167,7 +167,8 @@ configuration. Diagnostics do not include these credentials.
 ### ✅ Cable Lock Control
 
 - Lock/unlock the charging cable in the connector socket via Dashboard v11 (`cableLocked`), matching the dashboard's charger configuration Lock/Unlock button.
-- Only available on charging stations with a socket connector (not fixed-cable models). The `lock` entity reports as unavailable when the Dashboard API never reports a cable lock state for your station.
+- Disabled by default. Enable the **Cable lock** entity in Home Assistant's entity settings, then add it to your dashboard if desired. Only enable it if your charging station supports cable locking (socket version); it does not work on fixed-cable models. Hardware support is not detected automatically, and a reported cable lock state does not prove support.
+- The entity remains unavailable when the Dashboard API does not report a cable lock state. On upgrade, existing cable lock entities are disabled once. Users with supported stations can re-enable them; subsequent reloads preserve that choice.
 
 ### ✅ Charger State Feedback
 

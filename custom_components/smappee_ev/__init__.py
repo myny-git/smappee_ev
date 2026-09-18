@@ -7,7 +7,11 @@ from aiohttp import ClientSession
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
@@ -74,6 +78,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
     Version history:
       - v5 removes user control of update interval and drops old OAuth/v3 fields.
       - v6 marks entries without Dashboard credentials for reauthentication.
+      - v7 makes existing cable locks opt-in, matching newly created entities.
     """
     version = entry.version
     data = dict(entry.data)
@@ -115,6 +120,20 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
             updated = True
 
         version = 6
+
+    if version < 7:
+        registry = er.async_get(hass)
+        for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if (
+                entity.domain == "lock"
+                and entity.platform == DOMAIN
+                and entity.unique_id.endswith(":lock:cable_lock")
+                and entity.disabled_by is None
+            ):
+                registry.async_update_entity(
+                    entity.entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION
+                )
+        version = 7
 
     if updated or version != entry.version:
         hass.config_entries.async_update_entry(

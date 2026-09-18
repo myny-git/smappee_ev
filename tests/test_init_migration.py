@@ -3,22 +3,61 @@
 from unittest.mock import MagicMock
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import entity_registry as er
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smappee_ev import async_migrate_entry
 from custom_components.smappee_ev.const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
     CONF_PASSWORD,
+    DOMAIN,
 )
+
+
+async def test_cable_lock_upgrade_is_scoped_and_preserves_later_opt_in(hass):
+    """Disable legacy locks once, without changing other entities or entries."""
+    entry = MockConfigEntry(domain=DOMAIN, version=6, data={})
+    entry.add_to_hass(hass)
+    other = MockConfigEntry(domain=DOMAIN, version=6, data={})
+    other.add_to_hass(hass)
+    registry = er.async_get(hass)
+    cable = registry.async_get_or_create(
+        "lock", DOMAIN, "123:serial:station:lock:cable_lock", config_entry=entry
+    )
+    user_disabled = registry.async_get_or_create(
+        "lock",
+        DOMAIN,
+        "123:serial:second:lock:cable_lock",
+        config_entry=entry,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    unrelated = registry.async_get_or_create(
+        "switch", DOMAIN, "123:serial:station:available", config_entry=entry
+    )
+    other_lock = registry.async_get_or_create(
+        "lock", DOMAIN, "456:serial:station:lock:cable_lock", config_entry=other
+    )
+
+    assert await async_migrate_entry(hass, entry)
+    assert entry.version == 7
+    assert registry.async_get(cable.entity_id).disabled_by == er.RegistryEntryDisabler.INTEGRATION
+    assert registry.async_get(user_disabled.entity_id).disabled_by == er.RegistryEntryDisabler.USER
+    assert registry.async_get(unrelated.entity_id).disabled_by is None
+    assert registry.async_get(other_lock.entity_id).disabled_by is None
+
+    registry.async_update_entity(cable.entity_id, disabled_by=None)
+    assert await async_migrate_entry(hass, entry)
+    assert registry.async_get(cable.entity_id).disabled_by is None
 
 
 class TestMigration:
     """Test config entry migration."""
 
     @pytest.mark.asyncio
-    async def test_migrate_entry_v4_to_v6(self, hass):
-        """Test migration from version 4 to version 6."""
+    async def test_migrate_entry_v4_to_v7(self, hass):
+        """Test migration from version 4 to version 7."""
         # Mock config entry with version 4 and update_interval in data and options
         entry = MagicMock(spec=ConfigEntry)
         entry.version = 4
@@ -49,7 +88,7 @@ class TestMigration:
 
         assert "update_interval" not in call_kwargs["data"]
         assert "update_interval" not in call_kwargs["options"]
-        assert call_kwargs["version"] == 6
+        assert call_kwargs["version"] == 7
         assert CONF_NEEDS_DASHBOARD_REAUTH not in call_kwargs["data"]
 
         # Verify other data was preserved
@@ -57,8 +96,8 @@ class TestMigration:
         assert call_kwargs["data"]["password"] == "test_password"  # noqa: S105
 
     @pytest.mark.asyncio
-    async def test_migrate_entry_v5_to_v6(self, hass):
-        """Test migration from version 5 to version 6."""
+    async def test_migrate_entry_v5_to_v7(self, hass):
+        """Test migration from version 5 to version 7."""
         # Mock config entry at version 5
         entry = MagicMock(spec=ConfigEntry)
         entry.version = 5
@@ -82,7 +121,7 @@ class TestMigration:
 
         async_update_mock.assert_called_once()
         call_kwargs = async_update_mock.call_args[1]
-        assert call_kwargs["version"] == 6
+        assert call_kwargs["version"] == 7
         assert CONF_NEEDS_DASHBOARD_REAUTH not in call_kwargs["data"]
 
     @pytest.mark.asyncio
@@ -112,7 +151,7 @@ class TestMigration:
         assert call_kwargs["data"][CONF_DASHBOARD_REFRESH_TOKEN] == "test_dashboard_refresh_token"
         assert "refresh_token" not in call_kwargs["data"]
         assert call_kwargs["data"][CONF_PASSWORD] == "test_password"
-        assert call_kwargs["version"] == 6
+        assert call_kwargs["version"] == 7
         assert CONF_NEEDS_DASHBOARD_REAUTH not in call_kwargs["data"]
 
     @pytest.mark.asyncio
@@ -143,7 +182,7 @@ class TestMigration:
         async_update_mock.assert_called_once()
         call_kwargs = async_update_mock.call_args[1]
 
-        assert call_kwargs["version"] == 6
+        assert call_kwargs["version"] == 7
         assert CONF_NEEDS_DASHBOARD_REAUTH not in call_kwargs["data"]
 
         # Verify data was preserved
@@ -173,5 +212,5 @@ class TestMigration:
         assert result is True
         async_update_mock.assert_called_once()
         call_kwargs = async_update_mock.call_args[1]
-        assert call_kwargs["version"] == 6
+        assert call_kwargs["version"] == 7
         assert call_kwargs["data"] == {CONF_NEEDS_DASHBOARD_REAUTH: True}

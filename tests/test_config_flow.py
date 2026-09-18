@@ -430,7 +430,7 @@ async def test_reauth_flow_auth_failed(hass):
 
 def test_config_flow_properties():
     flow = SmappeeEvConfigFlow()
-    assert flow.VERSION == 6
+    assert flow.VERSION == 7
 
 
 @pytest.mark.asyncio

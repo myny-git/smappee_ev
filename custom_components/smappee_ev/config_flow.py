@@ -92,7 +92,7 @@ async def _async_dashboard_auth_data(
 class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Smappee EV."""
 
-    VERSION = 6
+    VERSION = 7
 
     @override
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
