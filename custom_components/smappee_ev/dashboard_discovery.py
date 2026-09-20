@@ -152,11 +152,17 @@ async def _dashboard_discover_topologies_by_serial(
     dashboard_client: SmappeeDashboardClient, serial: str
 ) -> list[SmappeeLocationTopology]:
     """Resolve a station into the existing site-first topology model."""
+    serial = serial.strip()
+    if not serial:
+        return []
     try:
         station = await dashboard_client.async_get_charging_station_details(serial)
     except SmappeeNotFoundError:
         return []
     if not isinstance(station, dict):
+        return []
+    if "serialNumber" in station and _safe_str(station["serialNumber"]) != serial:
+        _LOGGER.debug("Station details do not match the requested serial")
         return []
     location = station.get("serviceLocation")
     if not isinstance(location, dict):
@@ -177,14 +183,18 @@ async def _dashboard_discover_topologies_by_serial(
         if parent_id is None:
             raise ValueError("Dashboard child location has an invalid parent id")
         _LOGGER.debug("Child service location has parent %s", parent_id)
-        parent = await dashboard_client.async_get_service_location_details(parent_id)
+        try:
+            parent = await dashboard_client.async_get_service_location_details(parent_id)
+        except SmappeeNotFoundError:
+            _LOGGER.debug("Known parent service location was not found")
+            return []
         if not isinstance(parent, dict) or _direct_location_id(parent.get("id")) != parent_id:
             raise ValueError("Dashboard parent location returned no valid object")
         _LOGGER.debug("Direct parent service location resolved")
         locations.insert(0, parent)
     topologies = build_topologies_from_full_details(locations)
     if not any(
-        topology.control_location_id == child_id and topology.charging_station_serial
+        topology.control_location_id == child_id and topology.charging_station_serial == serial
         for topology in topologies
     ):
         _LOGGER.debug("Station serial fallback could not construct a usable charging topology")

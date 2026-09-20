@@ -117,11 +117,51 @@ async def test_missing_or_unusable_child(client, child):
     assert await discovery._dashboard_discover_topologies_by_serial(client, "BASE123") == []
 
 
-@pytest.mark.parametrize("parent", [None, {}, {"id": 99}, TimeoutError(), SmappeeServerError()])
+@pytest.mark.parametrize(
+    "parent",
+    [None, {}, {"id": 99}, TimeoutError(), SmappeeServerError(), SmappeeMaintenanceError()],
+)
 async def test_known_parent_must_resolve(client, parent):
     client.async_get_service_location_details.side_effect = [CHILD, parent]
-    with pytest.raises((ValueError, TimeoutError, SmappeeServerError)):
+    with pytest.raises((ValueError, TimeoutError, SmappeeServerError, SmappeeMaintenanceError)):
         await discovery._dashboard_discover_topologies_by_serial(client, "BASE123")
+
+
+@pytest.mark.parametrize("serial", ["BASE456", "", None])
+async def test_station_details_serial_must_match(client, serial):
+    client.async_get_charging_station_details.return_value["serialNumber"] = serial
+    assert await discovery._dashboard_discover_topologies_by_serial(client, "BASE123") == []
+    client.async_get_service_location_details.assert_not_awaited()
+
+
+async def test_topology_serial_must_match(client):
+    client.async_get_charging_station_details.return_value["serialNumber"] = "BASE123"
+    child = {**CHILD, "chargingStation": {"serialNumber": "BASE456"}}
+    client.async_get_service_location_details.side_effect = [child, PARENT]
+    assert await discovery._dashboard_discover_topologies_by_serial(client, "BASE123") == []
+
+
+async def test_serial_comparison_trims_whitespace(client):
+    client.async_get_charging_station_details.return_value["serialNumber"] = " BASE123 "
+    child = {**CHILD, "chargingStation": {"serialNumber": " BASE123 "}}
+    client.async_get_service_location_details.side_effect = [child, PARENT]
+    result = await discovery._dashboard_discover_topologies_by_serial(client, " BASE123 ")
+    assert result[0].charging_station_serial == "BASE123"
+    client.async_get_charging_station_details.assert_awaited_once_with("BASE123")
+
+
+async def test_empty_bootstrap_serial_does_not_call_api(client):
+    assert await discovery._dashboard_discover_topologies_by_serial(client, "  ") == []
+    client.async_get_charging_station_details.assert_not_awaited()
+
+
+async def test_parent_not_found_is_invalid_serial_in_flow(flow, client):
+    flow._pending_data = dict(DATA)
+    client.async_get_service_location_details.side_effect = [CHILD, SmappeeNotFoundError()]
+    with patch.object(flow, "_discovery_client", return_value=client):
+        result = await flow.async_step_station_serial({CONF_STATION_SERIAL: "BASE123"})
+    assert result["step_id"] == "station_serial"
+    assert result["errors"] == {"base": "invalid_station_serial"}
 
 
 @pytest.mark.parametrize("payload", [{"id": 20}, [], None, "bad"])
