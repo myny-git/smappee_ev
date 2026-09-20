@@ -22,6 +22,7 @@ from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
     CONF_PASSWORD,
+    CONF_STATION_SERIAL,
     CONF_USERNAME,
     DOMAIN,
     UPDATE_INTERVAL_DEFAULT,
@@ -248,7 +249,9 @@ async def _async_prepare_runtime(
     update_interval = UPDATE_INTERVAL_DEFAULT
 
     # 1) Discover site-first topologies
-    topologies = await _load_dashboard_topologies(dashboard_client)
+    topologies = await _load_dashboard_topologies(
+        dashboard_client, entry.data.get(CONF_STATION_SERIAL)
+    )
 
     sites: dict[int, SmappeeSiteRuntime] = {}
     mqtt_clients: dict[int, MqttRuntimeValue] = {}

@@ -33,12 +33,19 @@
           "username": "The username used by the existing Smappee EV config entry.",
           "password": "The Smappee Dashboard password to save for this config entry."
         }
+      },
+      "station_serial": {
+        "description": "No charging station could be discovered automatically. Enter one Smappee charging-station serial number to find its service location.",
+        "data": {
+          "station_serial": "Charging-station serial number"
+        }
       }
     },
     "error": {
       "auth_failed": "Authorization failed",
       "cannot_connect": "Could not connect",
-      "unknown": "Unexpected response from Smappee Dashboard"
+      "unknown": "Unexpected response from Smappee Dashboard",
+      "invalid_station_serial": "No usable charging station was found for this serial number. Check the serial number and account access."
     },
     "abort": {
       "wrong_account": "The credentials belong to a different Smappee account."

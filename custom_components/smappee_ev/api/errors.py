@@ -31,6 +31,10 @@ class SmappeeProtocolError(SmappeeError):
     """Smappee returned malformed or unsupported data."""
 
 
+class SmappeeNotFoundError(SmappeeProtocolError):
+    """The requested Dashboard resource does not exist or is not visible."""
+
+
 class SmappeeRateLimitError(SmappeeTransientError):
     """Dashboard rate limit, including the minimum delay before another request."""
 

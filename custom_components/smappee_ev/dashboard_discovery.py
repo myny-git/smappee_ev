@@ -11,7 +11,12 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .api.dashboard_client import DashboardMaintenanceState, SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology, build_topologies_from_full_details
-from .api.errors import SmappeeError, SmappeeMaintenanceError, SmappeeTransientError
+from .api.errors import (
+    SmappeeError,
+    SmappeeMaintenanceError,
+    SmappeeNotFoundError,
+    SmappeeTransientError,
+)
 from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import DashboardObjectList, HighLevelConfigMap
@@ -111,6 +116,8 @@ async def _dashboard_discover_topologies(
         _LOGGER.warning("Dashboard service location topology discovery failed: %s", err)
         raise
 
+    if locations is None:
+        raise ValueError("Dashboard service locations returned no valid list")
     topologies = build_topologies_from_full_details(
         [location for location in locations or [] if isinstance(location, dict)]
     )
@@ -127,6 +134,62 @@ async def _dashboard_discover_topologies(
             topology.site_gateway_serial,
             topology.control_gateway_serial,
         )
+    return topologies
+
+
+def _direct_location_id(value: object) -> int | None:
+    """Accept only usable integer location identifiers from remote data."""
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        return None
+    try:
+        location_id = int(value)
+    except ValueError:
+        return None
+    return location_id if location_id > 0 else None
+
+
+async def _dashboard_discover_topologies_by_serial(
+    dashboard_client: SmappeeDashboardClient, serial: str
+) -> list[SmappeeLocationTopology]:
+    """Resolve a station into the existing site-first topology model."""
+    try:
+        station = await dashboard_client.async_get_charging_station_details(serial)
+    except SmappeeNotFoundError:
+        return []
+    if not isinstance(station, dict):
+        return []
+    location = station.get("serviceLocation")
+    if not isinstance(location, dict):
+        return []
+    child_id = _direct_location_id(location.get("id"))
+    if child_id is None:
+        return []
+    _LOGGER.debug("Station serial resolved to service location %s", child_id)
+    try:
+        child = await dashboard_client.async_get_service_location_details(child_id)
+    except SmappeeNotFoundError:
+        return []
+    if not isinstance(child, dict) or _direct_location_id(child.get("id")) != child_id:
+        return []
+    locations = [child]
+    if child.get("parentId") is not None:
+        parent_id = _direct_location_id(child["parentId"])
+        if parent_id is None:
+            raise ValueError("Dashboard child location has an invalid parent id")
+        _LOGGER.debug("Child service location has parent %s", parent_id)
+        parent = await dashboard_client.async_get_service_location_details(parent_id)
+        if not isinstance(parent, dict) or _direct_location_id(parent.get("id")) != parent_id:
+            raise ValueError("Dashboard parent location returned no valid object")
+        _LOGGER.debug("Direct parent service location resolved")
+        locations.insert(0, parent)
+    topologies = build_topologies_from_full_details(locations)
+    if not any(
+        topology.control_location_id == child_id and topology.charging_station_serial
+        for topology in topologies
+    ):
+        _LOGGER.debug("Station serial fallback could not construct a usable charging topology")
+        return []
+    _LOGGER.debug("Station serial fallback produced %d topologies", len(topologies))
     return topologies
 
 
@@ -344,9 +407,15 @@ async def _load_dashboard_service_locations(
 
 async def _load_dashboard_topologies(
     dashboard_client: SmappeeDashboardClient,
+    station_serial: str | None = None,
 ) -> list[SmappeeLocationTopology]:
     try:
         topologies = await _dashboard_discover_topologies(dashboard_client)
+        if topologies == [] and station_serial:
+            _LOGGER.debug("Automatic discovery empty; trying configured station serial")
+            topologies = await _dashboard_discover_topologies_by_serial(
+                dashboard_client, station_serial
+            )
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,

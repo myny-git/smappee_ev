@@ -37,6 +37,7 @@ MQTT_HEARTBEAT_TOPIC_SUFFIX: Final = "/homeassistant/heartbeat"
 CONF_USERNAME: Final = ha_const.CONF_USERNAME
 CONF_PASSWORD: Final = ha_const.CONF_PASSWORD
 CONF_SERVICE_LOCATION_ID: str = "service_location_id"
+CONF_STATION_SERIAL: str = "station_serial"
 CONF_SERVICE_LOCATION_UUID: str = "service_location_uuid"
 CONF_SMART_DEVICE_UUID: str = "smart_device_uuid"
 CONF_SMART_DEVICE_ID: str = "smart_device_id"

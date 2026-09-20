@@ -13,13 +13,19 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, Tex
 import voluptuous as vol
 
 from .api.dashboard_client import SmappeeDashboardClient
+from .api.discovery import SmappeeLocationTopology
 from .api.errors import SmappeeError
 from .const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_NEEDS_DASHBOARD_REAUTH,
     CONF_PASSWORD,
+    CONF_STATION_SERIAL,
     CONF_USERNAME,
     DOMAIN,
+)
+from .dashboard_discovery import (
+    _dashboard_discover_topologies,
+    _dashboard_discover_topologies_by_serial,
 )
 from .registry import async_remove_config_entry_registry_entries
 
@@ -94,6 +100,76 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 7
 
+    _pending_data: dict[str, Any]
+
+    def _discovery_client(self) -> SmappeeDashboardClient:
+        """Recreate an authenticated client and retain any rotated refresh token."""
+        return SmappeeDashboardClient(
+            username=self._pending_data.get(CONF_USERNAME),
+            password=self._pending_data.get(CONF_PASSWORD),
+            refresh_token=self._pending_data.get(CONF_DASHBOARD_REFRESH_TOKEN),
+            session=async_get_clientsession(self.hass),
+            token_update_callback=self._pending_data.update,
+        )
+
+    async def _async_validate_discovery(self, serial: str | None = None) -> str | None:
+        """Return a form error, or None for a usable topology."""
+        client = self._discovery_client()
+        topologies: list[SmappeeLocationTopology] | None
+        try:
+            if serial is not None:
+                topologies = await _dashboard_discover_topologies_by_serial(client, serial)
+            else:
+                topologies = await _dashboard_discover_topologies(client)
+            if topologies is None:
+                return ERROR_UNKNOWN
+            return None if topologies else "invalid_station_serial"
+        except ConfigEntryAuthFailed:
+            return ERROR_AUTH_FAILED
+        except (SmappeeError, aiohttp.ClientError, RuntimeError, TimeoutError):
+            return ERROR_CANNOT_CONNECT
+        except Exception:
+            # Remote payloads can contain credentials; do not log their contents.
+            _LOGGER.debug("Dashboard discovery returned an unexpected response")
+            return ERROR_UNKNOWN
+
+    def _finish_discovery(self) -> ConfigFlowResult:
+        """Commit validated setup or reconfiguration data."""
+        if self.source == config_entries.SOURCE_RECONFIGURE:
+            return self.async_update_reload_and_abort(
+                self._get_reconfigure_entry(),
+                unique_id=self.unique_id,
+                data=self._pending_data,
+                options={},
+            )
+        return self.async_create_entry(
+            title=f"Smappee EV - {self._pending_data[CONF_USERNAME]}", data=self._pending_data
+        )
+
+    async def async_step_station_serial(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for a station serial only after successful empty automatic discovery."""
+        errors: dict[str, str] = {}
+        defaults = dict(self._pending_data)
+        if user_input is not None:
+            serial = str(user_input[CONF_STATION_SERIAL]).strip()
+            defaults[CONF_STATION_SERIAL] = serial
+            error = (
+                await self._async_validate_discovery(serial) if serial else "invalid_station_serial"
+            )
+            if error is None:
+                self._pending_data[CONF_STATION_SERIAL] = serial
+                return self._finish_discovery()
+            errors["base"] = error
+        return self.async_show_form(
+            step_id="station_serial",
+            data_schema=vol.Schema(
+                {_required_with_optional_default(CONF_STATION_SERIAL, defaults): TextSelector()}
+            ),
+            errors=errors,
+        )
+
     @override
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial setup step."""
@@ -132,19 +208,34 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_mismatch(reason="wrong_account")
             if entry.data.get(CONF_NEEDS_DASHBOARD_REAUTH):
                 async_remove_config_entry_registry_entries(self.hass, entry)
+            if CONF_STATION_SERIAL in entry.data:
+                data[CONF_STATION_SERIAL] = entry.data[CONF_STATION_SERIAL]
             return self.async_update_reload_and_abort(entry, unique_id=unique, data=data)
 
         if self.source == config_entries.SOURCE_RECONFIGURE:
             entry = self._get_reconfigure_entry()
             if entry.unique_id:
                 self._abort_if_unique_id_mismatch(reason="wrong_account")
-            return self.async_update_reload_and_abort(
-                entry, unique_id=unique, data=data, options={}
+            if CONF_STATION_SERIAL in entry.data:
+                data[CONF_STATION_SERIAL] = entry.data[CONF_STATION_SERIAL]
+        else:
+            self._abort_if_unique_id_configured()
+
+        self._pending_data = data
+        error = await self._async_validate_discovery()
+        if error == "invalid_station_serial":
+            _LOGGER.debug("Automatic discovery returned zero charging topologies")
+            serial = data.get(CONF_STATION_SERIAL)
+            if serial:
+                _LOGGER.debug("Trying stored station serial during reconfiguration")
+                error = await self._async_validate_discovery(serial)
+            if error == "invalid_station_serial":
+                return await self.async_step_station_serial()
+        if error is not None:
+            return self.async_show_form(
+                step_id=step_id, data_schema=data_schema, errors={"base": error}
             )
-
-        self._abort_if_unique_id_configured()
-
-        return self.async_create_entry(title=f"Smappee EV - {user_input[CONF_USERNAME]}", data=data)
+        return self._finish_discovery()
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Begin re-authentication flow."""

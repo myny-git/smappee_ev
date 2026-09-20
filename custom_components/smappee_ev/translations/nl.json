@@ -33,12 +33,19 @@
           "username": "De gebruikersnaam van de bestaande Smappee EV config entry.",
           "password": "Het Smappee Dashboard-wachtwoord dat voor deze config entry wordt opgeslagen."
         }
+      },
+      "station_serial": {
+        "description": "Er werd automatisch geen laadstation gevonden. Vul het serienummer van een Smappee-laadstation in om de bijbehorende servicelocatie te vinden.",
+        "data": {
+          "station_serial": "Serienummer van het laadstation"
+        }
       }
     },
     "error": {
       "auth_failed": "Authenticatie mislukt",
       "cannot_connect": "Kan geen verbinding maken",
-      "unknown": "Onverwachte respons van Smappee Dashboard"
+      "unknown": "Onverwachte respons van Smappee Dashboard",
+      "invalid_station_serial": "Er werd geen bruikbaar laadstation gevonden voor dit serienummer. Controleer het serienummer en de toegang van je account."
     },
     "abort": {
       "wrong_account": "De inloggegevens horen bij een ander Smappee-account."

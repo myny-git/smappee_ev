@@ -33,12 +33,19 @@
           "username": "Le nom d'utilisateur de la config entry Smappee EV existante.",
           "password": "Le mot de passe Smappee Dashboard a enregistrer pour cette config entry."
         }
+      },
+      "station_serial": {
+        "description": "Aucune borne de recharge n’a été détectée automatiquement. Saisissez le numéro de série d’une borne Smappee pour trouver son emplacement de service.",
+        "data": {
+          "station_serial": "Numéro de série de la borne de recharge"
+        }
       }
     },
     "error": {
       "auth_failed": "Autorisation échouée",
       "cannot_connect": "Connexion impossible",
-      "unknown": "Réponse inattendue du Smappee Dashboard"
+      "unknown": "Réponse inattendue du Smappee Dashboard",
+      "invalid_station_serial": "Aucune borne de recharge utilisable pour ce numéro de série. Vérifiez le numéro et les droits d’accès du compte."
     },
     "abort": {
       "wrong_account": "Les identifiants appartiennent a un autre compte Smappee."

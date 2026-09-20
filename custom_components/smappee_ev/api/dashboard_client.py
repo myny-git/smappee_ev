@@ -28,6 +28,7 @@ from .errors import (
     SmappeeConnectionError,
     SmappeeError,
     SmappeeMaintenanceError,
+    SmappeeNotFoundError,
     SmappeeProtocolError,
     SmappeeRateLimitError,
     SmappeeServerError,
@@ -320,6 +321,8 @@ class SmappeeDashboardClient:
             if resp.status in (401, 403):
                 raise SmappeeAuthenticationError("Dashboard authorization failed")
             if resp.status not in expected:
+                if resp.status == 404:
+                    raise SmappeeNotFoundError("Dashboard resource not found (HTTP 404)")
                 raise SmappeeProtocolError(
                     f"Dashboard request failed (HTTP {resp.status}, {method})"
                 )
@@ -336,6 +339,17 @@ class SmappeeDashboardClient:
             "GET", "v11/user/servicelocations?fullDetails=true", return_json=True
         )
         return data if isinstance(data, list) else None
+
+    async def async_get_service_location_details(
+        self, service_location_id: int | str
+    ) -> DashboardObject | None:
+        """Fetch one service location, including its topology details."""
+        data = await self._request(
+            "GET",
+            f"v10/servicelocation/{service_location_id}?includeDetails=true",
+            return_json=True,
+        )
+        return data if isinstance(data, dict) else None
 
     async def async_get_highlevel_configuration(
         self, service_location_id: int | str

@@ -33,12 +33,19 @@
           "username": "Der Benutzername des bestehenden Smappee EV config entry.",
           "password": "Das Smappee Dashboard-Passwort, das fuer diesen config entry gespeichert wird."
         }
+      },
+      "station_serial": {
+        "description": "Es wurde automatisch keine Ladestation gefunden. Gib die Seriennummer einer Smappee-Ladestation ein, um ihren Servicestandort zu finden.",
+        "data": {
+          "station_serial": "Seriennummer der Ladestation"
+        }
       }
     },
     "error": {
       "auth_failed": "Autorisierung fehlgeschlagen",
       "cannot_connect": "Verbindung fehlgeschlagen",
-      "unknown": "Unerwartete Antwort vom Smappee Dashboard"
+      "unknown": "Unerwartete Antwort vom Smappee Dashboard",
+      "invalid_station_serial": "Keine nutzbare Ladestation für diese Seriennummer gefunden. Prüfe die Seriennummer und die Zugriffsrechte des Kontos."
     },
     "abort": {
       "wrong_account": "Die Zugangsdaten gehoeren zu einem anderen Smappee-Konto."

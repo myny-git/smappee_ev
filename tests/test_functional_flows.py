@@ -11,6 +11,7 @@ from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.const import (
     CONF_DASHBOARD_REFRESH_TOKEN,
     CONF_PASSWORD,
+    CONF_STATION_SERIAL,
     CONF_USERNAME,
     DOMAIN,
 )
@@ -382,7 +383,8 @@ def reset_fake_mqtt_instances():
 
 
 @pytest.mark.asyncio
-async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass):
+@pytest.mark.parametrize("serial_fallback", [False, True])
+async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass, serial_fallback):
     dashboard = _FakeDashboard()
     entry = MagicMock()
     entry.data = {
@@ -390,6 +392,26 @@ async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass):
         CONF_PASSWORD: "pass",
         CONF_DASHBOARD_REFRESH_TOKEN: "refresh",
     }
+    if serial_fallback:
+        entry.data[CONF_STATION_SERIAL] = "STATION123"
+        locations = dashboard.async_get_service_locations_full_details.return_value
+        locations[0]["functionType"] = "CHARGINGPARK"
+        locations[1]["chargingStation"]["model"] = "EV Base"
+        dashboard.async_get_service_locations_full_details.return_value = []
+        dashboard.async_get_service_location_details = AsyncMock(
+            side_effect=lambda sid: next(loc for loc in locations if loc["id"] == sid)
+        )
+        details = dashboard.async_get_charging_station_details.return_value
+        details["serviceLocation"] = {"id": 317443}
+        details["chargingStation"]["model"] = "EV Base"
+        second_connector = {
+            "uuid": "connector-uuid-2",
+            "id": "connector-device-2",
+            "position": 2,
+            "type": {"category": "CARCHARGER"},
+        }
+        details["modules"].append({"position": 2, "smartDevice": second_connector})
+        dashboard.async_get_smart_devices.return_value.append(second_connector)
     entry.options = {}
     entry.entry_id = "setup_entry_123456"
     entry.title = "Smappee EV"
@@ -433,9 +455,14 @@ async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass):
     assert station.control_location_id == 317443
     assert station.station_name == "Garage Charger"
     assert station.charging_station_serial == "STATION123"
-    assert station.charging_station_model == "EV Wall"
+    assert station.charging_station_model == ("EV Base" if serial_fallback else "EV Wall")
     assert station.station_coordinator.session_tracking_started is True
-    assert set(station.connectors) == {"connector-uuid-1"}
+    assert set(station.connectors) == (
+        {"connector-uuid-1", "connector-uuid-2"} if serial_fallback else {"connector-uuid-1"}
+    )
+    if serial_fallback:
+        assert station.connectors["connector-uuid-2"].connector_position == 2
+        assert dashboard.async_get_service_location_details.await_count == 2
 
     connector = station.connectors["connector-uuid-1"]
     assert connector.connector_position == 1

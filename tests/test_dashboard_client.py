@@ -9,6 +9,7 @@ import pytest
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
 from custom_components.smappee_ev.api.errors import (
     SmappeeConnectionError,
+    SmappeeNotFoundError,
     SmappeeProtocolError,
     SmappeeServerError,
 )
@@ -77,6 +78,14 @@ def _client(session=None, **kwargs) -> SmappeeDashboardClient:
         session=session or MagicMock(),
         token_update_callback=kwargs.pop("token_update_callback", MagicMock()),
     )
+
+
+async def test_not_found_remains_a_protocol_error():
+    client = _client(session=_Session(requests=[_Response(404)]))
+    client.async_ensure_auth = AsyncMock(return_value=True)
+    with pytest.raises(SmappeeNotFoundError) as exc:
+        await client.async_get_charging_station_details("missing")
+    assert isinstance(exc.value, SmappeeProtocolError)
 
 
 def test_dashboard_token_update_handles_missing_and_invalid_expiration():
