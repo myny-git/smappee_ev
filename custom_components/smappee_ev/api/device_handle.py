@@ -13,6 +13,8 @@ from ..helpers import anonymize_uuid
 
 _LOGGER = logging.getLogger(__name__)
 
+type SmartDeviceRequests = dict[str, asyncio.Task[list[dict[str, Any]] | None]]
+
 
 class SmappeeDeviceHandle:
     """Per-device command handle. No polling/state; the coordinator owns state."""
@@ -171,8 +173,16 @@ class SmappeeDeviceHandle:
             raise RuntimeError("Dashboard charging station restart returned no success")
         return True
 
-    async def async_get_smartdevices(self) -> list[dict[str, Any]] | None:
-        """Fetch all smartdevices for this service location."""
+    async def async_get_smartdevices(
+        self, *, requests: SmartDeviceRequests | None = None
+    ) -> list[dict[str, Any]] | None:
+        """Fetch all smartdevices, sharing one request per location within a refresh."""
+        if requests is not None:
+            key = str(self.service_location_id)
+            if key not in requests:
+                requests[key] = asyncio.create_task(self.async_get_smartdevices())
+            return await requests[key]
+
         if not self._dashboard_configured():
             return None
         dashboard = self.dashboard_client
@@ -189,9 +199,11 @@ class SmappeeDeviceHandle:
             return None
         return data if isinstance(data, list) else None
 
-    async def async_get_smartdevice(self, smart_device_id: str) -> dict[str, Any] | None:
+    async def async_get_smartdevice(
+        self, smart_device_id: str, *, requests: SmartDeviceRequests | None = None
+    ) -> dict[str, Any] | None:
         """Fetch a single smartdevice by its numeric/string ID."""
-        devices = await self.async_get_smartdevices()
+        devices = await self.async_get_smartdevices(requests=requests)
         wanted = str(smart_device_id)
         for device in devices or []:
             candidates = {

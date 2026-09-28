@@ -726,6 +726,7 @@ async def test_running_coordinator_keeps_mqtt_during_outage_and_recovers(hass, o
         request.side_effect = lambda _method, path, **_kwargs: (
             [{"id": "connector-1"}] if path.endswith("/smart/devices") else {}
         )
+        coord._last_smartdevice_refresh -= 300
         await coord.async_refresh()
         assert control.available
         assert coord.data.connectors["connector-1"].api_available

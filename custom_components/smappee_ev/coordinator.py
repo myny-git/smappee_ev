@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 import logging
-from time import time as _now
+from time import monotonic as _monotonic, time as _now
 from typing import Any, override
 
 from aiohttp import ClientError
@@ -16,8 +16,13 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api.dashboard_client import SmappeeDashboardClient
-from .api.device_handle import SmappeeDeviceHandle
+from .api.device_handle import SmappeeDeviceHandle, SmartDeviceRequests
 from .api.errors import SmappeeError
+from .const import (
+    MQTT_REAL_POWER_FRESHNESS_TIMEOUT,
+    SMARTDEVICE_FALLBACK_INTERVAL,
+    SMARTDEVICE_REFRESH_INTERVAL,
+)
 from .coordinators.api_state import ConnectorRestSnapshot, StationApiMixin
 from .coordinators.dashboard_merge import DashboardMixin
 from .coordinators.mqtt_apply import MqttMixin
@@ -370,6 +375,9 @@ class SmappeeStationCoordinator(
         self._session_refresh_lock = asyncio.Lock()
         self._session_tracking_started = False
         self._last_dashboard_refresh = 0.0
+        self._last_smartdevice_refresh: float | None = None
+        self._smartdevice_refresh_error: Exception | None = None
+        self._force_smartdevice_refresh = False
         self._last_dashboard_warning = 0.0
         self._dashboard_refresh_lock = asyncio.Lock()
         self._dashboard_refresh_unsub: CALLBACK_TYPE | None = None
@@ -378,23 +386,76 @@ class SmappeeStationCoordinator(
 
     @override
     async def _async_update_data(self) -> IntegrationData:
-        if self.monitoring_only:
+        """Check freshness locally; only poll REST when its deadline is reached."""
+        if self._is_stopping:
             return self.data
+        now = _monotonic()
+        if (
+            not self._force_smartdevice_refresh
+            and self._last_smartdevice_refresh is not None
+            and now - self._last_smartdevice_refresh
+            < self._smartdevice_poll_interval().total_seconds()
+        ):
+            # A local timer tick must not turn a failed REST update into a recovery.
+            if self._smartdevice_refresh_error is not None:
+                raise self._smartdevice_refresh_error
+            return self.data
+
+        self._force_smartdevice_refresh = False
+        self._last_smartdevice_refresh = now
+        self._smartdevice_refresh_error = None
+        try:
+            return await self._async_fetch_data()
+        except asyncio.CancelledError:
+            # An interrupted attempt supplied no snapshot to reuse on later ticks.
+            self._last_smartdevice_refresh = None
+            raise
+        except Exception as err:
+            self._smartdevice_refresh_error = err
+            raise
+
+    def _smartdevice_poll_interval(self) -> timedelta:
+        """Use slow REST checks only with fresh charger traffic and reachable REST."""
+        data = self.data
+        if self._smartdevice_refresh_error is not None or (
+            data is not None
+            and (
+                data.station.api_available is False
+                or any(conn.api_available is False for conn in data.connectors.values())
+            )
+        ):
+            return SMARTDEVICE_FALLBACK_INTERVAL
+        last_rx = self.last_real_charger_rx
+        if (
+            self.mqtt_transport_connected
+            and last_rx is not None
+            and timedelta(0) <= datetime.now(UTC) - last_rx < MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+        ):
+            return SMARTDEVICE_REFRESH_INTERVAL
+        return SMARTDEVICE_FALLBACK_INTERVAL
+
+    async def _async_fetch_data(self) -> IntegrationData:
+        """Fetch and merge one fresh station/connector REST snapshot."""
+        # Share successes and failures for this refresh only. The next refresh
+        # must fetch a new list rather than replaying an older REST snapshot.
+        requests: SmartDeviceRequests = {}
         try:
             # ---- Station snapshot (LED brightness) ----
             prev_data = self.data
             station_state = self._merge_station_rest_state(
                 prev_data.station if prev_data else None,
-                await self._fetch_station_state(self.station_client),
+                await self._fetch_station_state(self.station_client, requests=requests),
             )
 
             # ---- Connectors in parallel ----
             pairs = list(self.connector_clients.items())  # [(uuid, client), ...]
-            coros = [self._fetch_connector_state(client) for _, client in pairs]
+            coros = [self._fetch_connector_state(client, requests=requests) for _, client in pairs]
             results = await asyncio.gather(*coros, return_exceptions=True)
 
             connectors_state: dict[str, ConnectorState] = {}
             for (uuid, client), res in zip(pairs, results, strict=True):
+                if isinstance(res, asyncio.CancelledError):
+                    raise res
                 if isinstance(res, ConfigEntryAuthFailed):
                     raise res
                 if isinstance(res, Exception):

@@ -10,7 +10,7 @@ import logging
 from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
-from ..api.device_handle import SmappeeDeviceHandle
+from ..api.device_handle import SmappeeDeviceHandle, SmartDeviceRequests
 from ..api.errors import SmappeeError
 from ..const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
 from ..helpers import (
@@ -180,11 +180,13 @@ class StationApiMixin(CoordinatorMixin):
         )
         return merged
 
-    async def _fetch_station_state(self, client: SmappeeDeviceHandle) -> StationState:
+    async def _fetch_station_state(
+        self, client: SmappeeDeviceHandle, *, requests: SmartDeviceRequests | None = None
+    ) -> StationState:
         """Read LED brightness by scanning all smartdevices for the station."""
         led_brightness: int | None = None
         try:
-            devices = await client.async_get_smartdevices()
+            devices = await client.async_get_smartdevices(requests=requests)
             if devices is None:
                 err = RuntimeError("smartdevice list request returned no data")
                 self._log_station_api_transition(False, err)
@@ -216,7 +218,9 @@ class StationApiMixin(CoordinatorMixin):
 
         return StationState(led_brightness=led_brightness, available=True, api_available=True)
 
-    async def _fetch_connector_state(self, client: SmappeeDeviceHandle) -> ConnectorRestSnapshot:
+    async def _fetch_connector_state(
+        self, client: SmappeeDeviceHandle, *, requests: SmartDeviceRequests | None = None
+    ) -> ConnectorRestSnapshot:
         """Read one connector's properties/config from its smartdevice."""
         session_state = "Initialize"
         selected_percentage: int | None = None
@@ -226,7 +230,7 @@ class StationApiMixin(CoordinatorMixin):
         min_surpluspct: int | None = None
         support_grid: int | None = None
 
-        data = await client.async_get_smartdevice(client.smart_device_id)
+        data = await client.async_get_smartdevice(client.smart_device_id, requests=requests)
         if data is None:
             raise RuntimeError(f"smartdevice fetch {client.smart_device_id} returned no data")
 

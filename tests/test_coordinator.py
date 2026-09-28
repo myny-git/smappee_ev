@@ -1131,6 +1131,7 @@ class TestSmappeeCoordinator:
         assert unavailable.connectors["test_uuid"].support_grid == 4
 
         coordinator.data = unavailable
+        coordinator._last_smartdevice_refresh -= 300
         recovered = await coordinator._async_update_data()
 
         assert recovered.connectors["test_uuid"].api_available is True

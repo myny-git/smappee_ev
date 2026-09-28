@@ -11,8 +11,10 @@ CONFIGURATION_URL: Final = "https://dashboard.smappee.net"
 
 CONF_NEEDS_DASHBOARD_REAUTH = "needs_dashboard_reauth"
 
-# Coordinator polling interval in seconds, kept internal without a user option.
+# Local coordinator tick; station REST requests have separate freshness-based limits.
 UPDATE_INTERVAL_DEFAULT: Final = 30
+SMARTDEVICE_REFRESH_INTERVAL: Final = timedelta(minutes=30)
+SMARTDEVICE_FALLBACK_INTERVAL: Final = timedelta(minutes=5)
 
 # Common numeric defaults and ranges.
 DEFAULT_MIN_CURRENT: Final = 6

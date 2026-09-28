@@ -33,7 +33,7 @@ async def test_mqtt_reconnect_restores_connector_entities_without_reload(
     entry.runtime_data = online
     cloud_up = True
 
-    async def smartdevice(_device_id):
+    async def smartdevice(_device_id, *, requests=None):
         if not cloud_up:
             raise SmappeeConnectionError("simulated internet outage")
         if reported_surplus is None:
@@ -140,7 +140,8 @@ async def test_mqtt_reconnect_restores_connector_entities_without_reload(
                     payload=json.dumps({"activePowerData": [0, 2300, 0]}).encode(),
                 )
             )
-            async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=35))
+            coord._last_smartdevice_refresh -= 300
+            async_fire_time_changed(hass, datetime.now(UTC) + timedelta(minutes=5, seconds=5))
             await hass.async_block_till_done(wait_background_tasks=True)
             assert coord.mqtt_transport_connected is True
             assert hass.states.get(power.entity_id).state == "2300.0"

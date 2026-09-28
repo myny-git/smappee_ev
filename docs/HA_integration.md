@@ -36,6 +36,27 @@ The integration uses Dashboard v10/v11 only for active control:
 | Charger configuration | Dashboard v10/v11 configuration endpoints for LED brightness, min surplus percentage, connector maximum current, availability, offline charging, capacity protection and overload protection |
 | Live measurements | MQTT topics for power, current, energy and fast charger state |
 
+During each REST refresh, the station and its connectors share one smartdevice
+list request per service location, including when that request fails.
+
+| Smartdevice refresh | Interval |
+|---|---|
+| Startup | Fetch immediately |
+| Connected MQTT with charger traffic less than five minutes old | Every 30 minutes |
+| Disconnected or stale MQTT, or a failed station/connector REST update | Every 5 minutes |
+| After supported control/configuration writes | Extra refresh 2 minutes after the last write |
+
+Freshness is checked locally every 30 seconds; these checks do not themselves
+make API requests. Only MQTT traffic routed to the station counts as charger
+traffic; heartbeats and unrelated site measurements do not extend its freshness.
+Each due REST refresh fetches a new list, while skipped checks retain the current
+MQTT state. Settings changed outside Home Assistant without a matching MQTT update
+can take about 30 minutes to appear when MQTT is healthy.
+
+Recent charging sessions retain their separate schedule: every 5 minutes while
+active, every 15 minutes when all active sessions are paused, and final checks
+after 30 seconds, 2 minutes and 5 minutes when a session ends.
+
 ## Services
 
 These services can be called from automations, scripts or Developer Tools -> Actions.

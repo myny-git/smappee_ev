@@ -49,6 +49,7 @@ This custom integration unlocks **more control over your Smappee** charger and c
 - Smappee Dashboard REST API v10/v11 is used for discovery, station details, charger configuration, capacity protection, overload protection, recent sessions and charger availability.
 - Dashboard v10/v11 calls are used for charging mode, start, pause, stop, percentage/current limit, LED brightness, min surplus percentage and availability.
 - Dashboard configuration data refreshes at most every 30 minutes, with a forced refresh shortly after supported dashboard writes.
+- Smartdevice polling runs every 30 minutes with fresh charger MQTT traffic, or every 5 minutes when MQTT is unavailable/stale or station/connector REST data is unavailable. Station and connectors share one list per service location within each station refresh. Supported writes trigger an extra check after 2 minutes; local freshness checks do not make API calls.
 
 ### MQTT measurements and connector targeting
 

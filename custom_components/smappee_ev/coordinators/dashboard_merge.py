@@ -247,6 +247,11 @@ class DashboardMixin(CoordinatorMixin):
             data = self.data
             if data and await self._maybe_refresh_dashboard_data(data, force=True):
                 self.async_set_updated_data(data)
+            if data and not self._is_stopping:
+                # Configuration writes also affect the smartdevice properties.
+                # Go through the coordinator so its normal refresh serialization applies.
+                self._force_smartdevice_refresh = True
+                await self.async_request_refresh()
         except asyncio.CancelledError:
             raise
         except ConfigEntryAuthFailed:
