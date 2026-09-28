@@ -6,7 +6,9 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+import json
 import logging
+from pathlib import Path
 import time
 from typing import Any
 
@@ -106,8 +108,18 @@ class SmappeeDashboardClient:
         self._token_expires_at_ms = 0
         self._auth_lock = asyncio.Lock()
         self._missing_credentials_logged = False
+        self._user_agent: str | None = None
         self.monitoring_only = False
         self._maintenance_state = maintenance_state or DashboardMaintenanceState()
+
+    async def _async_user_agent(self) -> str:
+        """Identify the integration release without account or device information."""
+        if self._user_agent is None:
+            manifest_path = Path(__file__).parent.parent / "manifest.json"
+            manifest_text = await asyncio.to_thread(manifest_path.read_text, encoding="utf-8")
+            manifest = json.loads(manifest_text)
+            self._user_agent = f"{DOMAIN}/{manifest['version']}"
+        return self._user_agent
 
     def _token_valid(self) -> bool:
         return bool(
@@ -137,6 +149,7 @@ class SmappeeDashboardClient:
             self._session.post(
                 f"{DASHAPI_URL}/login",
                 json={"userName": self.username, "password": self.password},
+                headers={"User-Agent": await self._async_user_agent()},
                 timeout=self._timeout,
             )
         ) as resp:
@@ -168,6 +181,7 @@ class SmappeeDashboardClient:
             self._session.post(
                 f"{DASHAPI_URL}/refreshToken",
                 json={"refreshToken": self.refresh_token, "language": "nl"},
+                headers={"User-Agent": await self._async_user_agent()},
                 timeout=self._timeout,
             )
         ) as resp:
@@ -277,6 +291,7 @@ class SmappeeDashboardClient:
             return None
 
         url = f"{DASHBOARD_API_URL}/{path.lstrip('/')}"
+        user_agent = await self._async_user_agent()
         failed_token = self._token
         try:
             response_context = self._session.request(
@@ -284,7 +299,11 @@ class SmappeeDashboardClient:
                 url,
                 json=json,
                 params=params,
-                headers={"token": str(failed_token), "content-type": "application/json"},
+                headers={
+                    "token": str(failed_token),
+                    "content-type": "application/json",
+                    "User-Agent": user_agent,
+                },
                 timeout=self._timeout,
             )
         except (aiohttp.ClientError, TimeoutError) as err:

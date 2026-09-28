@@ -23,6 +23,10 @@ Use **Configure** on the integration entry to update the saved Dashboard credent
 
 ## API Usage
 
+All Dashboard requests, including login and token refresh, send a `User-Agent`
+header containing only `smappee_ev/<installed version>`. The version is read from
+the integration manifest; no account or device information is included in this header.
+
 The integration uses Dashboard v10/v11 only for active control:
 
 | Area | API usage |

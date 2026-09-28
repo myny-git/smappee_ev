@@ -1,4 +1,6 @@
 import asyncio
+import json
+from pathlib import Path
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -80,6 +82,15 @@ def _client(session=None, **kwargs) -> SmappeeDashboardClient:
     )
 
 
+@pytest.fixture
+def expected_user_agent():
+    manifest_path = (
+        Path(__file__).parent.parent / "custom_components" / "smappee_ev" / "manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return f"smappee_ev/{manifest['version']}"
+
+
 async def test_not_found_remains_a_protocol_error():
     client = _client(session=_Session(requests=[_Response(404)]))
     client.async_ensure_auth = AsyncMock(return_value=True)
@@ -108,7 +119,7 @@ def test_dashboard_token_update_handles_missing_and_invalid_expiration():
 
 
 @pytest.mark.asyncio
-async def test_login_success_updates_token_and_refresh_token():
+async def test_login_success_updates_token_and_refresh_token(expected_user_agent):
     token_callback = MagicMock()
     expires_at = int(time.time() * 1000) + 300_000
     session = _Session(
@@ -137,6 +148,7 @@ async def test_login_success_updates_token_and_refresh_token():
     assert client._token_expires_at_ms == expires_at
     token_callback.assert_called_once_with({"dashboard_refresh_token": "login-refresh"})
     assert session.post_calls[0][1]["json"] == {"userName": "user", "password": "pass"}
+    assert session.post_calls[0][1]["headers"] == {"User-Agent": expected_user_agent}
 
 
 @pytest.mark.asyncio
@@ -481,7 +493,9 @@ async def test_dashboard_recent_sessions_uses_v10_range_mode():
 
 
 @pytest.mark.asyncio
-async def test_dashboard_request_reauthenticates_and_retries_after_unauthorized():
+async def test_dashboard_request_reauthenticates_and_retries_after_unauthorized(
+    expected_user_agent,
+):
     """A stale access token should be refreshed once and the API call retried."""
     token_updates = MagicMock()
     expires_at = int(time.time() * 1000) + 300_000
@@ -517,6 +531,10 @@ async def test_dashboard_request_reauthenticates_and_retries_after_unauthorized(
         "new-token",
     ]
     token_updates.assert_called_once_with({"dashboard_refresh_token": "new-refresh"})
+    assert session.post_calls[0][1]["headers"] == {"User-Agent": expected_user_agent}
+    assert all(
+        call[2]["headers"]["User-Agent"] == expected_user_agent for call in session.request_calls
+    )
 
 
 @pytest.mark.asyncio
