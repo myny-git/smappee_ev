@@ -153,13 +153,13 @@ def test_mqtt_freshness_separates_heartbeat_charger_power_and_clients():
 
     freshness.record_message("servicelocation/x/homeassistant/heartbeat")
     assert freshness.last_heartbeat_rx is not None
-    assert freshness.last_real_charger_rx is None
+    assert freshness.last_valid_charger_telemetry_rx is None
     assert freshness.last_real_power_rx is None
 
     freshness.record_message(
         "servicelocation/x/etc/carcharger/acchargingcontroller/v1/devices/y/state"
     )
-    assert freshness.last_real_charger_rx is not None
+    assert freshness.last_valid_charger_telemetry_rx is not None
     assert freshness.last_real_power_rx is None
 
     freshness.record_message("servicelocation/x/power")
@@ -253,7 +253,7 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
     coordinator.async_shutdown = AsyncMock()
     coordinator.cancel_delayed_refreshes = MagicMock()
     coordinator.async_request_refresh = AsyncMock()
-    coordinator.last_real_charger_rx = None
+    coordinator.last_valid_charger_telemetry_rx = None
     coordinator.last_real_power_rx = None
     coordinator.last_heartbeat_rx = None
     station = make_station_runtime(
@@ -291,9 +291,9 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
                 "servicelocation/x/etc/carcharger/acchargingcontroller/v1/devices/y/state",
                 {"chargingState": "CHARGING"},
             )
-            charger_rx = coordinator.last_real_charger_rx
+            charger_rx = coordinator.last_valid_charger_telemetry_rx
             on_properties("servicelocation/x/homeassistant/heartbeat", {})
-            assert coordinator.last_real_charger_rx == charger_rx
+            assert coordinator.last_valid_charger_telemetry_rx == charger_rx
             assert coordinator.last_heartbeat_rx > charger_rx
             on_properties("servicelocation/x/power", {"activePowerData": [1]})
             assert coordinator.last_real_power_rx > coordinator.last_heartbeat_rx

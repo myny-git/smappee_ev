@@ -13,7 +13,7 @@ from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.device_handle import SmappeeDeviceHandle, SmartDeviceRequests
@@ -26,6 +26,7 @@ from .const import (
 from .coordinators.api_state import ConnectorRestSnapshot, StationApiMixin
 from .coordinators.dashboard_merge import DashboardMixin
 from .coordinators.freshness import MeasurementFreshness, MqttApplyResult
+from .coordinators.freshness_coordinator import FreshnessCoordinator
 from .coordinators.mqtt_apply import MqttMixin
 from .coordinators.power import (
     PowerMixin,
@@ -61,7 +62,7 @@ def _to_int(value: object, default: int = 0) -> int:
     return _power_to_int(value, default)
 
 
-class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
+class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
     """Single source of truth for one site/service-location MQTT state."""
 
     def __init__(
@@ -96,7 +97,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
         self._power_map_retry_after = 0.0
         self.mqtt_transport_connected = False
-        self.last_real_charger_rx: datetime | None = None
+        self.last_valid_charger_telemetry_rx: datetime | None = None
         self.last_real_power_rx: datetime | None = None
         self.last_heartbeat_rx: datetime | None = None
 
@@ -340,7 +341,7 @@ class SmappeeStationCoordinator(
     MqttMixin,
     PowerMixin,
     DashboardMixin,
-    DataUpdateCoordinator[IntegrationData],
+    FreshnessCoordinator[IntegrationData],
 ):
     """Single source of truth: fetch station + all connector state here."""
 
@@ -384,7 +385,7 @@ class SmappeeStationCoordinator(
         self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
         self._power_map_retry_after = 0.0
         self.mqtt_transport_connected = False
-        self.last_real_charger_rx: datetime | None = None
+        self.last_valid_charger_telemetry_rx: datetime | None = None
         self.last_real_power_rx: datetime | None = None
         self.last_heartbeat_rx: datetime | None = None
         self._station_api_available: bool | None = None
@@ -449,7 +450,7 @@ class SmappeeStationCoordinator(
             )
         ):
             return SMARTDEVICE_FALLBACK_INTERVAL
-        last_rx = self.last_real_charger_rx
+        last_rx = self.last_valid_charger_telemetry_rx
         if (
             self.mqtt_transport_connected
             and last_rx is not None
@@ -560,6 +561,7 @@ class SmappeeStationCoordinator(
     def cancel_delayed_refreshes(self) -> None:
         """Synchronously cancel delayed refresh callbacks/tasks during shutdown."""
         self._shutting_down = True
+        self.cancel_freshness_timer()
 
         self._cancel_session_refresh()
         self._cancel_active_session_loop()

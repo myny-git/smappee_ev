@@ -37,7 +37,7 @@ class MqttFreshnessState:
 
     clients_connected: dict[int, bool] = field(default_factory=dict)
     # Last valid charger MQTT telemetry, including energy/current-only messages.
-    last_real_charger_rx: datetime | None = None
+    last_valid_charger_telemetry_rx: datetime | None = None
     last_real_power_rx: datetime | None = None
     last_real_site_power_rx: datetime | None = None
     last_heartbeat_rx: datetime | None = None
@@ -76,7 +76,7 @@ class MqttFreshnessState:
         if site_power:
             self.last_real_site_power_rx = now
         if real_charger:
-            self.last_real_charger_rx = now
+            self.last_valid_charger_telemetry_rx = now
 
 
 def _diagnostic_targets(
@@ -480,7 +480,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                         coord.last_real_power_rx = now_utc
                     elif coord is not site_coordinator:
                         if valid_charger:
-                            coord.last_real_charger_rx = now_utc
+                            coord.last_valid_charger_telemetry_rx = now_utc
                         if valid_power:
                             coord.last_real_power_rx = now_utc
                         if isinstance(coord, SmappeeStationCoordinator):

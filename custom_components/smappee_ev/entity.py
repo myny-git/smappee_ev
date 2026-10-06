@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypeVar, override
 
-from homeassistant.core import callback
-from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
@@ -94,22 +92,6 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
             unique_suffix,
         )
         super().__init__(coordinator)
-
-    @override
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        if self._mqtt_field is not None and isinstance(
-            getattr(self.coordinator, "measurement_freshness", None), MeasurementFreshness
-        ):
-            self.async_on_remove(
-                async_track_time_interval(
-                    self.hass, self._check_measurement_freshness, timedelta(seconds=30)
-                )
-            )
-
-    @callback
-    def _check_measurement_freshness(self, _now: datetime) -> None:
-        self.async_write_ha_state()
 
     @property
     def _measurement_available(self) -> bool | None:

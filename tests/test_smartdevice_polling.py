@@ -212,7 +212,7 @@ async def test_poll_deadlines_ignore_local_ticks_and_unrelated_traffic(
     while polling_clock[0] < deadline:
         now = coordinator_module.datetime.now(UTC)
         if mqtt_state == "healthy":
-            coordinator.last_real_charger_rx = now
+            coordinator.last_valid_charger_telemetry_rx = now
         elif mqtt_state == "heartbeat":
             coordinator.last_heartbeat_rx = now
         elif mqtt_state == "power":
@@ -234,7 +234,7 @@ async def test_silent_mqtt_switches_to_fallback_and_fresh_traffic_restores_slow_
     request = coordinator.dashboard_client._request
     request.return_value = device_list(1)
     coordinator.mqtt_transport_connected = True
-    coordinator.last_real_charger_rx = coordinator_module.datetime.now(UTC)
+    coordinator.last_valid_charger_telemetry_rx = coordinator_module.datetime.now(UTC)
     coordinator.data = await coordinator._async_update_data()
 
     polling_clock[0] += 299
@@ -245,7 +245,7 @@ async def test_silent_mqtt_switches_to_fallback_and_fresh_traffic_restores_slow_
     assert request.await_count == 2
 
     polling_clock[0] += 300
-    coordinator.last_real_charger_rx = coordinator_module.datetime.now(UTC)
+    coordinator.last_valid_charger_telemetry_rx = coordinator_module.datetime.now(UTC)
     await coordinator._async_update_data()
     assert request.await_count == 2
 
@@ -264,7 +264,7 @@ async def test_rest_failure_retries_after_five_minutes_even_with_healthy_mqtt(
     request = coordinator.dashboard_client._request
     request.side_effect = [SmappeeConnectionError("offline"), device_list(1)]
     coordinator.mqtt_transport_connected = True
-    coordinator.last_real_charger_rx = coordinator_module.datetime.now(UTC)
+    coordinator.last_valid_charger_telemetry_rx = coordinator_module.datetime.now(UTC)
     coordinator.data = await coordinator._async_update_data()
     assert not coordinator.data.station.api_available
 
@@ -272,7 +272,7 @@ async def test_rest_failure_retries_after_five_minutes_even_with_healthy_mqtt(
     await coordinator._async_update_data()
     request.assert_awaited_once()
     polling_clock[0] += 1
-    coordinator.last_real_charger_rx = coordinator_module.datetime.now(UTC)
+    coordinator.last_valid_charger_telemetry_rx = coordinator_module.datetime.now(UTC)
     coordinator.data = await coordinator._async_update_data()
     assert request.await_count == 2
     assert coordinator.data.station.api_available
@@ -313,7 +313,7 @@ async def test_write_refresh_is_debounced_and_bypasses_periodic_deadline(
     request.side_effect = [device_list(1), device_list(1, percentage=60)]
     coordinator.data = await coordinator._async_update_data()
     coordinator.mqtt_transport_connected = True
-    coordinator.last_real_charger_rx = coordinator_module.datetime.now(UTC)
+    coordinator.last_valid_charger_telemetry_rx = coordinator_module.datetime.now(UTC)
     schedule = MagicMock(side_effect=[MagicMock(), MagicMock()])
     monkeypatch.setattr(
         "custom_components.smappee_ev.coordinators.dashboard_merge.async_call_later", schedule

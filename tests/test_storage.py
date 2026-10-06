@@ -452,10 +452,6 @@ async def test_cached_battery_expires_without_messages_and_timer_is_removed(hass
     power = sensor.SiteBatteryPower(coord, 1)
     power.hass = hass
     power.entity_id = "sensor.test_battery_power"
-    monkeypatch.setattr(
-        "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
-        AsyncMock(),
-    )
     writes = []
     monkeypatch.setattr(power, "async_write_ha_state", lambda: writes.append(power.available))
     await power.async_added_to_hass()

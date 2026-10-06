@@ -39,8 +39,14 @@ Explicit zero and unchanged valid values both renew their own timestamps.
 `MeasurementFreshness` tracks each field separately per site or connector. Power,
 current, voltage, energy and charging state cannot renew one another. Empty
 messages and heartbeats do not make an old measurement available. Monitoring
-entities use these timestamps and recheck expiry every 30 seconds, including when
-polling is disabled. Entity removal cancels the timer.
+entities use these timestamps. Each site/station coordinator shares one 30-second
+timer that notifies its listeners to recheck expiry, including when polling is
+disabled. The tick performs no remote I/O and does not change API success/failure
+state. Removing the last listener or shutting down cancels the timer.
+
+`last_valid_charger_telemetry_rx` records any accepted charger measurement,
+including current/energy-only messages. It controls REST polling cadence; it does
+not replace the separate freshness timestamp for each measurement.
 
 Charging-state sensors retain their existing REST fallback in normal mode. When
 running from cached configuration without REST, they require fresh MQTT charging

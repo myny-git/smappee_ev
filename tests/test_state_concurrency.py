@@ -228,6 +228,56 @@ async def test_rest_refresh_preserves_mqtt_sessions_and_new_commands(online):
         await asyncio.gather(task, return_exceptions=True)
 
 
+async def test_stale_rest_current_limit_preserves_successful_command(online):
+    """A REST response for 8 A must not overwrite a newer successful 20 A write."""
+    coord = online.sites[1].stations["station-1"].station_coordinator
+    uuid = "connector-1"
+    initial = ConnectorState(
+        connector_number=1,
+        min_current=8,
+        max_current=32,
+        selected_current_limit=8,
+        selected_percentage_limit=0,
+    )
+    coord.data.connectors[uuid] = initial
+    coord._fetch_station_state = AsyncMock(return_value=StationState())
+    coord._ensure_power_index_map = AsyncMock()
+    coord._maybe_refresh_dashboard_data = AsyncMock(return_value=False)
+    coord.async_schedule_dashboard_refresh = MagicMock()
+    started, finish = asyncio.Event(), asyncio.Event()
+
+    async def stale_rest_response(*args, **kwargs):
+        response = replace(initial)
+        started.set()
+        await finish.wait()
+        return response
+
+    coord._fetch_connector_state = AsyncMock(side_effect=stale_rest_response)
+    api = MagicMock()
+    api.set_current = AsyncMock(return_value=(20.0, 50))
+    entity = number.SmappeeCombinedCurrentSlider(
+        coordinator=coord,
+        api_client=api,
+        sid=1,
+        station_uuid="station-1",
+        connector_uuid=uuid,
+    )
+    task = asyncio.create_task(coord._async_fetch_data())
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        await entity.async_set_native_value(20)
+        api.set_current.assert_awaited_once_with(20, min_current=8, max_current=32)
+        assert coord.data.connectors[uuid].selected_current_limit == 20
+        finish.set()
+        result = await task
+        assert result.connectors[uuid].selected_current_limit == 20
+        assert result.connectors[uuid].selected_percentage_limit == 50
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
 async def test_sessions_share_one_station_request(online):
     coord = online.sites[1].stations["station-1"].station_coordinator
     first = coord.connector_clients["connector-1"]

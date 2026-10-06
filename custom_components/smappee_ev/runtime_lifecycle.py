@@ -22,6 +22,9 @@ def _begin_runtime_shutdown(rd: RuntimeData) -> None:
         remove()
     rd.cleanup_callbacks.clear()
     for site in (rd.sites or {}).values():
+        cancel_freshness = getattr(site.site_coordinator, "cancel_freshness_timer", None)
+        if callable(cancel_freshness):
+            cancel_freshness()
         for bucket in site.stations.values():
             coord = bucket.station_coordinator
             cancel_delayed = getattr(coord, "cancel_delayed_refreshes", None)

@@ -102,10 +102,10 @@ async def test_empty_charger_message_does_not_refresh_state(hass, online, payloa
         start_clients=False,
     )
     mqtt._on_properties(topic, payload)
-    assert coord.last_real_charger_rx is None
+    assert coord.last_valid_charger_telemetry_rx is None
     assert not coord.measurement_freshness.is_fresh("charger_state", "connector-1")
     mqtt._on_properties(topic, {"chargingState": "Charging"})
-    assert coord.last_real_charger_rx is not None
+    assert coord.last_valid_charger_telemetry_rx is not None
     assert coord.measurement_freshness.is_fresh("charger_state", "connector-1")
 
 
@@ -155,10 +155,6 @@ async def test_measurements_expire_without_traffic_and_remove_timer(
         entity = ConnectorPowerSensor(coord, client, 1, "station-1", "connector-1")
     entity.hass = hass
     entity.entity_id = f"sensor.test_{scope}_freshness"
-    monkeypatch.setattr(
-        "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
-        AsyncMock(),
-    )
     writes = []
     monkeypatch.setattr(entity, "async_write_ha_state", lambda: writes.append(entity.available))
     await entity.async_added_to_hass()
@@ -173,3 +169,44 @@ async def test_measurements_expire_without_traffic_and_remove_timer(
     async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=65))
     await hass.async_block_till_done()
     assert writes == [False]
+
+
+@pytest.mark.parametrize("scope", ["site", "connector"])
+async def test_coordinator_shares_freshness_timer_and_stops_on_shutdown(
+    hass, online, monkeypatch, scope
+):
+    site = online.sites[1]
+    coord = (
+        site.site_coordinator if scope == "site" else site.stations["station-1"].station_coordinator
+    )
+    coord.update_interval = None
+    updates = [MagicMock(), MagicMock()]
+    cancel = MagicMock()
+    timer = MagicMock(return_value=cancel)
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.coordinators.freshness_coordinator.async_track_time_interval",
+        timer,
+    )
+    fetch = AsyncMock()
+    monkeypatch.setattr(coord, "_async_update_data", fetch)
+    remove_first = coord.async_add_listener(updates[0])
+    remove_second = coord.async_add_listener(updates[1])
+    assert timer.call_count == 1
+    tick = timer.call_args.args[1]
+    assert timer.call_args.args[2] == timedelta(seconds=30)
+    tick(datetime.now(UTC))
+    for update in updates:
+        update.assert_called_once_with()
+    fetch.assert_not_awaited()
+    remove_first()
+    cancel.assert_not_called()
+    remove_second()
+    cancel.assert_called_once_with()
+    remove = coord.async_add_listener(updates[0])
+    assert timer.call_count == 2
+    await coord.async_shutdown()
+    assert cancel.call_count == 2
+    tick(datetime.now(UTC))
+    updates[0].assert_called_once_with()
+    remove()
+    assert cancel.call_count == 2
