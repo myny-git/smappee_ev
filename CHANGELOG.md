@@ -7,6 +7,99 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.10.0] - 2026-10-06
+
+This release adds automatic home battery monitoring, optional cable lock control
+and a serial-number fallback for charging station discovery. It also prevents
+older API responses from overwriting newer state, makes MQTT measurement
+freshness more precise and reduces redundant Dashboard requests.
+
+### Home battery monitoring
+
+- Automatically adds site-level battery sensors when Smappee exposes measurements
+  configured as `STORAGE`. No additional integration option is required; sensors
+  are only created for configured measurement paths.
+- Battery power is negative while charging and positive while discharging.
+  Multiple battery measurements and phases are summed at site level.
+- Adds **Battery charged energy** and **Battery discharged energy** in kWh for
+  the Home Assistant Energy dashboard when cumulative readings have explicit,
+  valid direction mappings. These are measured counters, not estimates from power.
+- Battery power becomes unavailable if any contributing battery topic has not
+  delivered a complete, valid power measurement for five minutes. Other topics
+  and energy-only updates cannot keep stale battery power available.
+
+### Optional cable lock control
+
+- Adds a **Cable lock** entity for compatible socket-equipped charging stations.
+  It is disabled by default and can be enabled manually in the entity settings.
+- Missing API lock state remains unknown instead of being treated as unlocked.
+  The entity is unavailable without a reported lock state or Dashboard access.
+- Failed or interrupted lock commands preserve current state and schedule
+  reconciliation with Dashboard.
+
+### Charging station discovery
+
+- When automatic discovery returns no charging stations, setup asks for a station
+  serial number to discover its service location and connectors. Existing entries
+  can use **Reconfigure** to enter the serial number.
+- Validates the returned station identity and handles missing parent locations.
+  Automatic discovery remains the default when it succeeds.
+
+### State consistency and MQTT freshness
+
+- Prevents older REST and Dashboard responses from overwriting newer MQTT data,
+  charging sessions or successful control changes received during a refresh.
+  Repeated confirmations of an unchanged value are protected as well.
+- Applies control changes to the current state after successful writes. Timeouts,
+  transport failures and cancellation schedule reconciliation because the server
+  may have accepted the command before its response was lost.
+- Tracks freshness separately for each accepted measurement and connector.
+  Power, current, voltage, energy and MQTT charging state cannot renew each other.
+  Empty, invalid or incomplete measurement groups preserve values and timestamps;
+  valid zeros and unchanged readings renew their own timestamps.
+- Preserves the last valid charging state when MQTT charging-state payloads are
+  malformed. Charging-state sensors retain REST fallback in normal operation;
+  cached MQTT-only operation requires fresh MQTT charging-state data.
+- Shares one local 30-second freshness timer per site/station coordinator.
+  These checks make no API requests. Timers are cancelled when the last listener
+  is removed or the coordinator shuts down, without using private Home Assistant
+  listener attributes. Removed duplicate MQTT listener notifications.
+
+### API efficiency and maintenance
+
+- Station and connector refreshes share one smartdevice list request per service
+  location within each station refresh, including failed requests.
+- Smartdevice polling runs every 30 minutes while charger MQTT telemetry is fresh
+  and REST state is reachable, falling back to five minutes otherwise. Supported
+  writes schedule an additional Dashboard check after two minutes.
+- Fetches recent charging sessions once per physical station rather than once
+  per connector.
+- Adds a versioned `smappee_ev/<installed version>` User-Agent to all Dashboard
+  requests, including authentication, without account or device information.
+- Expands regression coverage for concurrent updates, repeated confirmations,
+  uncertain writes, malformed payloads, measurement expiry and timer cleanup.
+  Adds a real aiomqtt/Mosquitto transport test to CI.
+- Resolves coordinator import cycles, aligns development tooling and dependency
+  updates, removes committed test output and documents state-update rules.
+
+### Upgrade notes
+
+- Only enable **Cable lock** on socket-equipped stations that support cable
+  locking. Fixed-cable models are unsupported; a reported lock state does not
+  prove hardware support. Existing cable lock entities are disabled once during
+  the upgrade and can then be re-enabled; later reloads preserve that choice.
+- Compare battery power and energy direction with the Smappee Dashboard when
+  validating a new installation.
+- Availability and offline-charging switches now update their displayed state
+  after a successful API write, so toggles can take an API round trip to respond.
+- Settings changed outside Home Assistant without a matching MQTT update can
+  take about 30 minutes to appear while MQTT is healthy.
+
+References:
+[Issue #301](https://github.com/myny-git/smappee_ev/issues/301),
+[PR #297](https://github.com/myny-git/smappee_ev/pull/297),
+[Issue #300](https://github.com/myny-git/smappee_ev/issues/300).
+
 ## [2026.9.1] - 2026-09-09
 
 This release keeps MQTT monitoring available during temporary Smappee Dashboard
