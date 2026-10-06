@@ -17,7 +17,7 @@ repos:
           - --ignore-words-list=smappee,HA,nd
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.1.0
+    rev: v2.4.0
     hooks:
       - id: mypy
         files: ^custom_components/smappee_ev/
