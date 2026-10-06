@@ -13,9 +13,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 class FreshnessCoordinator[T](DataUpdateCoordinator[T]):
     """Notify entities about measurement expiry without fetching remote data."""
 
-    _freshness_unsub: CALLBACK_TYPE | None = None
-    _freshness_listener_count: int = 0
-    _freshness_stopped: bool = False
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._freshness_unsub: CALLBACK_TYPE | None = None
+        self._freshness_listener_count = 0
+        self._freshness_stopped = False
 
     @callback
     @override
