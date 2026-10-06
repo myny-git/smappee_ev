@@ -14,6 +14,8 @@ class FreshnessCoordinator[T](DataUpdateCoordinator[T]):
     """Notify entities about measurement expiry without fetching remote data."""
 
     _freshness_unsub: CALLBACK_TYPE | None = None
+    _freshness_listener_count: int = 0
+    _freshness_stopped: bool = False
 
     @callback
     @override
@@ -21,22 +23,30 @@ class FreshnessCoordinator[T](DataUpdateCoordinator[T]):
         self, update_callback: CALLBACK_TYPE, context: Any = None
     ) -> CALLBACK_TYPE:
         remove_listener = super().async_add_listener(update_callback, context)
-        if self._freshness_unsub is None and not self._shutdown_requested:
+        self._freshness_listener_count += 1
+        if self._freshness_unsub is None and not self._freshness_stopped:
             self._freshness_unsub = async_track_time_interval(
                 self.hass, self._async_freshness_tick, timedelta(seconds=30)
             )
 
+        removed = False
+
         @callback
         def remove() -> None:
+            nonlocal removed
+            if removed:
+                return
             remove_listener()
-            if not self._listeners:
+            removed = True
+            self._freshness_listener_count -= 1
+            if self._freshness_listener_count == 0:
                 self.cancel_freshness_timer()
 
         return remove
 
     @callback
     def _async_freshness_tick(self, _now: datetime) -> None:
-        if not self._shutdown_requested and not self.hass.is_stopping:
+        if not self._freshness_stopped and not self.hass.is_stopping:
             self.async_update_listeners()
 
     @callback
@@ -48,5 +58,6 @@ class FreshnessCoordinator[T](DataUpdateCoordinator[T]):
 
     @override
     async def async_shutdown(self) -> None:
+        self._freshness_stopped = True
         self.cancel_freshness_timer()
         await super().async_shutdown()

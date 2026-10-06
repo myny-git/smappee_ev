@@ -199,6 +199,7 @@ async def test_coordinator_shares_freshness_timer_and_stops_on_shutdown(
         update.assert_called_once_with()
     fetch.assert_not_awaited()
     remove_first()
+    remove_first()  # Repeated cleanup must not decrement another listener.
     cancel.assert_not_called()
     remove_second()
     cancel.assert_called_once_with()
@@ -209,4 +210,11 @@ async def test_coordinator_shares_freshness_timer_and_stops_on_shutdown(
     tick(datetime.now(UTC))
     updates[0].assert_called_once_with()
     remove()
+    assert cancel.call_count == 2
+    remove_after_shutdown = coord.async_add_listener(updates[1])
+    assert timer.call_count == 2
+    tick(datetime.now(UTC))
+    updates[1].assert_called_once_with()
+    remove_after_shutdown()
+    remove_after_shutdown()
     assert cancel.call_count == 2
