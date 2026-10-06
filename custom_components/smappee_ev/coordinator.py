@@ -626,7 +626,13 @@ class SmappeeStationCoordinator(
     def _set_if_changed(
         self, obj: object, attr: str, value: object, *, confirm: bool = True
     ) -> bool:
-        """Set attr if value is not None and different; return True if changed."""
+        """Apply a non-None value and return whether the field changed.
+
+        On live state, confirm=True also protects an unchanged incoming value
+        against older in-flight remote responses. Use confirm=False for derived
+        or fallback values that do not independently confirm the field.
+        Staging objects never record live confirmations.
+        """
         if value is None:
             return False
         if confirm:
