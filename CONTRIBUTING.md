@@ -14,7 +14,8 @@ Please note that this project is released with a [Contributor Code of Conduct][c
 - A virtual environment (recommended)
 
 The shipped integration keeps Python 3.13-compatible syntax. CI checks that
-separately from the tests running against Home Assistant 2026.9.3.
+separately from the tests running against the Home Assistant version pinned in
+`requirements-test.txt`.
 
 ## Setup
 

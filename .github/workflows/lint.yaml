@@ -18,10 +18,10 @@ jobs:
           enable-cache: true
 
       - name: Ruff Lint
-        run: uvx ruff@0.16.6 check --output-format=github .
+        run: uvx --from "ruff>=0.16.9" ruff check --output-format=github .
 
       - name: Ruff Format (check)
-        run: uvx ruff@0.16.6 format . --check
+        run: uvx --from "ruff>=0.16.9" ruff format . --check
 
   codespell:
     name: Codespell

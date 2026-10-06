@@ -36,6 +36,7 @@ class MqttFreshnessState:
     """Keep transport state separate from meaningful Smappee payload freshness."""
 
     clients_connected: dict[int, bool] = field(default_factory=dict)
+    # Last valid charger MQTT telemetry, including energy/current-only messages.
     last_real_charger_rx: datetime | None = None
     last_real_power_rx: datetime | None = None
     last_real_site_power_rx: datetime | None = None
@@ -465,6 +466,8 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                         *(fields for fields in result.connector_fields.values())
                     )
                     valid_power = bool(all_fields & power_fields)
+                    # Any accepted charger measurement proves MQTT telemetry is
+                    # live; individual fields retain their own freshness clocks.
                     valid_charger = coord is not site_coordinator and bool(all_fields)
                     freshness.record_message(
                         topic,
