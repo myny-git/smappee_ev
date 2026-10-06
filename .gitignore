@@ -6,3 +6,4 @@
 .ruff_cache/
 .agents/
 __pycache__/
+pytest-output.txt

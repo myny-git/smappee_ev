@@ -15,6 +15,7 @@ from custom_components.smappee_ev.const import (
     CONF_USERNAME,
     DOMAIN,
 )
+from custom_components.smappee_ev.coordinators.freshness import MqttApplyResult
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, SiteData
 from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
@@ -276,6 +277,7 @@ class _FakeSiteCoordinator:
 
     def apply_mqtt_properties(self, topic, payload):
         self.last_properties = (topic, payload)
+        return MqttApplyResult()
 
     def apply_mqtt_connection_change(self, up):
         self.mqtt_connection_changes.append(up)
@@ -316,6 +318,7 @@ class _FakeStationCoordinator:
 
     def apply_mqtt_properties(self, topic, payload):
         self.mqtt_properties.append((topic, payload))
+        return MqttApplyResult()
 
     def apply_mqtt_connection_change(self, up):
         self.mqtt_connection_changes.append(up)

@@ -73,3 +73,10 @@ def test_runtime_data_does_not_import_mqtt_setup():
     )
 
     assert f"{PACKAGE}.mqtt_setup" not in imports
+
+
+def test_state_updates_does_not_import_coordinator_even_for_type_checking():
+    """State helpers are used by coordinator mixins and must not import back."""
+    imports = _module_imports(PACKAGE_ROOT / "state_updates.py", f"{PACKAGE}.state_updates")
+
+    assert f"{PACKAGE}.coordinator" not in imports

@@ -248,13 +248,16 @@ class DashboardMixin(CoordinatorMixin):
             if self.data is None:
                 return
             baseline = state_staging_copy(self.data)
+            confirmation_version = self._state_confirmations.version
             staged = state_staging_copy(baseline)
             await self._maybe_refresh_dashboard_data(staged, force=True)
             current = self.data
             if current is not None:
                 concurrent = StateChanges.between(baseline, current)
+                confirmed = self._state_confirmations.since(confirmation_version, current)
                 changed = StateChanges.between(baseline, staged).apply(current)
                 changed |= concurrent.apply(current)
+                changed |= confirmed.apply(current)
                 if changed:
                     self.async_set_updated_data(current)
                 self._sync_dashboard_client_metadata(current)

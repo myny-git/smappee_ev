@@ -84,12 +84,62 @@ async def test_only_valid_power_renews_power_freshness(hass, online, monkeypatch
     assert power.native_value == 0
 
 
+@pytest.mark.parametrize("scope", ["site", "connector"])
+async def test_mqtt_notifies_once_for_changes_and_freshness_recovery(
+    hass, online, monkeypatch, scope
+):
+    site = online.sites[1]
+    bucket = site.stations["station-1"]
+    coord = site.site_coordinator if scope == "site" else bucket.station_coordinator
+    mqtt = _setup_mqtt(
+        hass,
+        suuid="site-uuid",
+        serial_str="gateway",
+        sid=1,
+        stations={"station-1": bucket} if scope == "connector" else {},
+        client_id_prefix="notification-test",
+        update_interval=30,
+        site_coordinator=coord if scope == "site" else None,
+        start_clients=False,
+    )
+    mqtt._on_conn(True)
+    notify = MagicMock()
+    monkeypatch.setattr(coord, "async_update_listeners", notify)
+    payload = {"activePowerData": [3200, 3200]}
+    mqtt._on_properties(bootstrap.TOPIC, payload)
+    notify.assert_called_once_with()
+    notify.reset_mock()
+    mqtt._on_properties(bootstrap.TOPIC, payload)
+    mqtt._on_properties(bootstrap.TOPIC, {})
+    notify.assert_not_called()
+    clock = MagicMock(wraps=datetime)
+    clock.now.return_value = datetime.now(UTC) + timedelta(minutes=10)
+    monkeypatch.setattr("custom_components.smappee_ev.coordinators.freshness.datetime", clock)
+    mqtt._on_properties(bootstrap.TOPIC, payload)
+    notify.assert_called_once_with()
+    notify.reset_mock()
+    mqtt._on_properties(bootstrap.TOPIC, {"activePowerData": [0, 0]})
+    notify.assert_called_once_with()
+
+
 @pytest.mark.parametrize(
-    "payload", [{}, {"unknown": "Started"}, {"chargingState": None}, {"chargingState": ""}]
+    "payload",
+    [
+        {},
+        {"unknown": "Started"},
+        {"chargingState": None},
+        {"chargingState": ""},
+        {"chargingState": "   "},
+        {"chargingState": 42},
+        {"chargingState": False},
+        {"chargingState": {}},
+        {"chargingState": []},
+    ],
 )
 async def test_empty_charger_message_does_not_refresh_state(hass, online, payload):
     bucket = online.sites[1].stations["station-1"]
     coord = bucket.station_coordinator
+    coord.data.connectors["connector-1"].session_state = "Started"
     topic = "servicelocation/site-uuid/etc/carcharger/acchargingcontroller/v1/devices/connector-1/property/chargingstate"
     mqtt = _setup_mqtt(
         hass,
@@ -104,6 +154,7 @@ async def test_empty_charger_message_does_not_refresh_state(hass, online, payloa
     mqtt._on_properties(topic, payload)
     assert coord.last_valid_charger_telemetry_rx is None
     assert not coord.measurement_freshness.is_fresh("charger_state", "connector-1")
+    assert coord.data.connectors["connector-1"].session_state == "Started"
     mqtt._on_properties(topic, {"chargingState": "Charging"})
     assert coord.last_valid_charger_telemetry_rx is not None
     assert coord.measurement_freshness.is_fresh("charger_state", "connector-1")

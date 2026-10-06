@@ -52,7 +52,7 @@ from .models.state import (
     SiteData,
     SiteState,
 )
-from .state_updates import StateChanges, state_staging_copy
+from .state_updates import StateChanges, StateConfirmations, state_staging_copy
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -378,6 +378,7 @@ class SmappeeStationCoordinator(
         self.station_name = station_name
         self.station_model = station_model
         self.last_connector_rx: dict[str, datetime] = {}
+        self._state_confirmations = StateConfirmations()
         self.measurement_freshness = MeasurementFreshness()
         self.station_client.dashboard_client = dashboard_client
         for client in self.connector_clients.values():
@@ -465,6 +466,7 @@ class SmappeeStationCoordinator(
         # must fetch a new list rather than replaying an older REST snapshot.
         requests: SmartDeviceRequests = {}
         refresh_start = state_staging_copy(self.data) if self.data is not None else None
+        confirmation_version = self._state_confirmations.version
         try:
             # Fetch remote values into isolated objects. Do not preserve live
             # telemetry from a snapshot retained while network I/O is pending.
@@ -530,6 +532,8 @@ class SmappeeStationCoordinator(
                 # New commands and MQTT state take precedence over responses
                 # that were already in flight when those updates arrived.
                 StateChanges.between(refresh_start, current).apply(data)
+            if current is not None:
+                self._state_confirmations.since(confirmation_version, current).apply(data)
             self._sync_dashboard_client_metadata(data)
             return data
 
@@ -557,6 +561,10 @@ class SmappeeStationCoordinator(
 
         if task is not None:
             await asyncio.gather(task, return_exceptions=True)
+
+    def record_confirmed_write(self, connector_uuid: str | None, changes: dict[str, Any]) -> None:
+        """Protect confirmed command fields from older in-flight responses."""
+        self._state_confirmations.record(connector_uuid, changes)
 
     def cancel_delayed_refreshes(self) -> None:
         """Synchronously cancel delayed refresh callbacks/tasks during shutdown."""
@@ -602,10 +610,27 @@ class SmappeeStationCoordinator(
         _LOGGER.warning("Smappee background task failed", exc_info=exc)
 
     # ---------- split sub-helpers ----------
-    def _set_if_changed(self, obj: object, attr: str, value: object) -> bool:
+    def _record_live_state_fields(self, obj: object, names: tuple[str, ...]) -> None:
+        """Record confirmations on live objects; staging merges are excluded."""
+        data: IntegrationData | None = self.data
+        if data is None:
+            return
+        if obj is data.station:
+            self._state_confirmations.record(None, names)
+        elif isinstance(obj, ConnectorState):
+            for uuid, connector in data.connectors.items():
+                if obj is connector:
+                    self._state_confirmations.record(uuid, names)
+                    break
+
+    def _set_if_changed(
+        self, obj: object, attr: str, value: object, *, confirm: bool = True
+    ) -> bool:
         """Set attr if value is not None and different; return True if changed."""
         if value is None:
             return False
+        if confirm:
+            self._record_live_state_fields(obj, (attr,))
         cur = getattr(obj, attr, None)
         if value != cur:
             setattr(obj, attr, value)

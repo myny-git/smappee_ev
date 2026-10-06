@@ -26,6 +26,13 @@ Preserve current telemetry and recent sessions. `StateChanges` applies individua
 fields rather than replacing live nested objects with an older staging snapshot.
 Changes received during the refresh take precedence over its remote responses.
 
+`StateConfirmations` also records field confirmations from successful commands
+and live MQTT merges. A confirmed value can equal the value at refresh start,
+so comparing snapshots alone cannot detect every newer update. Each refresh
+captures a confirmation version before I/O and preserves the current values of
+fields confirmed afterwards. Staging merges do not record live confirmations.
+Requests started after a confirmation can reconcile those fields normally.
+
 The same rule applies to the forced Dashboard refresh after a write. Recent
 sessions are requested once per physical station, even with multiple connectors.
 

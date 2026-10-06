@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, override
+from typing import Any, TypeVar, override
 
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+_DataT = TypeVar("_DataT")
 
-class FreshnessCoordinator[T](DataUpdateCoordinator[T]):
+
+# Keep the generic base visible to CodeQL's import analysis.
+class FreshnessCoordinator(DataUpdateCoordinator[_DataT]):
     """Notify entities about measurement expiry without fetching remote data."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

@@ -100,6 +100,7 @@ class MqttMixin(CoordinatorMixin):
         base = self._derive_base_mode(conn.raw_charging_mode, conn.optimization_strategy)
         changed = conn.ui_mode_base != base or conn.selected_mode != base
         conn.ui_mode_base = conn.selected_mode = base
+        self._record_live_state_fields(conn, ("ui_mode_base", "selected_mode"))
         return changed
 
     @staticmethod
@@ -328,7 +329,9 @@ class MqttMixin(CoordinatorMixin):
 
     def _merge_cs_primary(self, conn: ConnectorState, payload: dict) -> bool:
         v = self._get_any(payload, "chargingState", "chargingstate")
-        return self._set_if_changed(conn, "session_state", str(v)) if v is not None else False
+        if not isinstance(v, str) or not v.strip():
+            return False
+        return cast(bool, self._set_if_changed(conn, "session_state", v))
 
     def _merge_cs_context(self, conn: ConnectorState, payload: dict) -> bool:
         changed = False
@@ -399,13 +402,19 @@ class MqttMixin(CoordinatorMixin):
                 if getattr(conn, attr) != normalized:
                     setattr(conn, attr, normalized)
                     changed = True
+                self._record_live_state_fields(conn, (attr,))
 
         if mode_present or strategy_present:
             changed |= self._sync_base_mode(conn)
         paused = self._is_paused(
             conn.raw_charging_mode, conn.session_state, conn.session_cause, conn.status_current
         )
-        changed |= self._set_if_changed(conn, "paused", paused)
+        changed |= self._set_if_changed(
+            conn,
+            "paused",
+            paused,
+            confirm=self._has_charger_state(payload) or isinstance(payload.get("status"), dict),
+        )
         return cast(bool, changed)
 
     def _update_evcc(self, conn: ConnectorState) -> bool:
@@ -422,14 +431,10 @@ class MqttMixin(CoordinatorMixin):
         station: StationState = self.data.station
         if "available" in payload:
             avail = bool(payload["available"])
-            if avail != getattr(station, "available", None):
-                station.available = avail
-                changed = True
+            changed |= self._set_if_changed(station, "available", avail)
         if "ledBrightness" in payload:
             new_bri = self._as_int(payload.get("ledBrightness"))
-            if new_bri is not None and new_bri != getattr(station, "led_brightness", None):
-                station.led_brightness = new_bri
-                changed = True
+            changed |= self._set_if_changed(station, "led_brightness", new_bri)
         return changed
 
     def _handle_led_updated(self, payload: dict) -> bool:
@@ -452,8 +457,4 @@ class MqttMixin(CoordinatorMixin):
             return False
 
         station = self.data.station
-        if new_bri != getattr(station, "led_brightness", None):
-            station.led_brightness = new_bri
-            return True
-
-        return False
+        return cast(bool, self._set_if_changed(station, "led_brightness", new_bri))

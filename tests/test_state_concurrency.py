@@ -11,6 +11,7 @@ from custom_components.smappee_ev import light, number, select, switch
 from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
+from custom_components.smappee_ev.state_updates import update_station
 from tests import test_mqtt_bootstrap as bootstrap
 
 entry = bootstrap.entry
@@ -164,13 +165,13 @@ async def test_pending_controls_preserve_current_snapshot(kind, outcome):
         else:
             finish.set()
         if outcome == "success":
-            await task
+            await asyncio.wait_for(task, 1)
         else:
             expected = {"auth": ConfigEntryAuthFailed, "cancel": asyncio.CancelledError}.get(
                 outcome, (RuntimeError, HomeAssistantError)
             )
             with pytest.raises(expected):
-                await task
+                await asyncio.wait_for(task, 1)
         assert coord.data is current
         assert current.connectors["c"].power_total == 3200
         assert current.recent_sessions == [{"energy": 12.5}]
@@ -228,16 +229,19 @@ async def test_rest_refresh_preserves_mqtt_sessions_and_new_commands(online):
         await asyncio.gather(task, return_exceptions=True)
 
 
-async def test_stale_rest_current_limit_preserves_successful_command(online):
-    """A REST response for 8 A must not overwrite a newer successful 20 A write."""
+@pytest.mark.parametrize("initial_current", [8, 20])
+@pytest.mark.parametrize("source", ["command", "mqtt"])
+async def test_stale_rest_current_limit_preserves_confirmation(online, initial_current, source):
+    """A REST response for 8 A must not overwrite a newer 20 A confirmation."""
     coord = online.sites[1].stations["station-1"].station_coordinator
     uuid = "connector-1"
     initial = ConnectorState(
         connector_number=1,
         min_current=8,
         max_current=32,
-        selected_current_limit=8,
-        selected_percentage_limit=0,
+        selected_current_limit=initial_current,
+        selected_percentage_limit=0 if initial_current == 8 else 50,
+        optimization_strategy="NONE",
     )
     coord.data.connectors[uuid] = initial
     coord._fetch_station_state = AsyncMock(return_value=StationState())
@@ -247,7 +251,7 @@ async def test_stale_rest_current_limit_preserves_successful_command(online):
     started, finish = asyncio.Event(), asyncio.Event()
 
     async def stale_rest_response(*args, **kwargs):
-        response = replace(initial)
+        response = replace(initial, selected_current_limit=8, selected_percentage_limit=0)
         started.set()
         await finish.wait()
         return response
@@ -265,13 +269,28 @@ async def test_stale_rest_current_limit_preserves_successful_command(online):
     task = asyncio.create_task(coord._async_fetch_data())
     try:
         await asyncio.wait_for(started.wait(), 1)
-        await entity.async_set_native_value(20)
-        api.set_current.assert_awaited_once_with(20, min_current=8, max_current=32)
+        if source == "command":
+            await entity.async_set_native_value(20)
+            api.set_current.assert_awaited_once_with(20, min_current=8, max_current=32)
+        else:
+            coord.apply_mqtt_properties(
+                "servicelocation/site-uuid/etc/carcharger/acchargingcontroller/v1/"
+                "devices/connector-1/property/chargingstate",
+                {"chargingState": "Started", "percentageLimit": 50},
+            )
         assert coord.data.connectors[uuid].selected_current_limit == 20
         finish.set()
         result = await task
         assert result.connectors[uuid].selected_current_limit == 20
         assert result.connectors[uuid].selected_percentage_limit == 50
+        # A later request may reconcile normally; confirmations are not a lock.
+        coord._fetch_connector_state = AsyncMock(
+            return_value=replace(initial, selected_current_limit=8, selected_percentage_limit=0)
+        )
+        coord.async_set_updated_data(result)
+        reconciled = await coord._async_fetch_data()
+        assert reconciled.connectors[uuid].selected_current_limit == 8
+        assert reconciled.connectors[uuid].selected_percentage_limit == 0
     finally:
         if not task.done():
             task.cancel()
@@ -292,9 +311,10 @@ async def test_sessions_share_one_station_request(online):
     assert coord._connector_session_available == {"connector-1": True, "second": True}
 
 
-async def test_forced_dashboard_refresh_preserves_in_flight_commands(online):
+@pytest.mark.parametrize("initial_capacity", [2.0, 4.0])
+async def test_forced_dashboard_refresh_preserves_in_flight_commands(online, initial_capacity):
     coord = online.sites[1].stations["station-1"].station_coordinator
-    coord.data.station.capacity_maximum_power_kw = 2.0
+    coord.data.station.capacity_maximum_power_kw = initial_capacity
     initial = coord.data
     coord.async_request_refresh = AsyncMock()
     started, finish = asyncio.Event(), asyncio.Event()
@@ -320,13 +340,14 @@ async def test_forced_dashboard_refresh_preserves_in_flight_commands(online):
             recent_sessions=[{"energy": 12.5}],
         )
         coord.async_set_updated_data(current)
+        update_station(coord, capacity_maximum_power_kw=4.0)
         finish.set()
-        await task
+        await asyncio.wait_for(task, 1)
         assert coord.data is current
         assert current.station.capacity_maximum_power_kw == 4.0
         assert current.connectors["connector-1"].power_total == 3200
         assert current.recent_sessions == [{"energy": 12.5}]
-        assert initial.station.capacity_maximum_power_kw == 2.0
+        assert initial.station.capacity_maximum_power_kw == initial_capacity
         coord.async_request_refresh.assert_awaited_once()
     finally:
         if not task.done():

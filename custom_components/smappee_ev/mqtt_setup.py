@@ -17,7 +17,6 @@ from .api.discovery import MqttChannelSpec
 from .api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
 from .const import MQTT_HEARTBEAT_TOPIC_SUFFIX
 from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
-from .coordinators.freshness import MqttApplyResult
 from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import MqttRuntimeValue, SmappeeStationRuntime
 from .models.state import MqttPayload
@@ -29,6 +28,16 @@ MqttRouteTarget = SmappeeSiteCoordinator | SmappeeStationCoordinator
 
 _SITE_MEASUREMENT_ROLES = frozenset({"grid", "production", "storage"})
 _SITE_AGGREGATE_ROLES = frozenset({"consumption", "production_total", "always_on"})
+_POWER_MEASUREMENT_FIELDS = frozenset(
+    {
+        "grid_power_total",
+        "pv_power_total",
+        "house_consumption_power",
+        "always_on_power",
+        "storage_power_total",
+        "power_total",
+    }
+)
 
 
 @dataclass
@@ -450,22 +459,10 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         for coord in targets:
             if coord:
                 try:
-                    result = cast(object, coord.apply_mqtt_properties(topic, payload))
-                    if not isinstance(result, MqttApplyResult):
-                        continue
+                    result = coord.apply_mqtt_properties(topic, payload)
                     now_utc = datetime.now(UTC)
-                    power_fields = {
-                        "grid_power_total",
-                        "pv_power_total",
-                        "house_consumption_power",
-                        "always_on_power",
-                        "storage_power_total",
-                        "power_total",
-                    }
-                    all_fields = result.site_fields.union(
-                        *(fields for fields in result.connector_fields.values())
-                    )
-                    valid_power = bool(all_fields & power_fields)
+                    all_fields = result.site_fields.union(*result.connector_fields.values())
+                    valid_power = bool(all_fields & _POWER_MEASUREMENT_FIELDS)
                     # Any accepted charger measurement proves MQTT telemetry is
                     # live; individual fields retain their own freshness clocks.
                     valid_charger = coord is not site_coordinator and bool(all_fields)
@@ -484,14 +481,10 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                         if valid_power:
                             coord.last_real_power_rx = now_utc
                         if isinstance(coord, SmappeeStationCoordinator):
-                            for uuid, fields in result.connector_fields.items():
-                                if fields:
+                            for uuid, accepted_fields in result.connector_fields.items():
+                                if accepted_fields:
                                     coord.last_connector_rx[uuid] = now_utc
                     _sync_freshness()
-                    if all_fields:
-                        # Publish availability after accepted fields and their
-                        # clocks have been recorded; never postpone REST polling.
-                        coord.async_update_listeners()
                 except Exception:
                     routing_diagnostics.delivery_failures += 1
                     _LOGGER.exception(
