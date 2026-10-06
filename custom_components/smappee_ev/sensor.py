@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any, Protocol, override
 
 from homeassistant.components.sensor import (
@@ -20,9 +20,8 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .api.device_handle import SmappeeDeviceHandle
@@ -169,6 +168,7 @@ class _RestoredTotalSensor(Protocol):
 
 
 class StationGridPower(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_power_total"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -197,6 +197,7 @@ class StationGridPower(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationHouseConsumptionPower(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "house_consumption_power"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -225,6 +226,7 @@ class StationHouseConsumptionPower(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationAlwaysOnPower(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "always_on_power"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -253,6 +255,7 @@ class StationAlwaysOnPower(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationPvPower(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "pv_power_total"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -298,7 +301,7 @@ async def _async_restore_last_total_value(sensor: _RestoredTotalSensor) -> None:
         sensor._last_value = restored_value
 
 
-class RestoredEnergyStationSensor(SmappeeSiteEntity, RestoreSensor):
+class RestoredEnergyStationSensor(SmappeeSitePowerEntity, RestoreSensor):
     """Station energy sensor with restore support and coordinator lifecycle."""
 
     _last_value: float | None = None
@@ -333,6 +336,7 @@ class RestoredEnergyConnectorSensor(SmappeeConnectorMqttEntity, RestoreSensor):
 
 
 class StationGridEnergyImport(RestoredEnergyStationSensor):
+    _mqtt_field = "grid_energy_import_kwh"
     _attr_translation_key = "grid_energy_import"
 
     def __init__(
@@ -357,6 +361,7 @@ class StationGridEnergyImport(RestoredEnergyStationSensor):
 
 
 class StationGridEnergyExport(RestoredEnergyStationSensor):
+    _mqtt_field = "grid_energy_export_kwh"
     _attr_translation_key = "grid_energy_export"
 
     def __init__(
@@ -381,6 +386,7 @@ class StationGridEnergyExport(RestoredEnergyStationSensor):
 
 
 class StationPvEnergyImport(RestoredEnergyStationSensor):
+    _mqtt_field = "pv_energy_import_kwh"
     _attr_translation_key = "pv_energy_import"
 
     def __init__(
@@ -407,6 +413,7 @@ class StationPvEnergyImport(RestoredEnergyStationSensor):
 class SiteBatteryPower(SmappeeSitePowerEntity, SensorEntity):
     """Signed battery power: negative charging, positive discharging."""
 
+    _mqtt_field = "storage_power_total"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -419,19 +426,6 @@ class SiteBatteryPower(SmappeeSitePowerEntity, SensorEntity):
     @override
     def available(self) -> bool:
         return super().available and self.coordinator.storage_measurements.power_available
-
-    @override
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        # MQTT-only startup disables coordinator polling. Re-evaluate expiry
-        # even if every MQTT topic goes silent; remove the timer with the entity.
-        self.async_on_remove(
-            async_track_time_interval(self.hass, self._check_power_freshness, timedelta(seconds=30))
-        )
-
-    @callback
-    def _check_power_freshness(self, now: datetime) -> None:
-        self.async_write_ha_state()
 
     @property
     @override
@@ -447,6 +441,7 @@ class SiteBatteryEnergy(RestoredEnergyStationSensor):
         direction = "charged" if charging else "discharged"
         self._attr_translation_key = f"battery_{direction}_energy"
         self._state_field = f"storage_{direction}_energy_kwh"
+        self._mqtt_field = self._state_field
         super().__init__(coordinator, sid, unique_suffix=f"sensor:battery_{direction}_energy_kwh")
 
     @property
@@ -465,6 +460,7 @@ class SiteBatteryEnergy(RestoredEnergyStationSensor):
 
 
 class ConnCurrentL1(SmappeeConnectorMqttEntity, SensorEntity):
+    _mqtt_field = "current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -492,6 +488,7 @@ class ConnCurrentL1(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class ConnCurrentL2(SmappeeConnectorMqttEntity, SensorEntity):
+    _mqtt_field = "current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -519,6 +516,7 @@ class ConnCurrentL2(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class ConnCurrentL3(SmappeeConnectorMqttEntity, SensorEntity):
+    _mqtt_field = "current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -546,6 +544,7 @@ class ConnCurrentL3(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
+    _mqtt_field = "power_total"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -573,6 +572,7 @@ class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
+    _mqtt_field = "current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -630,6 +630,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
 
 
 class ConnEnergyImport(RestoredEnergyConnectorSensor):
+    _mqtt_field = "energy_import_kwh"
     _attr_translation_key = "energy_import"
 
     def __init__(
@@ -659,6 +660,7 @@ class ConnEnergyImport(RestoredEnergyConnectorSensor):
 
 
 class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -700,6 +702,7 @@ class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationPvCurrents(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "pv_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -741,6 +744,7 @@ class StationPvCurrents(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationGridCurrentL1(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -769,6 +773,7 @@ class StationGridCurrentL1(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationGridCurrentL2(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -797,6 +802,7 @@ class StationGridCurrentL2(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationGridCurrentL3(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -825,6 +831,7 @@ class StationGridCurrentL3(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationPvCurrentL1(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "pv_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -853,6 +860,7 @@ class StationPvCurrentL1(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationPvCurrentL2(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "pv_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -881,6 +889,7 @@ class StationPvCurrentL2(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationPvCurrentL3(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "pv_current_phases"
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -909,6 +918,7 @@ class StationPvCurrentL3(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationGridVoltageL1(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_voltage_phases"
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
@@ -937,6 +947,7 @@ class StationGridVoltageL1(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationGridVoltageL2(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_voltage_phases"
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
@@ -965,6 +976,7 @@ class StationGridVoltageL2(SmappeeSitePowerEntity, SensorEntity):
 
 
 class StationGridVoltageL3(SmappeeSitePowerEntity, SensorEntity):
+    _mqtt_field = "grid_voltage_phases"
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT

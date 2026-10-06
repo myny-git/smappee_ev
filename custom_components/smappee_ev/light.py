@@ -15,6 +15,7 @@ from .entity import SmappeeLedEntity
 from .helpers import station_action_error
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import IntegrationData
+from .state_updates import async_write, update_station
 
 PARALLEL_UPDATES = 1
 
@@ -128,13 +129,12 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
 
     async def _set_brightness(self, brightness: int) -> None:
         try:
-            await self.api_client.set_brightness(brightness)
+            await async_write(
+                self.api_client.set_brightness(brightness),
+                self.coordinator.async_schedule_dashboard_refresh,
+            )
         except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
             raise station_action_error("set_brightness", err) from err
         if brightness > 0:
             self._last_nonzero_brightness = brightness
-        data: IntegrationData | None = self.coordinator.data
-        if data and data.station:
-            data.station.led_brightness = brightness
-            self.coordinator.async_set_updated_data(data)
-        self.coordinator.async_schedule_dashboard_refresh()
+        update_station(self.coordinator, led_brightness=brightness)

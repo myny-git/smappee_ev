@@ -17,6 +17,7 @@ from .api.discovery import MqttChannelSpec
 from .api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
 from .const import MQTT_HEARTBEAT_TOPIC_SUFFIX
 from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
+from .coordinators.freshness import MqttApplyResult
 from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import MqttRuntimeValue, SmappeeStationRuntime
 from .models.state import MqttPayload
@@ -58,9 +59,10 @@ class MqttFreshnessState:
         real_charger: bool | None = None,
         real_power: bool | None = None,
         site_power: bool = False,
+        now: datetime | None = None,
     ) -> None:
         """Record heartbeat, charger, and power traffic independently."""
-        now = datetime.now(UTC)
+        now = now if now is not None else datetime.now(UTC)
         if topic.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
             self.last_heartbeat_rx = now
             return
@@ -444,63 +446,54 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         else:
             routing_diagnostics.unrouted_messages += 1
             routing_diagnostics.last_unrouted_rx = now
-        station_coordinator_ids = {
-            id(bucket.station_coordinator)
-            for bucket in stations.values()
-            if bucket.station_coordinator is not None
-        }
-        is_site_power = site_coordinator is not None and any(
-            target is site_coordinator for target in targets
-        )
-        has_station_target = any(id(target) in station_coordinator_ids for target in targets)
-        is_real_charger = has_station_target and (
-            "/etc/carcharger/" in topic
-            or "/etc/chargingstation/" in topic
-            or topic.endswith("/power")
-            or any(
-                isinstance(target, SmappeeStationCoordinator)
-                and topic in (target._power_index_maps_by_topic or {})
-                for target in targets
-            )
-        )
-        freshness.record_message(
-            topic,
-            real_power=is_site_power or (has_station_target and topic.endswith("/power")),
-            site_power=is_site_power,
-            real_charger=is_real_charger,
-        )
-        _sync_freshness()
-        if is_site_power and site_coordinator is not None:
-            site_coordinator.last_real_power_rx = freshness.last_real_site_power_rx
-        for target in targets:
-            if id(target) not in station_coordinator_ids:
-                continue
-            if is_real_charger:
-                target.last_real_charger_rx = freshness.last_real_charger_rx
-                if (
-                    isinstance(target, SmappeeStationCoordinator)
-                    and getattr(target, "monitoring_only", False) is True
-                ):
-                    connector_id = _topic_device_id(topic) or payload.get("deviceUUID")
-                    keys = (
-                        [connector_id]
-                        if connector_id
-                        else list(
-                            (target._power_index_maps_by_topic or {}).get(topic, {}).get("cars", {})
-                        )
-                    )
-                    for key in keys:
-                        if key in target.connector_clients:
-                            target.last_connector_rx[key] = datetime.now(UTC)
-            if topic.endswith("/power"):
-                target.last_real_power_rx = freshness.last_real_power_rx
         for coord in targets:
             if coord:
                 try:
-                    coord.apply_mqtt_properties(topic, payload)
+                    result = cast(object, coord.apply_mqtt_properties(topic, payload))
+                    if not isinstance(result, MqttApplyResult):
+                        continue
+                    now_utc = datetime.now(UTC)
+                    power_fields = {
+                        "grid_power_total",
+                        "pv_power_total",
+                        "house_consumption_power",
+                        "always_on_power",
+                        "storage_power_total",
+                        "power_total",
+                    }
+                    all_fields = result.site_fields.union(
+                        *(fields for fields in result.connector_fields.values())
+                    )
+                    valid_power = bool(all_fields & power_fields)
+                    valid_charger = coord is not site_coordinator and bool(all_fields)
+                    freshness.record_message(
+                        topic,
+                        real_power=valid_power,
+                        site_power=coord is site_coordinator and valid_power,
+                        real_charger=valid_charger,
+                        now=now_utc,
+                    )
+                    if coord is site_coordinator and valid_power:
+                        coord.last_real_power_rx = now_utc
+                    elif coord is not site_coordinator:
+                        if valid_charger:
+                            coord.last_real_charger_rx = now_utc
+                        if valid_power:
+                            coord.last_real_power_rx = now_utc
+                        if isinstance(coord, SmappeeStationCoordinator):
+                            for uuid, fields in result.connector_fields.items():
+                                if fields:
+                                    coord.last_connector_rx[uuid] = now_utc
+                    _sync_freshness()
+                    if all_fields:
+                        # Publish availability after accepted fields and their
+                        # clocks have been recorded; never postpone REST polling.
+                        coord.async_update_listeners()
                 except Exception:
                     routing_diagnostics.delivery_failures += 1
-                    _LOGGER.exception("Failed to apply MQTT properties from %s", topic)
+                    _LOGGER.exception(
+                        "Failed to apply MQTT properties from %s", redact_mqtt_topic(topic)
+                    )
 
     refresh_tasks: dict[int, asyncio.Task] = {}
 

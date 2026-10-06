@@ -14,6 +14,7 @@ from ..helpers import (
 )
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
+from .freshness import MqttApplyResult
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -133,11 +134,12 @@ class MqttMixin(CoordinatorMixin):
             # continuous MQTT traffic cannot postpone Dashboard recovery.
             self.async_update_listeners()
 
-    def apply_mqtt_properties(self, topic: str, payload: dict) -> None:
+    def apply_mqtt_properties(self, topic: str, payload: dict) -> MqttApplyResult:
         """Merge incoming MQTT properties/state in the current snapshot."""
+        result = MqttApplyResult()
         data = self.data
         if not data:
-            return
+            return result
 
         changed = False
 
@@ -152,15 +154,47 @@ class MqttMixin(CoordinatorMixin):
             changed |= self._handle_connector_devices_updated(payload)
         elif "/etc/carcharger/acchargingcontroller/" in topic and "/devices/" in topic:
             changed |= self._handle_connector_mqtt(topic, payload)
+            uuid = self._device_uuid_from_topic(topic) or payload.get("deviceUUID")
+            if (
+                "/property/" in topic
+                and self._property_name_from_topic(topic) == "chargingstate"
+                and isinstance(uuid, str)
+                and uuid in data.connectors
+                and self._has_charger_state(payload)
+            ):
+                result.connector(uuid).add("charger_state")
         elif topic.endswith("/power") or topic in (self._power_index_maps_by_topic or {}):
-            changed |= self._handle_power(topic, payload)
+            changed |= self._handle_power(topic, payload, result)
         elif "/etc/chargingstation/acchargingstation/" in topic and topic.endswith("/properties"):
             changed |= self._handle_station_properties(payload)
         elif "/etc/led/acledcontroller/" in topic and topic.endswith("/devices/updated"):
             changed |= self._handle_led_updated(payload)
 
+        changed |= self.measurement_freshness.record(result)
         if changed:
             self.async_update_listeners()
+        return result
+
+    @staticmethod
+    def _has_charger_state(payload: dict) -> bool:
+        """An empty/unknown payload does not confirm a live charging state."""
+        values = {str(key).lower(): value for key, value in payload.items()}
+        for key in ("chargingstate", "chargingmode", "optimizationstrategy", "iecstatus"):
+            value = values.get(key)
+            if isinstance(value, str) and value.strip():
+                return True
+            if (
+                key == "iecstatus"
+                and isinstance(value, dict)
+                and isinstance(value.get("current"), str)
+            ):
+                return bool(value["current"].strip())
+        status = values.get("status")
+        return bool(
+            isinstance(status, dict)
+            and isinstance(status.get("current"), str)
+            and status["current"].strip()
+        )
 
     def _handle_connector_devices_updated(self, payload: dict) -> bool:
         """Process devices/updated for AC charging controller."""

@@ -24,6 +24,7 @@ from ..models.state import (
     MqttPayload,
     StationState,
 )
+from ..state_updates import StateChanges, state_staging_copy
 from .base import CoordinatorMixin
 
 _LOGGER = logging.getLogger(__name__)
@@ -244,10 +245,20 @@ class DashboardMixin(CoordinatorMixin):
         try:
             if self._is_stopping:
                 return
-            data = self.data
-            if data and await self._maybe_refresh_dashboard_data(data, force=True):
-                self.async_set_updated_data(data)
-            if data and not self._is_stopping:
+            if self.data is None:
+                return
+            baseline = state_staging_copy(self.data)
+            staged = state_staging_copy(baseline)
+            await self._maybe_refresh_dashboard_data(staged, force=True)
+            current = self.data
+            if current is not None:
+                concurrent = StateChanges.between(baseline, current)
+                changed = StateChanges.between(baseline, staged).apply(current)
+                changed |= concurrent.apply(current)
+                if changed:
+                    self.async_set_updated_data(current)
+                self._sync_dashboard_client_metadata(current)
+            if current and not self._is_stopping:
                 # Configuration writes also affect the smartdevice properties.
                 # Go through the coordinator so its normal refresh serialization applies.
                 self._force_smartdevice_refresh = True

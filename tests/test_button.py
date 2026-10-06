@@ -156,7 +156,7 @@ async def test_station_button_restart_raises_translated_error(mock_coordinator):
         "method_name": "restart_charging_station",
         "error": "offline",
     }
-    mock_coordinator.async_schedule_dashboard_refresh.assert_not_called()
+    mock_coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
 async def test_station_button_unknown_action_logs_debug(mock_coordinator):
@@ -335,7 +335,7 @@ async def test_connector_button_api_errors_are_translated(
         "method_name": method_name,
         "error": "boom",
     }
-    mock_coordinator.async_schedule_dashboard_refresh.assert_not_called()
+    mock_coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
 async def test_button_press_pause_charging():

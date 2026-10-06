@@ -103,7 +103,9 @@ class StorageMeasurements:
         if path not in paths:
             paths.append(path)
 
-    def apply(self, site: SiteState, topic: str, payload: MqttPayload) -> bool:
+    def apply(
+        self, site: SiteState, topic: str, payload: MqttPayload, accepted: set[str] | None = None
+    ) -> bool:
         """Apply complete groups only; missing/invalid values never become zero."""
         changed = False
         was_available = self.power_available
@@ -122,6 +124,8 @@ class StorageMeasurements:
                 continue
             value = sum(self._values[metric, source] for source in topics)
             attr = "storage_power_total" if metric == "power" else f"storage_{metric}_kwh"
+            if accepted is not None:
+                accepted.add(attr)
             if metric != "power":
                 value = round(value / 1000, 3)
             if getattr(site, attr) != value:

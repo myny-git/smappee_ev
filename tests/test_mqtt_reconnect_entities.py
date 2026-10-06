@@ -53,6 +53,7 @@ async def test_mqtt_reconnect_restores_connector_entities_without_reload(
     coord.dashboard_client = None
     coord.data.connectors["connector-1"].min_surpluspct = 40
     coord.data.connectors["connector-1"].power_total = 1000
+    coord.apply_mqtt_properties(bootstrap.TOPIC, {"activePowerData": [0, 1000]})
     power = ConnectorPowerSensor(coord, client, 1, "station-1", "connector-1")
     surplus = SmappeeMinSurplusPctNumber(coord, client, 1, "station-1", "connector-1")
     power.entity_id = "sensor.reconnect_power"

@@ -24,6 +24,7 @@ from ..models.state import (
     StationState,
 )
 from .base import CoordinatorMixin
+from .freshness import MqttApplyResult
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -456,12 +457,15 @@ class PowerMixin(CoordinatorMixin):
             return position
         return PowerMixin._name_trailing_position_from_measurement(meas)
 
-    def _handle_power(self, topic: str, payload: dict) -> bool:
+    def _handle_power(
+        self, topic: str, payload: dict, result: MqttApplyResult | None = None
+    ) -> bool:
         data = self.data
         if not data:
             return False
         st = data.station
         changed = False
+        accepted = result.site_fields if result is not None else set()
 
         idx_map = (self._power_index_maps_by_topic or {}).get(topic)
         grid = idx_map.get("grid", {}) if idx_map else {}
@@ -489,6 +493,7 @@ class PowerMixin(CoordinatorMixin):
             grid.get("energy", []),
             "grid",
             grid.get("power_field"),
+            accepted,
         )
         changed |= self._apply_station_group(
             st,
@@ -498,6 +503,7 @@ class PowerMixin(CoordinatorMixin):
             pv.get("energy", []),
             "pv",
             pv.get("power_field"),
+            accepted,
         )
 
         for uuid, mapping in cars.items():
@@ -511,18 +517,22 @@ class PowerMixin(CoordinatorMixin):
                 mapping.get("current", []),
                 mapping.get("energy", []),
                 mapping.get("power_field"),
+                result.connector(uuid) if result is not None else None,
             )
 
         cp = payload.get("consumptionPower")
         if isinstance(cp, int | float):
+            accepted.add("house_consumption_power")
             changed |= self._set_if_changed(st, "house_consumption_power", int(cp))
 
         sp = payload.get("solarPower")
         if isinstance(sp, int | float):
+            accepted.add("pv_power_total")
             changed |= self._set_if_changed(st, "pv_power_total", int(sp))
 
         always_on = payload.get("alwaysOn")
         if isinstance(always_on, int | float):
+            accepted.add("always_on_power")
             changed |= self._set_if_changed(st, "always_on_power", int(always_on))
 
         return changed
@@ -536,7 +546,9 @@ class PowerMixin(CoordinatorMixin):
         energy_idxs: list[int] | str,
         power_key_prefix: str | None = None,
         power_field: str | None = None,
+        accepted: set[str] | None = None,
     ) -> bool:
+        accepted = accepted if accepted is not None else set()
         if power_key_prefix is None:
             power_key_prefix = str(energy_idxs)
             energy_idxs = current_idxs
@@ -550,10 +562,12 @@ class PowerMixin(CoordinatorMixin):
 
         p_ph = _pick(active, power_idxs)
         if p_ph:
+            accepted.add(f"{power_key_prefix}_power_total")
             changed |= self._set_if_changed(st, f"{power_key_prefix}_power_phases", p_ph)
             changed |= self._set_if_changed(st, f"{power_key_prefix}_power_total", sum(p_ph))
         i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
         if i_ph:
+            accepted.add(f"{power_key_prefix}_current_phases")
             changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
 
         if power_key_prefix == "grid":
@@ -563,10 +577,15 @@ class PowerMixin(CoordinatorMixin):
                 else []
             )
             if v_ph:
+                accepted.add("grid_voltage_phases")
                 changed |= self._set_if_changed(st, "grid_voltage_phases", v_ph)
 
         energy_idx_list = energy_idxs if isinstance(energy_idxs, list) else []
         if energy_idx_list:
+            if _pick(imp_wh, energy_idx_list):
+                accepted.add(f"{power_key_prefix}_energy_import_kwh")
+            if power_key_prefix == "grid" and _pick(exp_wh, energy_idx_list):
+                accepted.add("grid_energy_export_kwh")
             if power_key_prefix == "grid":
                 changed |= self._set_if_changed(
                     st,
@@ -594,7 +613,9 @@ class PowerMixin(CoordinatorMixin):
         current_idxs: list[int],
         energy_idxs: list[int] | None = None,
         power_field: str | None = None,
+        accepted: set[str] | None = None,
     ) -> bool:
+        accepted = accepted if accepted is not None else set()
         if energy_idxs is None:
             energy_idxs = current_idxs
             current_idxs = []
@@ -616,9 +637,13 @@ class PowerMixin(CoordinatorMixin):
             imp_kwh = None
 
         if p_ph:
+            accepted.add("power_total")
             changed |= self._set_if_changed(conn, "power_phases", p_ph)
             changed |= self._set_if_changed(conn, "power_total", sum(p_ph))
         if i_ma:
+            accepted.add("current_phases")
             changed |= self._set_if_changed(conn, "current_phases", _amps_from_ma(i_ma))
+        if imp_kwh is not None:
+            accepted.add("energy_import_kwh")
         changed |= self._set_if_changed(conn, "energy_import_kwh", imp_kwh)
         return cast(bool, changed)

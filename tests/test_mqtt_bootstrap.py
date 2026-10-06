@@ -339,9 +339,9 @@ async def test_cached_runtime_routes_live_data_and_preserves_ids(hass, entry, sn
         assert entity.available is True
         assert entity.native_value == 300
         with patch(
-            "custom_components.smappee_ev.entity._utcnow",
-            return_value=datetime.now(UTC) + timedelta(minutes=6),
-        ):
+            "custom_components.smappee_ev.coordinators.freshness.datetime",
+        ) as clock:
+            clock.now.return_value = datetime.now(UTC) + timedelta(minutes=6)
             assert entity.available is False
         mqtt._on_conn(False)
         assert entity.available is False

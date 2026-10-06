@@ -310,7 +310,7 @@ async def test_battery_power_freshness_and_energy_restore(hass, monkeypatch):
     assert not power.available
     coord.apply_mqtt_properties(TOPIC, {"channelData": [0] * 9 + [-318]})
     assert power.available
-    coord.last_real_power_rx -= timedelta(hours=1)
+    coord.storage_measurements.last_power_rx_by_topic[TOPIC] -= timedelta(hours=1)
     assert not power.available
     coord.mqtt_transport_connected = False
     assert not power.available
@@ -452,7 +452,10 @@ async def test_cached_battery_expires_without_messages_and_timer_is_removed(hass
     power = sensor.SiteBatteryPower(coord, 1)
     power.hass = hass
     power.entity_id = "sensor.test_battery_power"
-    monkeypatch.setattr(sensor.SmappeeSitePowerEntity, "async_added_to_hass", AsyncMock())
+    monkeypatch.setattr(
+        "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
+        AsyncMock(),
+    )
     writes = []
     monkeypatch.setattr(power, "async_write_ha_state", lambda: writes.append(power.available))
     await power.async_added_to_hass()

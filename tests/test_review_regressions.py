@@ -274,7 +274,7 @@ async def test_recovery_respects_retry_after_beyond_backoff_cap(hass, entry, onl
         await _async_shutdown_runtime_resources(cached)
 
 
-async def test_cached_current_topic_is_routed_and_marks_connector_fresh(hass, entry, online):
+async def test_cached_current_topic_is_routed_without_refreshing_power(hass, entry, online):
     site = online.sites[1]
     topic = "servicelocation/site-uuid/current"
     channel = {
@@ -294,7 +294,7 @@ async def test_cached_current_topic_is_routed_and_marks_connector_fresh(hass, en
     cached = build_cached_runtime(hass, entry, dashboard(), snapshot_from_runtime(online, entry))
     try:
         bucket = cached.sites[1].stations["station-1"]
-        entity = sensor.ConnectorPowerSensor(
+        entity = sensor.ConnectorCurrentASensor(
             bucket.station_coordinator,
             bucket.connectors["connector-1"].connector_client,
             1,

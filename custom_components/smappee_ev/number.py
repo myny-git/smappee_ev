@@ -25,6 +25,7 @@ from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationRes
 from .models.runtime_data import SmappeeEvConfigEntry, SmappeeSiteRuntime
 from .models.state import ConnectorState, IntegrationData, StationState
 from .registry import async_migrate_site_setting_ids, site_setting_unique_id
+from .state_updates import async_write, update_connector, update_station
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -225,15 +226,16 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
                 },
             )
         min_c, max_c = st.min_current, st.max_current
-        cur_float, pct_int = await self.api_client.set_current(
-            value, min_current=int(min_c), max_current=int(max_c)
+        cur_float, pct_int = await async_write(
+            self.api_client.set_current(value, min_current=int(min_c), max_current=int(max_c)),
+            self.coordinator.async_schedule_dashboard_refresh,
         )
-        st.selected_current_limit = cur_float
-        st.selected_percentage_limit = pct_int
-        data = self.coordinator.data
-        if data:
-            self.coordinator.async_set_updated_data(data)
-        self.coordinator.async_schedule_dashboard_refresh()
+        update_connector(
+            self.coordinator,
+            self.connector_uuid,
+            selected_current_limit=cur_float,
+            selected_percentage_limit=pct_int,
+        )
 
     @callback
     @override
@@ -361,14 +363,20 @@ class SmappeeConnectorMaxCurrentNumber(SmappeeConnectorEntity, _BaseNumber):
             )
         min_current = int(st.min_current or DEFAULT_MIN_CURRENT)
         amps = max(min_current, min(DEFAULT_MAX_CURRENT, int(round(value))))
-        await self.api_client.set_connector_max_current(amps)
-        st.max_current = amps
-        if st.selected_current_limit is not None:
-            st.selected_current_limit = min(float(st.selected_current_limit), float(amps))
-        data = self.coordinator.data
-        if data:
-            self.coordinator.async_set_updated_data(data)
-        self.coordinator.async_schedule_dashboard_refresh()
+        await async_write(
+            self.api_client.set_connector_max_current(amps),
+            self.coordinator.async_schedule_dashboard_refresh,
+        )
+        current = self._state()
+        if current is not None:
+            update_connector(
+                self.coordinator,
+                self.connector_uuid,
+                max_current=max(current.min_current, amps),
+                selected_current_limit=min(float(current.selected_current_limit), float(amps))
+                if current.selected_current_limit is not None
+                else None,
+            )
 
 
 class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
@@ -412,7 +420,10 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
     @override
     async def async_set_native_value(self, value: float) -> None:
         try:
-            await self.api_client.set_min_surpluspct(int(value))
+            await async_write(
+                self.api_client.set_min_surpluspct(int(value)),
+                self.coordinator.async_schedule_dashboard_refresh,
+            )
         except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -422,14 +433,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
                     "error": str(err),
                 },
             ) from err
-        # Optimistic immediate update
-        st = self._state()
-        if st:
-            st.min_surpluspct = int(value)
-            data = self.coordinator.data
-            if data:
-                self.coordinator.async_set_updated_data(data)
-        self.coordinator.async_schedule_dashboard_refresh()
+        update_connector(self.coordinator, self.connector_uuid, min_surpluspct=int(value))
 
     @override
     async def async_added_to_hass(self) -> None:  # RestoreEntity
@@ -513,10 +517,11 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
             )
         power_kw = round(max(0.0, float(value)), 1)
         active = _active_or_true(st.capacity_protection_active)
-        await dashboard.async_set_capacity_protection(self._sid, active, power_kw)
-        st.capacity_maximum_power_kw = power_kw
-        self.coordinator.async_set_updated_data(data)
-        self.coordinator.async_schedule_dashboard_refresh()
+        await async_write(
+            dashboard.async_set_capacity_protection(self._sid, active, power_kw),
+            self.coordinator.async_schedule_dashboard_refresh,
+        )
+        update_station(self.coordinator, capacity_maximum_power_kw=power_kw)
 
 
 class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _BaseNumber):
@@ -577,10 +582,11 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
             )
         maximum_load_a = max(0, int(round(value)))
         active = _active_or_true(st.overload_protection_active)
-        await dashboard.async_set_overload_protection(self._sid, active, maximum_load_a)
-        st.overload_maximum_load_a = maximum_load_a
-        self.coordinator.async_set_updated_data(data)
-        self.coordinator.async_schedule_dashboard_refresh()
+        await async_write(
+            dashboard.async_set_overload_protection(self._sid, active, maximum_load_a),
+            self.coordinator.async_schedule_dashboard_refresh,
+        )
+        update_station(self.coordinator, overload_maximum_load_a=maximum_load_a)
 
 
 class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationRestEntity, _BaseNumber):
@@ -644,8 +650,10 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationRestEntity, _BaseNumber)
         enabled = (
             bool(st.offline_charging_enabled) if st.offline_charging_enabled is not None else True
         )
-        await self.api_client.set_offline_charging_config(enabled, failsafe)
-        st.offline_charging_enabled = enabled
-        st.offline_failsafe_current_a = failsafe
-        self.coordinator.async_set_updated_data(data)
-        self.coordinator.async_schedule_dashboard_refresh()
+        await async_write(
+            self.api_client.set_offline_charging_config(enabled, failsafe),
+            self.coordinator.async_schedule_dashboard_refresh,
+        )
+        update_station(
+            self.coordinator, offline_charging_enabled=enabled, offline_failsafe_current_a=failsafe
+        )

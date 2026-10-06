@@ -16,6 +16,7 @@ from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .helpers import connector_percentage_setpoint, dashboard_mode, station_action_error
 from .models.runtime_data import SmappeeEvConfigEntry
+from .state_updates import async_write
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -133,10 +134,12 @@ class SmappeeStationActionButton(SmappeeStationRestEntity, ButtonEntity):
         """Execute the action on press."""
         if self._action == "restart_charging_station":
             try:
-                await self.api_client.restart_charging_station()
+                await async_write(
+                    self.api_client.restart_charging_station(),
+                    self.coordinator.async_schedule_dashboard_refresh,
+                )
             except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise station_action_error("restart_charging_station", err) from err
-            self.coordinator.async_schedule_dashboard_refresh()
         else:
             _LOGGER.debug("Unknown station action for button: %s", self._action)
 
@@ -178,22 +181,28 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
             data = self.coordinator.data if self.coordinator else None
             conn = (data.connectors or {}).get(self.connector_uuid) if data else None
             try:
-                await self.api_client.start_charging(connector_percentage_setpoint(conn))
+                await async_write(
+                    self.api_client.start_charging(connector_percentage_setpoint(conn)),
+                    self.coordinator.async_schedule_dashboard_refresh,
+                )
             except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("start_charging", err) from err
-            self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "pause_charging":
             try:
-                await self.api_client.pause_charging()
+                await async_write(
+                    self.api_client.pause_charging(),
+                    self.coordinator.async_schedule_dashboard_refresh,
+                )
             except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("pause_charging", err) from err
-            self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "stop_charging":
             try:
-                await self.api_client.stop_charging()
+                await async_write(
+                    self.api_client.stop_charging(),
+                    self.coordinator.async_schedule_dashboard_refresh,
+                )
             except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("stop_charging", err) from err
-            self.coordinator.async_schedule_dashboard_refresh()
         elif self._action == "resume_charging":
             data = self.coordinator.data if self.coordinator else None
             mode = "STANDARD"
@@ -205,9 +214,11 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
                     or "STANDARD"
                 )
             try:
-                await self.api_client.set_charging_mode(mode)
+                await async_write(
+                    self.api_client.set_charging_mode(mode),
+                    self.coordinator.async_schedule_dashboard_refresh,
+                )
             except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
                 raise _connector_action_error("set_charging_mode", err) from err
-            self.coordinator.async_schedule_dashboard_refresh()
         else:
             _LOGGER.debug("Unknown action for button: %s", self._action)

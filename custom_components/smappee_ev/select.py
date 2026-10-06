@@ -14,6 +14,7 @@ from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import ConnectorState, IntegrationData
+from .state_updates import async_write, update_connector
 
 PARALLEL_UPDATES = 1
 MODES = [mode.lower() for mode in CHARGING_MODES]
@@ -99,21 +100,14 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
 
     @override
     async def async_select_option(self, option: str) -> None:
-        data = self.coordinator.data
-        conn = (data.connectors or {}).get(self.connector_uuid) if data else None
-        previous_mode = conn.selected_mode if conn else None
-        if conn:
-            conn.selected_mode = option
-            self.coordinator.async_set_updated_data(data)
         try:
-            await self.api_client.set_charging_mode(option.upper())
+            await async_write(
+                self.api_client.set_charging_mode(option.upper()),
+                self.coordinator.async_schedule_dashboard_refresh,
+            )
         except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
-            if conn:
-                conn.selected_mode = previous_mode
-                if data:
-                    self.coordinator.async_set_updated_data(data)
             raise _connector_action_error("set_charging_mode", err) from err
-        self.coordinator.async_schedule_dashboard_refresh()
+        update_connector(self.coordinator, self.connector_uuid, selected_mode=option)
         self.async_write_ha_state()
 
     @override

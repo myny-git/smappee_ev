@@ -11,6 +11,7 @@ import pytest
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.api.errors import SmappeeConnectionError
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
+from custom_components.smappee_ev.coordinators.freshness import MqttApplyResult
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import (
     IntegrationData,
@@ -243,7 +244,12 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
     coordinator.update_interval = timedelta(seconds=60)
     coordinator._shutting_down = False
     coordinator.apply_mqtt_connection_change = MagicMock()
-    coordinator.apply_mqtt_properties = MagicMock()
+    coordinator.apply_mqtt_properties = MagicMock(
+        side_effect=[
+            MqttApplyResult(connector_fields={"y": {"charger_state"}}),
+            MqttApplyResult(connector_fields={"y": {"power_total"}}),
+        ]
+    )
     coordinator.async_shutdown = AsyncMock()
     coordinator.cancel_delayed_refreshes = MagicMock()
     coordinator.async_request_refresh = AsyncMock()

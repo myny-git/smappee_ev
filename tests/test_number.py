@@ -289,7 +289,7 @@ async def test_connector_max_current_number_api_error_preserves_state(coordinato
     assert state.max_current == 32
     assert state.selected_current_limit == 20
     coordinator.async_set_updated_data.assert_not_called()
-    coordinator.async_schedule_dashboard_refresh.assert_not_called()
+    coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -349,7 +349,7 @@ async def test_capacity_maximum_power_api_error_preserves_previous_value(
     dashboard_client.async_set_capacity_protection.assert_awaited_once_with(1, False, 6.0)
     assert station.capacity_maximum_power_kw == 4.2
     coordinator.async_set_updated_data.assert_not_called()
-    coordinator.async_schedule_dashboard_refresh.assert_not_called()
+    coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -643,7 +643,7 @@ async def test_min_surpluspct_api_error_preserves_state_and_raises_homeassistant
 
     assert state.min_surpluspct == 20
     coordinator.async_set_updated_data.assert_not_called()
-    coordinator.async_schedule_dashboard_refresh.assert_not_called()
+    coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
 def test_min_surpluspct_native_value_returns_none_without_state(coordinator, api_client):

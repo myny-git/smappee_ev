@@ -8,6 +8,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 import logging
 from time import time as _now
+from typing import TYPE_CHECKING
 
 from aiohttp import ClientError
 from homeassistant.core import CALLBACK_TYPE
@@ -18,6 +19,9 @@ from ..api.errors import SmappeeError
 from ..helpers import anonymize_uuid, charging_session_paused, charging_session_phase
 from ..models.state import ConnectorState, RecentSession
 from .base import CoordinatorMixin
+
+if TYPE_CHECKING:
+    from ..api.device_handle import SmappeeDeviceHandle
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -238,25 +242,37 @@ class SessionTrackingMixin(CoordinatorMixin):
             _LOGGER.warning("Skipping recent session refresh: no connector clients available")
             return []
 
+        # The endpoint is station-scoped. Multiple connectors on one station
+        # must share one request and must not duplicate the returned sessions.
+        groups: dict[str, list[tuple[str, SmappeeDeviceHandle]]] = {}
+        for uuid, client in pairs:
+            serial = getattr(client, "charging_station_serial", None) or getattr(
+                client, "serial", None
+            )
+            key = serial if isinstance(serial, str) and serial else uuid
+            groups.setdefault(key, []).append((uuid, client))
+        station_groups = list(groups.values())
         results = await asyncio.gather(
-            *(client.async_get_recent_sessions() for _, client in pairs),
+            *(group[0][1].async_get_recent_sessions() for group in station_groups),
             return_exceptions=True,
         )
         sessions: list[RecentSession] = []
         errors: list[tuple[str, Exception]] = []
 
-        for (connector_uuid, _client), result in zip(pairs, results, strict=True):
+        for group, result in zip(station_groups, results, strict=True):
             if isinstance(result, BaseException):
                 if isinstance(result, asyncio.CancelledError):
                     raise result
                 if isinstance(result, ConfigEntryAuthFailed):
                     raise result
                 if isinstance(result, Exception):
-                    errors.append((connector_uuid, result))
-                    self._log_connector_session_transition(connector_uuid, False, result)
+                    for connector_uuid, _client in group:
+                        errors.append((connector_uuid, result))
+                        self._log_connector_session_transition(connector_uuid, False, result)
                     continue
                 raise result
-            self._log_connector_session_transition(connector_uuid, True)
+            for connector_uuid, _client in group:
+                self._log_connector_session_transition(connector_uuid, True)
             sessions.extend(session for session in result if isinstance(session, dict))
 
         if errors and len(errors) == len(pairs):

@@ -1,4 +1,5 @@
 .venv/
+.venv-mqtt/
 .vscode/
 .continue/  
 .ha-config/

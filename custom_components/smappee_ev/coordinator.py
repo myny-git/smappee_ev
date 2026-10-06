@@ -25,6 +25,7 @@ from .const import (
 )
 from .coordinators.api_state import ConnectorRestSnapshot, StationApiMixin
 from .coordinators.dashboard_merge import DashboardMixin
+from .coordinators.freshness import MeasurementFreshness, MqttApplyResult
 from .coordinators.mqtt_apply import MqttMixin
 from .coordinators.power import (
     PowerMixin,
@@ -50,6 +51,7 @@ from .models.state import (
     SiteData,
     SiteState,
 )
+from .state_updates import StateChanges, state_staging_copy
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +92,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         self._highlevel_configs = highlevel_configs or {}
         self.storage_measurements = StorageMeasurements(self._highlevel_configs)
         self.monitoring_only = False
+        self.measurement_freshness = MeasurementFreshness()
         self._power_index_maps_by_topic: dict[str, DashboardObject] | None = None
         self._power_map_retry_after = 0.0
         self.mqtt_transport_connected = False
@@ -192,7 +195,9 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         energy_idxs: list[int],
         power_key_prefix: str,
         power_field: str | None = None,
+        accepted: set[str] | None = None,
     ) -> bool:
+        accepted = accepted if accepted is not None else set()
         changed = False
         active = _active_power_values(payload, power_field)
         currents_ma = payload.get("currentData") or []
@@ -201,10 +206,12 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         exp_wh = payload.get("exportActiveEnergyData") or []
         p_ph = _pick(active, power_idxs)
         if p_ph:
+            accepted.add(f"{power_key_prefix}_power_total")
             changed |= self._set_if_changed(site, f"{power_key_prefix}_power_phases", p_ph)
             changed |= self._set_if_changed(site, f"{power_key_prefix}_power_total", sum(p_ph))
         i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
         if i_ph:
+            accepted.add(f"{power_key_prefix}_current_phases")
             changed |= self._set_if_changed(site, f"{power_key_prefix}_current_phases", i_ph)
         if power_key_prefix == "grid" and voltage_dv:
             v_ph = _volts_from_dv(
@@ -213,8 +220,13 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
                 else []
             )
             if v_ph:
+                accepted.add("grid_voltage_phases")
                 changed |= self._set_if_changed(site, "grid_voltage_phases", v_ph)
         if energy_idxs:
+            if _pick(imp_wh, energy_idxs):
+                accepted.add(f"{power_key_prefix}_energy_import_kwh")
+            if power_key_prefix == "grid" and _pick(exp_wh, energy_idxs):
+                accepted.add("grid_energy_export_kwh")
             if power_key_prefix == "grid":
                 changed |= self._set_if_changed(
                     site,
@@ -234,13 +246,16 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
                 )
         return changed
 
-    def _handle_power(self, topic: str, payload: dict) -> bool:
+    def _handle_power(
+        self, topic: str, payload: dict, result: MqttApplyResult | None = None
+    ) -> bool:
         data = self.data
         if not data:
             return False
         idx_map = (self._power_index_maps_by_topic or {}).get(topic)
         site = data.site
-        changed = self.storage_measurements.apply(site, topic, payload)
+        accepted = result.site_fields if result is not None else set()
+        changed = self.storage_measurements.apply(site, topic, payload, accepted)
         grid = idx_map.get("grid", {}) if idx_map else {}
         pv = idx_map.get("pv", {}) if idx_map else {}
         changed |= self._apply_site_group(
@@ -251,6 +266,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
             grid.get("energy", []),
             "grid",
             grid.get("power_field"),
+            accepted,
         )
         changed |= self._apply_site_group(
             site,
@@ -260,6 +276,7 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
             pv.get("energy", []),
             "pv",
             pv.get("power_field"),
+            accepted,
         )
 
         payload_location_id = payload.get("serviceLocationId")
@@ -270,12 +287,15 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
 
         cp = payload.get("consumptionPower")
         if isinstance(cp, int | float):
+            accepted.add("house_consumption_power")
             changed |= self._set_if_changed(site, "house_consumption_power", int(cp))
         sp = payload.get("solarPower")
         if isinstance(sp, int | float):
+            accepted.add("pv_power_total")
             changed |= self._set_if_changed(site, "pv_power_total", int(sp))
         always_on = payload.get("alwaysOn")
         if isinstance(always_on, int | float):
+            accepted.add("always_on_power")
             changed |= self._set_if_changed(site, "always_on_power", int(always_on))
         return changed
 
@@ -297,18 +317,21 @@ class SmappeeSiteCoordinator(DataUpdateCoordinator[SiteData]):
         if changed:
             self.async_set_updated_data(data)
 
-    def apply_mqtt_properties(self, topic: str, payload: dict) -> None:
+    def apply_mqtt_properties(self, topic: str, payload: dict) -> MqttApplyResult:
+        result = MqttApplyResult()
         data = self.data
         if not data:
-            return
+            return result
         data.site.last_mqtt_rx = _now()
         changed = False
         if not getattr(data.site, "mqtt_connected", False):
             data.site.mqtt_connected = True
             changed = True
-        changed |= self._handle_power(topic, payload)
+        changed |= self._handle_power(topic, payload, result)
+        changed |= self.measurement_freshness.record(result)
         if changed:
             self.async_set_updated_data(data)
+        return result
 
 
 class SmappeeStationCoordinator(
@@ -354,6 +377,7 @@ class SmappeeStationCoordinator(
         self.station_name = station_name
         self.station_model = station_model
         self.last_connector_rx: dict[str, datetime] = {}
+        self.measurement_freshness = MeasurementFreshness()
         self.station_client.dashboard_client = dashboard_client
         for client in self.connector_clients.values():
             client.dashboard_client = dashboard_client
@@ -439,18 +463,38 @@ class SmappeeStationCoordinator(
         # Share successes and failures for this refresh only. The next refresh
         # must fetch a new list rather than replaying an older REST snapshot.
         requests: SmartDeviceRequests = {}
+        refresh_start = state_staging_copy(self.data) if self.data is not None else None
         try:
-            # ---- Station snapshot (LED brightness) ----
-            prev_data = self.data
-            station_state = self._merge_station_rest_state(
-                prev_data.station if prev_data else None,
-                await self._fetch_station_state(self.station_client, requests=requests),
-            )
+            # Fetch remote values into isolated objects. Do not preserve live
+            # telemetry from a snapshot retained while network I/O is pending.
+            rest_station = await self._fetch_station_state(self.station_client, requests=requests)
 
             # ---- Connectors in parallel ----
             pairs = list(self.connector_clients.items())  # [(uuid, client), ...]
             coros = [self._fetch_connector_state(client, requests=requests) for _, client in pairs]
             results = await asyncio.gather(*coros, return_exceptions=True)
+
+            await self._ensure_power_index_map()
+            baseline = state_staging_copy(
+                self.data
+                or IntegrationData(
+                    station=rest_station,
+                    connectors={
+                        uuid: ConnectorState(connector_number=client.connector_number or 1)
+                        for uuid, client in pairs
+                    },
+                )
+            )
+            staged = state_staging_copy(baseline)
+            await self._maybe_refresh_dashboard_data(staged)
+            dashboard_changes = StateChanges.between(baseline, staged)
+
+            # All awaits are finished. Merge remote fields into the CURRENT
+            # snapshot and return without yielding, preserving MQTT and sessions.
+            current = self.data
+            station_state = self._merge_station_rest_state(
+                current.station if current else None, rest_station
+            )
 
             connectors_state: dict[str, ConnectorState] = {}
             for (uuid, client), res in zip(pairs, results, strict=True):
@@ -472,17 +516,20 @@ class SmappeeStationCoordinator(
                         )
                 elif isinstance(res, ConnectorState | ConnectorRestSnapshot):
                     self._log_connector_api_transition(uuid, True)
-                    prev = (prev_data.connectors or {}).get(uuid) if prev_data else None
+                    prev = (current.connectors or {}).get(uuid) if current else None
                     connectors_state[uuid] = self._merge_connector_rest_state(prev, res)
-
-            await self._ensure_power_index_map()
 
             data = IntegrationData(
                 station=station_state,
                 connectors=connectors_state,
-                recent_sessions=prev_data.recent_sessions if prev_data else [],
+                recent_sessions=current.recent_sessions if current else [],
             )
-            await self._maybe_refresh_dashboard_data(data)
+            dashboard_changes.apply(data)
+            if refresh_start is not None and current is not None:
+                # New commands and MQTT state take precedence over responses
+                # that were already in flight when those updates arrived.
+                StateChanges.between(refresh_start, current).apply(data)
+            self._sync_dashboard_client_metadata(data)
             return data
 
         except asyncio.CancelledError:

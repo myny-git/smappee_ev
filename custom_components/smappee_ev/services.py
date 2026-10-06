@@ -4,7 +4,11 @@ import logging
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
@@ -13,6 +17,7 @@ from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOM
 from .helpers import connector_percentage_setpoint, dashboard_mode
 from .models.runtime_data import RuntimeData, RuntimeMode, SmappeeSiteRuntime
 from .models.state import ConnectorState
+from .state_updates import async_write
 
 _LOGGER = logging.getLogger(__name__)
 DASHBOARD_CHARGING_MODES = {mode.upper() for mode in CHARGING_MODES}
@@ -322,7 +327,12 @@ async def async_handle_station_service(
             method_name=method_name,
         )
     try:
-        await method(**(extra_args or {}))
+        await async_write(
+            method(**(extra_args or {})),
+            lambda: _schedule_dashboard_refresh_for_client(hass, client),
+        )
+    except ConfigEntryAuthFailed:
+        raise
     except Exception as err:
         raise _home_assistant_error(
             f"Station service '{method_name}' failed: {err}",
@@ -330,7 +340,6 @@ async def async_handle_station_service(
             method_name=method_name,
             error=err,
         ) from err
-    _schedule_dashboard_refresh_for_client(hass, client)
 
 
 async def async_handle_connector_service(
@@ -374,7 +383,12 @@ async def _async_call_connector_client(
             method_name=method_name,
         )
     try:
-        await method(**(extra_args or {}))
+        await async_write(
+            method(**(extra_args or {})),
+            lambda: _schedule_dashboard_refresh_for_client(hass, client),
+        )
+    except ConfigEntryAuthFailed:
+        raise
     except Exception as err:
         raise _home_assistant_error(
             f"Connector service '{method_name}' failed: {err}",
@@ -382,7 +396,6 @@ async def _async_call_connector_client(
             method_name=method_name,
             error=err,
         ) from err
-    _schedule_dashboard_refresh_for_client(hass, client)
 
 
 # ----------------------------

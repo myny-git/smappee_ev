@@ -59,3 +59,4 @@ docstring-code-format = true
 [lint.per-file-ignores]
 "custom_components/**/__init__.py" = ["F401"]  # re-export ok
 "tests/**" = ["D","S101"]                      # 
+"mqtt_smoke/**" = ["PT009"]                   # standalone unittest, no pytest plugins

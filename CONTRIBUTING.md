@@ -10,8 +10,11 @@ Please note that this project is released with a [Contributor Code of Conduct][c
 
 ## Prerequisites
 
-- Python 3.12+
+- Python 3.14.2+ for the pinned Home Assistant test dependencies
 - A virtual environment (recommended)
+
+The shipped integration keeps Python 3.13-compatible syntax. CI checks that
+separately from the tests running against Home Assistant 2026.9.3.
 
 ## Setup
 
@@ -62,6 +65,32 @@ Here are a few things you can do that will increase the likelihood of your pull 
 - Write a [good commit message](http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html).
 
 Work in Progress pull requests are also welcome to get feedback early on, or if there is something blocking you.
+
+## State updates
+
+See [state update rules](docs/state-updates.md) before changing coordinator merges,
+control actions or MQTT measurement handling. Regression tests intentionally block
+network calls while newer MQTT data, commands and sessions arrive.
+
+## Real MQTT smoke test
+
+The ordinary tests stub `aiomqtt` because the Home Assistant pytest plugin pins an
+incompatible `paho-mqtt`. CI also runs a separate smoke test with real `aiomqtt`
+and a disposable Mosquitto container. It covers subscriptions, retained messages,
+payload handling, bursts across multiple topics, reconnect and shutdown during
+reconnect. TLS certificate validation is outside this local transport test.
+
+With Docker running, use a separate virtual environment:
+
+```bash
+python -m venv .venv-mqtt
+source .venv-mqtt/bin/activate
+pip install -r requirements-mqtt-test.txt
+python -m unittest discover -s mqtt_smoke -v
+```
+
+The test exposes its broker on localhost only, uses a random port and removes
+its own container on completion.
 
 ## Resources
 

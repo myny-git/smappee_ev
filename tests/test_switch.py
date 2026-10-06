@@ -558,7 +558,7 @@ class TestSmappeeAvailabilitySwitch:
         api_client.set_available.assert_called_once()
         assert mock_integration_data.station.available is True
 
-        # Test optimistic update
+        # Publish the confirmed update
         coordinator.async_set_updated_data.assert_called_once_with(mock_integration_data)
 
     @pytest.mark.asyncio
@@ -608,14 +608,16 @@ class TestSmappeeAvailabilitySwitch:
         with pytest.raises(HomeAssistantError):
             await availability_switch._set_available(True)
 
-        # State should be reverted to original
+        # Keep the original state when the write fails
         assert mock_integration_data.station.available is False
 
-        # First update changes optimistically, second reverts on error
-        assert coordinator.async_set_updated_data.call_count == 2
+        # A failed write must not publish an unconfirmed state
+        coordinator.async_set_updated_data.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_set_available_auth_error_reverts_and_propagates(self, mock_integration_data):
+    async def test_set_available_auth_error_preserves_state_and_propagates(
+        self, mock_integration_data
+    ):
         coordinator = MagicMock(spec=SmappeeCoordinator)
         coordinator.data = mock_integration_data
         api_client = MagicMock()
@@ -634,7 +636,7 @@ class TestSmappeeAvailabilitySwitch:
             await availability_switch.async_turn_on()
 
         assert mock_integration_data.station.available is False
-        assert coordinator.async_set_updated_data.call_count == 2
+        coordinator.async_set_updated_data.assert_not_called()
 
 
 class TestSmappeeOfflineChargingSwitch:
@@ -691,7 +693,7 @@ class TestSmappeeOfflineChargingSwitch:
         api_client.set_offline_charging_config.assert_awaited_once_with(False, 3)
 
     @pytest.mark.asyncio
-    async def test_turn_on_reverts_optimistic_state_on_error(self, mock_integration_data):
+    async def test_turn_on_preserves_state_on_error(self, mock_integration_data):
         mock_integration_data.station.offline_charging_enabled = False
         offline_switch, coordinator, api_client = self._make_switch(mock_integration_data)
         api_client.set_offline_charging_config.side_effect = RuntimeError("api down")
@@ -701,10 +703,10 @@ class TestSmappeeOfflineChargingSwitch:
 
         assert err.value.translation_key == "station_service_failed"
         assert mock_integration_data.station.offline_charging_enabled is False
-        assert coordinator.async_set_updated_data.call_count == 2
+        coordinator.async_set_updated_data.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_turn_on_auth_error_reverts_and_propagates(self, mock_integration_data):
+    async def test_turn_on_auth_error_preserves_state_and_propagates(self, mock_integration_data):
         mock_integration_data.station.offline_charging_enabled = False
         offline_switch, coordinator, api_client = self._make_switch(mock_integration_data)
         api_client.set_offline_charging_config.side_effect = SmappeeAuthenticationError(
@@ -715,7 +717,7 @@ class TestSmappeeOfflineChargingSwitch:
             await offline_switch.async_turn_on()
 
         assert mock_integration_data.station.offline_charging_enabled is False
-        assert coordinator.async_set_updated_data.call_count == 2
+        coordinator.async_set_updated_data.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_turn_on_raises_when_station_state_missing(self):

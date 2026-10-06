@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, TypeVar, override
 
+from homeassistant.core import callback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
+from .coordinators.freshness import MeasurementFreshness
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
 if TYPE_CHECKING:
@@ -61,6 +64,7 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
 
     _attr_has_entity_name = True
     _attr_attribution = f"Data provided by {MANUFACTURER}"
+    _mqtt_field: str | None = None
 
     def __init__(
         self,
@@ -90,6 +94,29 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
             unique_suffix,
         )
         super().__init__(coordinator)
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._mqtt_field is not None and isinstance(
+            getattr(self.coordinator, "measurement_freshness", None), MeasurementFreshness
+        ):
+            self.async_on_remove(
+                async_track_time_interval(
+                    self.hass, self._check_measurement_freshness, timedelta(seconds=30)
+                )
+            )
+
+    @callback
+    def _check_measurement_freshness(self, _now: datetime) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def _measurement_available(self) -> bool | None:
+        freshness = getattr(self.coordinator, "measurement_freshness", None)
+        if self._mqtt_field is None or not isinstance(freshness, MeasurementFreshness):
+            return None
+        return freshness.is_fresh(self._mqtt_field, self._connector_key)
 
     @property
     @override
@@ -210,6 +237,16 @@ class SmappeeSitePowerEntity(SmappeeSiteEntity[CoordinatorT]):
     @override
     def available(self) -> bool:
         """Return False when site power MQTT data is missing or stale."""
+        measured = self._measurement_available
+        if measured is not None:
+            return bool(
+                self._coordinator_available
+                and measured
+                and (
+                    not self.coordinator.monitoring_only
+                    or self.coordinator.mqtt_transport_connected
+                )
+            )
         if not super().available:
             return False
         last_rx = getattr(self.coordinator, "last_real_power_rx", None)
@@ -330,13 +367,25 @@ class SmappeeConnectorRestEntity(SmappeeConnectorEntity):
 class SmappeeConnectorMqttEntity(SmappeeConnectorEntity):
     """Base for connector entities whose values are primarily MQTT-backed."""
 
+    _mqtt_field = "charger_state"
+
     @property
     @override
     def available(self) -> bool:
         """Return True when coordinator data exists and MQTT is not known down."""
         if not self._coordinator_available:
             return False
-        if getattr(self.coordinator, "monitoring_only", False) is True:
+        measured = self._measurement_available
+        if (
+            self._mqtt_field == "charger_state"
+            and getattr(self.coordinator, "monitoring_only", False) is not True
+        ):
+            # Normal mode also refreshes charging state through REST. Preserve
+            # that fallback; cached monitoring must rely on actual MQTT state.
+            measured = None
+        if measured is not None and not measured:
+            return False
+        if getattr(self.coordinator, "monitoring_only", False) is True and measured is None:
             last_rx = self.coordinator.last_connector_rx.get(self.connector_uuid)
             if (
                 not self.coordinator.mqtt_transport_connected
@@ -344,6 +393,11 @@ class SmappeeConnectorMqttEntity(SmappeeConnectorEntity):
                 or _utcnow() - last_rx > MQTT_REAL_POWER_FRESHNESS_TIMEOUT
             ):
                 return False
+        if (
+            getattr(self.coordinator, "monitoring_only", False) is True
+            and not self.coordinator.mqtt_transport_connected
+        ):
+            return False
         conn = self._conn_state
         if conn is None:
             return False

@@ -21,6 +21,7 @@ from .entity import SmappeeConnectorEntity, SmappeeStationRestEntity
 from .helpers import anonymize_uuid
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import IntegrationData, StationState
+from .state_updates import async_write, update_connector, update_station
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -140,14 +141,11 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
                 self._sid,
                 anonymize_uuid(self.connector_uuid),
             )
-            await self.api_client.set_charging_mode("STANDARD")
-            st = self._conn_state
-            if st:
-                st.selected_mode = "STANDARD"
-                data = self.coordinator.data
-                if data:
-                    self.coordinator.async_set_updated_data(data)
-            self.coordinator.async_schedule_dashboard_refresh()
+            await async_write(
+                self.api_client.set_charging_mode("STANDARD"),
+                self.coordinator.async_schedule_dashboard_refresh,
+            )
+            update_connector(self.coordinator, self.connector_uuid, selected_mode="STANDARD")
             self._is_on = True
             self.async_write_ha_state()
         except asyncio.CancelledError:
@@ -177,8 +175,9 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
                 self._sid,
                 anonymize_uuid(self.connector_uuid),
             )
-            await self.api_client.pause_charging()
-            self.coordinator.async_schedule_dashboard_refresh()
+            await async_write(
+                self.api_client.pause_charging(), self.coordinator.async_schedule_dashboard_refresh
+            )
             self._is_on = False
             self.async_write_ha_state()
         except asyncio.CancelledError:
@@ -255,21 +254,12 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
                 translation_key="station_unavailable",
             )
 
-        prev = st.available
-
-        if prev != value:
-            st.available = value
-            self.coordinator.async_set_updated_data(data)
-
         try:
-            if value:
-                await self.api_client.set_available()
-            else:
-                await self.api_client.set_unavailable()
-            self.coordinator.async_schedule_dashboard_refresh()
+            await async_write(
+                self.api_client.set_available() if value else self.api_client.set_unavailable(),
+                self.coordinator.async_schedule_dashboard_refresh,
+            )
         except ConfigEntryAuthFailed:
-            st.available = prev
-            self.coordinator.async_set_updated_data(data)
             raise
         except (
             SmappeeError,
@@ -281,9 +271,6 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
             ValueError,
         ) as err:
             _LOGGER.warning("Set station availability failed (sid=%s): %s", self._sid, err)
-            # revert optimistic update
-            st.available = prev
-            self.coordinator.async_set_updated_data(data)
             if isinstance(err, HomeAssistantError):
                 raise
             raise HomeAssistantError(
@@ -294,6 +281,8 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
                     "error": str(err),
                 },
             ) from err
+
+        update_station(self.coordinator, available=value)
 
 
 class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
@@ -347,21 +336,16 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
                 translation_key="station_unavailable",
             )
 
-        prev_enabled = st.offline_charging_enabled
         failsafe = st.offline_failsafe_current_a
         if failsafe is None:
             failsafe = 3
 
-        if prev_enabled != enabled:
-            st.offline_charging_enabled = enabled
-            self.coordinator.async_set_updated_data(data)
-
         try:
-            await self.api_client.set_offline_charging_config(enabled, failsafe)
-            self.coordinator.async_schedule_dashboard_refresh()
+            await async_write(
+                self.api_client.set_offline_charging_config(enabled, failsafe),
+                self.coordinator.async_schedule_dashboard_refresh,
+            )
         except ConfigEntryAuthFailed:
-            st.offline_charging_enabled = prev_enabled
-            self.coordinator.async_set_updated_data(data)
             raise
         except (
             SmappeeError,
@@ -373,8 +357,6 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
             ValueError,
         ) as err:
             _LOGGER.warning("Set offline charging failed (sid=%s): %s", self._sid, err)
-            st.offline_charging_enabled = prev_enabled
-            self.coordinator.async_set_updated_data(data)
             if isinstance(err, HomeAssistantError):
                 raise
             raise HomeAssistantError(
@@ -385,3 +367,5 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
                     "error": str(err),
                 },
             ) from err
+
+        update_station(self.coordinator, offline_charging_enabled=enabled)
