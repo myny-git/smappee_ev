@@ -1,4 +1,4 @@
 # Separate from the HA pytest plugin, which pins an incompatible paho-mqtt.
 # Keep Home Assistant in sync with requirements-test.txt.
 homeassistant==2026.9.4
-aiomqtt>=2.5.0,<3.0.0
+aiomqtt>=2.5.1,<3.0.0
