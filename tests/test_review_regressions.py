@@ -347,3 +347,15 @@ async def test_voltage_only_accepts_reported_phases_without_zero_fill(online, sc
     assert state.grid_voltage_phases == [value // 10 for value in voltages]
     coord.apply_mqtt_properties(topic, {})
     assert state.grid_voltage_phases == [value // 10 for value in voltages]
+
+
+@pytest.mark.parametrize("percentage", [None, 0, 65])
+def test_rest_missing_percentage_preserves_confirmed_limit(percentage):
+    """An absent REST limit must not clear MQTT state; zero remains explicit."""
+    from custom_components.smappee_ev.coordinators.api_state import StationApiMixin
+    from custom_components.smappee_ev.models.state import ConnectorState
+
+    previous = ConnectorState(connector_number=1, selected_percentage_limit=42)
+    rest = ConnectorState(connector_number=1, selected_percentage_limit=percentage)
+    merged = StationApiMixin._merge_connector_rest_state(previous, rest)
+    assert merged.selected_percentage_limit == (42 if percentage is None else percentage)

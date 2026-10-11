@@ -157,7 +157,9 @@ class StationApiMixin(CoordinatorMixin):
             selected_current_limit=StationApiMixin._rest_selected_current_limit(
                 prev, rest_state, min_current, max_current
             ),
-            selected_percentage_limit=rest_state.selected_percentage_limit,
+            selected_percentage_limit=rest_state.selected_percentage_limit
+            if rest_state.selected_percentage_limit is not None
+            else prev.selected_percentage_limit,
             selected_mode=rest_state.selected_mode
             if rest_state.selected_mode is not None
             else prev.selected_mode,

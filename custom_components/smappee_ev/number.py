@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 import logging
 from typing import Any, override
@@ -29,6 +30,20 @@ from .state_updates import async_write, update_connector, update_station
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
+
+
+async def _async_number_write[T](
+    action: Awaitable[T], refresh: Callable[[], None], method: str, *, connector: bool = False
+) -> T:
+    """Translate command failures while preserving authentication and cancellation."""
+    try:
+        return await async_write(action, refresh)
+    except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="connector_service_failed" if connector else "station_service_failed",
+            translation_placeholders={"method_name": method, "error": str(err)},
+        ) from err
 
 
 def _active_or_true(value: bool | None) -> bool:
@@ -226,9 +241,11 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
                 },
             )
         min_c, max_c = st.min_current, st.max_current
-        cur_float, pct_int = await async_write(
+        cur_float, pct_int = await _async_number_write(
             self.api_client.set_current(value, min_current=int(min_c), max_current=int(max_c)),
             self.coordinator.async_schedule_dashboard_refresh,
+            "set_current",
+            connector=True,
         )
         update_connector(
             self.coordinator,
@@ -363,9 +380,11 @@ class SmappeeConnectorMaxCurrentNumber(SmappeeConnectorEntity, _BaseNumber):
             )
         min_current = int(st.min_current or DEFAULT_MIN_CURRENT)
         amps = max(min_current, min(DEFAULT_MAX_CURRENT, int(round(value))))
-        await async_write(
+        await _async_number_write(
             self.api_client.set_connector_max_current(amps),
             self.coordinator.async_schedule_dashboard_refresh,
+            "set_connector_max_current",
+            connector=True,
         )
         current = self._state()
         if current is not None:
@@ -419,20 +438,12 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
 
     @override
     async def async_set_native_value(self, value: float) -> None:
-        try:
-            await async_write(
-                self.api_client.set_min_surpluspct(int(value)),
-                self.coordinator.async_schedule_dashboard_refresh,
-            )
-        except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="connector_service_failed",
-                translation_placeholders={
-                    "method_name": "set_min_surpluspct",
-                    "error": str(err),
-                },
-            ) from err
+        await _async_number_write(
+            self.api_client.set_min_surpluspct(int(value)),
+            self.coordinator.async_schedule_dashboard_refresh,
+            "set_min_surpluspct",
+            connector=True,
+        )
         update_connector(self.coordinator, self.connector_uuid, min_surpluspct=int(value))
 
     @override
@@ -517,9 +528,10 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
             )
         power_kw = round(max(0.0, float(value)), 1)
         active = _active_or_true(st.capacity_protection_active)
-        await async_write(
+        await _async_number_write(
             dashboard.async_set_capacity_protection(self._sid, active, power_kw),
             self.coordinator.async_schedule_dashboard_refresh,
+            "async_set_capacity_protection",
         )
         update_station(self.coordinator, capacity_maximum_power_kw=power_kw)
 
@@ -582,9 +594,10 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
             )
         maximum_load_a = max(0, int(round(value)))
         active = _active_or_true(st.overload_protection_active)
-        await async_write(
+        await _async_number_write(
             dashboard.async_set_overload_protection(self._sid, active, maximum_load_a),
             self.coordinator.async_schedule_dashboard_refresh,
+            "async_set_overload_protection",
         )
         update_station(self.coordinator, overload_maximum_load_a=maximum_load_a)
 
@@ -650,9 +663,10 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationRestEntity, _BaseNumber)
         enabled = (
             bool(st.offline_charging_enabled) if st.offline_charging_enabled is not None else True
         )
-        await async_write(
+        await _async_number_write(
             self.api_client.set_offline_charging_config(enabled, failsafe),
             self.coordinator.async_schedule_dashboard_refresh,
+            "set_offline_charging_config",
         )
         update_station(
             self.coordinator, offline_charging_enabled=enabled, offline_failsafe_current_a=failsafe

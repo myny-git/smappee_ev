@@ -17,7 +17,12 @@ from homeassistant.loader import async_get_integration
 
 from .api.discovery import _measurement_role
 from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
-from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry, SmappeeStationRuntime
+from .models.runtime_data import (
+    DashboardRecoveryDiagnostics,
+    RuntimeData,
+    SmappeeEvConfigEntry,
+    SmappeeStationRuntime,
+)
 from .mqtt_setup import _mqtt_routing_diagnostics
 
 REDACT_KEYS = {
@@ -754,6 +759,16 @@ async def async_get_config_entry_diagnostics(
 
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
     out["runtime_mode"] = rt.mode.value if rt is not None else None
+    recovery = getattr(rt, "recovery", None)
+    if not isinstance(recovery, DashboardRecoveryDiagnostics):
+        recovery = DashboardRecoveryDiagnostics()
+    out["recovery"] = {
+        "status": recovery.status,
+        "attempts": recovery.attempts,
+        "last_attempt": recovery.last_attempt.isoformat() if recovery.last_attempt else None,
+        "next_attempt": recovery.next_attempt.isoformat() if recovery.next_attempt else None,
+        "last_error_category": recovery.last_error_category,
+    }
     sites = rt.sites if rt else {}
     sensitive_values = _entry_sensitive_values(entry) + _runtime_sensitive_values(rt)
     # Stable local aliases instead of raw service-location ids (#251 follow-up):

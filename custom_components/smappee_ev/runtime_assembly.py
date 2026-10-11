@@ -8,7 +8,9 @@ from inspect import isawaitable
 import logging
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology
@@ -86,6 +88,21 @@ def _log_stored_runtime_shape(runtime: RuntimeData) -> None:
     )
 
 
+async def _async_initial_refresh(coord: SmappeeCoordinator | SmappeeSiteCoordinator) -> None:
+    """Refresh setup coordinators or probes for an already loaded entry."""
+    if (
+        coord.config_entry is not None
+        and coord.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS
+    ):
+        await coord.async_config_entry_first_refresh()
+        return
+    await coord.async_refresh()
+    if not coord.last_update_success:
+        if isinstance(coord.last_exception, ConfigEntryAuthFailed):
+            raise coord.last_exception
+        raise ConfigEntryNotReady from coord.last_exception
+
+
 async def _create_coordinators(
     hass: HomeAssistant,
     stations: dict[str, SmappeeStationRuntime],
@@ -129,7 +146,7 @@ async def _create_coordinators(
                     kwargs[key] = value
             coord = SmappeeCoordinator(hass, **kwargs)
             created.append(coord)
-            await coord.async_config_entry_first_refresh()
+            await _async_initial_refresh(coord)
             bucket.station_coordinator = coord
     except BaseException:
         for coord in created:
@@ -168,7 +185,14 @@ async def _create_site_coordinator(
         config_entry=config_entry,
         highlevel_configs=highlevel_configs,
     )
-    await coord.async_config_entry_first_refresh()
+    try:
+        await _async_initial_refresh(coord)
+    except BaseException:
+        try:
+            await coord.async_shutdown()
+        except Exception:
+            _LOGGER.debug("Site coordinator rollback failed", exc_info=True)
+        raise
     return coord
 
 

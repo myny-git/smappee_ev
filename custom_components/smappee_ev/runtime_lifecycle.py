@@ -18,6 +18,9 @@ _LOGGER = logging.getLogger(__name__)
 def _begin_runtime_shutdown(rd: RuntimeData) -> None:
     """Synchronously mark runtime resources as stopping."""
     rd.stopping = True
+    rd.recovery.next_attempt = None
+    if rd.recovery.status in ("waiting", "probing"):
+        rd.recovery.status = "stopped"
     for remove in rd.cleanup_callbacks:
         remove()
     rd.cleanup_callbacks.clear()

@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from aiohttp import ClientSession
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -266,6 +267,9 @@ async def _async_prepare_runtime(
     # Prepare different physical sites in parallel. Controls belonging to one
     # site are prepared together so coordinators and MQTT capture the final map.
     client_id_prefix = f"ha-{entry.entry_id[-6:]}"
+    # Recovery probes own their cleanup and reauth. Linking their temporary
+    # coordinators to a loaded entry would retain unload callbacks on every retry.
+    coordinator_entry = None if entry.state is ConfigEntryState.LOADED else entry
     prep_tasks = [
         asyncio.create_task(
             _prepare_site_topologies(
@@ -273,7 +277,7 @@ async def _async_prepare_runtime(
                 site_topologies,
                 update_interval,
                 client_id_prefix,
-                config_entry=entry,
+                config_entry=coordinator_entry,
                 dashboard_client=dashboard_client,
                 background_tasks=background_tasks,
                 start_runtime=False,

@@ -267,12 +267,13 @@ class _FakeSiteCoordinator:
     def __init__(self, hass, **kwargs):
         self.hass = hass
         self.kwargs = kwargs
+        self.config_entry = kwargs.get("config_entry")
         self.data = SiteData(site=SimpleNamespace(mqtt_connected=None))
         self.last_update_success = True
         self.mqtt_connection_changes = []
         self.shutdown_called = False
 
-    async def async_config_entry_first_refresh(self):
+    async def async_refresh(self):
         return None
 
     def apply_mqtt_properties(self, topic, payload):
@@ -291,6 +292,7 @@ class _FakeStationCoordinator:
     def __init__(self, hass, **kwargs):
         self.hass = hass
         self.kwargs = kwargs
+        self.config_entry = kwargs.get("config_entry")
         self.station_client = kwargs["station_client"]
         self.connector_clients = kwargs["connector_clients"]
         self.highlevel_configs = kwargs.get("highlevel_configs", {})
@@ -310,7 +312,7 @@ class _FakeStationCoordinator:
         self.delayed_refreshes_cancelled = False
         self.shutdown_called = False
 
-    async def async_config_entry_first_refresh(self):
+    async def async_refresh(self):
         return None
 
     def async_start_session_tracking(self):

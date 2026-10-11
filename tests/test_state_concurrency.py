@@ -4,11 +4,15 @@ import asyncio
 from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
+from aiohttp import ClientConnectionError
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 import pytest
 
-from custom_components.smappee_ev import light, number, select, switch
-from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
+from custom_components.smappee_ev import light, lock, number, select, switch
+from custom_components.smappee_ev.api.errors import (
+    SmappeeAuthenticationError,
+    SmappeeConnectionError,
+)
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.state_updates import update_station
@@ -353,3 +357,80 @@ async def test_forced_dashboard_refresh_preserves_in_flight_commands(online, ini
         if not task.done():
             task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("target", [True, False])
+@pytest.mark.parametrize("repeat_value", [False, True])
+async def test_confirmed_cable_lock_survives_older_dashboard_response(online, target, repeat_value):
+    """Even repeating a lock command confirms state against an older in-flight poll."""
+    coord = online.sites[1].stations["station-1"].station_coordinator
+    coord.data.station.cable_locked = target if repeat_value else not target
+    coord.data.connectors["connector-1"].power_total = 100
+    coord._fetch_station_state = AsyncMock(return_value=StationState())
+    coord._fetch_connector_state = AsyncMock(return_value=ConnectorState(connector_number=1))
+    coord._ensure_power_index_map = AsyncMock()
+    coord.async_schedule_dashboard_refresh = MagicMock()
+    started, finish = asyncio.Event(), asyncio.Event()
+
+    async def stale_dashboard(staged):
+        staged.station.cable_locked = not target
+        started.set()
+        await finish.wait()
+        return True
+
+    coord._maybe_refresh_dashboard_data = stale_dashboard
+    api = MagicMock()
+    api.set_cable_locked = AsyncMock()
+    api.set_cable_unlocked = AsyncMock()
+    entity = lock.SmappeeCableLock(
+        coordinator=coord, api_client=api, sid=1, station_uuid="station-1"
+    )
+    task = asyncio.create_task(coord._async_fetch_data())
+    try:
+        await asyncio.wait_for(started.wait(), timeout=1)
+        await (entity.async_lock() if target else entity.async_unlock())
+        coord.apply_mqtt_properties(bootstrap.TOPIC, {"activePowerData": [0, 3200]})
+        finish.set()
+        result = await asyncio.wait_for(task, timeout=1)
+        assert result.station.cable_locked is target
+        assert result.connectors["connector-1"].power_total == 3200
+        coord.async_schedule_dashboard_refresh.assert_called_once()
+        # The confirmation only protects requests that started before the write.
+        coord.async_set_updated_data(result)
+        reconciled = await coord._async_fetch_data()
+        assert reconciled.station.cable_locked is not target
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize(
+    "kind", ["current", "maximum", "surplus", "capacity", "overload", "failsafe"]
+)
+@pytest.mark.parametrize(
+    "error_cls", [SmappeeConnectionError, ClientConnectionError, TimeoutError, ValueError]
+)
+async def test_number_transport_failures_are_translated_without_confirming_state(kind, error_cls):
+    """Every number translates API/transport failures at its actual entity method."""
+    coord = MagicMock(spec=SmappeeCoordinator)
+    coord.data = initial = make_data()
+    api = MagicMock()
+    coord.dashboard_client = api
+    action, method, field, _target, connector = make_entity(kind, coord, api)
+    previous = getattr(initial.connectors["c"] if connector else initial.station, field)
+    error = error_cls("uncertain write response")
+    setattr(api, method, AsyncMock(side_effect=error))
+
+    with pytest.raises(HomeAssistantError) as caught:
+        await action()
+
+    assert caught.value.__cause__ is error
+    assert caught.value.translation_key == (
+        "connector_service_failed" if connector else "station_service_failed"
+    )
+    assert coord.data is initial
+    assert getattr(initial.connectors["c"] if connector else initial.station, field) == previous
+    coord.async_set_updated_data.assert_not_called()
+    coord.record_confirmed_write.assert_not_called()
+    coord.async_schedule_dashboard_refresh.assert_called_once()

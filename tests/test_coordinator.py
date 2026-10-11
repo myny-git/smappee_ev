@@ -598,7 +598,8 @@ class TestSmappeeCoordinator:
         coordinator._session_refresh_unsub = session_unsub
         coordinator._session_active_loop_unsub = active_loop_unsub
         coordinator._session_active_loop_interval = 300
-        coordinator._session_final_refresh_unsubs = final_unsubs.copy()
+        coordinator._session_final_refresh_unsubs = {"test_uuid": final_unsubs.copy()}
+        coordinator._session_final_refresh_scheduled = {"test_uuid"}
         coordinator._dashboard_refresh_task = dashboard_task
 
         await coordinator.async_shutdown()
@@ -611,7 +612,8 @@ class TestSmappeeCoordinator:
         assert coordinator._session_refresh_unsub is None
         assert coordinator._session_active_loop_unsub is None
         assert coordinator._session_active_loop_interval is None
-        assert coordinator._session_final_refresh_unsubs == []
+        assert coordinator._session_final_refresh_unsubs == {}
+        assert coordinator._session_final_refresh_scheduled == set()
 
         coordinator._schedule_session_refresh("after shutdown", delay=0)
         assert coordinator._session_refresh_unsub is None

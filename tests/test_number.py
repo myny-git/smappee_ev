@@ -283,7 +283,7 @@ async def test_connector_max_current_number_api_error_preserves_state(coordinato
         connector_uuid="uuid",
     )
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(HomeAssistantError):
         await number.async_set_native_value(16)
 
     assert state.max_current == 32
@@ -343,7 +343,7 @@ async def test_capacity_maximum_power_api_error_preserves_previous_value(
         station_uuid="station",
     )
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(HomeAssistantError):
         await number.async_set_native_value(6)
 
     dashboard_client.async_set_capacity_protection.assert_awaited_once_with(1, False, 6.0)
@@ -774,3 +774,34 @@ async def test_async_setup_entry_handles_empty_sites(hass):
     await async_setup_entry(hass, entry, async_add_entities)
 
     async_add_entities.assert_called_once_with([], False)
+
+
+@pytest.mark.parametrize("connector", [False, True])
+@pytest.mark.parametrize("failure", ["transport", "auth", "cancel"])
+async def test_number_write_translates_errors_and_preserves_auth(connector, failure):
+    """Failed commands refresh uncertain state while auth/cancellation propagate."""
+    import asyncio
+
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    from custom_components.smappee_ev.api.errors import SmappeeConnectionError
+    from custom_components.smappee_ev.number import _async_number_write
+
+    error = {
+        "transport": SmappeeConnectionError("offline"),
+        "auth": ConfigEntryAuthFailed("expired"),
+        "cancel": asyncio.CancelledError(),
+    }[failure]
+    action = AsyncMock(side_effect=error)
+    refresh = MagicMock()
+    expected = HomeAssistantError if failure == "transport" else type(error)
+    with pytest.raises(expected) as caught:
+        await _async_number_write(action(), refresh, "set_current", connector=connector)
+    if failure == "auth":
+        refresh.assert_not_called()
+    else:
+        refresh.assert_called_once()
+    if failure == "transport":
+        assert caught.value.translation_key == (
+            "connector_service_failed" if connector else "station_service_failed"
+        )

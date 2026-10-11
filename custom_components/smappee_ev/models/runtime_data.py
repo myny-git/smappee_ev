@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,17 @@ class RuntimeMode(StrEnum):
 
     NORMAL = "normal"
     MQTT_ONLY = "mqtt_only"
+
+
+@dataclass
+class DashboardRecoveryDiagnostics:
+    """Recovery progress without response bodies, credentials or identifiers."""
+
+    status: str = "inactive"
+    attempts: int = 0
+    last_attempt: datetime | None = None
+    next_attempt: datetime | None = None
+    last_error_category: str | None = None
 
 
 @dataclass
@@ -104,6 +116,7 @@ class RuntimeData:
     mode: RuntimeMode = RuntimeMode.NORMAL
     stopping: bool = False
     cleanup_callbacks: list[CALLBACK_TYPE] = field(default_factory=list)
+    recovery: DashboardRecoveryDiagnostics = field(default_factory=DashboardRecoveryDiagnostics)
 
 
 type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]

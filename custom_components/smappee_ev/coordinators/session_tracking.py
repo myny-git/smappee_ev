@@ -116,7 +116,7 @@ class SessionTrackingMixin(CoordinatorMixin):
 
         is_active = self._is_session_active(conn)
         if is_active:
-            self._cancel_final_session_refreshes()
+            self._cancel_connector_final_session_refreshes(connector_uuid)
             self._ensure_active_session_loop()
 
             if not was_active:
@@ -182,10 +182,14 @@ class SessionTrackingMixin(CoordinatorMixin):
 
     def _schedule_final_session_refreshes(self, connector_uuid: str | None) -> None:
         """Schedule final delayed refreshes after a charging session ends."""
-        if self._shutting_down:
+        if self._shutting_down or connector_uuid in self._session_final_refresh_scheduled:
             return
 
-        self._cancel_final_session_refreshes()
+        # Keep the completion marker after the timers run, until a new session
+        # starts. Repeated terminal messages must not restart these deadlines.
+        self._session_final_refresh_scheduled.add(connector_uuid)
+        unsubs: list[CALLBACK_TYPE] = []
+        self._session_final_refresh_unsubs[connector_uuid] = unsubs
 
         for delay in SESSION_FINAL_REFRESH_DELAYS:
             unsub_holder: dict[str, CALLBACK_TYPE] = {}
@@ -196,11 +200,16 @@ class SessionTrackingMixin(CoordinatorMixin):
                 unsub_holder: dict[str, CALLBACK_TYPE] = unsub_holder,
             ) -> None:
                 unsub = unsub_holder.get("unsub")
+                if (
+                    self._shutting_down
+                    or self._session_final_refresh_unsubs.get(connector_uuid) is not unsubs
+                ):
+                    return
                 if unsub is not None:
                     with suppress(ValueError):
-                        self._session_final_refresh_unsubs.remove(unsub)
-                if self._shutting_down:
-                    return
+                        unsubs.remove(unsub)
+                if not unsubs:
+                    self._session_final_refresh_unsubs.pop(connector_uuid, None)
 
                 await self._async_refresh_recent_sessions(
                     f"connector {anonymize_uuid(connector_uuid) or '?'} finalizing after {delay}s",
@@ -209,14 +218,20 @@ class SessionTrackingMixin(CoordinatorMixin):
 
             unsub = async_call_later(self.hass, delay, _refresh)
             unsub_holder["unsub"] = unsub
-            self._session_final_refresh_unsubs.append(unsub)
+            unsubs.append(unsub)
+
+    def _cancel_connector_final_session_refreshes(self, connector_uuid: str | None) -> None:
+        """Cancel one connector's deadlines without touching another session."""
+        for unsub in self._session_final_refresh_unsubs.pop(connector_uuid, []):
+            with suppress(RuntimeError, ValueError):
+                unsub()
+        self._session_final_refresh_scheduled.discard(connector_uuid)
 
     def _cancel_final_session_refreshes(self) -> None:
         """Cancel all final delayed session refresh callbacks."""
-        for unsub in list(self._session_final_refresh_unsubs):
-            with suppress(RuntimeError, ValueError):
-                unsub()
-        self._session_final_refresh_unsubs.clear()
+        for connector_uuid in list(self._session_final_refresh_unsubs):
+            self._cancel_connector_final_session_refreshes(connector_uuid)
+        self._session_final_refresh_scheduled.clear()
 
     def _schedule_session_refresh(self, reason: str, *, delay: int, force: bool = False) -> None:
         """Schedule one delayed recent-session refresh."""

@@ -210,11 +210,14 @@ async def test_runtime_shutdown_is_shared_for_concurrent_callers(hass):
 @pytest.mark.asyncio
 async def test_second_station_failure_rolls_back_first_without_starting_tracking(hass):
     first = MagicMock()
-    first.async_config_entry_first_refresh = AsyncMock()
+    first.config_entry = None
+    first.last_update_success = True
+    first.async_refresh = AsyncMock()
     first.async_shutdown = AsyncMock()
     first.async_start_session_tracking = MagicMock()
     second = MagicMock()
-    second.async_config_entry_first_refresh = AsyncMock(side_effect=RuntimeError("failed"))
+    second.config_entry = None
+    second.async_refresh = AsyncMock(side_effect=RuntimeError("failed"))
     second.async_shutdown = AsyncMock()
     second.async_start_session_tracking = MagicMock()
     stations = {

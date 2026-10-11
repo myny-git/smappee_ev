@@ -3,7 +3,8 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from aiomqtt import MqttError
 import pytest
@@ -603,3 +604,73 @@ class TestSmappeeMqtt:
         gw._client = FailingClient()  # type: ignore[assignment]
         await gw._publish_tracking_once()
         await gw._publish_ha_heartbeat_once()
+
+
+@pytest.mark.parametrize("failure_phase", ["connect", "subscribe"])
+async def test_reconnect_backoff_grows_is_capped_and_resets_after_all_subscriptions(
+    monkeypatch, failure_phase
+):
+    """Repeated partial subscription failures must not produce a 1 s retry loop."""
+    gw = SmappeeMqtt(
+        service_location_uuid="u",
+        client_id="c",
+        serial_number="s",
+        service_location_id=1,
+        on_properties=MagicMock(),
+    )
+    attempts = []
+    delays = []
+
+    class DisconnectedMessages:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise MqttError("lost connection after successful subscriptions")
+
+    class Client:
+        def __init__(self, **_kwargs):
+            self.subscriptions = []
+            self.messages = DisconnectedMessages()
+            attempts.append(self)
+            self.attempt = len(attempts)
+
+        async def __aenter__(self):
+            if self.attempt <= 9 and failure_phase == "connect":
+                raise MqttError("connection refused")
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def subscribe(self, topic, **_kwargs):
+            self.subscriptions.append(topic)
+            if self.attempt <= 9 and len(self.subscriptions) == 2:
+                raise MqttError("second subscription refused")
+
+        async def publish(self, *_args, **_kwargs):
+            return None
+
+    async def elapse_backoff(awaitable, **kwargs):
+        # Only replace the runner's wait; retain real asyncio for cancellation.
+        awaitable.close()
+        delays.append(kwargs["timeout"])
+        assert gw._client is None
+        assert gw._track_task is None
+        if len(delays) == 10:
+            gw.begin_shutdown()
+        else:
+            raise TimeoutError
+
+    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", Client)
+    clock = SimpleNamespace(**{**vars(asyncio), "wait_for": elapse_backoff})
+    with patch("custom_components.smappee_ev.api.mqtt_gateway.asyncio", clock):
+        await gw._runner_main(MagicMock())
+
+    assert delays == [1, 2, 4, 8, 16, 32, 60, 60, 60, 1]
+    assert len(attempts) == 10
+    assert len(attempts[-1].subscriptions) == 6
+    if failure_phase == "subscribe":
+        assert all(len(client.subscriptions) == 2 for client in attempts[:-1])
+    assert gw._client is None
+    assert gw._track_task is None

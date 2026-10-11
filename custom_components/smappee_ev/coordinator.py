@@ -397,7 +397,8 @@ class SmappeeStationCoordinator(
         self._session_refresh_unsub: CALLBACK_TYPE | None = None
         self._session_active_loop_unsub: CALLBACK_TYPE | None = None
         self._session_active_loop_interval: int | None = None
-        self._session_final_refresh_unsubs: list[CALLBACK_TYPE] = []
+        self._session_final_refresh_unsubs: dict[str | None, list[CALLBACK_TYPE]] = {}
+        self._session_final_refresh_scheduled: set[str | None] = set()
         self._session_refresh_lock = asyncio.Lock()
         self._session_tracking_started = False
         self._last_dashboard_refresh = 0.0

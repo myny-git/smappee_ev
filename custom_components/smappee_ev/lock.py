@@ -18,6 +18,7 @@ from .coordinator import SmappeeCoordinator
 from .entity import SmappeeStationRestEntity
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import IntegrationData, StationState
+from .state_updates import update_station
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
@@ -156,7 +157,9 @@ class SmappeeCableLock(SmappeeStationRestEntity, LockEntity):
         # Polling may replace the snapshot while the request is in flight.
         # Publish only the successful lock change on the current snapshot.
         current: IntegrationData | None = self.coordinator.data
-        if current is not None and current.station.cable_locked != value:
-            current.station.cable_locked = value
-            self.coordinator.async_set_updated_data(current)
+        if current is not None:
+            if current.station.cable_locked != value:
+                update_station(self.coordinator, cable_locked=value)
+            else:
+                self.coordinator.record_confirmed_write(None, {"cable_locked": value})
         self.coordinator.async_schedule_dashboard_refresh()

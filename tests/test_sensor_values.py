@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -140,7 +141,7 @@ def test_station_phase_total_sensors_include_phase_attributes():
         # chargingState/session_state value, see docs/HA_integration.md and #251.
         (SmappeeChargingStateSensor, "started"),
         (SmappeeEVCCStateSensor, "B"),
-        (SmappeeEvseStatusSensor, "c1"),
+        (SmappeeEvseStatusSensor, None),
     ],
 )
 def test_connector_sensor_native_values(sensor_cls, expected):
@@ -240,9 +241,50 @@ def test_evse_status_restored_fallback_without_current_state():
     entity = SmappeeEvseStatusSensor(coordinator, _api(), 42, "station-uuid", "conn-1")
 
     coordinator.data = None
-    entity._restored_value = "B1"
+    entity._restored_value = "available"
 
-    assert entity.native_value == "B1"
+    assert entity.native_value == "available"
+
+
+@pytest.mark.parametrize(
+    ("sensor_cls", "field", "known"),
+    [
+        (SmappeeChargingStateSensor, "session_state", "started"),
+        (SmappeeEvseStatusSensor, "status_current", "charging"),
+    ],
+)
+@pytest.mark.parametrize("raw", ["FUTURE_FIRMWARE_STATUS", "", "   ", None, 42])
+def test_enum_sensor_unknown_values_remain_publishable_and_keep_raw_status(
+    sensor_cls, field, known, raw
+):
+    state = ConnectorState(connector_number=1)
+    setattr(state, field, raw)
+    coordinator = _coordinator(connector=state)
+    entity = sensor_cls(coordinator, _api(), 42, "station-uuid", "conn-1")
+    entity.platform_data = SimpleNamespace(
+        platform_name="smappee_ev", domain="sensor", default_language_platform_translations={}
+    )
+    if sensor_cls is SmappeeEvseStatusSensor:
+        entity._restored_value = "available"
+    # HA's actual state property rejects invalid ENUM values, not native_value.
+    assert entity.state == (
+        "available" if raw is None and sensor_cls is SmappeeEvseStatusSensor else None
+    )
+    assert entity.extra_state_attributes == ({"raw_status": raw} if raw is not None else None)
+    setattr(state, field, f" {known.upper()} ")
+    assert entity.state == known
+    assert entity.extra_state_attributes == {"raw_status": f" {known.upper()} "}
+
+
+def test_evse_status_rejects_invalid_restored_enum_value():
+    coordinator = _coordinator()
+    entity = SmappeeEvseStatusSensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+    coordinator.data = None
+    entity._restored_value = "FUTURE_FIRMWARE_STATUS"
+    entity.platform_data = SimpleNamespace(
+        platform_name="smappee_ev", domain="sensor", default_language_platform_translations={}
+    )
+    assert entity.state is None
 
 
 @pytest.mark.parametrize(

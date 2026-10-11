@@ -215,9 +215,16 @@ These are the raw Home Assistant state values to use in automations. The Home As
 
 | Sensor | Possible HA state values | Meaning |
 |---|---|---|
-| `charging_state` | `initialize`, `started`, `suspended`, `stopped`, rare: `smart` | Raw Smappee `chargingState` from `_fetch_connector_state`, published by the integration as a lowercase string. `initialize` is the default before the first API fetch. No fixed enum is enforced. The rare `smart` value has been observed once; its session-classification behavior is unconfirmed, so consider opening an issue if it appears repeatedly. |
+| `charging_state` | `initialize`, `started`, `suspended`, `stopped` | Smappee `chargingState`, normalized to a supported lowercase ENUM value. `initialize` is the default before the first API fetch. Other values, including `smart`, produce an unknown sensor state and remain visible in the `raw_status` attribute. |
 | `evcc_state` | `A`, `B`, `C`, `E`, `F` | IEC 61851 notation derived from `iec_status` through `_derive_evcc_letter`. A means no vehicle connected, B means connected/not charging, C means actively charging, E/F indicate fault states. `D` is intentionally excluded. |
-| `evse_status` | `available`, `cable_connected`, `charging`, `charging_finished`, `error`, `suspended_evse` | Raw Smappee `status_current`, published by the integration as a lowercase string. No fixed enum is enforced. |
+| `evse_status` | `initialize`, `available`, `cable_connected`, `charging`, `charging_finished`, `error`, `suspended_evse` | Smappee `status_current`, normalized to a supported lowercase ENUM value. Unknown values produce an unknown sensor state and remain visible in the `raw_status` attribute. |
+
+The two ENUM sensors keep the original received status in `raw_status`, including
+its capitalization. New firmware values therefore remain available for diagnosis
+without causing Home Assistant to reject the sensor state. Session tracking still
+uses the original connector data. Final session refreshes are scheduled once per
+connector when a session ends; repeated terminal messages do not postpone them,
+and activity on another connector does not cancel them.
 
 ## Power, Current and Energy Sensors
 

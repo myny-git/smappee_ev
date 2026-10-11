@@ -87,7 +87,9 @@ class TestCoordinatorCreation:
         ) as mock_coordinator_class:
             # Create a mock coordinator instance
             mock_coordinator = MagicMock(spec=SmappeeCoordinator)
-            mock_coordinator.async_config_entry_first_refresh = AsyncMock()
+            mock_coordinator.config_entry = None
+            mock_coordinator.last_update_success = True
+            mock_coordinator.async_refresh = AsyncMock()
 
             # Set the return value of the coordinator class
             mock_coordinator_class.return_value = mock_coordinator
@@ -105,7 +107,7 @@ class TestCoordinatorCreation:
             )
 
             # Verify first refresh was called
-            mock_coordinator.async_config_entry_first_refresh.assert_called_once()
+            mock_coordinator.async_refresh.assert_called_once()
 
             # Verify coordinator was assigned to station
             assert stations["station1_uuid"].station_coordinator == mock_coordinator
@@ -145,7 +147,9 @@ class TestCoordinatorCreation:
         ) as mock_coordinator_class:
             # Create a mock coordinator instance
             mock_coordinator = MagicMock(spec=SmappeeCoordinator)
-            mock_coordinator.async_config_entry_first_refresh = AsyncMock()
+            mock_coordinator.config_entry = None
+            mock_coordinator.last_update_success = True
+            mock_coordinator.async_refresh = AsyncMock()
 
             # Set the return value of the coordinator class
             mock_coordinator_class.return_value = mock_coordinator

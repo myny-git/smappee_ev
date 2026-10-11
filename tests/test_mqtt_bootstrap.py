@@ -874,3 +874,42 @@ async def test_complete_discovery_can_include_location_without_mqtt_channels(onl
     saved = snapshot_from_runtime(online, entry)
     assert saved["sites"][0]["metadata"]["measurement_location_ids"] == [1, 2]
     assert {spec["service_location_id"] for spec in saved["sites"][0]["specs"]} == {1}
+
+
+@pytest.mark.parametrize("scope", ["site", "station"])
+@pytest.mark.parametrize("failure", [None, SmappeeServerError, ConfigEntryAuthFailed])
+async def test_loaded_entry_probe_uses_real_coordinator_refresh(
+    hass, entry, online, scope, failure
+):
+    """Recovery refreshes a loaded entry and preserves transient/auth failures."""
+    from custom_components.smappee_ev.runtime_assembly import _async_initial_refresh
+
+    entry._async_set_state(hass, ConfigEntryState.LOADED, None)
+    site = online.sites[1]
+    coord = (
+        site.site_coordinator
+        if scope == "site"
+        else next(iter(site.stations.values())).station_coordinator
+    )
+    update = AsyncMock(return_value=coord.data)
+    if failure is not None:
+        update.side_effect = failure("probe failed")
+    try:
+        with (
+            patch.object(coord, "_async_update_data", update),
+            patch.object(entry, "async_start_reauth"),
+        ):
+            if failure is None:
+                await _async_initial_refresh(coord)
+                assert coord.last_update_success
+            else:
+                expected = (
+                    ConfigEntryAuthFailed
+                    if failure is ConfigEntryAuthFailed
+                    else ConfigEntryNotReady
+                )
+                with pytest.raises(expected):
+                    await _async_initial_refresh(coord)
+            update.assert_awaited_once()
+    finally:
+        await coord.async_shutdown()

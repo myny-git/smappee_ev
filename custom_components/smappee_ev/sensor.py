@@ -1037,7 +1037,15 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
             return None
 
         value = getattr(st, "session_state", None)
-        return str(value).lower() if value is not None else None
+        normalized = str(value).strip().lower() if value is not None else None
+        return normalized if normalized in self._attr_options else None
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, object] | None:
+        st = self._conn_state
+        value = getattr(st, "session_state", None) if st else None
+        return {"raw_status": value} if value is not None else None
 
 
 class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
@@ -1151,10 +1159,18 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         st = self._conn_state
         value = getattr(st, "status_current", None) if st else None
         if value is not None:
-            return str(value).lower()
+            normalized = str(value).strip().lower()
+            return normalized if normalized in self._attr_options else None
         if not self._dashboard_available:
             return None
-        return self._restored_value
+        return self._restored_value if self._restored_value in self._attr_options else None
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, object] | None:
+        st = self._conn_state
+        value = getattr(st, "status_current", None) if st else None
+        return {"raw_status": value} if value is not None else None
 
     @override
     async def async_added_to_hass(self) -> None:
@@ -1165,7 +1181,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         last_data = await self.async_get_last_sensor_data()
         restored_value = last_data.native_value if last_data else None
         if isinstance(restored_value, str):
-            lowered = restored_value.lower()
+            lowered = restored_value.strip().lower()
             restored_value = lowered if lowered in self._attr_options else None
         if restored_value is not None:
             self._restored_value = str(restored_value)

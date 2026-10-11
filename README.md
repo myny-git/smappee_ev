@@ -134,6 +134,10 @@ Assistant requests reauthentication while the existing MQTT monitoring continues
 During normal operation, MQTT updates also leave REST polling scheduled so that
 Dashboard can recover without a manual reload.
 
+Downloaded integration diagnostics include recovery status, attempt count,
+the last attempt and next retry timestamps in UTC, and the last error category.
+Exception messages and response bodies are not included in this recovery section.
+
 Fallback requires at least one successful setup with this version and a valid
 saved configuration. Without it, Home Assistant retries setup normally. The last
 saved configuration has no expiry time and is refreshed on successful normal

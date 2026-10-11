@@ -240,11 +240,9 @@ class SmappeeMqtt:
                         self._log_mqtt_connection_transition(True)
                         self._notify_conn(True)
 
-                        # Success -> reset backoff
-                        backoff = MQTT_RECONNECT_INITIAL_BACKOFF
-
                         # (Re)subscribe all topics
                         await self._subscribe_all(client)
+                        backoff = MQTT_RECONNECT_INITIAL_BACKOFF
 
                         # First tracking ping en periodically
                         await self._publish_tracking_once()
