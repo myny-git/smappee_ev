@@ -540,7 +540,7 @@ SET_MODE_SCHEMA = vol.Schema(
         vol.Optional("station_serial"): vol.All(cv.string, vol.Length(min=1)),
         vol.Required("mode"): vol.All(
             str,
-            str.upper,  # normalize to uppercase
+            str.upper,
             vol.In(DASHBOARD_CHARGING_MODES),
         ),
     }
@@ -553,7 +553,6 @@ SET_CURRENT_SCHEMA = vol.Schema(
         vol.Optional("service_location_id"): cv.positive_int,
         vol.Optional("connector_id"): cv.positive_int,
         vol.Optional("station_serial"): vol.All(cv.string, vol.Length(min=1)),
-        # Sane lower bound; upper bound validated dynamically against connector limits
         vol.Required("current"): vol.All(vol.Coerce(float), vol.Range(min=1.0)),
     }
 )
