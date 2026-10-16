@@ -18,6 +18,7 @@ from .state import HighLevelConfigMap
 if TYPE_CHECKING:
     from ..api.device_handle import SmappeeDeviceHandle
     from ..coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
+    from ..coordinators.status import SmappeeStatusCoordinator
 
 type MqttRuntimeValue = SmappeeMqtt | list[SmappeeMqtt] | None
 
@@ -117,6 +118,7 @@ class RuntimeData:
     stopping: bool = False
     cleanup_callbacks: list[CALLBACK_TYPE] = field(default_factory=list)
     recovery: DashboardRecoveryDiagnostics = field(default_factory=DashboardRecoveryDiagnostics)
+    status_coordinator: SmappeeStatusCoordinator | None = None
 
 
 type SmappeeEvConfigEntry = ConfigEntry[RuntimeData]

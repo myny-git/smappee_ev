@@ -3,6 +3,12 @@
     "binary_sensor": {
       "mqtt_connected": {
         "default": "mdi:lan-connect"
+      },
+      "service_status": {
+        "default": "mdi:check-circle-outline",
+        "state": {
+          "on": "mdi:alert-circle-outline"
+        }
       }
     },
     "button": {
@@ -58,6 +64,12 @@
       }
     },
     "sensor": {
+      "active_incidents": {
+        "default": "mdi:alert-circle-outline",
+        "state": {
+          "0": "mdi:check-circle-outline"
+        }
+      },
       "battery_power": {
         "default": "mdi:battery-sync"
       },
