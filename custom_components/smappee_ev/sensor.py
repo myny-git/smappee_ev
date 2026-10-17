@@ -21,11 +21,15 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .api.device_handle import SmappeeDeviceHandle
+from .const import DOMAIN, MANUFACTURER
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
+from .coordinators.status import SmappeeStatusCoordinator
 from .entity import (
     SmappeeConnectorEntity,
     SmappeeConnectorMqttEntity,
@@ -48,6 +52,9 @@ async def async_setup_entry(
     runtime = config_entry.runtime_data
 
     entities: list[SensorEntity] = [SmappeeConnectionModeSensor(config_entry)]
+
+    if runtime.status_coordinator is not None:
+        entities.append(SmappeeActiveIncidentsSensor(runtime.status_coordinator))
 
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
@@ -127,6 +134,47 @@ class SmappeeConnectionModeSensor(SensorEntity):
     def __init__(self, entry: SmappeeEvConfigEntry) -> None:
         self._attr_unique_id = f"{entry.entry_id}:connection_mode"
         self._attr_native_value = entry.runtime_data.mode.value
+
+
+class SmappeeActiveIncidentsSensor(CoordinatorEntity[SmappeeStatusCoordinator], SensorEntity):
+    """Counts active (unresolved) Smappee service incidents."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "active_incidents"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_unique_id = "smappee_service_status:active_incidents"
+    _attr_device_info = DeviceInfo(
+        identifiers={(DOMAIN, "smappee_service_status")},
+        name="Smappee Service Status",
+        manufacturer=MANUFACTURER,
+        entry_type=DeviceEntryType.SERVICE,
+        configuration_url="https://status.smappee.net",
+    )
+
+    @property
+    @override
+    def native_value(self) -> int:
+        data = self.coordinator.data
+        return len(data.active_incidents) if data else 0
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, object]:
+        data = self.coordinator.data
+        if not data or not data.active_incidents:
+            return {}
+        return {
+            "incidents": [
+                {
+                    "subsystem": inc.get("subsystem"),
+                    "level": inc.get("level"),
+                    "timestamp": datetime.fromtimestamp(inc["timestamp"] / 1000, tz=UTC).isoformat()
+                    if inc.get("timestamp")
+                    else None,
+                }
+                for inc in data.active_incidents
+            ]
+        }
 
 
 ############################################################

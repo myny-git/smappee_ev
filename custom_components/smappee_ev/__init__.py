@@ -28,6 +28,7 @@ from .const import (
     DOMAIN,
     UPDATE_INTERVAL_DEFAULT,
 )
+from .coordinators.status import SmappeeStatusCoordinator
 from .dashboard_discovery import (
     _create_dashboard_client,
     _dashboard_client_configured,
@@ -225,6 +226,11 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
             ) from err
         runtime = build_cached_runtime(hass, entry, dashboard_client, snapshot)
         _LOGGER.warning("Dashboard unavailable; using saved MQTT configuration for monitoring only")
+
+    status_coordinator = SmappeeStatusCoordinator(hass)
+    await status_coordinator.async_refresh()
+    if status_coordinator.data is not None:
+        runtime.status_coordinator = status_coordinator
 
     entry.runtime_data = runtime
     _register_runtime_stop_cleanup(hass, entry, runtime)
