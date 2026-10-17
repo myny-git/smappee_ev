@@ -228,8 +228,9 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         _LOGGER.warning("Dashboard unavailable; using saved MQTT configuration for monitoring only")
 
     status_coordinator = SmappeeStatusCoordinator(hass)
-    await status_coordinator.async_config_entry_first_refresh()
-    runtime.status_coordinator = status_coordinator
+    await status_coordinator.async_refresh()
+    if status_coordinator.data is not None:
+        runtime.status_coordinator = status_coordinator
 
     entry.runtime_data = runtime
     _register_runtime_stop_cleanup(hass, entry, runtime)

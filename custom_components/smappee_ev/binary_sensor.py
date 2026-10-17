@@ -32,7 +32,7 @@ async def async_setup_entry(
 
     entities: list[BinarySensorEntity] = []
 
-    if runtime.status_coordinator is not None:
+    if runtime.status_coordinator is not None and runtime.status_coordinator.data is not None:
         entities.extend(
             SmappeeServiceStatusSensor(runtime.status_coordinator, subsystem)
             for subsystem in runtime.status_coordinator.data.subsystems
