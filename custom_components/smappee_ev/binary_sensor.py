@@ -5,9 +5,13 @@ from typing import override
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import DOMAIN, MANUFACTURER
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
+from .coordinators.status import SmappeeStatusCoordinator
 from .entity import SmappeeSiteEntity
 from .helpers import station_serial
 from .models.runtime_data import SmappeeEvConfigEntry
@@ -26,7 +30,14 @@ async def async_setup_entry(
 ) -> None:
     runtime = config_entry.runtime_data
 
-    entities: list[SmappeeMqttConnectivity] = []
+    entities: list[BinarySensorEntity] = []
+
+    if runtime.status_coordinator is not None and runtime.status_coordinator.data is not None:
+        entities.extend(
+            SmappeeServiceStatusSensor(runtime.status_coordinator, subsystem)
+            for subsystem in runtime.status_coordinator.data.subsystems
+        )
+
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
         coord: SmappeeSiteCoordinator | SmappeeCoordinator | None = site.site_coordinator
@@ -37,6 +48,52 @@ async def async_setup_entry(
             entities.append(SmappeeMqttConnectivity(coord, sid_int))
 
     async_add_entities(entities, False)
+
+
+_SUBSYSTEM_LABELS: dict[str, str] = {
+    "website": "Website",
+    "dashboard": "Dashboard",
+    "android": "Android app",
+    "ios": "iOS app",
+    "api": "API",
+    "cloud": "Cloud",
+    "livedata": "Live data",
+    "historical": "Historical data",
+    "evline": "Smappee EV Line",
+    "evline-ocpp": "Smappee EV Line OCPP",
+    "evline-csms": "Smappee EV Line CSMS",
+    "global": "Global",
+}
+
+
+class SmappeeServiceStatusSensor(CoordinatorEntity[SmappeeStatusCoordinator], BinarySensorEntity):
+    """Binary sensor per Smappee service subsystem: off=ok, on=problem."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "service_status"
+
+    def __init__(self, coordinator: SmappeeStatusCoordinator, subsystem: str) -> None:
+        super().__init__(coordinator)
+        self._subsystem = subsystem
+        self._attr_unique_id = f"smappee_service_status:{subsystem}"
+        label = _SUBSYSTEM_LABELS.get(subsystem, subsystem)
+        self._attr_translation_placeholders = {"subsystem": label}
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "smappee_service_status")},
+            name="Smappee Service Status",
+            manufacturer=MANUFACTURER,
+            entry_type=DeviceEntryType.SERVICE,
+            configuration_url="https://status.smappee.net",
+        )
+
+    @property
+    @override
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data
+        status = data.subsystems.get(self._subsystem) if data else None
+        return None if status is None else status != "ok"
 
 
 class SmappeeMqttConnectivity(SmappeeSiteEntity, BinarySensorEntity):

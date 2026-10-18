@@ -241,6 +241,9 @@
     "binary_sensor": {
       "mqtt_connected": {
         "name": "MQTT verbunden"
+      },
+      "service_status": {
+        "name": "{subsystem}"
       }
     },
     "button": {
@@ -429,6 +432,9 @@
           "normal": "Dashboard und MQTT",
           "mqtt_only": "Nur MQTT-Überwachung"
         }
+      },
+      "active_incidents": {
+        "name": "Aktive Vorfälle"
       }
     }
   }

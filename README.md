@@ -186,6 +186,15 @@ configuration. Diagnostics do not include these credentials.
 - **Support Grid** sensor per connector: shows the maximum grid assistance current (A) configured on the charger
 - **Charging mode** is correctly restored from Home Assistant's persistent state after a restart (MQTT confirms or corrects it shortly after boot)
 
+### ✅ Smappee Service Status
+
+The integration polls `https://status.smappee.net/status` every 5 minutes and exposes the results as diagnostic entities on a **Smappee Service Status** device:
+
+- **Binary sensor per subsystem** (`website`, `dashboard`, `api`, `cloud`, `livedata`, `historical`, `evline`, `evline-ocpp`, `evline-csms`, `global`, …): `off` = OK, `on` = problem or maintenance.
+- **Active incidents sensor**: counts unresolved incidents. The `incidents` attribute lists each active incident with its subsystem, level and timestamp.
+
+These entities are only created when the integration can reach the status endpoint during setup. Unknown subsystems or status values are logged as a warning once so they can be reported.
+
 #### ⚡️ Advanced / Developer Notes
 
 - Most values for currents/brightnesses are always **integers** (no floats in UI), except for current limits which are **1 decimal precision**. The integration converts the requested current to the nearest supported percentage for the connector's configured range.
