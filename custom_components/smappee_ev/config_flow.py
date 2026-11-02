@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import logging
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
 import aiohttp
 from homeassistant import config_entries
@@ -10,7 +10,12 @@ from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
-import voluptuous as vol
+
+if TYPE_CHECKING:
+    import probatio as vol
+else:
+    # HA aliases voluptuous to Probatio since 2026.9; older versions use voluptuous.
+    import voluptuous as vol
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology

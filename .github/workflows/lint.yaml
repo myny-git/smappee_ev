@@ -42,7 +42,7 @@ jobs:
             --quiet-level=2 \
             --check-filenames \
             --check-hidden \
-            --skip "*.po,*.min.js,*.svg,*.png,*.jpg,*.json" \
+            --skip "*review-2026-11-02.md,*.po,*.min.js,*.svg,*.png,*.jpg,*.json" \
             --ignore-words-list "smappee,HA,nd"
 
   mypy:

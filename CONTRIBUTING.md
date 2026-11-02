@@ -93,6 +93,23 @@ python -m unittest discover -s mqtt_smoke -v
 The test exposes its broker on localhost only, uses a random port and removes
 its own container on completion.
 
+## Publishing a release
+
+Before creating a release tag, update `custom_components/smappee_ev/manifest.json`
+to the intended release version and commit it with the release changes. For
+example, tag `v2026.11.0` requires manifest version `2026.11.0`.
+
+The release workflow checks out the tag, verifies the manifest version and
+builds `smappee_ev.zip` from that revision. It fails on a version mismatch
+instead of publishing another revision or modifying `main`. Do not move a
+published release tag; publish a corrected version with a new tag.
+
+To check packaging locally from the intended release checkout:
+
+```bash
+python script/build_release.py --tag v2026.11.0 --output dist/smappee_ev.zip
+```
+
 ## Resources
 
 - [Home Assistant Developer Docs](https://developers.home-assistant.io/)

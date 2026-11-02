@@ -1,4 +1,4 @@
-# Smappee EV Home Assistant Integration (HACS)
+# Smappee EV Home Assistant Integration (Marketplace / HACS)
 
 > [!IMPORTANT]
 > This is a personal project developed by me and I am not affiliated with Smappee in any way. Use at your own risk.
@@ -188,12 +188,22 @@ configuration. Diagnostics do not include these credentials.
 
 ### ✅ Smappee Service Status
 
-The integration polls `https://status.smappee.net/status` every 5 minutes and exposes the results as diagnostic entities on a **Smappee Service Status** device:
+The integration polls `https://status.smappee.net/status` every 15 minutes while live MQTT data is arriving. If any configured site has no connected MQTT source with a valid measurement received in the last 5 minutes, status polling increases to every 5 minutes. Heartbeats alone do not count as live data. Normal polling resumes when MQTT data returns. Failed or empty status responses are also retried after 5 minutes.
+
+MQTT health is checked locally every 5 minutes; healthy checks reuse the last status response without making an HTTP request. The results appear as diagnostic entities on a **Smappee Service Status** device:
 
 - **Binary sensor per subsystem** (`website`, `dashboard`, `api`, `cloud`, `livedata`, `historical`, `evline`, `evline-ocpp`, `evline-csms`, `global`, …): `off` = OK, `on` = problem or maintenance.
 - **Active incidents sensor**: counts unresolved incidents. The `incidents` attribute lists each active incident with its subsystem, level and timestamp.
 
-These entities are only created when the integration can reach the status endpoint during setup. Unknown subsystems or status values are logged as a warning once so they can be reported.
+Known subsystem sensors are created immediately for each Smappee account. Status
+requests run in the background with a 15-second timeout and do not delay charger
+monitoring. If the first request fails, the sensors become unavailable and retry
+automatically; no reload is needed. Malformed responses retain the last valid
+data and mark the sensors unavailable until recovery. New subsystems are added
+when first reported. Unknown subsystem names or status values are logged once.
+
+Each account has independent status entities and its own status device. Existing
+status entity IDs and custom names are migrated in place when upgrading.
 
 #### ⚡️ Advanced / Developer Notes
 
@@ -211,32 +221,54 @@ These entities are only created when the integration can reach the status endpoi
 
 > ## ⚠️ Important
 >
-> This is a HACS custom integration.
+> This is a custom integration installed through Marketplace or HACS.
 > Do **not** try to add this repository as an **add-on** in Home Assistant - it won't work that way.
 
 ## 📦 Installation Instructions
 
-### Step 1. Add the Integration via HACS
+### Step 1. Install the Integration
 
 > [!NOTE]  
 > 🚀 Great news! The integration has been **officially approved by HACS**, no need to add it manually anymore! 🎉
 
 [![Add to my Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=myny-git&repository=smappee_ev&category=integration)
 
-### Method 1: Install via HACS (Recommended)
+### Home Assistant 2026.11 and newer: Marketplace
+
+1. Open **Settings -> Marketplace** and accept the community-content notice if prompted.
+2. Search for **Smappee EV**, open it, and select **Install**.
+3. Follow the setup flow that opens automatically and enter your Smappee credentials
+   as described in Step 2 below. A new installation does not need a restart.
+
+Updates to an already installed integration still require a restart when prompted.
+
+Marketplace is built into Home Assistant; installing HACS separately is unnecessary.
+When upgrading an existing HACS installation to Home Assistant 2026.11, installed
+repositories, custom repositories, and update entities migrate automatically.
+You do not need to remove or re-add Smappee EV or enter your credentials again
+just for this transition. Open Marketplace once after upgrading and accept the
+notice if prompted so installations and updates can continue.
+
+The installation button above also works with Marketplace. See the official
+[Marketplace migration guide](https://hacs.netlify.app/docs/marketplace/) for details.
+
+### Home Assistant 2026.10 and older: HACS
 
 1. In Home Assistant, go to **HACS** → **Integrations**.
 2. Search for `Smappee EV`.
 3. Click the **download** button in the right bottom side
 4. Restart Home Assistant.
 
-### Method 2: Manual Installation
+### Manual Installation
 
 1. Download the latest release from GitHub.
 2. Copy the `smappee_ev` folder to your Home Assistant `custom_components` directory.
 3. Restart Home Assistant.
 
 ### Step 2. Configure the Integration
+
+Open **Settings -> Devices & services -> Add integration** and search for
+**Smappee EV**. Existing users keep their current integration configuration.
 
 During setup, you will be prompted to enter:
 
