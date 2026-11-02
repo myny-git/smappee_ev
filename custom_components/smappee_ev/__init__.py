@@ -50,6 +50,7 @@ from .mqtt_bootstrap import (
 )
 from .mqtt_recovery import start_recovery
 from .mqtt_setup import _mqtt_routing_diagnostics, _start_mqtt_clients
+from .registry import async_migrate_status_registry
 from .runtime_assembly import _log_stored_runtime_shape, _prepare_site_topologies
 from .runtime_devices import _current_station_device_identifiers, _register_runtime_devices
 from .runtime_lifecycle import (
@@ -227,18 +228,22 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         runtime = build_cached_runtime(hass, entry, dashboard_client, snapshot)
         _LOGGER.warning("Dashboard unavailable; using saved MQTT configuration for monitoring only")
 
-    status_coordinator = SmappeeStatusCoordinator(hass)
-    await status_coordinator.async_refresh()
-    if status_coordinator.data is not None:
-        runtime.status_coordinator = status_coordinator
+    status_coordinator = SmappeeStatusCoordinator(hass, runtime.sites, config_entry=entry)
+    runtime.status_coordinator = status_coordinator
 
     entry.runtime_data = runtime
     _register_runtime_stop_cleanup(hass, entry, runtime)
     _log_stored_runtime_shape(runtime)
     try:
         _register_runtime_devices(hass, entry)
+        async_migrate_status_registry(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         _start_runtime_background_work(hass, runtime.sites, runtime.mqtt)
+        status_task = hass.async_create_background_task(
+            status_coordinator.async_refresh(), f"{entry.entry_id} Smappee service status"
+        )
+        runtime.background_tasks.add(status_task)
+        status_task.add_done_callback(runtime.background_tasks.discard)
         if runtime.mode is RuntimeMode.NORMAL:
             await async_save_snapshot(hass, entry, runtime)
         else:

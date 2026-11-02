@@ -67,6 +67,7 @@ def mock_api_client():
 def mock_runtime_data(mock_coordinator, mock_api_client):
     """Create mock runtime data."""
     runtime = MagicMock(spec=RuntimeData)
+    runtime.status_coordinator = None
     runtime.sites = {
         12345: make_site_runtime(
             site_location_id=12345,

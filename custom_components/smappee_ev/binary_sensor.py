@@ -4,14 +4,12 @@ from typing import override
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
-from .coordinators.status import SmappeeStatusCoordinator
+from .coordinators.status import STATUS_SUBSYSTEMS, SmappeeStatusCoordinator
 from .entity import SmappeeSiteEntity
 from .helpers import station_serial
 from .models.runtime_data import SmappeeEvConfigEntry
@@ -32,11 +30,30 @@ async def async_setup_entry(
 
     entities: list[BinarySensorEntity] = []
 
-    if runtime.status_coordinator is not None and runtime.status_coordinator.data is not None:
+    if (status_coordinator := runtime.status_coordinator) is not None:
+        subsystems = set(STATUS_SUBSYSTEMS)
+        if status_coordinator.data is not None:
+            subsystems.update(status_coordinator.data.subsystems)
         entities.extend(
-            SmappeeServiceStatusSensor(runtime.status_coordinator, subsystem)
-            for subsystem in runtime.status_coordinator.data.subsystems
+            SmappeeServiceStatusSensor(status_coordinator, subsystem)
+            for subsystem in sorted(subsystems)
         )
+
+        @callback
+        def add_new_subsystems() -> None:
+            new_subsystems = (
+                set(status_coordinator.data.subsystems) - subsystems
+                if status_coordinator.data is not None
+                else set()
+            )
+            subsystems.update(new_subsystems)
+            if new_subsystems:
+                async_add_entities(
+                    SmappeeServiceStatusSensor(status_coordinator, subsystem)
+                    for subsystem in sorted(new_subsystems)
+                )
+
+        config_entry.async_on_unload(status_coordinator.async_add_listener(add_new_subsystems))
 
     for sid, site in (runtime.sites or {}).items():
         sid_int = int(sid)
@@ -77,16 +94,10 @@ class SmappeeServiceStatusSensor(CoordinatorEntity[SmappeeStatusCoordinator], Bi
     def __init__(self, coordinator: SmappeeStatusCoordinator, subsystem: str) -> None:
         super().__init__(coordinator)
         self._subsystem = subsystem
-        self._attr_unique_id = f"smappee_service_status:{subsystem}"
+        self._attr_unique_id = f"{coordinator.unique_id_prefix}:{subsystem}"
         label = _SUBSYSTEM_LABELS.get(subsystem, subsystem)
         self._attr_translation_placeholders = {"subsystem": label}
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "smappee_service_status")},
-            name="Smappee Service Status",
-            manufacturer=MANUFACTURER,
-            entry_type=DeviceEntryType.SERVICE,
-            configuration_url="https://status.smappee.net",
-        )
+        self._attr_device_info = coordinator.device_info
 
     @property
     @override

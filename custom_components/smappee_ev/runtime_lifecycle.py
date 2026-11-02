@@ -80,6 +80,8 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
     # Mark coordinators as shutting down before stopping MQTT, because MQTT
     # disconnect callbacks can otherwise schedule fallback refreshes.
     _begin_runtime_shutdown(rd)
+    if rd.status_coordinator is not None:
+        await rd.status_coordinator.async_shutdown()
     for site in (rd.sites or {}).values():
         await _shutdown_site_coordinator(site)
         for bucket in site.stations.values():
@@ -115,6 +117,8 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
     if pending_tasks:
         await asyncio.gather(*pending_tasks, return_exceptions=True)
     rd.background_tasks.difference_update(pending_tasks)
+    # A completed task's done callback may still be waiting for the next loop tick.
+    rd.background_tasks.difference_update({task for task in rd.background_tasks if task.done()})
 
 
 def ensure_runtime_shutdown(

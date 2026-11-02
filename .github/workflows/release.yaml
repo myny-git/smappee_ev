@@ -14,55 +14,19 @@ jobs:
       contents: write
 
     steps:
-      - name: ⤵️ Check out main branch
+      - name: Check out the release tag
         uses: actions/checkout@v7
         with:
-          ref: main
-          fetch-depth: 0
+          ref: refs/tags/${{ github.event.release.tag_name }}
 
-      - name: 🔢 Update version in manifest.json
-        shell: bash
-        run: |
-          version="${{ github.event.release.tag_name }}"
-          version="${version,,}"
-          version="${version#v}"
+      - name: Validate version and build the release package
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python script/build_release.py --tag "$RELEASE_TAG" --output dist/smappee_ev.zip
 
-          python - <<EOF
-          import json
-          from pathlib import Path
-
-          path = Path("custom_components/smappee_ev/manifest.json")
-          data = json.loads(path.read_text())
-          data["version"] = "${version}"
-          path.write_text(json.dumps(data, indent=2) + "\n")
-          EOF
-
-      - name: 💾 Commit manifest.json version bump
-        shell: bash
-        run: |
-          version="${{ github.event.release.tag_name }}"
-          version="${version,,}"
-          version="${version#v}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add custom_components/smappee_ev/manifest.json
-
-          if git diff --cached --quiet; then
-            echo "No version change to commit."
-          else
-            git commit -m "Bump manifest version to ${version}"
-            git push origin main
-          fi
-
-      - name: 📦 Create zipped release package
-        shell: bash
-        run: |
-          cd "${{ github.workspace }}/custom_components/smappee_ev"
-          zip smappee_ev.zip -r ./ -x "smappee_ev.zip"
-
-      - name: ⬆️ Upload zip to release
+      - name: Upload ZIP to the release
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ github.workspace }}/custom_components/smappee_ev/smappee_ev.zip
+          tag_name: ${{ github.event.release.tag_name }}
+          files: dist/smappee_ev.zip
+          fail_on_unmatched_files: true

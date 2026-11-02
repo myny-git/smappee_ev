@@ -21,13 +21,11 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .api.device_handle import SmappeeDeviceHandle
-from .const import DOMAIN, MANUFACTURER
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .coordinators.status import SmappeeStatusCoordinator
 from .entity import (
@@ -142,20 +140,17 @@ class SmappeeActiveIncidentsSensor(CoordinatorEntity[SmappeeStatusCoordinator], 
     _attr_has_entity_name = True
     _attr_translation_key = "active_incidents"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_unique_id = "smappee_service_status:active_incidents"
-    _attr_device_info = DeviceInfo(
-        identifiers={(DOMAIN, "smappee_service_status")},
-        name="Smappee Service Status",
-        manufacturer=MANUFACTURER,
-        entry_type=DeviceEntryType.SERVICE,
-        configuration_url="https://status.smappee.net",
-    )
+
+    def __init__(self, coordinator: SmappeeStatusCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.unique_id_prefix}:active_incidents"
+        self._attr_device_info = coordinator.device_info
 
     @property
     @override
-    def native_value(self) -> int:
+    def native_value(self) -> int | None:
         data = self.coordinator.data
-        return len(data.active_incidents) if data else 0
+        return len(data.active_incidents) if data else None
 
     @property
     @override
@@ -169,7 +164,7 @@ class SmappeeActiveIncidentsSensor(CoordinatorEntity[SmappeeStatusCoordinator], 
                     "subsystem": inc.get("subsystem"),
                     "level": inc.get("level"),
                     "timestamp": datetime.fromtimestamp(inc["timestamp"] / 1000, tz=UTC).isoformat()
-                    if inc.get("timestamp")
+                    if inc.get("timestamp") is not None
                     else None,
                 }
                 for inc in data.active_incidents

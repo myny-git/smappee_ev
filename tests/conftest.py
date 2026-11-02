@@ -94,6 +94,15 @@ def _restore_real_socket() -> None:
 import pytest  # type: ignore  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def mock_public_status_endpoint(aioclient_mock):
+    """Keep ordinary setup tests independent of the public Smappee status website."""
+    aioclient_mock.get(
+        "https://status.smappee.net/status",
+        json={"subsystems": [{"subsystem": "api", "status": "ok"}]},
+    )
+
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_fixture_setup(fixturedef, request):  # type: ignore[override]
     if fixturedef.argname == "event_loop":  # ensure sockets available for loop creation

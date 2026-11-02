@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -10,7 +11,12 @@ from homeassistant.exceptions import (
     ServiceValidationError,
 )
 from homeassistant.helpers import config_validation as cv
-import voluptuous as vol
+
+if TYPE_CHECKING:
+    import probatio as vol
+else:
+    # Match HA's validation engine while retaining support for older versions.
+    import voluptuous as vol
 
 from .api.device_handle import SmappeeDeviceHandle
 from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
