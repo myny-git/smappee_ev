@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 import logging
 from math import isfinite
 from time import monotonic
-from typing import TYPE_CHECKING, Any, override
+from typing import Any, Protocol, override
 
 from aiohttp import ClientTimeout
 from homeassistant.config_entries import ConfigEntry
@@ -24,9 +24,7 @@ from ..const import (
     MANUFACTURER,
     MQTT_REAL_POWER_FRESHNESS_TIMEOUT,
 )
-
-if TYPE_CHECKING:
-    from ..models.runtime_data import SmappeeSiteRuntime
+from .freshness import MeasurementFreshness
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +32,28 @@ STATUS_URL = "https://status.smappee.net/status"
 # Check MQTT locally every five minutes; healthy installations only fetch every fifteen.
 _SCAN_INTERVAL = timedelta(minutes=5)
 _REFRESH_INTERVAL = timedelta(minutes=15)
+
+
+class _MqttTelemetry(Protocol):
+    """The MQTT fields used by status polling, independent of runtime containers."""
+
+    mqtt_transport_connected: bool
+    measurement_freshness: MeasurementFreshness
+
+
+class _StationTelemetry(Protocol):
+    @property
+    def station_coordinator(self) -> _MqttTelemetry | None: ...
+
+
+class _SiteTelemetry(Protocol):
+    """Read-only site view so concrete runtime containers can provide the data."""
+
+    @property
+    def site_coordinator(self) -> _MqttTelemetry | None: ...
+
+    @property
+    def stations(self) -> Mapping[str, _StationTelemetry]: ...
 
 
 @dataclass
@@ -110,7 +130,7 @@ class SmappeeStatusCoordinator(DataUpdateCoordinator[SmappeeStatusData]):
     def __init__(
         self,
         hass: HomeAssistant,
-        sites: Mapping[int, SmappeeSiteRuntime] | None = None,
+        sites: Mapping[int, _SiteTelemetry] | None = None,
         *,
         config_entry: ConfigEntry[Any] | None = None,
     ) -> None:
