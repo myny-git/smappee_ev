@@ -7,6 +7,132 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [2026.11.0] - 2026-11-02
+
+This release adds Smappee service-status diagnostics and prepares installation
+instructions for Home Assistant's built-in Marketplace. It includes all
+intervening changes to Dashboard recovery, charging sessions, state consistency,
+MQTT reconnection and release packaging since `2026.10.0`.
+
+### Smappee service status
+
+- Adds a **Smappee Service Status** diagnostic device per configured account.
+  Problem binary sensors report the public status of Smappee's Website,
+  Dashboard, API, Cloud, Live data, Historical data, EV Line and related services.
+  Sensors are off for `ok` and on for errors or maintenance.
+- Adds an **Active incidents** sensor with unresolved incident count and
+  attributes containing subsystem, level and timestamp.
+- Fetches public status every 15 minutes while live MQTT data is arriving.
+  If any configured site has no connected MQTT source with a valid measurement
+  received in the last five minutes, polling increases to every five minutes.
+  Heartbeats alone do not count; fresh measurements restore the normal interval.
+  Local five-minute checks reuse cached status when no HTTP request is due.
+- Runs the first status request in the background after charger monitoring
+  starts, with a 15-second total timeout and five-second connection timeout.
+  An unavailable status website cannot hold up integration setup.
+- Creates known subsystem sensors immediately. A failed first request marks
+  status entities unavailable and retries automatically without a reload.
+  New subsystems are added dynamically; unknown names or status values are
+  logged once.
+- Validates response structure, subsystem fields and incident timestamps.
+  Failed, empty or malformed responses preserve the last valid data, mark status
+  entities unavailable and retry after five minutes. Invalid timestamps cannot
+  break incident attributes; a valid timestamp of zero is supported.
+- Separates entity and device identifiers per account. Existing registrations
+  migrate in place, preserving entity IDs, custom names and disabled state.
+  Status timers and pending startup requests are stopped during unload.
+
+### Marketplace and Home Assistant compatibility
+
+- Documents installation through **Settings -> Marketplace** on Home Assistant
+  2026.11 and newer, and through HACS on earlier versions. The existing
+  `hacs.json`, catalog entry, installation link and ZIP format remain in use.
+- Explains automatic migration of existing HACS installations. Smappee EV does
+  not need to be removed or configured again solely for this transition. A new
+  Marketplace installation opens configuration without a restart; updates to
+  an installed integration still require one.
+- Fixes Probatio schema typing in config flows and service registration while
+  retaining the runtime validation import used by older Home Assistant versions.
+- Removes the status/runtime-model import cycle reported by CodeQL and adds an
+  architecture regression guard, including imports under `TYPE_CHECKING`.
+- Uses the current device ownership API during registry cleanup, retaining the
+  legacy path for older versions and preserving devices owned by other accounts.
+
+### Dashboard recovery and diagnostics
+
+- Fixes coordinator refresh handling during recovery probes for an already
+  loaded entry. Temporary probe coordinators manage their own lifecycle instead
+  of accumulating unload callbacks on the active entry.
+- Cleans up partially prepared site coordinators when an initial refresh fails.
+  Cached MQTT monitoring continues until discovery and REST access to the
+  expected stations and connectors have recovered.
+- Adds recovery status, attempt count, last-attempt and next-retry UTC
+  timestamps, and the last error category to integration diagnostics. This
+  section excludes response bodies, exception messages and credentials.
+- Tracks waiting, probing, reauthentication, recovered and stopped states.
+  Cancellation and shutdown clear pending retry timestamps. Rate-limit retries
+  continue to respect the server's `Retry-After` delay.
+- Removes completed background tasks during cleanup even when their completion
+  callback has not yet run.
+
+### Charging sessions, state consistency and controls
+
+- Schedules final session checks once per connector, after 30 seconds, two
+  minutes and five minutes. Repeated terminal messages no longer postpone them,
+  and another connector's activity no longer cancels them. Starting a new
+  session resets only that connector's final-check deadlines.
+- Normalizes charging-state and EVSE-status ENUM values to supported options.
+  Unsupported values now produce an unknown sensor state instead of a rejected
+  Home Assistant state, and remain visible in `raw_status`. Restored EVSE status
+  is validated too; session tracking keeps using the original connector data.
+- Preserves the previous percentage/current-limit setting when a partial REST
+  response omits `percentageLimit`.
+- Protects successful cable-lock writes, including confirmations of an unchanged
+  value, against older Dashboard responses received while a command was pending.
+- Gives numeric controls consistent translated errors for failed current-limit,
+  connector maximum-current, minimum-surplus, capacity-protection,
+  overload-protection and offline-failsafe writes. Authentication and cancellation
+  retain their normal handling; uncertain writes still schedule reconciliation.
+
+### MQTT, release packaging and maintenance
+
+- Resets MQTT reconnect backoff only after topic subscriptions succeed,
+  preventing rapid retries when connection succeeds but subscriptions keep failing.
+- Builds release ZIPs from the published tag instead of the current `main`
+  branch. The tagged manifest must already match the release version; a mismatch
+  fails before an archive is created. Builds no longer modify or push source
+  files. Bytecode and Python cache directories are excluded from packages.
+- Documents version preparation and local package checks for maintainers.
+- Expands regression coverage for recovery, diagnostics, control races,
+  connector-specific session deadlines, status validation and retry, multiple
+  accounts, registry migration, import dependencies and release packaging.
+- Updates Home Assistant development dependencies, Ruff, pre-commit hooks and
+  GitHub Actions. Regular setup tests mock the public status endpoint so they
+  do not depend on the live website.
+
+### Upgrade notes
+
+- Restart Home Assistant after updating this integration.
+- This integration release does not require upgrading Home Assistant to 2026.11.
+  Continue using HACS on Home Assistant 2026.10 and older. From Home Assistant
+  2026.11, use Marketplace; existing HACS installations migrate automatically.
+  Accept the Marketplace community-content notice if prompted to enable updates
+  and installations.
+- Existing accounts do not need to be removed or configured again for the new
+  status sensors or Marketplace preparation.
+- Automations using `charging_state` or `evse_status` should handle unknown
+  values when Smappee reports an unsupported status. Inspect `raw_status` when
+  troubleshooting a new firmware value.
+- Public service status is separate from charger state and MQTT connectivity.
+  A healthy public status page does not prove an individual installation is connected.
+
+References:
+[PR #315](https://github.com/myny-git/smappee_ev/pull/315),
+[PR #327](https://github.com/myny-git/smappee_ev/pull/327),
+[intervening recovery fixes](https://github.com/myny-git/smappee_ev/commit/c9e94b5),
+[changes since 2026.10.0](https://github.com/myny-git/smappee_ev/compare/2026.10.0...2026.11.0),
+[official HACS-to-Marketplace guide](https://hacs.netlify.app/docs/marketplace/).
+
 ## [2026.10.0] - 2026-10-06
 
 This release adds automatic home battery monitoring, optional cable lock control

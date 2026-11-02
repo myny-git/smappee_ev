@@ -31,6 +31,14 @@ Feel free to join the Discord channel if you have questions, want to share feedb
 [![Discord][discord-shield]][discord-url]
 </div>
 
+## 2026.11.0: Service status and Marketplace preparation
+
+The November release adds Smappee service-status diagnostics and prepares
+installation instructions for Home Assistant's built-in Marketplace. It also
+improves Dashboard recovery, charging-session handling and control reliability.
+See the [release notes](docs/releases/2026.11.0.md) and [changelog](CHANGELOG.md)
+for all changes and upgrade notes.
+
 ## Breaking changes in the 2026.7.x version
 
 > [!CAUTION]
