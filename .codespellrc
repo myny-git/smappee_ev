@@ -3,6 +3,5 @@
 quiet-level = 2
 check-filenames =
 check-hidden =
-# The dated review is in Dutch; the spellchecker uses English dictionaries.
-skip = .git,.coverage,*.po,*.min.js,*.svg,*.png,*.jpg,*.json,*review-2026-11-02.md
+skip = .git,.coverage,*.po,*.min.js,*.svg,*.png,*.jpg,*.json
 ignore-words-list = hass,HA,Smappee
