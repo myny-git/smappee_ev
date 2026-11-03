@@ -1320,6 +1320,8 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             ("connector", "number"),
             ("connector", "position"),
             ("position",),
+            ("controller", "position"),
+            ("controller", "label"),
         )
         serial_value = _nested_value(
             session,
@@ -1328,6 +1330,8 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             ("serialNumber",),
             ("chargingStation", "serialNumber"),
             ("chargingStation", "serial"),
+            ("station", "serialNumber"),
+            ("station", "serial"),
         )
         return (
             number_value is not None
