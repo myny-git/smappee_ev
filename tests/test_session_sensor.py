@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import UnitOfEnergy
+import pytest
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
@@ -58,6 +59,68 @@ def test_session_energy_sensor_metadata():
 
 def test_session_energy_sensor_avoids_ambiguous_multi_connector_fallback():
     sensor = _make_sensor("unknown-connector")
+
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes == {}
+
+
+@pytest.mark.parametrize("serial_key", ["serialNumber", "serial"])
+@pytest.mark.parametrize("number_key", ["position", "label"])
+@pytest.mark.parametrize("number", [1, "1"])
+def test_session_energy_sensor_matches_nested_station_and_controller(
+    serial_key, number_key, number
+):
+    sensor = _make_sensor()
+    sensor.coordinator.data.recent_sessions = [
+        {
+            "station": {serial_key: "OTHER_STATION"},
+            "controller": {number_key: number},
+            "energy": 99,
+        },
+        {
+            "station": {serial_key: "STATION123"},
+            "controller": {number_key: 2},
+            "energy": 88,
+        },
+        {
+            "station": {serial_key: "STATION123"},
+            "controller": {number_key: number},
+            "energy": "3.456",
+            "from": 1_781_273_310_000,
+            "to": 1_781_273_910_000,
+        },
+    ]
+
+    assert sensor.native_value == 3.46
+    attrs = sensor.extra_state_attributes
+    assert attrs["from"] == datetime.fromtimestamp(1_781_273_310, tz=UTC).isoformat()
+    assert attrs["to"] == datetime.fromtimestamp(1_781_273_910, tz=UTC).isoformat()
+    assert attrs["duration_minutes"] == 10.0
+    assert attrs["duration_formatted"] == "00:10:00"
+    assert "station" not in attrs
+    assert "controller" not in attrs
+
+
+@pytest.mark.parametrize(
+    "session",
+    [
+        {
+            "station": {"serialNumber": "OTHER_STATION"},
+            "controller": {"position": 1},
+            "energy": 99,
+        },
+        {
+            "station": {"serialNumber": "STATION123"},
+            "controller": {"position": 2},
+            "energy": 88,
+        },
+        {"station": None, "controller": None, "energy": 99},
+        {"station": {"serialNumber": "STATION123"}, "controller": {}, "energy": 99},
+    ],
+)
+def test_session_energy_sensor_rejects_unmatched_nested_sessions(session):
+    sensor = _make_sensor()
+    sensor.coordinator.data.recent_sessions = [session]
 
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
