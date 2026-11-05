@@ -219,7 +219,11 @@ def test_evcc_state_attributes_and_restored_fallback():
     )
     entity = SmappeeEVCCStateSensor(coordinator, _api(), 42, "station-uuid", "conn-1")
 
+    coordinator.measurement_freshness = SimpleNamespace(received={})
+    coordinator._complete_control = {}
     assert entity.extra_state_attributes == {
+        "measurement_received": None,
+        "control_observation": None,
         "iec_status": "B1",
         "session_state": "Charging",
         "charging_mode": "SMART",

@@ -287,6 +287,7 @@ class SessionTrackingMixin(CoordinatorMixin):
                     continue
                 raise result
             for connector_uuid, _client in group:
+                self._session_query_success[str(connector_uuid)] = _now()
                 self._log_connector_session_transition(connector_uuid, True)
             sessions.extend(session for session in result if isinstance(session, dict))
 

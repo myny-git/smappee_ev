@@ -214,6 +214,7 @@ class TestMqttSetup:
             # Verify MQTT was created with correct parameters
             mock_mqtt_class.assert_called_once_with(
                 service_location_uuid="test-service-uuid",
+                tracking_serials=None,
                 client_id="client-prefix-12345",
                 serial_number="STATION-SERIAL",
                 on_properties=mock_mqtt_class.call_args[1]["on_properties"],

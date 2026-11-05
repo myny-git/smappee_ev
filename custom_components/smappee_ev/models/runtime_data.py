@@ -98,6 +98,7 @@ class SmappeeSiteRuntime:
     control_location_ids: list[int] = field(default_factory=list)
     measurement_location_ids: list[int] = field(default_factory=list)
     highlevel_configs: HighLevelConfigMap = field(default_factory=dict)
+    tracking_serials: dict[str, str] = field(default_factory=dict)
     mqtt_clients: MqttRuntimeValue = None
     site_coordinator: SmappeeSiteCoordinator | None = None
     stations: dict[str, SmappeeStationRuntime] = field(default_factory=dict)

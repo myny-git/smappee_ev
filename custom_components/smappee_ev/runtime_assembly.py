@@ -274,6 +274,33 @@ def _deduplicate_stations(
     }
 
 
+def _tracking_serials_for_topologies(
+    topologies: list[SmappeeLocationTopology],
+) -> dict[str, str]:
+    """Resolve physical Connects per measurement location, refusing ambiguity."""
+    candidates: dict[str, set[str]] = {}
+    for topology in topologies:
+        for location, serial in (
+            (topology.site_location_id, topology.site_gateway_serial),
+            (topology.control_location_id, topology.control_gateway_serial),
+        ):
+            if serial:
+                candidates.setdefault(str(location), set()).add(str(serial))
+            else:
+                _LOGGER.warning(
+                    "Missing tracking gateway for location %s; tracking skipped", location
+                )
+    result: dict[str, str] = {}
+    for location_key, serials in candidates.items():
+        if len(serials) == 1:
+            result[location_key] = next(iter(serials))
+        else:
+            _LOGGER.warning(
+                "Ambiguous tracking gateway for location %s; tracking skipped", location_key
+            )
+    return result
+
+
 async def _prepare_control_stations(
     topology: SmappeeLocationTopology,
     dashboard_client: SmappeeDashboardClient | None,
@@ -458,6 +485,7 @@ async def _prepare_site_topologies(
         gateway_type=primary.site_gateway_type,
         control_location_ids=list(dict.fromkeys(t.control_location_id for t in ordered)),
         measurement_location_ids=measurement_sids,
+        tracking_serials=_tracking_serials_for_topologies(ordered),
         highlevel_configs=highlevel_configs,
         stations=stations,
     )
@@ -497,6 +525,7 @@ async def _prepare_site_topologies(
             client_id_prefix,
             update_interval,
             mqtt_specs=mqtt_specs,
+            tracking_serials=site.tracking_serials,
             site_coordinator=site_coordinator,
             background_tasks=background_tasks,
             start_clients=start_runtime,

@@ -41,6 +41,7 @@ _SITE_FIELDS = {
     "gateway_type": _TEXT,
     "control_location_ids": [int],
     "measurement_location_ids": [int],
+    "tracking_serials": {str: str},
 }
 _STATION_FIELDS = {
     "site_location_id": int,
@@ -377,6 +378,7 @@ def build_cached_runtime(
             f"ha-{entry.entry_id[-6:]}",
             UPDATE_INTERVAL_DEFAULT,
             mqtt_specs=specs,
+            tracking_serials=site.tracking_serials,
             site_coordinator=site_coord,
             background_tasks=runtime.background_tasks,
             start_clients=False,

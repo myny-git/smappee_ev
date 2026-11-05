@@ -110,6 +110,12 @@ async def test_mqtt_notifies_once_for_changes_and_freshness_recovery(
     notify.assert_called_once_with()
     notify.reset_mock()
     mqtt._on_properties(bootstrap.TOPIC, payload)
+    if scope == "connector":
+        # The exposed receive timestamp advances even at unchanged power.
+        notify.assert_called_once_with()
+    else:
+        notify.assert_not_called()
+    notify.reset_mock()
     mqtt._on_properties(bootstrap.TOPIC, {})
     notify.assert_not_called()
     clock = MagicMock(wraps=datetime)

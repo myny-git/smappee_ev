@@ -71,3 +71,25 @@ when changing these internals.
   stale, invalid, partial, unchanged and zero measurements.
 - `mqtt_smoke/test_transport.py` uses real `aiomqtt` and a local Mosquitto broker
   in a separate environment; see the contribution guide for the command.
+
+## Evidence exposed to external control automations
+
+Connector power exposes `measurement_received` from its own accepted power
+field, including repeated zero readings. EVCC exposes `measurement_received`
+only for a complete control packet, together with `control_observation` from
+that same packet. A partial packet can change the merged current state while
+leaving that observation and its clock unchanged. Consumers must compare the
+observation with the current fields before using it as command confirmation.
+These receive clocks and observations are excluded from Recorder attributes.
+
+Session energy exposes `session_queried_at`, `session_started_at` and
+`session_ended_at`. Query success belongs to each connector whose station-scoped
+request succeeded; errors cannot advance it. Explicit `update_entity` refreshes
+recent sessions without issuing a charger command. Receive/query clocks are
+runtime evidence and are not restored as proof of freshness after restart.
+
+Live tracking requests use the physical Connect serial discovered for each
+service location, even when MQTT credentials are shared. Missing or conflicting
+mappings are skipped rather than requesting another location's gateway. Cached
+bootstrap data persists the mapping; older snapshots without it require one
+successful online discovery to be refreshed.

@@ -164,6 +164,10 @@ class MqttMixin(CoordinatorMixin):
                 and self._has_charger_state(payload)
             ):
                 result.connector(uuid).add("charger_state")
+                observation = self._control_observation(payload)
+                if observation is not None:
+                    result.connector(uuid).add("control_complete")
+                    self._complete_control[uuid] = observation
         elif topic.endswith("/power") or topic in (self._power_index_maps_by_topic or {}):
             changed |= self._handle_power(topic, payload, result)
         elif "/etc/chargingstation/acchargingstation/" in topic and topic.endswith("/properties"):
@@ -172,9 +176,25 @@ class MqttMixin(CoordinatorMixin):
             changed |= self._handle_led_updated(payload)
 
         changed |= self.measurement_freshness.record(result)
-        if changed:
+        if changed or any(result.connector_fields.values()):
             self.async_update_listeners()
         return result
+
+    @staticmethod
+    def _control_observation(payload: dict[str, Any]) -> dict[str, str] | None:
+        """Keep one complete packet separate from retained/merged control fields."""
+        iec = payload.get("iecStatus")
+        status = payload.get("status")
+        values = {
+            "iec_status": iec.get("current") if isinstance(iec, dict) else None,
+            "status_current": status.get("current") if isinstance(status, dict) else None,
+            "charging_mode": payload.get("chargingMode"),
+            "optimization_strategy": payload.get("optimizationStrategy"),
+            "session_state": payload.get("chargingState"),
+        }
+        if not all(isinstance(value, str) and value.strip() for value in values.values()):
+            return None
+        return cast(dict[str, str], values)
 
     @staticmethod
     def _has_charger_state(payload: dict) -> bool:

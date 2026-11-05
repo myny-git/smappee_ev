@@ -587,6 +587,7 @@ class ConnCurrentL3(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
+    _unrecorded_attributes = frozenset({"measurement_received"})
     _mqtt_field = "power_total"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -612,6 +613,14 @@ class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
         st = self._conn_state
         v = getattr(st, "power_total", None) if st else None
         return float(v) if isinstance(v, int | float) else None
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, object]:
+        received = self.coordinator.measurement_freshness.received.get(
+            (self._connector_key, "power_total")
+        )
+        return {"measurement_received": received.isoformat() if received else None}
 
 
 class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
@@ -1092,6 +1101,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
+    _unrecorded_attributes = frozenset({"measurement_received", "control_observation"})
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "evcc_state"
 
@@ -1127,6 +1137,18 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         st = self._conn_state
         if st:
             return {
+                "control_observation": getattr(self.coordinator, "_complete_control", {}).get(
+                    self._connector_key
+                ),
+                "measurement_received": (
+                    received.isoformat()
+                    if (
+                        received := self.coordinator.measurement_freshness.received.get(
+                            (self._connector_key, "control_complete")
+                        )
+                    )
+                    else None
+                ),
                 "iec_status": getattr(st, "iec_status", None),
                 "session_state": getattr(st, "session_state", None),
                 "charging_mode": getattr(st, "raw_charging_mode", None),
@@ -1259,6 +1281,8 @@ def _nested_value(data: dict[str, Any], *paths: tuple[str, ...]) -> object:
 class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     """Energy reported for the current or most recent cloud charging session."""
 
+    _unrecorded_attributes = frozenset({"session_queried_at"})
+
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -1276,6 +1300,11 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:session_energy"
         )
         self.api_client = api
+
+    @override
+    async def async_update(self) -> None:
+        # Explicit update_entity refreshes session evidence without a control write.
+        await self.coordinator._async_refresh_recent_sessions("EV controller", force=True)
 
     def _session_matches_connector(self, session: dict[str, Any]) -> bool:
         connector_uuid = str(self.connector_uuid)
@@ -1387,6 +1416,13 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         if not connector_matched:
             excluded |= {"from", "to"}
         attrs = {k: v for k, v in session.items() if k not in excluded}
+        attrs["session_queried_at"] = getattr(self.coordinator, "_session_query_success", {}).get(
+            str(self.connector_uuid)
+        )
+        queried_start = _session_ts_to_datetime(session.get("from"))
+        queried_end = _session_ts_to_datetime(session.get("to"))
+        attrs["session_started_at"] = queried_start.isoformat() if queried_start else None
+        attrs["session_ended_at"] = queried_end.isoformat() if queried_end else None
 
         start_time = _session_ts_to_datetime(session.get("from"))
         end_time = _session_ts_to_datetime(session.get("to"))

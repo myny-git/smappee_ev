@@ -392,6 +392,8 @@ class SmappeeStationCoordinator(
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
         self._connector_session_available: dict[str, bool] = {}
+        self._session_query_success: dict[str, float] = {}
+        self._complete_control: dict[str, dict[str, str]] = {}
         self._last_session_api_attempt = 0.0
         self._last_session_api_update = 0.0
         self._session_refresh_unsub: CALLBACK_TYPE | None = None
