@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import replace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -87,10 +87,10 @@ async def test_cancelled_waiter_does_not_cancel_shared_session_query(online, mon
     await asyncio.sleep(0)
     first.cancel()
     with pytest.raises(asyncio.CancelledError):
-        await first
+        await asyncio.wait_for(first, timeout=1)
     assert not coord._session_refresh_task.cancelled()
     release.set()
-    await second
+    await asyncio.wait_for(second, timeout=1)
     fetch.assert_awaited_once()
     assert entity.native_value == 3.5
 
@@ -110,7 +110,7 @@ async def test_shutdown_cancels_shared_session_query_and_blocks_new_requests(onl
     shared = coord._session_refresh_task
     await coord.async_shutdown()
     with pytest.raises(asyncio.CancelledError):
-        await caller
+        await asyncio.wait_for(caller, timeout=1)
     assert shared.cancelled()
     await entity.async_update()
     fetch.assert_awaited_once()
@@ -176,8 +176,11 @@ async def test_repeated_finished_messages_do_not_postpone_or_restart_final_refre
         for call in coord._async_refresh_recent_sessions.await_args_list
     )
     assert coord._session_final_refresh_unsubs == {}
-    send("connector-1", "Stopped")
-    assert timers == originals
+    with patch(
+        "custom_components.smappee_ev.coordinators.session_tracking.async_call_later"
+    ) as schedule:
+        send("connector-1", "Stopped")
+    schedule.assert_not_called()
 
 
 async def test_new_session_cancels_only_its_own_old_deadlines(tracking):
