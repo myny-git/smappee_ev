@@ -40,6 +40,18 @@ separately from the tests running against the Home Assistant version pinned in
    pre-commit install
    ```
 
+## Home Assistant devcontainer
+
+The devcontainer follows the latest stable Home Assistant image. On opening or
+rebuilding, a host-side Python script pulls `stable` and removes an outdated,
+stopped container for this workspace so Dev Containers creates an updated one.
+An active container is kept; use **Dev Containers: Rebuild Container** to update
+it when convenient. A failed image pull keeps the cached environment available.
+Docker and `python` must be on the host's PATH.
+
+Home Assistant configuration remains in the bind-mounted `.ha-config` directory.
+Start Home Assistant in the container with `hass -c /config`.
+
 ## Submitting a pull request
 
 1. Create a new branch: `git checkout -b my-branch-name`

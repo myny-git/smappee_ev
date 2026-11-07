@@ -1,6 +1,11 @@
 {
     "name": "HA custom integration dev",
     "image": "ghcr.io/home-assistant/home-assistant:stable",
+    "initializeCommand": [
+        "python",
+        "${localWorkspaceFolder}/.devcontainer/initialize.py",
+        "${localWorkspaceFolder}"
+    ],
     "overrideCommand": true,
     "appPort": [
         "8124:8123"
