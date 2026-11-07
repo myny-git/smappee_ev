@@ -67,6 +67,7 @@ class SmappeeMqtt:
         service_location_ids_by_uuid: dict[str, int | str] | None = None,
         on_connection_change: Callable[[bool], None] | None = None,
         mqtt_specs: list[Any] | None = None,
+        tracking_serials: dict[str, str] | None = None,
     ) -> None:
         slus = service_location_uuids or ([service_location_uuid] if service_location_uuid else [])
         self._slus = tuple(dict.fromkeys(str(slu) for slu in slus if slu))
@@ -74,6 +75,7 @@ class SmappeeMqtt:
         self._slu_ids = service_location_ids_by_uuid or {}
         self._client_id = client_id
         self._serial = serial_number
+        self._tracking_serials = tracking_serials
         self._on_properties = on_properties
         self._slu_id = service_location_id
         self._on_conn = on_connection_change
@@ -398,10 +400,19 @@ class SmappeeMqtt:
             return
         for slu in self._slus:
             topic = f"servicelocation/{slu}/tracking"
+            serial = self._serial
+            if self._tracking_serials is not None:
+                tracking_serial = self._tracking_serials.get(
+                    str(self._slu_ids.get(slu, self._slu_id))
+                )
+                if not tracking_serial:
+                    # Never request a different location's gateway as a fallback.
+                    continue
+                serial = tracking_serial
             payload = {
                 "value": "ON",
                 "clientId": self._client_id,
-                "serialNumber": self._serial,
+                "serialNumber": serial,
                 "type": MQTT_TRACKING_TYPE_RT_VALUES,
             }
             with suppress(MqttError):

@@ -392,6 +392,8 @@ class SmappeeStationCoordinator(
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
         self._connector_session_available: dict[str, bool] = {}
+        self._session_query_success: dict[str, float] = {}
+        self._complete_control: dict[str, dict[str, str]] = {}
         self._last_session_api_attempt = 0.0
         self._last_session_api_update = 0.0
         self._session_refresh_unsub: CALLBACK_TYPE | None = None
@@ -400,6 +402,7 @@ class SmappeeStationCoordinator(
         self._session_final_refresh_unsubs: dict[str | None, list[CALLBACK_TYPE]] = {}
         self._session_final_refresh_scheduled: set[str | None] = set()
         self._session_refresh_lock = asyncio.Lock()
+        self._session_refresh_task: asyncio.Task[None] | None = None
         self._session_tracking_started = False
         self._last_dashboard_refresh = 0.0
         self._last_smartdevice_refresh: float | None = None
@@ -558,10 +561,13 @@ class SmappeeStationCoordinator(
         """Cancel session refresh callbacks and background tasks."""
         self.cancel_delayed_refreshes()
         await super().async_shutdown()
-        task = self._dashboard_refresh_task
-
-        if task is not None:
-            await asyncio.gather(task, return_exceptions=True)
+        tasks = [
+            task
+            for task in (self._dashboard_refresh_task, self._session_refresh_task)
+            if task is not None
+        ]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     def record_confirmed_write(self, connector_uuid: str | None, changes: dict[str, Any]) -> None:
         """Protect confirmed command fields from older in-flight responses."""
@@ -580,6 +586,9 @@ class SmappeeStationCoordinator(
         task = self._dashboard_refresh_task
         if task is not None and not task.done():
             task.cancel()
+        session_task = self._session_refresh_task
+        if session_task is not None and not session_task.done():
+            session_task.cancel()
 
     @property
     def _is_stopping(self) -> bool:

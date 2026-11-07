@@ -821,7 +821,8 @@ async def test_dashboard_list_and_dict_methods_ignore_malformed_response_shapes(
     assert await client.async_get_charging_station_details("SERIAL") is None
     assert await client.async_get_smart_devices(236259) is None
     assert await client.async_get_load_management(236259, "device-1") is None
-    assert await client.async_get_recent_sessions("SERIAL") == []
+    with pytest.raises(SmappeeProtocolError, match="list of objects"):
+        await client.async_get_recent_sessions("SERIAL")
     assert await client.async_get_capacity_protection(236259) is None
     assert await client.async_get_overload_protection(236259) is None
 

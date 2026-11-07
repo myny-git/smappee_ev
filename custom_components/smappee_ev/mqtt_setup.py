@@ -273,12 +273,14 @@ def _build_mqtt_clients(
     on_connection_change: Callable[[bool], None] | None,
     mqtt_specs: list[MqttChannelSpec] | None,
     on_connection_change_factory: Callable[[int], Callable[[bool], None]] | None = None,
+    tracking_serials: dict[str, str] | None = None,
 ) -> list[SmappeeMqtt]:
     """Create one or more MQTT clients for a site based on credential sets."""
     if mqtt_specs is None:
         return [
             SmappeeMqtt(
                 service_location_uuid=suuid,
+                tracking_serials=tracking_serials,
                 client_id=f"{client_id_prefix}-{sid}",
                 serial_number=serial_str,
                 on_properties=on_properties,
@@ -315,6 +317,7 @@ def _build_mqtt_clients(
                     else on_connection_change
                 ),
                 mqtt_specs=specs,
+                tracking_serials=tracking_serials,
             )
         )
     return mqtt_clients
@@ -397,6 +400,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     site_coordinator: SmappeeSiteCoordinator | None = None,
     background_tasks: set[asyncio.Task] | None = None,
     start_clients: bool = True,
+    tracking_serials: dict[str, str] | None = None,
 ) -> MqttRuntimeValue:
     if not suuid and not mqtt_specs:
         _LOGGER.warning("No serviceLocationUuid for %s; MQTT disabled for this site", sid)
@@ -550,6 +554,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         on_connection_change=None,
         mqtt_specs=mqtt_specs,
         on_connection_change_factory=_connection_callback,
+        tracking_serials=tracking_serials,
     )
     freshness.clients_connected.update(dict.fromkeys(range(len(mqtt_clients)), False))
     routing_diagnostics.client_count = len(mqtt_clients)

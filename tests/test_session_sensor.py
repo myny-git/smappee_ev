@@ -61,7 +61,7 @@ def test_session_energy_sensor_avoids_ambiguous_multi_connector_fallback():
     sensor = _make_sensor("unknown-connector")
 
     assert sensor.native_value is None
-    assert sensor.extra_state_attributes == {}
+    assert sensor.extra_state_attributes == {"session_queried_at": None}
 
 
 @pytest.mark.parametrize("serial_key", ["serialNumber", "serial"])
@@ -123,4 +123,4 @@ def test_session_energy_sensor_rejects_unmatched_nested_sessions(session):
     sensor.coordinator.data.recent_sessions = [session]
 
     assert sensor.native_value is None
-    assert sensor.extra_state_attributes == {}
+    assert sensor.extra_state_attributes == {"session_queried_at": None}

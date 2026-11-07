@@ -17,13 +17,14 @@ class StateCoordinator(Protocol):
     """State publishing contract, independent of the concrete coordinator."""
 
     @property
-    def data(self) -> IntegrationData | None: ...
+    def data(self) -> IntegrationData | None:
+        """Return the current state snapshot, if initialized."""
 
-    def async_set_updated_data(self, data: IntegrationData) -> None: ...
+    def async_set_updated_data(self, data: IntegrationData) -> None:
+        """Publish the updated snapshot to coordinator listeners."""
 
-    def record_confirmed_write(
-        self, connector_uuid: str | None, changes: dict[str, Any]
-    ) -> None: ...
+    def record_confirmed_write(self, connector_uuid: str | None, changes: dict[str, Any]) -> None:
+        """Protect confirmed fields from responses that were already in flight."""
 
 
 async def async_write[T](action: Awaitable[T], refresh: Callable[[], None]) -> T:

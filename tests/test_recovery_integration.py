@@ -181,7 +181,7 @@ async def test_cancelled_real_prepare_closes_every_created_coordinator(
         await asyncio.wait_for(started.wait(), timeout=1)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await task
+            await asyncio.wait_for(task, timeout=1)
         assert_probe_closed(probe_coordinators)
         assert len(probe_coordinators) == (1 if phase == "site" else 2)
         assert entry.runtime_data is cached

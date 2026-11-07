@@ -43,17 +43,20 @@ class _MqttTelemetry(Protocol):
 
 class _StationTelemetry(Protocol):
     @property
-    def station_coordinator(self) -> _MqttTelemetry | None: ...
+    def station_coordinator(self) -> _MqttTelemetry | None:
+        """Return this station's coordinator when it has been created."""
 
 
 class _SiteTelemetry(Protocol):
     """Read-only site view so concrete runtime containers can provide the data."""
 
     @property
-    def site_coordinator(self) -> _MqttTelemetry | None: ...
+    def site_coordinator(self) -> _MqttTelemetry | None:
+        """Return the site's measurement coordinator when available."""
 
     @property
-    def stations(self) -> Mapping[str, _StationTelemetry]: ...
+    def stations(self) -> Mapping[str, _StationTelemetry]:
+        """Return the stations whose MQTT telemetry belongs to this site."""
 
 
 @dataclass

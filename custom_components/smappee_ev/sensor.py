@@ -27,6 +27,7 @@ from homeassistant.util import dt as dt_util
 
 from .api.device_handle import SmappeeDeviceHandle
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
+from .coordinators.session_tracking import SESSION_EXPLICIT_MIN_REFRESH_INTERVAL
 from .coordinators.status import SmappeeStatusCoordinator
 from .entity import (
     SmappeeConnectorEntity,
@@ -587,6 +588,7 @@ class ConnCurrentL3(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
+    _unrecorded_attributes = frozenset({"measurement_received"})
     _mqtt_field = "power_total"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -612,6 +614,14 @@ class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
         st = self._conn_state
         v = getattr(st, "power_total", None) if st else None
         return float(v) if isinstance(v, int | float) else None
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, object]:
+        received = self.coordinator.measurement_freshness.received.get(
+            (self._connector_key, "power_total")
+        )
+        return {"measurement_received": received.isoformat() if received else None}
 
 
 class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
@@ -1092,6 +1102,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
 
 
 class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
+    _unrecorded_attributes = frozenset({"measurement_received", "control_observation"})
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "evcc_state"
 
@@ -1127,6 +1138,18 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         st = self._conn_state
         if st:
             return {
+                "control_observation": getattr(self.coordinator, "_complete_control", {}).get(
+                    self._connector_key
+                ),
+                "measurement_received": (
+                    received.isoformat()
+                    if (
+                        received := self.coordinator.measurement_freshness.received.get(
+                            (self._connector_key, "control_complete")
+                        )
+                    )
+                    else None
+                ),
                 "iec_status": getattr(st, "iec_status", None),
                 "session_state": getattr(st, "session_state", None),
                 "charging_mode": getattr(st, "raw_charging_mode", None),
@@ -1259,6 +1282,8 @@ def _nested_value(data: dict[str, Any], *paths: tuple[str, ...]) -> object:
 class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     """Energy reported for the current or most recent cloud charging session."""
 
+    _unrecorded_attributes = frozenset({"session_queried_at"})
+
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -1276,6 +1301,13 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:session_energy"
         )
         self.api_client = api
+
+    @override
+    async def async_update(self) -> None:
+        # Explicit update_entity refreshes session evidence without a control write.
+        await self.coordinator._async_refresh_recent_sessions(
+            "explicit entity update", minimum_interval=SESSION_EXPLICIT_MIN_REFRESH_INTERVAL
+        )
 
     def _session_matches_connector(self, session: dict[str, Any]) -> bool:
         connector_uuid = str(self.connector_uuid)
@@ -1380,16 +1412,36 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes of the sensor."""
         session, connector_matched = self._active_session_match()
+        queried_at = _session_ts_to_datetime(
+            getattr(self.coordinator, "_session_query_success", {}).get(str(self.connector_uuid))
+        )
+        attrs: dict[str, Any] = {
+            "session_queried_at": queried_at.isoformat() if queried_at else None
+        }
         if not session:
-            return {}
+            return attrs
 
-        excluded = {"energy", "controller", "station", "address", "updateChannels", "rfidToken"}
+        excluded = {
+            "energy",
+            "controller",
+            "station",
+            "address",
+            "updateChannels",
+            "rfidToken",
+            "session_queried_at",
+            "session_started_at",
+            "session_ended_at",
+        }
         if not connector_matched:
             excluded |= {"from", "to"}
-        attrs = {k: v for k, v in session.items() if k not in excluded}
+        attrs.update({k: v for k, v in session.items() if k not in excluded})
 
         start_time = _session_ts_to_datetime(session.get("from"))
         end_time = _session_ts_to_datetime(session.get("to"))
+
+        if connector_matched:
+            attrs["session_started_at"] = start_time.isoformat() if start_time else None
+            attrs["session_ended_at"] = end_time.isoformat() if end_time else None
 
         if connector_matched and start_time:
             attrs["from"] = start_time.isoformat()

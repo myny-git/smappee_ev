@@ -71,3 +71,40 @@ when changing these internals.
   stale, invalid, partial, unchanged and zero measurements.
 - `mqtt_smoke/test_transport.py` uses real `aiomqtt` and a local Mosquitto broker
   in a separate environment; see the contribution guide for the command.
+
+## Evidence exposed to external control automations
+
+Connector power exposes `measurement_received` from its own accepted power
+field, including repeated zero readings. EVCC exposes `measurement_received`
+only for a complete control packet, together with `control_observation` from
+that same packet. A partial packet can change the merged current state while
+leaving that observation and its clock unchanged. Consumers must compare the
+observation with the current fields before using it as command confirmation.
+These receive clocks and observations are excluded from Recorder attributes.
+
+Session energy exposes `session_queried_at`, `session_started_at` and
+`session_ended_at`. Query success belongs to each connector whose station-scoped
+request succeeded, even when no sessions are returned. All three timestamps use
+ISO 8601 UTC; session start/end are exposed only after a confirmed connector
+match. Invalid response shapes are protocol errors and cannot advance query
+success. Explicit `update_entity` refreshes recent sessions without issuing a
+charger command, with a shared ten-second minimum between attempts, including
+failed attempts. Concurrent callers await the same in-flight request; cancelling
+one caller does not cancel that shared request. Scheduled lifecycle refreshes
+retain their existing throttle and forced final-refresh behavior. Receive/query
+clocks are runtime evidence and are not restored as proof of freshness after restart.
+
+Live tracking requests use the physical Connect serial discovered for each
+service location, even when MQTT credentials are shared. Missing or conflicting
+mappings are skipped rather than requesting another location's gateway. A parent
+relationship or one known serial does not prove that two locations share a
+Connect. Alternate observations for the same location ID may resolve missing
+metadata; explicit conflicts remain unresolved and produce a warning. Missing
+metadata is logged at debug after resolution.
+
+Cached bootstrap data persists the mapping. Older snapshots are upgraded in
+memory without requiring Dashboard access, retaining their entities and MQTT
+routes. Only the old site gateway's ownership can be recovered reliably; inherited
+station/client serials are not used as evidence for a different control location.
+Unknown child gateways remain untracked until online discovery establishes their
+identity. Malformed current metadata is still rejected rather than migrated.

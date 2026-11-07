@@ -29,6 +29,7 @@ SESSION_START_REFRESH_DELAY = 20
 SESSION_ACTIVE_REFRESH_INTERVAL = 5 * 60
 SESSION_PAUSED_REFRESH_INTERVAL = 15 * 60
 SESSION_MIN_REFRESH_INTERVAL = 2 * 60
+SESSION_EXPLICIT_MIN_REFRESH_INTERVAL = 10
 SESSION_FINAL_REFRESH_DELAYS = (30, 2 * 60, 5 * 60)
 
 
@@ -36,6 +37,7 @@ class SessionTrackingMixin(CoordinatorMixin):
     """Recent-session refresh and active-session tracking helpers."""
 
     _last_session_api_attempt: float
+    _session_refresh_task: asyncio.Task[None] | None
     _session_refresh_unsub: CALLBACK_TYPE | None
     _session_active_loop_unsub: CALLBACK_TYPE | None
     _session_active_loop_interval: int | None
@@ -287,6 +289,7 @@ class SessionTrackingMixin(CoordinatorMixin):
                     continue
                 raise result
             for connector_uuid, _client in group:
+                self._session_query_success[str(connector_uuid)] = _now()
                 self._log_connector_session_transition(connector_uuid, True)
             sessions.extend(session for session in result if isinstance(session, dict))
 
@@ -294,14 +297,42 @@ class SessionTrackingMixin(CoordinatorMixin):
             raise errors[0][1]
         return sessions
 
-    async def _async_refresh_recent_sessions(self, reason: str, *, force: bool = False) -> None:
+    async def _async_refresh_recent_sessions(
+        self, reason: str, *, force: bool = False, minimum_interval: float | None = None
+    ) -> None:
+        """Share an in-flight query, including with explicit entity updates."""
+        if self._is_stopping:
+            return
+        task = self._session_refresh_task
+        if task is None or task.done():
+            task = self.hass.async_create_background_task(
+                self._async_run_session_refresh(
+                    reason, force=force, minimum_interval=minimum_interval
+                ),
+                "Smappee recent session refresh",
+            )
+            self._session_refresh_task = task
+            task.add_done_callback(self._log_background_task_exception)
+        try:
+            # Cancelling one service call must not cancel a query shared by others.
+            await asyncio.shield(task)
+        finally:
+            if task.done() and self._session_refresh_task is task:
+                self._session_refresh_task = None
+
+    async def _async_run_session_refresh(
+        self, reason: str, *, force: bool, minimum_interval: float | None
+    ) -> None:
         if self._session_refresh_lock.locked():
             _LOGGER.debug("Skipping recent session refresh; previous refresh still running")
             return
 
         async with self._session_refresh_lock:
             now = _now()
-            if not force and now - self._last_session_api_attempt < SESSION_MIN_REFRESH_INTERVAL:
+            interval = minimum_interval
+            if interval is None:
+                interval = 0 if force else SESSION_MIN_REFRESH_INTERVAL
+            if now - self._last_session_api_attempt < interval:
                 _LOGGER.debug("Skipping recent session refresh for %s; throttled", reason)
                 return
             self._last_session_api_attempt = now

@@ -75,6 +75,41 @@ from tests.test_storage import storage_config
 TOPIC = "servicelocation/site-uuid/power"
 
 
+@pytest.mark.parametrize("gateway", ["gateway", None])
+async def test_legacy_cache_migration_does_not_guess_child_gateway(hass, entry, online, gateway):
+    snapshot = snapshot_from_runtime(online, entry)
+    saved = snapshot["sites"][0]
+    saved["metadata"].pop("tracking_serials")
+    saved["metadata"]["gateway_serial"] = gateway
+    saved["metadata"]["control_location_ids"] = [2]
+    for station in saved["stations"].values():
+        station["metadata"]["control_location_id"] = 2
+        # This inherited value existed in the old format; it is not evidence
+        # that location 2 really uses the site's physical gateway.
+        station["metadata"]["gateway_serial"] = "gateway"
+        station["client"]["service_location_id"] = 2
+    original = deepcopy(snapshot)
+    api = dashboard()
+    api._request = AsyncMock()
+    cached = build_cached_runtime(hass, entry, api, snapshot)
+    assert snapshot == original
+    expected = {"1": gateway} if gateway else {}
+    assert cached.sites[1].tracking_serials == expected
+    mqtt = cached.sites[1].mqtt_clients
+    assert mqtt._tracking_serials == expected
+    mqtt._client = type("Client", (), {"publish": AsyncMock()})()
+    await mqtt._publish_tracking_once()
+    assert mqtt._client.publish.await_count == (1 if gateway else 0)
+    mqtt._on_properties(TOPIC, {"activePowerData": [3200, 1600]})
+    assert cached.sites[1].site_coordinator.data.site.grid_power_total == 3200
+    coord = cached.sites[1].stations["station-1"].station_coordinator
+    assert coord.data.connectors["connector-1"].power_total == 1600
+    api._request.assert_not_awaited()
+    assert cached.mode is RuntimeMode.MQTT_ONLY
+    assert coord.monitoring_only
+    await _async_shutdown_runtime_resources(cached)
+
+
 async def test_storage_survives_cached_bootstrap_without_changing_existing_entities(
     hass, entry, online
 ):
@@ -275,6 +310,8 @@ async def test_private_store_roundtrip_and_entry_removal(
         lambda s: s.update(account="other"),
         lambda s: s.update(fetched_at="not-a-date"),
         lambda s: s.update(sites=[]),
+        lambda s: s["sites"][0]["metadata"].update(tracking_serials=None),
+        lambda s: s["sites"][0]["metadata"].update(tracking_serials={"1": 42}),
         lambda s: s["sites"].append(deepcopy(s["sites"][0])),
         lambda s: s["sites"][0].update(specs=[]),
         lambda s: s["sites"][0].update(stations={}),
@@ -590,13 +627,20 @@ async def test_bootstrap_auth_wins_over_outage_and_success_is_cleaned_up(
     assert _bootstrap_error_priority(ValueError()) < _bootstrap_error_priority(SmappeeServerError())
 
 
+@pytest.mark.parametrize("legacy_snapshot", [False, True])
 async def test_entry_loaded_through_outage_reload_and_normal_recovery(
-    hass, entry, online, hass_storage, enable_custom_integrations
+    hass, entry, online, hass_storage, enable_custom_integrations, legacy_snapshot
 ):
     """Exercise real HA platform setup/unload and stable registry identities."""
     from homeassistant.helpers import entity_registry as er
 
     await async_save_snapshot(hass, entry, online)
+    if legacy_snapshot:
+        store = bootstrap_store(hass, entry)
+        saved = await store.async_load()
+        for site in saved["sites"]:
+            site["metadata"].pop("tracking_serials")
+        await store.async_save(saved)
     with (
         patch(
             "custom_components.smappee_ev._async_prepare_runtime",
@@ -609,6 +653,8 @@ async def test_entry_loaded_through_outage_reload_and_normal_recovery(
         await hass.async_block_till_done()
         assert entry.state is ConfigEntryState.LOADED
         assert entry.runtime_data.mode is RuntimeMode.MQTT_ONLY
+        if legacy_snapshot:
+            assert entry.runtime_data.sites[1].tracking_serials == {"1": "gateway"}
         registry = er.async_get(hass)
         before = {
             e.unique_id: e.entity_id
