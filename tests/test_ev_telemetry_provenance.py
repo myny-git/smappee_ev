@@ -3,13 +3,19 @@
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 import json
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
+from custom_components.smappee_ev.coordinators.session_tracking import (
+    SESSION_EXPLICIT_MIN_REFRESH_INTERVAL,
+)
 from custom_components.smappee_ev.mqtt_bootstrap import build_cached_runtime, snapshot_from_runtime
+from custom_components.smappee_ev.mqtt_setup import _build_mqtt_clients
 from custom_components.smappee_ev.runtime_assembly import _tracking_serials_for_topologies
 from custom_components.smappee_ev.sensor import (
     ConnectorPowerSensor,
@@ -171,7 +177,9 @@ async def test_session_entity_update_is_read_only_and_exposes_query_evidence(onl
     refresh = AsyncMock()
     monkeypatch.setattr(coord, "_async_refresh_recent_sessions", refresh)
     await entity.async_update()
-    refresh.assert_awaited_once_with("EV controller", force=True)
+    refresh.assert_awaited_once_with(
+        "explicit entity update", minimum_interval=SESSION_EXPLICIT_MIN_REFRESH_INTERVAL
+    )
     coord.data.recent_sessions = [
         {
             "connectorUuid": "connector-1",
@@ -182,6 +190,147 @@ async def test_session_entity_update_is_read_only_and_exposes_query_evidence(onl
     ]
     coord._session_query_success["connector-1"] = 123
     attrs = entity.extra_state_attributes
-    assert attrs["session_queried_at"] == 123
+    assert attrs["session_queried_at"] == datetime.fromtimestamp(123, UTC).isoformat()
     assert attrs["session_started_at"] == datetime.fromtimestamp(1_781_273_310, UTC).isoformat()
     assert attrs["session_ended_at"] == datetime.fromtimestamp(1_781_273_910, UTC).isoformat()
+
+
+@pytest.mark.parametrize("serials", [("shared", "shared"), ("house", "charger"), ("house", None)])
+async def test_topology_tracking_survives_shared_credentials(serials, caplog):
+    caplog.set_level(logging.DEBUG, logger="custom_components.smappee_ev.runtime_assembly")
+    topology = SimpleNamespace(
+        site_location_id=11,
+        site_gateway_serial=serials[0],
+        control_location_id=22,
+        control_gateway_serial=serials[1],
+    )
+    mapping = _tracking_serials_for_topologies([topology])
+    specs = [
+        MqttChannelSpec(
+            sid,
+            "car_charger",
+            "activePower",
+            f"servicelocation/{uuid}/power",
+            "shared-user",
+            "shared-password",
+            [],
+        )
+        for sid, uuid in ((11, "site"), (22, "charger"))
+    ]
+    clients = _build_mqtt_clients(
+        suuid="site",
+        serial_str="legacy",
+        sid=11,
+        client_id_prefix="test",
+        on_properties=MagicMock(),
+        on_connection_change=None,
+        mqtt_specs=specs,
+        tracking_serials=mapping,
+    )
+    assert len(clients) == 1
+    client = clients[0]
+    client._client = SimpleNamespace(publish=AsyncMock())
+    await client._publish_tracking_once()
+    published = {
+        call.args[0]: json.loads(call.args[1])["serialNumber"]
+        for call in client._client.publish.call_args_list
+    }
+    expected = {"servicelocation/site/tracking": serials[0]}
+    if serials[1]:
+        expected["servicelocation/charger/tracking"] = serials[1]
+    assert published == expected
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+def test_gateway_resolution_distinguishes_missing_conflicting_and_same_location(caplog):
+    caplog.set_level(logging.DEBUG, logger="custom_components.smappee_ev.runtime_assembly")
+    same = SimpleNamespace(
+        site_location_id=11,
+        site_gateway_serial=None,
+        control_location_id=11,
+        control_gateway_serial="shared",
+    )
+    assert _tracking_serials_for_topologies([same]) == {"11": "shared"}
+    assert not caplog.records
+    missing = SimpleNamespace(
+        site_location_id=11,
+        site_gateway_serial="shared",
+        control_location_id=22,
+        control_gateway_serial=None,
+    )
+    assert _tracking_serials_for_topologies([missing]) == {"11": "shared"}
+    assert caplog.records[-1].levelno == logging.DEBUG
+    conflict_a = SimpleNamespace(**{**vars(missing), "control_gateway_serial": "charger-A"})
+    conflict_b = SimpleNamespace(**{**vars(missing), "control_gateway_serial": "charger-B"})
+    assert _tracking_serials_for_topologies([conflict_a, conflict_b]) == {"11": "shared"}
+    assert caplog.records[-1].levelno == logging.WARNING
+    assert "Ambiguous" in caplog.records[-1].message
+
+
+async def test_successful_empty_query_is_public_iso_evidence(online, monkeypatch):
+    bucket = online.sites[1].stations["station-1"]
+    coord = bucket.station_coordinator
+    client = bucket.connectors["connector-1"].connector_client
+    client.dashboard_client = online.dashboard
+    request = AsyncMock(return_value=[])
+    monkeypatch.setattr(online.dashboard, "_request", request)
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.coordinators.session_tracking._now", lambda: 100
+    )
+    entity = ConnectorSessionEnergySensor(coord, client, 1, "station-1", "connector-1")
+    await entity.async_update()
+    assert entity.native_value is None
+    assert entity.extra_state_attributes == {
+        "session_queried_at": datetime.fromtimestamp(100, UTC).isoformat()
+    }
+    request.assert_awaited_once()
+
+
+def test_unmatched_session_cannot_supply_connector_times_or_query_clock(online):
+    bucket = online.sites[1].stations["station-1"]
+    coord = bucket.station_coordinator
+    client = bucket.connectors["connector-1"].connector_client
+    entity = ConnectorSessionEnergySensor(coord, client, 1, "station-1", "connector-1")
+    coord.data.recent_sessions = [
+        {
+            "connectorUuid": "another-connector",
+            "energy": 1.25,
+            "from": 1_781_273_310_000,
+            "to": 1_781_273_910_000,
+            "session_started_at": "untrusted",
+            "session_ended_at": "untrusted",
+            "session_queried_at": "untrusted",
+        }
+    ]
+    coord._session_query_success["connector-1"] = 123
+    attrs = entity.extra_state_attributes
+    assert entity.native_value == 1.25
+    assert attrs["session_queried_at"] == datetime.fromtimestamp(123, UTC).isoformat()
+    assert not {"from", "to", "session_started_at", "session_ended_at"}.intersection(attrs)
+
+
+@pytest.mark.parametrize(
+    "response", [None, {"error": "unavailable"}, "invalid", [None], ["invalid"]]
+)
+async def test_invalid_session_response_preserves_previous_evidence(online, monkeypatch, response):
+    bucket = online.sites[1].stations["station-1"]
+    coord = bucket.station_coordinator
+    client = bucket.connectors["connector-1"].connector_client
+    client.dashboard_client = online.dashboard
+    request = AsyncMock(return_value=response)
+    monkeypatch.setattr(online.dashboard, "_request", request)
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.coordinators.session_tracking._now", lambda: 200
+    )
+    coord._session_query_success["connector-1"] = 100
+    coord.data.recent_sessions = [{"connectorUuid": "connector-1", "energy": 2.5}]
+    entity = ConnectorSessionEnergySensor(coord, client, 1, "station-1", "connector-1")
+    await entity.async_update()
+    request.assert_awaited_once()
+    assert coord._connector_session_available["connector-1"] is False
+    assert coord._session_query_success == {"connector-1": 100}
+    assert entity.native_value == 2.5
+    assert (
+        entity.extra_state_attributes["session_queried_at"]
+        == datetime.fromtimestamp(100, UTC).isoformat()
+    )

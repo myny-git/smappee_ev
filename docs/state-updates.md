@@ -84,12 +84,27 @@ These receive clocks and observations are excluded from Recorder attributes.
 
 Session energy exposes `session_queried_at`, `session_started_at` and
 `session_ended_at`. Query success belongs to each connector whose station-scoped
-request succeeded; errors cannot advance it. Explicit `update_entity` refreshes
-recent sessions without issuing a charger command. Receive/query clocks are
-runtime evidence and are not restored as proof of freshness after restart.
+request succeeded, even when no sessions are returned. All three timestamps use
+ISO 8601 UTC; session start/end are exposed only after a confirmed connector
+match. Invalid response shapes are protocol errors and cannot advance query
+success. Explicit `update_entity` refreshes recent sessions without issuing a
+charger command, with a shared ten-second minimum between attempts, including
+failed attempts. Concurrent callers await the same in-flight request; cancelling
+one caller does not cancel that shared request. Scheduled lifecycle refreshes
+retain their existing throttle and forced final-refresh behavior. Receive/query
+clocks are runtime evidence and are not restored as proof of freshness after restart.
 
 Live tracking requests use the physical Connect serial discovered for each
 service location, even when MQTT credentials are shared. Missing or conflicting
-mappings are skipped rather than requesting another location's gateway. Cached
-bootstrap data persists the mapping; older snapshots without it require one
-successful online discovery to be refreshed.
+mappings are skipped rather than requesting another location's gateway. A parent
+relationship or one known serial does not prove that two locations share a
+Connect. Alternate observations for the same location ID may resolve missing
+metadata; explicit conflicts remain unresolved and produce a warning. Missing
+metadata is logged at debug after resolution.
+
+Cached bootstrap data persists the mapping. Older snapshots are upgraded in
+memory without requiring Dashboard access, retaining their entities and MQTT
+routes. Only the old site gateway's ownership can be recovered reliably; inherited
+station/client serials are not used as evidence for a different control location.
+Unknown child gateways remain untracked until online discovery establishes their
+identity. Malformed current metadata is still rejected rather than migrated.

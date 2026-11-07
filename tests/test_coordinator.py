@@ -57,6 +57,7 @@ def mock_hass():
     hass = MagicMock()
     hass.config_entries.async_entries.return_value = []
     hass.async_create_task.side_effect = lambda coro: asyncio.create_task(coro)
+    hass.async_create_background_task.side_effect = lambda coro, _name: asyncio.create_task(coro)
     return hass
 
 

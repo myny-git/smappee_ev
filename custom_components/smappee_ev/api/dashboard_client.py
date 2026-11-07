@@ -424,7 +424,9 @@ class SmappeeDashboardClient:
             params={"range": f"{from_ms},{now_ms}", "rangeMode": "stop_or_start"},
             return_json=True,
         )
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list) or any(not isinstance(session, dict) for session in data):
+            raise SmappeeProtocolError("Dashboard sessions response must be a list of objects")
+        return data
 
     async def async_get_capacity_protection(
         self, service_location_id: int | str

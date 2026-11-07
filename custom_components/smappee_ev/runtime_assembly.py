@@ -277,26 +277,27 @@ def _deduplicate_stations(
 def _tracking_serials_for_topologies(
     topologies: list[SmappeeLocationTopology],
 ) -> dict[str, str]:
-    """Resolve physical Connects per measurement location, refusing ambiguity."""
+    """Resolve each location independently; a parent link does not prove a shared Connect."""
     candidates: dict[str, set[str]] = {}
     for topology in topologies:
         for location, serial in (
             (topology.site_location_id, topology.site_gateway_serial),
             (topology.control_location_id, topology.control_gateway_serial),
         ):
+            serials = candidates.setdefault(str(location), set())
             if serial:
-                candidates.setdefault(str(location), set()).add(str(serial))
-            else:
-                _LOGGER.warning(
-                    "Missing tracking gateway for location %s; tracking skipped", location
-                )
+                serials.add(str(serial))
     result: dict[str, str] = {}
     for location_key, serials in candidates.items():
         if len(serials) == 1:
             result[location_key] = next(iter(serials))
-        else:
+        elif serials:
             _LOGGER.warning(
                 "Ambiguous tracking gateway for location %s; tracking skipped", location_key
+            )
+        else:
+            _LOGGER.debug(
+                "Missing tracking gateway for location %s; tracking skipped", location_key
             )
     return result
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
 from datetime import UTC, datetime
 import logging
@@ -77,6 +78,23 @@ def _validate_fields(value: Any, schema: dict[str, Any]) -> None:
     vol.Schema({vol.Required(key): validator for key, validator in schema.items()})(value)
 
 
+def _upgrade_site_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Recover only gateway ownership actually preserved by pre-tracking snapshots."""
+    if "tracking_serials" in metadata:
+        return metadata
+    legacy_fields = {
+        key: validator for key, validator in _SITE_FIELDS.items() if key != "tracking_serials"
+    }
+    _validate_fields(metadata, legacy_fields)
+    # Legacy station/client serials could be inherited from the site. They do
+    # not prove ownership of a different control location's physical gateway.
+    serial = metadata["gateway_serial"]
+    return {
+        **metadata,
+        "tracking_serials": {str(metadata["site_location_id"]): serial} if serial else {},
+    }
+
+
 def bootstrap_store(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> Store[dict[str, Any]]:
     """Use HA atomic storage with private filesystem permissions."""
     return Store(
@@ -119,18 +137,20 @@ def validate_snapshot(value: Any, entry: SmappeeEvConfigEntry) -> dict[str, Any]
     """Validate identity, metadata, credentials and routes as one complete snapshot."""
     if not isinstance(value, dict) or value.get("schema_version") != 1:
         raise ValueError("Unsupported MQTT snapshot")
-    if value.get("entry_id") != entry.entry_id or value.get("account") != entry.data.get(
+    snapshot: dict[str, Any] = deepcopy(value)
+    if snapshot.get("entry_id") != entry.entry_id or snapshot.get("account") != entry.data.get(
         CONF_USERNAME
     ):
         raise ValueError("MQTT snapshot belongs to another account")
-    fetched = datetime.fromisoformat(value["fetched_at"])
+    fetched = datetime.fromisoformat(snapshot["fetched_at"])
     if fetched.tzinfo is None:
         raise ValueError("Missing snapshot timezone")
-    sites = value.get("sites")
+    sites = snapshot.get("sites")
     if not isinstance(sites, list) or not sites:
         raise ValueError("Empty MQTT snapshot")
     seen_sites: set[int] = set()
     for site in sites:
+        site["metadata"] = _upgrade_site_metadata(site["metadata"])
         _validate_fields(site["metadata"], _SITE_FIELDS)
         sid = site["metadata"]["site_location_id"]
         if sid in seen_sites:
@@ -161,7 +181,7 @@ def validate_snapshot(value: Any, entry: SmappeeEvConfigEntry) -> dict[str, Any]
         if not isinstance(stations, dict) or not stations:
             raise ValueError("Missing stations")
         _validate_stations(stations, sid)
-    return value
+    return snapshot
 
 
 def _validate_stations(stations: dict[str, Any], sid: int) -> None:
@@ -295,7 +315,7 @@ def build_cached_runtime(
     snapshot: dict[str, Any],
 ) -> RuntimeData:
     """Construct a monitoring runtime without calling any Dashboard endpoint."""
-    validate_snapshot(snapshot, entry)
+    snapshot = validate_snapshot(snapshot, entry)
     dashboard.monitoring_only = True
     runtime = RuntimeData(
         api=dashboard, dashboard=dashboard, sites={}, mqtt={}, mode=RuntimeMode.MQTT_ONLY
