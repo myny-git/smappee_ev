@@ -316,7 +316,7 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
             changed = True
             _LOGGER.info("Site %s MQTT unavailable", anonymize_uuid(self.site_uuid))
         if changed:
-            self.async_set_updated_data(data)
+            self.async_update_listeners()
 
     def apply_mqtt_properties(self, topic: str, payload: dict) -> MqttApplyResult:
         result = MqttApplyResult()
@@ -331,7 +331,7 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
         changed |= self._handle_power(topic, payload, result)
         changed |= self.measurement_freshness.record(result)
         if changed:
-            self.async_set_updated_data(data)
+            self.async_update_listeners()
         return result
 
 
@@ -408,6 +408,8 @@ class SmappeeStationCoordinator(
         self._last_smartdevice_refresh: float | None = None
         self._smartdevice_refresh_error: Exception | None = None
         self._force_smartdevice_refresh = False
+        # Transport callbacks only; payloads may mark the published state online.
+        self._mqtt_connection_up: bool | None = None
         self._last_dashboard_warning = 0.0
         self._dashboard_refresh_lock = asyncio.Lock()
         self._dashboard_refresh_unsub: CALLBACK_TYPE | None = None

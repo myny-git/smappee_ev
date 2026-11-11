@@ -1,7 +1,6 @@
 """Reconnect regression through transport, routing, REST and HA entity state."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
 import json
 import logging
 from types import SimpleNamespace
@@ -10,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from aiomqtt import MqttError
 from homeassistant.helpers.entity_component import EntityComponent
 import pytest
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.smappee_ev.api.errors import SmappeeConnectionError
 from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
@@ -141,8 +139,6 @@ async def test_mqtt_reconnect_restores_connector_entities_without_reload(
                     payload=json.dumps({"activePowerData": [0, 2300, 0]}).encode(),
                 )
             )
-            coord._last_smartdevice_refresh -= 300
-            async_fire_time_changed(hass, datetime.now(UTC) + timedelta(minutes=5, seconds=5))
             await hass.async_block_till_done(wait_background_tasks=True)
             assert coord.mqtt_transport_connected is True
             assert hass.states.get(power.entity_id).state == "2300.0"

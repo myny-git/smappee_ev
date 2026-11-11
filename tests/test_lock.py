@@ -183,7 +183,7 @@ class TestSmappeeCableLock:
 
         api_client.set_cable_locked.assert_called_once()
         assert mock_integration_data.station.cable_locked is True
-        coordinator.async_set_updated_data.assert_called_once_with(mock_integration_data)
+        coordinator.async_update_listeners.assert_called_once_with()
         coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
     @pytest.mark.asyncio
@@ -205,7 +205,7 @@ class TestSmappeeCableLock:
 
         api_client.set_cable_unlocked.assert_called_once()
         assert mock_integration_data.station.cable_locked is False
-        coordinator.async_set_updated_data.assert_called_once_with(mock_integration_data)
+        coordinator.async_update_listeners.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_set_locked_error_preserves_state(self, mock_integration_data):
@@ -227,7 +227,7 @@ class TestSmappeeCableLock:
             await cable_lock._set_locked(True)
 
         assert mock_integration_data.station.cable_locked is False
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_set_locked_auth_error_preserves_state_and_propagates(
@@ -251,7 +251,7 @@ class TestSmappeeCableLock:
             await cable_lock.async_lock()
 
         assert mock_integration_data.station.cable_locked is False
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_set_locked_raises_when_station_state_missing(self):
@@ -284,7 +284,7 @@ async def test_pending_lock_preserves_current_snapshot(
     mock_integration_data.connectors["connector_uuid1"].power_total = 100
     coordinator = MagicMock(spec=SmappeeCoordinator)
     coordinator.data = mock_integration_data
-    coordinator.async_set_updated_data.side_effect = lambda data: setattr(coordinator, "data", data)
+    coordinator.async_update_listeners = MagicMock()
     started = asyncio.Event()
     finish = asyncio.Event()
 
@@ -306,7 +306,7 @@ async def test_pending_lock_preserves_current_snapshot(
     try:
         await asyncio.wait_for(started.wait(), timeout=1)
         assert entity.is_locked is initial
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
         current = mock_integration_data
         expected_state = initial
@@ -352,9 +352,9 @@ async def test_pending_lock_preserves_current_snapshot(
                 assert current.station.led_brightness == 75
                 assert current.recent_sessions == [{"energy": 12.5}]
         if outcome == "success" and snapshot in {"same", "refreshed"}:
-            coordinator.async_set_updated_data.assert_called_once_with(current)
+            coordinator.async_update_listeners.assert_called_once_with()
         else:
-            coordinator.async_set_updated_data.assert_not_called()
+            coordinator.async_update_listeners.assert_not_called()
         if outcome in {"success", "error", "cancel"}:
             coordinator.async_schedule_dashboard_refresh.assert_called_once()
         else:
@@ -384,7 +384,7 @@ async def test_lock_rejects_unknown_capability(mock_integration_data, target):
     assert error.value.translation_key == "station_unavailable"
     api.set_cable_locked.assert_not_awaited()
     api.set_cable_unlocked.assert_not_awaited()
-    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_update_listeners.assert_not_called()
     coordinator.async_schedule_dashboard_refresh.assert_not_called()
 
 
@@ -429,7 +429,7 @@ async def test_failed_dashboard_write_schedules_reconciliation(
 
     dashboard.async_set_cable_lock.assert_awaited_once_with("serial", target)
     assert entity.is_locked is not target
-    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_update_listeners.assert_not_called()
     if error_type is SmappeeAuthenticationError:
         coordinator.async_schedule_dashboard_refresh.assert_not_called()
     else:

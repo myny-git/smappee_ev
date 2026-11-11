@@ -76,7 +76,7 @@ def integration_data(connector_state, station_state):
 def coordinator(integration_data):
     coord = MagicMock(spec=SmappeeCoordinator)
     coord.data = integration_data
-    coord.async_set_updated_data = MagicMock()
+    coord.async_update_listeners = MagicMock()
     coord.async_schedule_dashboard_refresh = MagicMock()
     return coord
 
@@ -135,16 +135,16 @@ async def test_current_slider_set_native_value(coordinator, api_client):
     await slider.async_set_native_value(20)
     assert state.selected_current_limit == 16.0
     assert state.selected_percentage_limit == 50
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
     # Test fixed range - mock returns (6.0, 100) for 100% of fixed 6-6A range
-    coordinator.async_set_updated_data.reset_mock()
+    coordinator.async_update_listeners.reset_mock()
     state.max_current = 6
     state.min_current = 6
     api_client.set_current = AsyncMock(return_value=(6.0, 100))
     await slider.async_set_native_value(6)
     assert state.selected_current_limit == 6.0
     assert state.selected_percentage_limit == 100
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
 
 
 def test_current_slider_derives_value_from_percentage(coordinator, api_client):
@@ -205,7 +205,7 @@ async def test_connector_max_current_number_updates_config_without_charging_limi
     api_client.set_current.assert_not_awaited()
     assert state.max_current == 16
     assert state.selected_current_limit == 16
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
 
 
@@ -288,7 +288,7 @@ async def test_connector_max_current_number_api_error_preserves_state(coordinato
 
     assert state.max_current == 32
     assert state.selected_current_limit == 20
-    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_update_listeners.assert_not_called()
     coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
@@ -308,7 +308,7 @@ async def test_capacity_maximum_power_rounds_to_one_decimal_and_defaults_active_
 
     dashboard_client.async_set_capacity_protection.assert_awaited_once_with(1, True, 5.1)
     assert coordinator.data.station.capacity_maximum_power_kw == 5.1
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
 
 
@@ -348,7 +348,7 @@ async def test_capacity_maximum_power_api_error_preserves_previous_value(
 
     dashboard_client.async_set_capacity_protection.assert_awaited_once_with(1, False, 6.0)
     assert station.capacity_maximum_power_kw == 4.2
-    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_update_listeners.assert_not_called()
     coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
@@ -368,7 +368,7 @@ async def test_overload_maximum_load_rounds_to_integer_and_defaults_active_true(
 
     dashboard_client.async_set_overload_protection.assert_awaited_once_with(1, True, 25)
     assert coordinator.data.station.overload_maximum_load_a == 25
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
 
 
@@ -530,7 +530,7 @@ async def test_offline_failsafe_set_native_value(coordinator, api_client, dashbo
 
     api_client.set_offline_charging_config.assert_awaited_once_with(True, 10)
     assert station.offline_failsafe_current_a == 10
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
 
 
 @pytest.mark.asyncio
@@ -554,7 +554,7 @@ async def test_offline_failsafe_defaults_enabled_and_clamps_negative_current(
     api_client.set_offline_charging_config.assert_awaited_once_with(True, 0)
     assert station.offline_charging_enabled is True
     assert station.offline_failsafe_current_a == 0
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
 
 
@@ -619,7 +619,7 @@ async def test_min_surpluspct_set_native_value(coordinator, api_client):
     await min_pct.async_set_native_value(17)
     assert state.min_surpluspct == 17
     api_client.set_min_surpluspct.assert_awaited_with(17)
-    coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+    coordinator.async_update_listeners.assert_called_once_with()
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
 
 
@@ -642,7 +642,7 @@ async def test_min_surpluspct_api_error_preserves_state_and_raises_homeassistant
         await min_pct.async_set_native_value(17)
 
     assert state.min_surpluspct == 20
-    coordinator.async_set_updated_data.assert_not_called()
+    coordinator.async_update_listeners.assert_not_called()
     coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 

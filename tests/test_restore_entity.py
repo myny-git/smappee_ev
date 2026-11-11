@@ -85,7 +85,7 @@ class TestRestoreEntityFunctionality:
 
         # Verify percentage was calculated correctly
         assert connector.selected_percentage_limit == 38  # (16-6)/(32-6)*100 = 38.46%
-        assert mock_coordinator.async_set_updated_data.called
+        assert mock_coordinator.async_update_listeners.called
 
     @pytest.mark.asyncio
     async def test_min_surplus_pct_restore(self, hass, mock_coordinator, mock_api_client):
@@ -112,7 +112,7 @@ class TestRestoreEntityFunctionality:
         # Verify state was restored
         connector = mock_coordinator.data.connectors["connector-uuid"]
         assert connector.min_surpluspct == 25
-        assert mock_coordinator.async_set_updated_data.called
+        assert mock_coordinator.async_update_listeners.called
 
     @pytest.mark.asyncio
     async def test_current_slider_restore_no_last_state(
@@ -138,7 +138,7 @@ class TestRestoreEntityFunctionality:
         connector = mock_coordinator.data.connectors["connector-uuid"]
         assert connector.selected_current_limit is None
         assert connector.selected_percentage_limit is None
-        assert not mock_coordinator.async_set_updated_data.called
+        assert not mock_coordinator.async_update_listeners.called
 
     @pytest.mark.asyncio
     async def test_current_slider_restore_with_existing_value(
@@ -172,7 +172,7 @@ class TestRestoreEntityFunctionality:
         # Verify existing value was not overwritten
         assert connector.selected_current_limit == 20
         assert connector.selected_percentage_limit == 60
-        assert not mock_coordinator.async_set_updated_data.called
+        assert not mock_coordinator.async_update_listeners.called
 
     @pytest.mark.asyncio
     async def test_current_slider_restore_does_not_overwrite_api_percentage(
@@ -202,7 +202,7 @@ class TestRestoreEntityFunctionality:
 
         assert connector.selected_current_limit is None
         assert connector.selected_percentage_limit == 60
-        assert not mock_coordinator.async_set_updated_data.called
+        assert not mock_coordinator.async_update_listeners.called
 
     @pytest.mark.asyncio
     async def test_evcc_state_sensor_restore(self, hass, mock_coordinator, mock_api_client):

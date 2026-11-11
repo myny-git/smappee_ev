@@ -1,9 +1,6 @@
 """The intended contract between MQTT, REST polls, Dashboard refreshes and commands.
 
-Each test states the outcome the integration *should* produce and why. A test
-marked ``xfail(strict=True)`` describes intended behaviour the code does not
-have yet: it must be fixed in the code, not by relaxing the test, and the strict
-marker makes the suite fail as soon as the behaviour changes.
+Each test states the outcome the integration should produce and why.
 
 Already covered elsewhere, and therefore not repeated here:
 
@@ -25,7 +22,7 @@ import pytest
 from custom_components.smappee_ev import number
 from custom_components.smappee_ev.models.state import ConnectorState, StationState
 from custom_components.smappee_ev.mqtt_setup import _handle_mqtt_connection_change
-from custom_components.smappee_ev.state_updates import update_connector
+from custom_components.smappee_ev.state_updates import update_connector, update_station
 from tests import test_mqtt_bootstrap as bootstrap
 
 entry = bootstrap.entry
@@ -192,15 +189,7 @@ async def test_session_refresh_keeps_the_snapshot_a_poll_published_meanwhile(onl
         await _finish(task)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "In-place publications use async_set_updated_data, which marks the "
-        "coordinator as successfully updated. Planned fix: publish them with "
-        "async_update_listeners, as the MQTT path already does."
-    ),
-)
-@pytest.mark.parametrize("publication", ["command", "sessions"])
+@pytest.mark.parametrize("publication", ["command", "station_command", "sessions", "dashboard"])
 async def test_local_publication_does_not_report_a_failed_poll_as_recovered(online, publication):
     """Only a successful poll may report the REST connection as recovered.
 
@@ -217,12 +206,47 @@ async def test_local_publication_does_not_report_a_failed_poll_as_recovered(onli
     if publication == "command":
         update_connector(coord, UUID, min_surpluspct=40)
         assert coord.data.connectors[UUID].min_surpluspct == 40
-    else:
+    elif publication == "station_command":
+        update_station(coord, led_brightness=75)
+        assert coord.data.station.led_brightness == 75
+    elif publication == "sessions":
         coord._async_get_recent_sessions = AsyncMock(return_value=[{"energy": 1.5}])
         await coord._async_run_session_refresh("test", force=True, minimum_interval=None)
         assert coord.data.recent_sessions == [{"energy": 1.5}]
+    else:
+
+        async def dashboard(staged, force=False):
+            staged.station.led_brightness = 75
+            return True
+
+        coord._maybe_refresh_dashboard_data = dashboard
+        await coord._async_dashboard_refresh_now()
+        assert coord.data.station.led_brightness == 75
 
     assert coord.last_update_success is False
+
+
+@pytest.mark.parametrize("publication", ["command", "sessions", "site_mqtt"])
+async def test_local_publications_notify_without_moving_the_next_poll(online, publication):
+    coord = online.sites[1].site_coordinator if publication == "site_mqtt" else _coordinator(online)
+    listener = MagicMock()
+    remove = coord.async_add_listener(listener)
+    try:
+        deadline = coord._unsub_refresh
+        assert deadline is not None
+        coord.last_update_success = False
+        if publication == "command":
+            update_connector(coord, UUID, min_surpluspct=40)
+        elif publication == "sessions":
+            coord._async_get_recent_sessions = AsyncMock(return_value=[{"energy": 1.5}])
+            await coord._async_run_session_refresh("test", force=True, minimum_interval=None)
+        else:
+            coord.apply_mqtt_properties(bootstrap.TOPIC, {"activePowerData": [3200, 0]})
+        listener.assert_called_once_with()
+        assert coord._unsub_refresh is deadline
+        assert coord.last_update_success is False
+    finally:
+        remove()
 
 
 def test_mqtt_disconnect_schedules_a_rest_refresh(online):
@@ -237,13 +261,6 @@ def test_mqtt_disconnect_schedules_a_rest_refresh(online):
     assert schedule_refresh.call_count == len(site.stations)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A REST refresh is scheduled when MQTT disconnects, not when it returns. "
-        "Open decision: resync once after every reconnect (one extra REST call)."
-    ),
-)
 def test_mqtt_reconnect_schedules_a_rest_resync(online):
     """After an MQTT outage the missed changes must be fetched, not waited for.
 

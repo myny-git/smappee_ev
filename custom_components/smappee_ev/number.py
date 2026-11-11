@@ -305,7 +305,7 @@ class SmappeeCombinedCurrentSlider(SmappeeConnectorEntity, _BaseNumber):
                     st.selected_percentage_limit = max(0, min(100, pct))
                 data = self.coordinator.data
                 if data:
-                    self.coordinator.async_set_updated_data(data)
+                    self.coordinator.async_update_listeners()
                     updated_data = True
         if not updated_data:
             if getattr(self, "platform", None) is not None:
@@ -463,7 +463,7 @@ class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
             st.min_surpluspct = restored
             data = self.coordinator.data
             if data:
-                self.coordinator.async_set_updated_data(data)
+                self.coordinator.async_update_listeners()
                 updated_data = True
         if not updated_data:
             if getattr(self, "platform", None) is not None:

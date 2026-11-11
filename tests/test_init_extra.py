@@ -178,6 +178,12 @@ class TestMqttSetup:
         mock_coordinator = MagicMock(spec=SmappeeCoordinator)
         mock_coordinator.monitoring_only = False
         mock_coordinator._shutting_down = False
+        mock_coordinator.hass = hass
+        mock_coordinator._mqtt_connection_up = None
+        mock_coordinator._is_stopping = False
+        mock_coordinator.async_refresh.side_effect = lambda: setattr(
+            mock_coordinator, "_force_smartdevice_refresh", False
+        )
         stations = {
             "station1_uuid": make_station_runtime(
                 station_uuid="station1_uuid",
@@ -410,6 +416,12 @@ class TestMqttSetup:
         mock_coordinator = MagicMock(spec=SmappeeCoordinator)
         mock_coordinator.monitoring_only = False
         mock_coordinator._shutting_down = False
+        mock_coordinator.hass = hass
+        mock_coordinator._mqtt_connection_up = None
+        mock_coordinator._is_stopping = False
+        mock_coordinator.async_refresh.side_effect = lambda: setattr(
+            mock_coordinator, "_force_smartdevice_refresh", False
+        )
 
         stations = {
             "station1_uuid": make_station_runtime(
@@ -458,7 +470,7 @@ class TestMqttSetup:
         mock_coordinator._shutting_down = False
         mock_coordinator.update_interval = None
         mock_coordinator._shutting_down = True
-        mock_coordinator.async_request_refresh = AsyncMock()
+        mock_coordinator.async_refresh = AsyncMock()
         mock_coordinator.apply_mqtt_connection_change = MagicMock()
         stations = {
             "station1_uuid": make_station_runtime(
@@ -490,7 +502,7 @@ class TestMqttSetup:
             on_conn_callback(False)
 
         assert mock_coordinator.update_interval == timedelta(seconds=UPDATE_INTERVAL_DEFAULT)
-        mock_coordinator.async_request_refresh.assert_not_called()
+        mock_coordinator.async_refresh.assert_not_called()
         mock_coordinator.apply_mqtt_connection_change.assert_not_called()
         assert background_tasks == set()
 

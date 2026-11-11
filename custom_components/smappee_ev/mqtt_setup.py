@@ -350,7 +350,8 @@ def _handle_mqtt_refresh_done(
     refresh_tasks: dict[int, asyncio.Task], done_task: asyncio.Task, key: int
 ) -> None:
     """Drop a finished MQTT fallback refresh task and consume its exception."""
-    refresh_tasks.pop(key, None)
+    if refresh_tasks.get(key) is done_task:
+        refresh_tasks.pop(key)
     if done_task.cancelled():
         return
     try:
@@ -374,12 +375,18 @@ def _handle_mqtt_connection_change(
     for bucket in stations.values():
         coord = bucket.station_coordinator
         if coord:
+            if coord._shutting_down or coord.hass.is_stopping:
+                continue
+            previous = coord._mqtt_connection_up
+            coord._mqtt_connection_up = up
             if coord.update_interval is None and not coord.monitoring_only:
                 object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
             coord.apply_mqtt_connection_change(up)
             # HA can start the refresh eagerly; publish the transport state
             # before it captures the previous snapshot for the REST merge.
-            if not up and not coord.monitoring_only:
+            # Initial connection needs no extra poll. A return from an outage
+            # does: configuration changes are not necessarily replayed by MQTT.
+            if not coord.monitoring_only and previous != up and (not up or previous is False):
                 schedule_refresh(coord)
 
 
@@ -492,15 +499,24 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
 
     refresh_tasks: dict[int, asyncio.Task] = {}
 
+    async def _refresh_until_synced(coord: SmappeeStationCoordinator) -> None:
+        # async_refresh waits for HA's coordinator lock, unlike a debounced
+        # request which can be absorbed by a poll already in flight. The force
+        # flag is consumed at the START of a REST poll. A later connection edge
+        # sets it again, coalescing edges into one fresh follow-up poll.
+        while coord._force_smartdevice_refresh and not coord._is_stopping:
+            await coord.async_refresh()
+
     def _schedule_refresh(coord: SmappeeStationCoordinator) -> None:
-        if coord._shutting_down:
+        if coord._is_stopping:
             return
+        coord._force_smartdevice_refresh = True
         task_key = id(coord)
         existing = refresh_tasks.get(task_key)
         if existing is not None and not existing.done():
             return
 
-        task: asyncio.Task[None] = hass.async_create_task(coord.async_request_refresh())
+        task: asyncio.Task[None] = hass.async_create_task(_refresh_until_synced(coord))
         refresh_tasks[task_key] = task
         if background_tasks is not None:
             background_tasks.add(task)

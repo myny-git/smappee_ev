@@ -125,7 +125,7 @@ class SmappeeModeSelect(SmappeeConnectorEntity, SelectEntity, RestoreEntity):
             st.selected_mode = restored
             data = self.coordinator.data
             if data:
-                self.coordinator.async_set_updated_data(data)
+                self.coordinator.async_update_listeners()
                 updated_data = True
         if not updated_data:
             if getattr(self, "platform", None) is not None:

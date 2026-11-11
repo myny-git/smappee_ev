@@ -168,8 +168,12 @@ def test_mqtt_freshness_separates_heartbeat_charger_power_and_clients():
     assert freshness.mqtt_transport_connected is False
 
 
-def test_mqtt_transport_connect_never_disables_rest_fallback():
+def test_mqtt_transport_connect_never_disables_rest_fallback(hass):
     coordinator = MagicMock()
+    coordinator.hass = hass
+    coordinator.monitoring_only = False
+    coordinator._shutting_down = False
+    coordinator._mqtt_connection_up = None
     coordinator.update_interval = timedelta(seconds=60)
     bucket = make_station_runtime(coordinator=coordinator)
     schedule_refresh = MagicMock()

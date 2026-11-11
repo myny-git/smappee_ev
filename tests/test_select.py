@@ -260,7 +260,7 @@ class TestSmappeeModeSelect:
             )
 
         entity.async_write_ha_state = MagicMock()
-        mock_coordinator.async_set_updated_data = MagicMock()
+        mock_coordinator.async_update_listeners = MagicMock()
 
         # Select SMART mode
         await entity.async_select_option("smart")
@@ -272,7 +272,7 @@ class TestSmappeeModeSelect:
         assert mock_connector_state.selected_mode == "smart"
 
         # Check that coordinator was updated
-        mock_coordinator.async_set_updated_data.assert_called_once()
+        mock_coordinator.async_update_listeners.assert_called_once()
 
         # Check that entity state was written
         entity.async_write_ha_state.assert_called_once()
@@ -293,7 +293,7 @@ class TestSmappeeModeSelect:
             )
 
         entity.async_write_ha_state = MagicMock()
-        mock_coordinator.async_set_updated_data = MagicMock()
+        mock_coordinator.async_update_listeners = MagicMock()
 
         # Set coordinator data to None
         mock_coordinator.data = None
@@ -305,7 +305,7 @@ class TestSmappeeModeSelect:
         mock_api_client.set_charging_mode.assert_called_once_with("SMART")
 
         # Coordinator update should not be called
-        mock_coordinator.async_set_updated_data.assert_not_called()
+        mock_coordinator.async_update_listeners.assert_not_called()
 
         # Check that entity state was written
         entity.async_write_ha_state.assert_called_once()
@@ -369,7 +369,7 @@ class TestSmappeeModeSelect:
         entity.hass = hass
         entity.platform = object()
         entity.async_write_ha_state = MagicMock()
-        mock_coordinator.async_set_updated_data = MagicMock()
+        mock_coordinator.async_update_listeners = MagicMock()
         mock_connector_state.selected_mode = "standard"
         mock_last_state = State("select.charging_mode_1", "smart")
 
@@ -380,7 +380,7 @@ class TestSmappeeModeSelect:
             await entity.async_added_to_hass()
 
         assert mock_connector_state.selected_mode == "standard"
-        mock_coordinator.async_set_updated_data.assert_not_called()
+        mock_coordinator.async_update_listeners.assert_not_called()
         entity.async_write_ha_state.assert_called_once()
 
     @pytest.mark.asyncio
@@ -401,7 +401,7 @@ class TestSmappeeModeSelect:
             )
 
         entity.async_write_ha_state = MagicMock()
-        mock_coordinator.async_set_updated_data = MagicMock()
+        mock_coordinator.async_update_listeners = MagicMock()
         mock_connector_state.selected_mode = "standard"
         mock_api_client.set_charging_mode.side_effect = RuntimeError("boom")
 
@@ -409,7 +409,7 @@ class TestSmappeeModeSelect:
             await entity.async_select_option("smart")
 
         assert mock_connector_state.selected_mode == "standard"
-        mock_coordinator.async_set_updated_data.assert_not_called()
+        mock_coordinator.async_update_listeners.assert_not_called()
         entity.async_write_ha_state.assert_not_called()
 
     @pytest.mark.asyncio

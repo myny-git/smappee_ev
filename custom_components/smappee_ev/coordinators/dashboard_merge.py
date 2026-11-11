@@ -259,7 +259,7 @@ class DashboardMixin(CoordinatorMixin):
                 changed |= concurrent.apply(current)
                 changed |= confirmed.apply(current)
                 if changed:
-                    self.async_set_updated_data(current)
+                    self.async_update_listeners()
                 self._sync_dashboard_client_metadata(current)
             if current and not self._is_stopping:
                 # Configuration writes also affect the smartdevice properties.

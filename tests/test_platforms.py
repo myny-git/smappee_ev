@@ -548,7 +548,7 @@ class TestSmappeeLedLight:
             station=StationState(led_brightness=70, available=True),
             connectors={},
         )
-        coordinator.async_set_updated_data = MagicMock()
+        coordinator.async_update_listeners = MagicMock()
         api_client = MagicMock()
         api_client.set_brightness = AsyncMock()
         entity = SmappeeLedLight(
@@ -585,7 +585,7 @@ class TestSmappeeLedLight:
 
         api_client.set_brightness.assert_awaited_once_with(50)
         assert coordinator.data.station.led_brightness == 50
-        coordinator.async_set_updated_data.assert_called_once_with(coordinator.data)
+        coordinator.async_update_listeners.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_turn_on_uses_existing_or_default(self):

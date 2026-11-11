@@ -134,35 +134,35 @@ def test_site_mqtt_connection_change_handles_no_data_and_up_down_transitions(has
         gateway_type="Genius",
         update_interval=60,
     )
-    coord.async_set_updated_data = MagicMock()
+    coord.async_update_listeners = MagicMock()
 
     coord.apply_mqtt_connection_change(True)
-    coord.async_set_updated_data.assert_not_called()
+    coord.async_update_listeners.assert_not_called()
 
     coord.data = SiteData(site=SiteState())
     caplog.set_level(logging.INFO, logger="custom_components.smappee_ev.coordinator")
     coord.apply_mqtt_connection_change(True)
     assert coord.data.site.mqtt_connected is True
     assert coord.data.site.last_mqtt_rx is not None
-    coord.async_set_updated_data.assert_called_once_with(coord.data)
+    coord.async_update_listeners.assert_called_once_with()
     assert "MQTT availability recovered" in caplog.text
 
     caplog.clear()
-    coord.async_set_updated_data.reset_mock()
+    coord.async_update_listeners.reset_mock()
     coord.apply_mqtt_connection_change(True)
-    coord.async_set_updated_data.assert_not_called()
+    coord.async_update_listeners.assert_not_called()
     assert "MQTT availability recovered" not in caplog.text
 
     caplog.clear()
     coord.apply_mqtt_connection_change(False)
     assert coord.data.site.mqtt_connected is False
-    coord.async_set_updated_data.assert_called_once_with(coord.data)
+    coord.async_update_listeners.assert_called_once_with()
     assert caplog.text.count("MQTT unavailable") == 1
 
     caplog.clear()
-    coord.async_set_updated_data.reset_mock()
+    coord.async_update_listeners.reset_mock()
     coord.apply_mqtt_connection_change(False)
-    coord.async_set_updated_data.assert_not_called()
+    coord.async_update_listeners.assert_not_called()
     assert "MQTT unavailable" not in caplog.text
 
 
@@ -205,11 +205,11 @@ def test_site_apply_mqtt_properties_without_data_is_safe(hass):
         gateway_type="Genius",
         update_interval=60,
     )
-    coord.async_set_updated_data = MagicMock()
+    coord.async_update_listeners = MagicMock()
 
     coord.apply_mqtt_properties("servicelocation/site/power", {"channelData": [1]})
 
-    coord.async_set_updated_data.assert_not_called()
+    coord.async_update_listeners.assert_not_called()
 
 
 def test_site_apply_mqtt_properties_does_not_notify_on_heartbeat_only(hass):
@@ -223,13 +223,13 @@ def test_site_apply_mqtt_properties_does_not_notify_on_heartbeat_only(hass):
         update_interval=60,
     )
     coord.data = SiteData(site=SiteState(mqtt_connected=True, last_mqtt_rx=1.0))
-    coord.async_set_updated_data = MagicMock()
+    coord.async_update_listeners = MagicMock()
 
     coord.apply_mqtt_properties("/homeassistant/heartbeat", {})
 
     assert coord.data.site.mqtt_connected is True
     assert coord.data.site.last_mqtt_rx > 1.0
-    coord.async_set_updated_data.assert_not_called()
+    coord.async_update_listeners.assert_not_called()
 
 
 def test_site_coordinator_builds_and_applies_highlevel_grid_and_pv_maps(hass):
@@ -1149,7 +1149,7 @@ async def test_recent_sessions_filter_malformed_results_and_handle_errors(hass):
 @pytest.mark.asyncio
 async def test_recent_session_refresh_lock_throttle_reauth_and_success(hass, monkeypatch):
     coord = _station_coordinator(hass)
-    coord.async_set_updated_data = MagicMock()
+    coord.async_update_listeners = MagicMock()
     coord._async_get_recent_sessions = AsyncMock(return_value=[{"session": 1}])
 
     await coord._session_refresh_lock.acquire()
@@ -1178,7 +1178,7 @@ async def test_recent_session_refresh_lock_throttle_reauth_and_success(hass, mon
     coord._async_get_recent_sessions.side_effect = None
     coord._async_get_recent_sessions.return_value = [{"session": 2}]
     await coord._async_refresh_recent_sessions("success", force=True)
-    coord.async_set_updated_data.assert_called_once()
+    coord.async_update_listeners.assert_called_once()
     assert coord._last_session_api_update == 1000.0
 
 

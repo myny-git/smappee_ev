@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from dataclasses import replace
 from datetime import datetime, timedelta
 import logging
 from time import time as _now
@@ -402,5 +401,6 @@ class SessionTrackingMixin(CoordinatorMixin):
 
             self._last_session_api_update = now
             if self.data:
-                self.async_set_updated_data(replace(self.data, recent_sessions=recent_sessions))
+                self.data.recent_sessions = recent_sessions
+                self.async_update_listeners()
             _LOGGER.debug("Recent sessions refreshed for %s", reason)

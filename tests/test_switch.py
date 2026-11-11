@@ -562,7 +562,7 @@ class TestSmappeeAvailabilitySwitch:
         assert mock_integration_data.station.available is True
 
         # Publish the confirmed update
-        coordinator.async_set_updated_data.assert_called_once_with(mock_integration_data)
+        coordinator.async_update_listeners.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_async_turn_off(self, mock_integration_data):
@@ -587,7 +587,7 @@ class TestSmappeeAvailabilitySwitch:
         assert mock_integration_data.station.available is False
 
         # Test optimistic update
-        coordinator.async_set_updated_data.assert_called_once_with(mock_integration_data)
+        coordinator.async_update_listeners.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_set_available_error(self, mock_integration_data):
@@ -615,7 +615,7 @@ class TestSmappeeAvailabilitySwitch:
         assert mock_integration_data.station.available is False
 
         # A failed write must not publish an unconfirmed state
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_set_available_auth_error_preserves_state_and_propagates(
@@ -639,7 +639,7 @@ class TestSmappeeAvailabilitySwitch:
             await availability_switch.async_turn_on()
 
         assert mock_integration_data.station.available is False
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
 
 class TestSmappeeOfflineChargingSwitch:
@@ -681,7 +681,7 @@ class TestSmappeeOfflineChargingSwitch:
 
         assert mock_integration_data.station.offline_charging_enabled is True
         api_client.set_offline_charging_config.assert_awaited_once_with(True, 9)
-        coordinator.async_set_updated_data.assert_called_with(mock_integration_data)
+        coordinator.async_update_listeners.assert_called_with()
         coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
     @pytest.mark.asyncio
@@ -706,7 +706,7 @@ class TestSmappeeOfflineChargingSwitch:
 
         assert err.value.translation_key == "station_service_failed"
         assert mock_integration_data.station.offline_charging_enabled is False
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_turn_on_auth_error_preserves_state_and_propagates(self, mock_integration_data):
@@ -720,7 +720,7 @@ class TestSmappeeOfflineChargingSwitch:
             await offline_switch.async_turn_on()
 
         assert mock_integration_data.station.offline_charging_enabled is False
-        coordinator.async_set_updated_data.assert_not_called()
+        coordinator.async_update_listeners.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_turn_on_raises_when_station_state_missing(self):

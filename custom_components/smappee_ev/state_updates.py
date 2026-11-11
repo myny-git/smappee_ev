@@ -20,8 +20,8 @@ class StateCoordinator(Protocol):
     def data(self) -> IntegrationData | None:
         """Return the current state snapshot, if initialized."""
 
-    def async_set_updated_data(self, data: IntegrationData) -> None:
-        """Publish the updated snapshot to coordinator listeners."""
+    def async_update_listeners(self) -> None:
+        """Notify listeners without changing REST update status or scheduling."""
 
     def record_confirmed_write(self, connector_uuid: str | None, changes: dict[str, Any]) -> None:
         """Protect confirmed fields from responses that were already in flight."""
@@ -49,7 +49,7 @@ def update_station(coordinator: StateCoordinator, **changes: Any) -> None:
     for name, value in changes.items():
         setattr(current.station, name, value)
     coordinator.record_confirmed_write(None, changes)
-    coordinator.async_set_updated_data(current)
+    coordinator.async_update_listeners()
 
 
 def update_connector(coordinator: StateCoordinator, connector_uuid: str, **changes: Any) -> None:
@@ -60,7 +60,7 @@ def update_connector(coordinator: StateCoordinator, connector_uuid: str, **chang
     for name, value in changes.items():
         setattr(connector, name, value)
     coordinator.record_confirmed_write(connector_uuid, changes)
-    coordinator.async_set_updated_data(current)
+    coordinator.async_update_listeners()
 
 
 @dataclass
