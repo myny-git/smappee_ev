@@ -144,7 +144,7 @@ async def test_rest_session_start_without_mqtt_starts_tracking(harness):
     assert harness.final_delays() == [SESSION_START_REFRESH_DELAY]
 
 
-async def test_rest_does_not_drive_sessions_while_mqtt_charger_state_is_live(harness):
+async def test_rest_cannot_contradict_live_mqtt_charger_state(harness):
     harness.charge()
     harness.coord._ensure_active_session_loop()
     harness.coord.mqtt_transport_connected = True
@@ -153,11 +153,39 @@ async def test_rest_does_not_drive_sessions_while_mqtt_charger_state_is_live(har
     data = await harness.poll("Stopped")
 
     conn = data.connectors[CONNECTOR]
-    # The value itself is still merged as before; only its consequences are withheld.
-    assert conn.session_state == "Stopped"
+    # A lagging poll must not publish a state that contradicts live MQTT.
+    assert conn.session_state == "Started"
+    assert conn.paused is False
     assert conn.power_total == 7400
+    assert harness.coord._is_session_active(conn)
     assert not harness.loops[0]["cancel"].called
     assert harness.timers == []
+
+    # The active-session loop keeps running on its own tick ...
+    await harness.loops[0]["callback"](None)
+    assert harness.coord._session_active_loop_unsub is not None
+    # ... and the next MQTT message is not mistaken for a new session.
+    harness.mqtt("Started")
+    assert len(harness.loops) == 1
+    assert harness.timers == []
+
+
+async def test_live_mqtt_status_and_cause_survive_a_rest_poll(harness):
+    """REST supplies neither field, so they cannot change session activity."""
+    harness.coord.mqtt_transport_connected = True
+    harness.coord.apply_mqtt_properties(
+        CHARGING_STATE_TOPIC,
+        {"chargingState": "Started", "status": {"current": "CHARGING"}},
+    )
+
+    conn = (await harness.poll("Stopped")).connectors[CONNECTOR]
+
+    assert (conn.session_state, conn.status_current, conn.session_cause) == (
+        "Started",
+        "CHARGING",
+        "CHARGING",
+    )
+    assert harness.coord._is_session_active(conn)
 
 
 async def test_rest_drives_sessions_when_connected_mqtt_state_went_stale(harness):

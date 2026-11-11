@@ -20,6 +20,7 @@ from custom_components.smappee_ev.coordinators.freshness import MqttApplyResult
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, SiteData
 from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
+from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
 from custom_components.smappee_ev.services import register_services
 from tests.factories import (
     configure_loaded_entries,
@@ -397,8 +398,18 @@ def reset_fake_mqtt_instances():
 
 
 @pytest.mark.asyncio
-async def test_setup_failure_after_platform_forward_unloads_platforms(hass):
-    """A failure after forwarding must not leave entities on a stopped runtime."""
+@pytest.mark.parametrize(
+    ("failing_step", "rollback_error"),
+    [
+        ("background", None),
+        ("forward", None),
+        ("background", "unload"),
+        ("background", "shutdown"),
+    ],
+    ids=["after-forward", "during-forward", "unload-fails", "shutdown-fails"],
+)
+async def test_failed_setup_rolls_back_platforms_and_runtime(hass, failing_step, rollback_error):
+    """The setup error is reported, whatever happens while rolling back."""
     dashboard = _FakeDashboard()
     entry = MagicMock()
     entry.data = {
@@ -412,6 +423,16 @@ async def test_setup_failure_after_platform_forward_unloads_platforms(hass):
     entry.state = ConfigEntryState.LOADED
     entry.runtime_data = None
     entry.async_on_unload = MagicMock()
+    setup_error = RuntimeError("setup step failed")
+    forward = AsyncMock(side_effect=setup_error if failing_step == "forward" else None)
+    unload = AsyncMock(
+        side_effect=RuntimeError("unload failed") if rollback_error == "unload" else None
+    )
+
+    async def shutdown(runtime):
+        if rollback_error == "shutdown":
+            raise RuntimeError("shutdown failed")
+        await _async_shutdown_runtime_resources(runtime)
 
     with (
         patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
@@ -426,25 +447,26 @@ async def test_setup_failure_after_platform_forward_unloads_platforms(hass):
         ),
         patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
         patch("custom_components.smappee_ev._register_runtime_devices"),
-        patch.object(hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
-        patch.object(
-            hass.config_entries, "async_unload_platforms", new_callable=AsyncMock
-        ) as unload_platforms,
+        patch.object(hass.config_entries, "async_forward_entry_setups", forward),
+        patch.object(hass.config_entries, "async_unload_platforms", unload),
         patch(
             "custom_components.smappee_ev._start_runtime_background_work",
-            side_effect=RuntimeError("background start failed"),
+            side_effect=setup_error,
         ),
-        pytest.raises(RuntimeError, match="background start failed"),
+        patch("custom_components.smappee_ev._async_shutdown_runtime_resources", shutdown),
+        pytest.raises(RuntimeError, match="setup step failed"),
     ):
         await async_setup_entry(hass, entry)
 
-    unload_platforms.assert_awaited_once()
-    runtime = entry.runtime_data
-    assert runtime.stopping is True
-    station = runtime.sites[317418].stations["station-uuid"]
-    assert station.station_coordinator.shutdown_called is True
-    assert runtime.sites[317418].site_coordinator.shutdown_called is True
-    assert all(mqtt.stopped for mqtt in _FakeMqtt.instances)
+    # Also after a failing forward: some platforms may already be set up.
+    unload.assert_awaited_once()
+    if rollback_error != "shutdown":
+        runtime = entry.runtime_data
+        assert runtime.stopping is True
+        station = runtime.sites[317418].stations["station-uuid"]
+        assert station.station_coordinator.shutdown_called is True
+        assert runtime.sites[317418].site_coordinator.shutdown_called is True
+        assert all(mqtt.stopped for mqtt in _FakeMqtt.instances)
 
 
 @pytest.mark.asyncio

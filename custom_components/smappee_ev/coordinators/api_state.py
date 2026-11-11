@@ -123,8 +123,15 @@ class StationApiMixin(CoordinatorMixin):
     def _merge_connector_rest_state(
         prev: ConnectorState | None,
         rest: ConnectorState | ConnectorRestSnapshot,
+        *,
+        keep_session_state: bool = False,
     ) -> ConnectorState:
-        """Merge REST connector fields into the previous MQTT-rich connector state."""
+        """Merge REST connector fields into the previous MQTT-rich connector state.
+
+        ``keep_session_state`` preserves the previous session state while MQTT
+        reports it live. It is the only polled field that decides whether a
+        session is active; status and cause are never read from REST.
+        """
         if isinstance(rest, ConnectorRestSnapshot):
             rest_state = rest.state
             reported_min = rest.reported_min_current
@@ -151,9 +158,9 @@ class StationApiMixin(CoordinatorMixin):
         merged = replace(
             prev,
             connector_number=rest_state.connector_number,
-            session_state=rest_state.session_state
-            if rest_state.session_state != "Initialize"
-            else prev.session_state,
+            session_state=prev.session_state
+            if keep_session_state or rest_state.session_state == "Initialize"
+            else rest_state.session_state,
             selected_current_limit=StationApiMixin._rest_selected_current_limit(
                 prev, rest_state, min_current, max_current
             ),

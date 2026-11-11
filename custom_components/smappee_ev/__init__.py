@@ -243,12 +243,13 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
     entry.runtime_data = runtime
     _register_runtime_stop_cleanup(hass, entry, runtime)
     _log_stored_runtime_shape(runtime)
-    platforms_forwarded = False
+    forward_started = False
     try:
         _register_runtime_devices(hass, entry)
         async_migrate_status_registry(hass, entry)
+        # Forwarding can fail after some platforms were set up.
+        forward_started = True
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        platforms_forwarded = True
         _start_runtime_background_work(hass, runtime.sites, runtime.mqtt)
         status_task = hass.async_create_background_task(
             status_coordinator.async_refresh(), f"{entry.entry_id} Smappee service status"
@@ -260,13 +261,19 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         else:
             start_recovery(hass, entry, runtime, _async_prepare_runtime)
     except BaseException:
-        try:
-            # Home Assistant does not unload forwarded platforms of a failed setup;
-            # their entities would keep referring to the stopped runtime.
-            if platforms_forwarded:
+        # Home Assistant does not unload forwarded platforms of a failed setup;
+        # their entities would keep referring to the stopped runtime. Unloading a
+        # platform that was never set up is harmless.
+        if forward_started:
+            try:
                 await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-        finally:
+            except Exception:
+                # The setup failure is the error to report, not its rollback.
+                _LOGGER.exception("Unloading platforms after a failed setup failed")
+        try:
             await _async_shutdown_runtime_resources(runtime)
+        except Exception:
+            _LOGGER.exception("Stopping the runtime after a failed setup failed")
         raise
     return True
 

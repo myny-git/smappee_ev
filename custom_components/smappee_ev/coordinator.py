@@ -524,7 +524,10 @@ class SmappeeStationCoordinator(
                 elif isinstance(res, ConnectorState | ConnectorRestSnapshot):
                     self._log_connector_api_transition(uuid, True)
                     prev = (current.connectors or {}).get(uuid) if current else None
-                    connectors_state[uuid] = self._merge_connector_rest_state(prev, res)
+                    # A poll may lag behind MQTT; live charger state takes precedence.
+                    connectors_state[uuid] = self._merge_connector_rest_state(
+                        prev, res, keep_session_state=self._mqtt_reports_charger_state(uuid)
+                    )
 
             data = IntegrationData(
                 station=station_state,
