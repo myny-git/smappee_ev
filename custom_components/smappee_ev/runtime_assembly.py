@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-from inspect import isawaitable
 import logging
 from typing import Any
 
@@ -32,6 +31,7 @@ from .models.runtime_data import (
 from .models.state import HighLevelConfigMap
 from .mqtt_setup import _setup_mqtt
 from .mqtt_specs import _mqtt_specs_from_highlevel_configs, _split_highlevel_configs_by_scope
+from .runtime_lifecycle import _async_shutdown_coordinator
 from .topology import (
     _assign_connectors,
     _connector_uuid,
@@ -150,14 +150,7 @@ async def _create_coordinators(
             bucket.station_coordinator = coord
     except BaseException:
         for coord in created:
-            shutdown = getattr(coord, "async_shutdown", None)
-            if callable(shutdown):
-                try:
-                    result = shutdown()
-                    if isawaitable(result):
-                        await result
-                except Exception:
-                    _LOGGER.debug("Station coordinator rollback failed", exc_info=True)
+            await _async_shutdown_coordinator(coord, "Station")
         raise
 
     if start_tracking:
@@ -188,10 +181,7 @@ async def _create_site_coordinator(
     try:
         await _async_initial_refresh(coord)
     except BaseException:
-        try:
-            await coord.async_shutdown()
-        except Exception:
-            _LOGGER.debug("Site coordinator rollback failed", exc_info=True)
+        await _async_shutdown_coordinator(coord, "Site")
         raise
     return coord
 
@@ -534,23 +524,8 @@ async def _prepare_site_topologies(
     except BaseException:
         if coordinators_ready:
             for bucket in stations.values():
-                coordinator = bucket.station_coordinator
-                shutdown = getattr(coordinator, "async_shutdown", None)
-                if callable(shutdown):
-                    try:
-                        result = shutdown()
-                        if isawaitable(result):
-                            await result
-                    except Exception:
-                        _LOGGER.debug("Station coordinator rollback failed", exc_info=True)
-        shutdown = getattr(site_coordinator, "async_shutdown", None)
-        if callable(shutdown):
-            try:
-                result = shutdown()
-                if isawaitable(result):
-                    await result
-            except Exception:
-                _LOGGER.debug("Site coordinator rollback failed", exc_info=True)
+                await _async_shutdown_coordinator(bucket.station_coordinator, "Station")
+        await _async_shutdown_coordinator(site_coordinator, "Site")
         raise
 
     for bucket in stations.values():

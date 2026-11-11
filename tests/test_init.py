@@ -1006,7 +1006,7 @@ class TestDomainSetup:
         """Test config entry unloading."""
         # Create runtime data with MQTT clients and coordinators
         mqtt_client = MagicMock()
-        mqtt_client.stop = MagicMock(return_value=None)
+        mqtt_client.stop = AsyncMock()
 
         coordinator = MagicMock()
         coordinator.async_shutdown = AsyncMock()
@@ -1063,7 +1063,7 @@ class TestDomainSetup:
     async def test_async_unload_entry_keeps_services_registered(self, hass, mock_config_entry):
         """Test services stay registered after unloading an entry."""
         mqtt_client = MagicMock()
-        mqtt_client.stop = MagicMock(return_value=None)
+        mqtt_client.stop = AsyncMock()
         coordinator = MagicMock()
         coordinator.async_shutdown = AsyncMock()
         mock_config_entry.runtime_data = RuntimeData(

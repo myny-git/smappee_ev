@@ -539,6 +539,9 @@ class SmappeeStationCoordinator(
             if current is not None:
                 self._state_confirmations.since(confirmation_version, current).apply(data)
             self._sync_dashboard_client_metadata(data)
+            # Last step, on the final merged state and without yielding: the
+            # returned snapshot is published as soon as this method returns.
+            self._apply_rest_session_transitions(current, data)
             return data
 
         except asyncio.CancelledError:

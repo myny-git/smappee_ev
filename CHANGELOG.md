@@ -7,6 +7,35 @@ Non-stable versions are intentionally omitted.
 References point to the related GitHub issues, pull requests or discussions
 where the bug report, testing notes or design discussion can be found.
 
+## [Unreleased]
+
+### Breaking changes
+
+- Requires Home Assistant 2026.10 or newer. HACS and Marketplace no longer
+  offer this update on older versions; those installations keep the previous
+  release.
+
+### Devices
+
+- Devices are no longer removed automatically after discovery. The unofficial
+  Dashboard API can return an incomplete topology, which previously could
+  remove a charging station or connector that still existed. A device that is
+  no longer part of the topology can be deleted from its device page.
+
+### Charging sessions
+
+- A charging session that starts or ends while MQTT is unavailable is now
+  handled through the REST poll: stale connector power is cleared, session
+  refreshes follow the session, and the final session values are fetched. With
+  live MQTT charger state the behaviour is unchanged.
+
+### Stability
+
+- A setup that fails after its platforms were loaded now unloads them again.
+- Cancelling an unload no longer cancels the shared runtime shutdown.
+- A failing status coordinator shutdown no longer skips the remaining cleanup.
+- The Dashboard maintenance state of a removed config entry is released.
+
 ## [2026.11.0] - 2026-11-02
 
 This release adds Smappee service-status diagnostics and prepares installation

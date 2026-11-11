@@ -176,6 +176,8 @@ class TestMqttSetup:
         """Test setting up MQTT with a valid service location UUID."""
         # Create test stations data
         mock_coordinator = MagicMock(spec=SmappeeCoordinator)
+        mock_coordinator.monitoring_only = False
+        mock_coordinator._shutting_down = False
         stations = {
             "station1_uuid": make_station_runtime(
                 station_uuid="station1_uuid",
@@ -406,6 +408,8 @@ class TestMqttSetup:
         """Test the MQTT on_connection_change callback."""
         # Create test stations data with coordinator
         mock_coordinator = MagicMock(spec=SmappeeCoordinator)
+        mock_coordinator.monitoring_only = False
+        mock_coordinator._shutting_down = False
 
         stations = {
             "station1_uuid": make_station_runtime(
@@ -450,6 +454,8 @@ class TestMqttSetup:
     async def test_mqtt_disconnect_during_shutdown_skips_fallback_refresh(self, hass):
         """Test disconnect fallback polling does not schedule work while shutting down."""
         mock_coordinator = MagicMock(spec=SmappeeCoordinator)
+        mock_coordinator.monitoring_only = False
+        mock_coordinator._shutting_down = False
         mock_coordinator.update_interval = None
         mock_coordinator._shutting_down = True
         mock_coordinator.async_request_refresh = AsyncMock()

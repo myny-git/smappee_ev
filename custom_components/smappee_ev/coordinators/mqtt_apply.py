@@ -331,11 +331,8 @@ class MqttMixin(CoordinatorMixin):
 
         changed |= self._update_evcc(conn)
 
-        if was_active and not self._is_session_active(conn):
-            changed |= self._clear_connector_power(conn)
-
-        self._handle_session_tracking_transition(conn, was_active, connector_uuid)
-        return changed
+        changed |= self._apply_session_transition(conn, was_active, connector_uuid)
+        return bool(changed)
 
     @staticmethod
     def _clear_connector_power(conn: ConnectorState) -> bool:

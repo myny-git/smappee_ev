@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -264,6 +265,11 @@ class _MultiLocationDashboard:
 
 
 class _FakeSiteCoordinator:
+    monitoring_only = False
+
+    def cancel_freshness_timer(self):
+        return None
+
     def __init__(self, hass, **kwargs):
         self.hass = hass
         self.kwargs = kwargs
@@ -289,6 +295,9 @@ class _FakeSiteCoordinator:
 
 
 class _FakeStationCoordinator:
+    monitoring_only = False
+    _shutting_down = False
+
     def __init__(self, hass, **kwargs):
         self.hass = hass
         self.kwargs = kwargs
@@ -385,6 +394,57 @@ class _ServiceRegistry:
 @pytest.fixture(autouse=True)
 def reset_fake_mqtt_instances():
     _FakeMqtt.instances = []
+
+
+@pytest.mark.asyncio
+async def test_setup_failure_after_platform_forward_unloads_platforms(hass):
+    """A failure after forwarding must not leave entities on a stopped runtime."""
+    dashboard = _FakeDashboard()
+    entry = MagicMock()
+    entry.data = {
+        CONF_USERNAME: "user",
+        CONF_PASSWORD: "pass",
+        CONF_DASHBOARD_REFRESH_TOKEN: "refresh",
+    }
+    entry.options = {}
+    entry.entry_id = "setup_entry_123456"
+    entry.title = "Smappee EV"
+    entry.state = ConfigEntryState.LOADED
+    entry.runtime_data = None
+    entry.async_on_unload = MagicMock()
+
+    with (
+        patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
+        patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeSiteCoordinator",
+            _FakeSiteCoordinator,
+        ),
+        patch(
+            "custom_components.smappee_ev.runtime_assembly.SmappeeCoordinator",
+            _FakeStationCoordinator,
+        ),
+        patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
+        patch("custom_components.smappee_ev._register_runtime_devices"),
+        patch.object(hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
+        patch.object(
+            hass.config_entries, "async_unload_platforms", new_callable=AsyncMock
+        ) as unload_platforms,
+        patch(
+            "custom_components.smappee_ev._start_runtime_background_work",
+            side_effect=RuntimeError("background start failed"),
+        ),
+        pytest.raises(RuntimeError, match="background start failed"),
+    ):
+        await async_setup_entry(hass, entry)
+
+    unload_platforms.assert_awaited_once()
+    runtime = entry.runtime_data
+    assert runtime.stopping is True
+    station = runtime.sites[317418].stations["station-uuid"]
+    assert station.station_coordinator.shutdown_called is True
+    assert runtime.sites[317418].site_coordinator.shutdown_called is True
+    assert all(mqtt.stopped for mqtt in _FakeMqtt.instances)
 
 
 @pytest.mark.asyncio
@@ -739,6 +799,7 @@ async def test_service_call_survives_unload_reload_without_reregistering_service
     hass = MagicMock()
     hass.services = _ServiceRegistry(hass)
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
+    hass.async_create_task = asyncio.ensure_future
 
     first_connector = make_connector_client(
         service_location_id=11111,

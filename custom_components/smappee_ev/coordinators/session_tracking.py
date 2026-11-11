@@ -17,7 +17,7 @@ from homeassistant.helpers.event import async_call_later, async_track_time_inter
 
 from ..api.errors import SmappeeError
 from ..helpers import anonymize_uuid, charging_session_paused, charging_session_phase
-from ..models.state import ConnectorState, RecentSession
+from ..models.state import ConnectorState, IntegrationData, RecentSession
 from .base import CoordinatorMixin
 
 if TYPE_CHECKING:
@@ -94,14 +94,17 @@ class SessionTrackingMixin(CoordinatorMixin):
             == "finished"
         )
 
-    def _active_session_connectors(self) -> list[ConnectorState]:
-        data = self.data
+    def _active_session_connectors(
+        self, snapshot: IntegrationData | None = None
+    ) -> list[ConnectorState]:
+        """Return active connectors of the published state, or of a pending snapshot."""
+        data = snapshot if snapshot is not None else self.data
         if not data:
             return []
         return [conn for conn in data.connectors.values() if self._is_session_active(conn)]
 
-    def _session_loop_interval(self) -> int:
-        active = self._active_session_connectors()
+    def _session_loop_interval(self, snapshot: IntegrationData | None = None) -> int:
+        active = self._active_session_connectors(snapshot)
         if active and all(self._is_session_paused(conn) for conn in active):
             return SESSION_PAUSED_REFRESH_INTERVAL
         return SESSION_ACTIVE_REFRESH_INTERVAL
@@ -110,8 +113,59 @@ class SessionTrackingMixin(CoordinatorMixin):
         if self._active_session_connectors():
             self._ensure_active_session_loop()
 
+    def _apply_session_transition(
+        self,
+        conn: ConnectorState,
+        was_active: bool,
+        connector_uuid: str | None,
+        *,
+        snapshot: IntegrationData | None = None,
+    ) -> bool:
+        """Apply the consequences of a session-state change from MQTT or REST.
+
+        ``conn`` already carries the new state. Pass ``snapshot`` when it belongs
+        to data that has not been published yet. Returns whether readings changed.
+        """
+        changed = False
+        if was_active and not self._is_session_active(conn):
+            changed = bool(self._clear_connector_power(conn))
+        self._handle_session_tracking_transition(
+            conn, was_active, connector_uuid, snapshot=snapshot
+        )
+        return changed
+
+    def _mqtt_reports_charger_state(self, connector_uuid: str) -> bool:
+        """Return True while MQTT is the live source of this connector's state."""
+        return bool(
+            self.mqtt_transport_connected
+            and self.measurement_freshness.is_fresh("charger_state", connector_uuid)
+        )
+
+    def _apply_rest_session_transitions(
+        self, previous: IntegrationData | None, data: IntegrationData
+    ) -> None:
+        """Let a REST poll start or end a session only while MQTT cannot.
+
+        With live MQTT charger state the poll keeps its historical behaviour, so
+        a delayed REST response can never start or end a session by itself.
+        """
+        if previous is None:
+            return
+        for uuid, conn in data.connectors.items():
+            prev = previous.connectors.get(uuid)
+            if prev is None or self._mqtt_reports_charger_state(uuid):
+                continue
+            was_active = self._is_session_active(prev)
+            if was_active != self._is_session_active(conn):
+                self._apply_session_transition(conn, was_active, uuid, snapshot=data)
+
     def _handle_session_tracking_transition(
-        self, conn: ConnectorState, was_active: bool, connector_uuid: str | None
+        self,
+        conn: ConnectorState,
+        was_active: bool,
+        connector_uuid: str | None,
+        *,
+        snapshot: IntegrationData | None = None,
     ) -> None:
         if not self._session_tracking_started:
             return
@@ -119,7 +173,7 @@ class SessionTrackingMixin(CoordinatorMixin):
         is_active = self._is_session_active(conn)
         if is_active:
             self._cancel_connector_final_session_refreshes(connector_uuid)
-            self._ensure_active_session_loop()
+            self._ensure_active_session_loop(snapshot)
 
             if not was_active:
                 self._schedule_session_refresh(
@@ -129,16 +183,16 @@ class SessionTrackingMixin(CoordinatorMixin):
             return
 
         if was_active or self._is_session_finished(conn):
-            if not self._active_session_connectors():
+            if not self._active_session_connectors(snapshot):
                 self._cancel_active_session_loop()
             self._schedule_final_session_refreshes(connector_uuid)
 
-    def _ensure_active_session_loop(self) -> None:
+    def _ensure_active_session_loop(self, snapshot: IntegrationData | None = None) -> None:
         """Start periodic session refresh while a charging session is active."""
         if self._shutting_down:
             return
 
-        interval = self._session_loop_interval()
+        interval = self._session_loop_interval(snapshot)
 
         if self._session_active_loop_unsub is not None:
             if self._session_active_loop_interval == interval:

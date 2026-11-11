@@ -6,15 +6,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.smappee_ev import async_remove_config_entry_device, async_unload_entry
+from custom_components.smappee_ev import (
+    async_remove_config_entry_device,
+    async_remove_entry,
+    async_unload_entry,
+)
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec, SmappeeLocationTopology
 from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
+    _MAINTENANCE_STATES,
     _create_dashboard_client,
     _dashboard_discover_service_locations,
     _dashboard_fetch_devices,
@@ -28,15 +33,13 @@ from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
     make_station_device_info,
 )
-from custom_components.smappee_ev.models.runtime_data import RuntimeData, RuntimeMode
+from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_clients
 from custom_components.smappee_ev.mqtt_specs import _group_mqtt_specs_by_credentials
 from custom_components.smappee_ev.runtime_assembly import _prepare_topology
 from custom_components.smappee_ev.runtime_devices import (
     _register_runtime_devices,
-    _remove_entry_device,
     _remove_legacy_led_controller_devices,
-    async_remove_stale_devices,
 )
 from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
 from custom_components.smappee_ev.site_preparation import _prepare_site
@@ -990,13 +993,7 @@ def test_create_dashboard_client_persists_refresh_token_updates():
     )
 
 
-@pytest.mark.parametrize("legacy_api", [False, True], ids=["modern", "legacy"])
-async def test_register_runtime_devices_creates_site_station_and_connector_devices(
-    hass, monkeypatch, legacy_api
-):
-    monkeypatch.setattr(
-        "custom_components.smappee_ev.runtime_devices._SUPPORTS_VIA_DEVICE_ID", not legacy_api
-    )
+async def test_register_runtime_devices_creates_site_station_and_connector_devices(hass):
     entry = MockConfigEntry(domain=DOMAIN)
     entry.add_to_hass(hass)
     station_client = MagicMock()
@@ -1036,34 +1033,12 @@ async def test_register_runtime_devices_creates_site_station_and_connector_devic
         },
     )
     registry = dr.async_get(hass)
-    if legacy_api:
-        create_device = registry.async_get_or_create
-
-        def legacy_get_or_create(*, config_entry_id, via_device=None, **metadata):
-            # Emulate the old API: reject the new keyword and resolve identifiers.
-            assert "via_device_id" not in metadata
-            if via_device is not None:
-                parent = registry.async_get_device_by_identifier(via_device, config_entry_id)
-                assert parent is not None
-                metadata["via_device_id"] = parent.id
-            return create_device(config_entry_id=config_entry_id, **metadata)
-
-        monkeypatch.setattr(registry, "async_get_or_create", legacy_get_or_create)
     legacy_led = registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "led:100:200:STATION-1:led-id")},
     )
     _register_runtime_devices(hass, entry)
     assert registry.async_get(legacy_led.id) is None
-
-    devices = list(dr.async_entries_for_config_entry(registry, entry.entry_id))
-    identifiers = [device.identifiers for device in devices]
-    flattened = {identifier for group in identifiers for _, identifier in group}
-    assert "site:100" in flattened
-    assert "station:100:200:STATION-1" in flattened
-    assert "100:LEGACY-SERIAL:station-uuid" in flattened
-    assert "led:100:200:STATION-1:led-id" not in flattened
-    assert "connector:100:200:STATION-1:conn-uuid" in flattened
 
     site = registry.async_get_device_by_identifier((DOMAIN, "site:100"), entry.entry_id)
     station = registry.async_get_device_by_identifier(
@@ -1075,6 +1050,7 @@ async def test_register_runtime_devices_creates_site_station_and_connector_devic
     assert site is not None
     assert station is not None
     assert connector is not None
+    assert (DOMAIN, "100:LEGACY-SERIAL:station-uuid") in station.identifiers
     assert station.via_device_id == site.id
     assert connector.via_device_id == station.id
 
@@ -1097,30 +1073,18 @@ async def test_register_runtime_devices_creates_site_station_and_connector_devic
     assert registry.async_get(connector.id).via_device_id == station.id
 
 
-@pytest.mark.parametrize("shared", [False, True], ids=["owned", "shared"])
-def test_remove_legacy_led_devices_preserves_other_config_entries(shared):
+def test_remove_legacy_led_devices_removes_only_led_devices():
     registry = MagicMock(spec=dr.DeviceRegistry)
     entry = SimpleNamespace(entry_id="smappee-entry")
-    config_entries = {entry.entry_id, "other-entry"} if shared else {entry.entry_id}
-    device = SimpleNamespace(
-        id="old-led",
-        identifiers={(DOMAIN, "led:100:200:STATION-1:led-id")},
-        config_entries=config_entries,
-    )
+    led = SimpleNamespace(id="old-led", identifiers={(DOMAIN, "led:100:200:STATION-1:led-id")})
+    station = SimpleNamespace(id="station", identifiers={(DOMAIN, "station:100:200:STATION-1")})
     with patch(
         "custom_components.smappee_ev.runtime_devices.dr.async_entries_for_config_entry",
-        return_value=[device],
+        return_value=[led, station],
     ):
         _remove_legacy_led_controller_devices(registry, entry)
 
-    if shared:
-        registry.async_remove_device.assert_not_called()
-        registry.async_update_device.assert_called_once_with(
-            device.id, remove_config_entry_id=entry.entry_id
-        )
-    else:
-        registry.async_remove_device.assert_called_once_with(device.id)
-        registry.async_update_device.assert_not_called()
+    registry.async_remove_device.assert_called_once_with("old-led")
 
 
 @pytest.mark.asyncio
@@ -1269,105 +1233,6 @@ def _stale_device_runtime(entry, *, connector_uuid="conn-uuid"):
     return runtime
 
 
-async def test_stale_devices_are_removed_after_complete_discovery(hass):
-    """Only devices absent from a complete discovery, without live entities, go."""
-    entry = MockConfigEntry(domain=DOMAIN)
-    entry.add_to_hass(hass)
-    _stale_device_runtime(entry)
-    devices = dr.async_get(hass)
-    entities = er.async_get(hass)
-
-    def device(identifier, domain=DOMAIN):
-        return devices.async_get_or_create(
-            config_entry_id=entry.entry_id, identifiers={(domain, identifier)}
-        )
-
-    stale_station = device("station:100:200:OLD-STATION")
-    stale_connector = device("connector:100:200:OLD-STATION:old-conn")
-    stale_site = device("site:999")
-    status = device(f"{entry.entry_id}:smappee_service_status")
-    foreign = device("something", domain="other")
-    restored_only = device("connector:100:200:STATION-1:removed-conn")
-    in_use = device("station:100:100:STATION-1")
-    restored_entity = entities.async_get_or_create(
-        "sensor", DOMAIN, "restored", config_entry=entry, device_id=restored_only.id
-    )
-    hass.states.async_set(restored_entity.entity_id, "unavailable", {"restored": True})
-    live_entity = entities.async_get_or_create(
-        "sensor", DOMAIN, "live", config_entry=entry, device_id=in_use.id
-    )
-    hass.states.async_set(live_entity.entity_id, "1")
-    entities.async_get_or_create(
-        "sensor", DOMAIN, "disabled", config_entry=entry, device_id=in_use.id
-    )
-
-    registered = _register_runtime_devices(hass, entry)
-    assert len(registered) == 3
-    async_remove_stale_devices(hass, entry, registered)
-
-    remaining = {
-        identifier
-        for item in dr.async_entries_for_config_entry(devices, entry.entry_id)
-        for _, identifier in item.identifiers
-    }
-    assert remaining == {
-        "site:100",
-        "station:100:200:STATION-1",
-        "100:STATION-1:station-uuid",
-        "connector:100:200:STATION-1:conn-uuid",
-        f"{entry.entry_id}:smappee_service_status",
-        "something",
-        "station:100:100:STATION-1",
-    }
-    for removed in (stale_station, stale_connector, stale_site, restored_only):
-        assert devices.async_get(removed.id) is None
-    assert devices.async_get(status.id) is not None
-    assert devices.async_get(foreign.id) is not None
-    assert entities.async_get(restored_entity.entity_id) is None
-    assert entities.async_get(live_entity.entity_id) is not None
-
-
-@pytest.mark.parametrize("case", ["mqtt_only", "nothing_registered"])
-async def test_stale_devices_are_kept_without_complete_discovery(hass, case):
-    """A cached topology or an empty registration proves nothing about absence."""
-    entry = MockConfigEntry(domain=DOMAIN)
-    entry.add_to_hass(hass)
-    runtime = _stale_device_runtime(entry)
-    devices = dr.async_get(hass)
-    old = devices.async_get_or_create(
-        config_entry_id=entry.entry_id, identifiers={(DOMAIN, "station:100:200:OLD-STATION")}
-    )
-    registered = _register_runtime_devices(hass, entry)
-    if case == "mqtt_only":
-        runtime.mode = RuntimeMode.MQTT_ONLY
-    else:
-        registered = set()
-
-    async_remove_stale_devices(hass, entry, registered)
-
-    assert devices.async_get(old.id) is not None
-
-
-async def test_stale_device_shared_with_another_entry_only_loses_this_entry(hass):
-    """Registries that still share devices keep the other entry's claim."""
-    entry = MockConfigEntry(domain=DOMAIN)
-    entry.add_to_hass(hass)
-    _stale_device_runtime(entry)
-    registry = MagicMock()
-    shared = MagicMock(spec=["id", "config_entries"], id="shared", config_entries={"a", "b"})
-    owned = MagicMock(spec=["id", "config_entries"], id="owned", config_entries={entry.entry_id})
-    foreign = MagicMock(spec=["id", "config_entry_id"], id="foreign", config_entry_id="other")
-
-    _remove_entry_device(registry, shared, entry)
-    _remove_entry_device(registry, owned, entry)
-    _remove_entry_device(registry, foreign, entry)
-
-    registry.async_update_device.assert_called_once_with(
-        "shared", remove_config_entry_id=entry.entry_id
-    )
-    registry.async_remove_device.assert_called_once_with("owned")
-
-
 async def test_async_remove_config_entry_device_keeps_every_current_device(hass):
     """Sites, connectors and the status device are as current as stations."""
     entry = MockConfigEntry(domain=DOMAIN)
@@ -1389,3 +1254,40 @@ async def test_async_remove_config_entry_device_keeps_every_current_device(hass)
     entry.runtime_data.sites[100].stations["station-uuid"].charging_station_serial = ""
     assert await allowed("site:100") is False
     assert await allowed(f"{entry.entry_id}:smappee_service_status") is True
+
+
+async def test_remove_entry_forgets_dashboard_maintenance_state(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    _create_dashboard_client(hass, entry, MagicMock())
+    assert entry.entry_id in hass.data[_MAINTENANCE_STATES]
+
+    await async_remove_entry(hass, entry)
+
+    assert entry.entry_id not in hass.data[_MAINTENANCE_STATES]
+
+
+async def test_cancelled_unload_does_not_cancel_runtime_shutdown(hass):
+    """The shutdown task is shared; only its own completion may end it."""
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_shutdown():
+        started.set()
+        await release.wait()
+
+    runtime = RuntimeData(api=MagicMock(), mqtt={}, sites={})
+    runtime.status_coordinator = MagicMock(async_shutdown=slow_shutdown)
+    entry = MagicMock(entry_id="entry", runtime_data=runtime)
+
+    with patch.object(hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)):
+        unload = asyncio.create_task(async_unload_entry(hass, entry))
+        await started.wait()
+        unload.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await unload
+
+    assert not runtime.shutdown_task.done()
+    release.set()
+    await runtime.shutdown_task
+    assert runtime.stopping is True

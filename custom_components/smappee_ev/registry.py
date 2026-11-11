@@ -14,13 +14,6 @@ from .models.runtime_data import SmappeeEvConfigEntry
 _LOGGER = logging.getLogger(__name__)
 
 
-def _device_owned_only_by_entry(device: dr.DeviceEntry, entry_id: str) -> bool:
-    """Use modern ownership without touching deprecated compatibility properties."""
-    if hasattr(device, "config_entry_id"):
-        return device.config_entry_id == entry_id
-    return device.config_entries == {entry_id}
-
-
 @callback
 def async_remove_config_entry_registry_entries(
     hass: HomeAssistant, entry: SmappeeEvConfigEntry
@@ -36,14 +29,7 @@ def async_remove_config_entry_registry_entries(
 
     device_count = 0
     for device_entry in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
-        if _device_owned_only_by_entry(device_entry, entry.entry_id):
-            device_registry.async_remove_device(device_entry.id)
-        elif not hasattr(device_entry, "config_entry_id"):
-            device_registry.async_update_device(
-                device_entry.id, remove_config_entry_id=entry.entry_id
-            )
-        else:
-            continue
+        device_registry.async_remove_device(device_entry.id)
         device_count += 1
 
     if entity_count or device_count:
@@ -72,9 +58,7 @@ def async_migrate_status_registry(hass: HomeAssistant, entry: SmappeeEvConfigEnt
     device_registry = dr.async_get(hass)
     old_identifier = (DOMAIN, "smappee_service_status")
     for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
-        if old_identifier in device.identifiers and _device_owned_only_by_entry(
-            device, entry.entry_id
-        ):
+        if old_identifier in device.identifiers:
             identifiers = set(device.identifiers) - {old_identifier}
             identifiers.add((DOMAIN, f"{entry.entry_id}:smappee_service_status"))
             device_registry.async_update_device(device.id, new_identifiers=identifiers)

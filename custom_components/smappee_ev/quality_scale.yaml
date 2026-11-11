@@ -78,7 +78,9 @@ rules:
   repair-issues:
     status: done
     comment: Authentication failures use the reauthentication flow and editable credentials use the reconfiguration flow. No other detected condition currently requires separate user intervention through a repair issue or repair flow.
-  stale-devices: done
+  stale-devices:
+    status: done
+    comment: Devices outside the current topology can be removed manually from the device page. They are never removed automatically, because the unofficial Dashboard API can return an incomplete topology.
 
   # Platinum.
   async-dependency: done

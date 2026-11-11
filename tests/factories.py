@@ -242,6 +242,7 @@ def make_runtime_for_connector(
     station_uuid = station_uuid if station_uuid is not None else f"station_{site_id}"
     connector_uuid = connector_client.smart_device_uuid
     coord = MagicMock()
+    coord.async_shutdown = AsyncMock()
     coord.data = IntegrationData(
         station=StationState(),
         connectors={

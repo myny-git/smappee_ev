@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from inspect import isawaitable
 import logging
 import time
-from typing import Any, cast
 
 from homeassistant.core import HomeAssistant
 
@@ -376,15 +374,12 @@ def _handle_mqtt_connection_change(
     for bucket in stations.values():
         coord = bucket.station_coordinator
         if coord:
-            if (
-                coord.update_interval is None
-                and getattr(coord, "monitoring_only", False) is not True
-            ):
+            if coord.update_interval is None and not coord.monitoring_only:
                 object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
             coord.apply_mqtt_connection_change(up)
             # HA can start the refresh eagerly; publish the transport state
             # before it captures the previous snapshot for the REST merge.
-            if not up and getattr(coord, "monitoring_only", False) is not True:
+            if not up and not coord.monitoring_only:
                 schedule_refresh(coord)
 
 
@@ -498,23 +493,14 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     refresh_tasks: dict[int, asyncio.Task] = {}
 
     def _schedule_refresh(coord: SmappeeStationCoordinator) -> None:
-        if getattr(coord, "_shutting_down", False):
+        if coord._shutting_down:
             return
         task_key = id(coord)
         existing = refresh_tasks.get(task_key)
         if existing is not None and not existing.done():
             return
 
-        refresh = getattr(coord, "async_request_refresh", None)
-        if not callable(refresh):
-            return
-
-        refresh_result = refresh()
-        if not isawaitable(refresh_result):
-            return
-
-        refresh_coro = cast(Coroutine[Any, Any, None], refresh_result)
-        task: asyncio.Task[None] = hass.async_create_task(refresh_coro)
+        task: asyncio.Task[None] = hass.async_create_task(coord.async_request_refresh())
         refresh_tasks[task_key] = task
         if background_tasks is not None:
             background_tasks.add(task)
@@ -567,7 +553,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
         coord = bucket.station_coordinator
         if coord is None:
             continue
-        if coord.update_interval is None and getattr(coord, "monitoring_only", False) is not True:
+        if coord.update_interval is None and not coord.monitoring_only:
             object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
     mqtt_runtime = _mqtt_runtime_value(mqtt_clients)
     if start_clients:
@@ -579,8 +565,7 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
 
 def _start_mqtt_clients(hass: HomeAssistant, value: MqttRuntimeValue) -> None:
     """Start prepared MQTT clients after topology commit."""
-    for mqtt in _iter_mqtt_clients(value):
-        mqtt_client = cast(SmappeeMqtt, mqtt)
+    for mqtt_client in _iter_mqtt_clients(value):
         diagnostics = getattr(mqtt_client, "_routing_diagnostics", None)
         if isinstance(diagnostics, MqttRoutingDiagnostics):
             diagnostics.started = True
@@ -600,9 +585,9 @@ def _mqtt_routing_diagnostics(value: MqttRuntimeValue) -> list[MqttRoutingDiagno
     return states
 
 
-def _iter_mqtt_clients(value: object) -> list[object]:
-    """Return MQTT clients from legacy single-client or grouped-client runtime values."""
-    if isinstance(value, list | tuple):
+def _iter_mqtt_clients(value: MqttRuntimeValue) -> list[SmappeeMqtt]:
+    """Return MQTT clients from single-client or grouped-client runtime values."""
+    if isinstance(value, list):
         return list(value)
     return [value] if value is not None else []
 

@@ -30,6 +30,7 @@ from .const import (
 )
 from .coordinators.status import SmappeeStatusCoordinator
 from .dashboard_discovery import (
+    _MAINTENANCE_STATES,
     _create_dashboard_client,
     _dashboard_client_configured,
     _load_dashboard_topologies,
@@ -52,11 +53,7 @@ from .mqtt_recovery import start_recovery
 from .mqtt_setup import _mqtt_routing_diagnostics, _start_mqtt_clients
 from .registry import async_migrate_status_registry
 from .runtime_assembly import _log_stored_runtime_shape, _prepare_site_topologies
-from .runtime_devices import (
-    _current_device_identifiers,
-    _register_runtime_devices,
-    async_remove_stale_devices,
-)
+from .runtime_devices import _current_device_identifiers, _register_runtime_devices
 from .runtime_lifecycle import (
     _async_shutdown_runtime_resources,
     _register_runtime_stop_cleanup,
@@ -193,10 +190,7 @@ def _start_runtime_background_work(
     for site in sites.values():
         for bucket in site.stations.values():
             coordinator = bucket.station_coordinator
-            if (
-                coordinator is not None
-                and getattr(coordinator, "monitoring_only", False) is not True
-            ):
+            if coordinator is not None and not coordinator.monitoring_only:
                 coordinator.async_start_session_tracking()
     for mqtt in mqtt_clients.values():
         _start_mqtt_clients(hass, mqtt)
@@ -249,11 +243,12 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
     entry.runtime_data = runtime
     _register_runtime_stop_cleanup(hass, entry, runtime)
     _log_stored_runtime_shape(runtime)
+    platforms_forwarded = False
     try:
-        registered_device_ids = _register_runtime_devices(hass, entry)
+        _register_runtime_devices(hass, entry)
         async_migrate_status_registry(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        async_remove_stale_devices(hass, entry, registered_device_ids)
+        platforms_forwarded = True
         _start_runtime_background_work(hass, runtime.sites, runtime.mqtt)
         status_task = hass.async_create_background_task(
             status_coordinator.async_refresh(), f"{entry.entry_id} Smappee service status"
@@ -265,7 +260,13 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         else:
             start_recovery(hass, entry, runtime, _async_prepare_runtime)
     except BaseException:
-        await _async_shutdown_runtime_resources(runtime)
+        try:
+            # Home Assistant does not unload forwarded platforms of a failed setup;
+            # their entities would keep referring to the stopped runtime.
+            if platforms_forwarded:
+                await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+        finally:
+            await _async_shutdown_runtime_resources(runtime)
         raise
     return True
 
@@ -398,6 +399,7 @@ def _bootstrap_error_priority(error: BaseException) -> int:
 
 async def async_remove_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> None:
     """Remove persisted MQTT credentials when the integration entry is deleted."""
+    hass.data.get(_MAINTENANCE_STATES, {}).pop(entry.entry_id, None)
     await bootstrap_store(hass, entry).async_remove()
 
 
@@ -417,7 +419,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         )
     else:
         if isinstance(rd, RuntimeData):
-            await ensure_runtime_shutdown(hass, rd)
+            # The task is shared with the stop listener: cancelling this unload
+            # must not cancel the shutdown itself.
+            await asyncio.shield(ensure_runtime_shutdown(hass, rd))
         else:
             _LOGGER.debug(  # type: ignore[unreachable]
                 "Unload requested for %s but runtime_data is invalid (may have failed early)",
@@ -432,7 +436,11 @@ async def async_remove_config_entry_device(
     entry: SmappeeEvConfigEntry,
     device_entry: dr.DeviceEntry,
 ) -> bool:
-    """Allow users to remove only devices that are no longer part of the topology."""
+    """Allow users to remove only devices that are no longer part of the topology.
+
+    Devices are never removed automatically: the unofficial Dashboard API can
+    return an incomplete topology, which does not prove that a device is gone.
+    """
     domain_identifiers = {
         identifier for domain, identifier in device_entry.identifiers if domain == DOMAIN
     }

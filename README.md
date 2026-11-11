@@ -5,8 +5,7 @@
 
 ## About
 
-Device registration supports both the newer Home Assistant registry API and the legacy API
-used before Home Assistant 2026.8.
+This integration requires Home Assistant 2026.10 or newer.
 
 This Home Assistant integration provides extended local control and monitoring for Smappee EV chargers, including charging modes, current limits, availability control, LED brightness, and status feedback. It is intended for users who want to integrate their Smappee EV charger more deeply into Home Assistant, EVCC, or other energy management setups. Depending on your device and configuration, energy-related data may also be available.
 
@@ -260,7 +259,7 @@ notice if prompted so installations and updates can continue.
 The installation button above also works with Marketplace. See the official
 [Marketplace migration guide](https://hacs.netlify.app/docs/marketplace/) for details.
 
-### Home Assistant 2026.10 and older: HACS
+### Home Assistant 2026.10: HACS
 
 1. In Home Assistant, go to **HACS** → **Integrations**.
 2. Search for `Smappee EV`.

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from inspect import isawaitable
 import logging
+from typing import Any
 
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry, SmappeeSiteRuntime
+from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry
 from .mqtt_setup import _iter_mqtt_clients
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,21 +25,16 @@ def _begin_runtime_shutdown(rd: RuntimeData) -> None:
     for remove in rd.cleanup_callbacks:
         remove()
     rd.cleanup_callbacks.clear()
-    for site in (rd.sites or {}).values():
-        cancel_freshness = getattr(site.site_coordinator, "cancel_freshness_timer", None)
-        if callable(cancel_freshness):
-            cancel_freshness()
+    for site in rd.sites.values():
+        if site.site_coordinator is not None:
+            site.site_coordinator.cancel_freshness_timer()
         for bucket in site.stations.values():
-            coord = bucket.station_coordinator
-            cancel_delayed = getattr(coord, "cancel_delayed_refreshes", None)
-            if callable(cancel_delayed):
-                cancel_delayed()
+            if bucket.station_coordinator is not None:
+                bucket.station_coordinator.cancel_delayed_refreshes()
 
-    for mqtt in (rd.mqtt or {}).values():
+    for mqtt in rd.mqtt.values():
         for mqtt_client in _iter_mqtt_clients(mqtt):
-            begin_shutdown = getattr(mqtt_client, "begin_shutdown", None)
-            if callable(begin_shutdown):
-                begin_shutdown()
+            mqtt_client.begin_shutdown()
 
 
 def _register_runtime_stop_cleanup(
@@ -60,19 +56,16 @@ def _register_runtime_stop_cleanup(
     entry.async_on_unload(remove_stop_listener)
 
 
-async def _shutdown_site_coordinator(site: SmappeeSiteRuntime) -> None:
-    """Shutdown a site coordinator if present."""
-    site_coord = site.site_coordinator
-    shutdown = getattr(site_coord, "async_shutdown", None)
-    if callable(shutdown):
-        try:
-            result = shutdown()
-            if isawaitable(result):
-                await result
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            _LOGGER.debug("Site coordinator shutdown issue: %s", exc)
+async def _async_shutdown_coordinator(
+    coordinator: DataUpdateCoordinator[Any] | None, label: str
+) -> None:
+    """Shut one coordinator down; a failure must not stop the remaining cleanup."""
+    if coordinator is None:
+        return
+    try:
+        await coordinator.async_shutdown()
+    except Exception:
+        _LOGGER.debug("%s coordinator shutdown failed", label, exc_info=True)
 
 
 async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
@@ -80,34 +73,16 @@ async def _async_shutdown_runtime_resources(rd: RuntimeData) -> None:
     # Mark coordinators as shutting down before stopping MQTT, because MQTT
     # disconnect callbacks can otherwise schedule fallback refreshes.
     _begin_runtime_shutdown(rd)
-    if rd.status_coordinator is not None:
-        await rd.status_coordinator.async_shutdown()
-    for site in (rd.sites or {}).values():
-        await _shutdown_site_coordinator(site)
+    await _async_shutdown_coordinator(rd.status_coordinator, "Status")
+    for site in rd.sites.values():
+        await _async_shutdown_coordinator(site.site_coordinator, "Site")
         for bucket in site.stations.values():
-            coord = bucket.station_coordinator
-            shutdown = getattr(coord, "async_shutdown", None)
-            if callable(shutdown):
-                try:
-                    result = shutdown()
-                    if isawaitable(result):
-                        await result
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:
-                    _LOGGER.debug("Coordinator shutdown issue: %s", exc)
+            await _async_shutdown_coordinator(bucket.station_coordinator, "Station")
 
-    for sid, mqtt in (rd.mqtt or {}).items():
+    for sid, mqtt in rd.mqtt.items():
         for mqtt_client in _iter_mqtt_clients(mqtt):
-            stop_fn = getattr(mqtt_client, "stop", None)
-            if not callable(stop_fn):  # pragma: no cover - defensive
-                continue
             try:
-                result = stop_fn()
-                if asyncio.iscoroutine(result):
-                    await result
-            except asyncio.CancelledError:
-                raise
+                await mqtt_client.stop()
             except Exception as err:
                 _LOGGER.warning("Failed to stop MQTT client for service location %s: %s", sid, err)
 
@@ -126,13 +101,6 @@ def ensure_runtime_shutdown(
     runtime: RuntimeData,
 ) -> asyncio.Task[None]:
     """Return the single shared shutdown task for a runtime."""
-    task = runtime.shutdown_task
-    if task is None:
-        shutdown_coro = _async_shutdown_runtime_resources(runtime)
-        created = hass.async_create_task(shutdown_coro)
-        if not isinstance(created, asyncio.Task):  # pragma: no cover - test doubles
-            shutdown_coro.close()  # type: ignore[unreachable]
-            created = asyncio.create_task(_async_shutdown_runtime_resources(runtime))
-        task = created
-        runtime.shutdown_task = task
-    return task
+    if runtime.shutdown_task is None:
+        runtime.shutdown_task = hass.async_create_task(_async_shutdown_runtime_resources(runtime))
+    return runtime.shutdown_task
