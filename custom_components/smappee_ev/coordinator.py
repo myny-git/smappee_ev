@@ -30,16 +30,18 @@ from .coordinators.freshness_coordinator import FreshnessCoordinator
 from .coordinators.mqtt_apply import MqttMixin
 from .coordinators.power import (
     PowerMixin,
-    _active_power_values,
-    _amps_from_ma,
+    _active_power_values,  # noqa: F401 - compatibility re-export
+    _amps_from_ma,  # noqa: F401 - compatibility re-export
     _empty_power_topic_map,
     _indexes_and_field_from_aspect_paths,
     _indexes_from_aspect_paths,
     _mqtt_channel_topic,
-    _pick,
-    _sum_kwh,
+    _pick,  # noqa: F401 - compatibility re-export
+    _power_aggregate_values,
+    _power_group_updates,
+    _sum_kwh,  # noqa: F401 - compatibility re-export
     _to_int as _power_to_int,
-    _volts_from_dv,
+    _volts_from_dv,  # noqa: F401 - compatibility re-export
 )
 from .coordinators.session_tracking import SessionTrackingMixin
 from .coordinators.storage import StorageMeasurements
@@ -200,51 +202,12 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
     ) -> bool:
         accepted = accepted if accepted is not None else set()
         changed = False
-        active = _active_power_values(payload, power_field)
-        currents_ma = payload.get("currentData") or []
-        voltage_dv = payload.get("phaseVoltageData") or []
-        imp_wh = payload.get("importActiveEnergyData") or []
-        exp_wh = payload.get("exportActiveEnergyData") or []
-        p_ph = _pick(active, power_idxs)
-        if p_ph:
-            accepted.add(f"{power_key_prefix}_power_total")
-            changed |= self._set_if_changed(site, f"{power_key_prefix}_power_phases", p_ph)
-            changed |= self._set_if_changed(site, f"{power_key_prefix}_power_total", sum(p_ph))
-        i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
-        if i_ph:
-            accepted.add(f"{power_key_prefix}_current_phases")
-            changed |= self._set_if_changed(site, f"{power_key_prefix}_current_phases", i_ph)
-        if power_key_prefix == "grid" and voltage_dv:
-            v_ph = _volts_from_dv(
-                _pick(voltage_dv, range(min(3, len(voltage_dv))))
-                if isinstance(voltage_dv, list)
-                else []
-            )
-            if v_ph:
-                accepted.add("grid_voltage_phases")
-                changed |= self._set_if_changed(site, "grid_voltage_phases", v_ph)
-        if energy_idxs:
-            if _pick(imp_wh, energy_idxs):
-                accepted.add(f"{power_key_prefix}_energy_import_kwh")
-            if power_key_prefix == "grid" and _pick(exp_wh, energy_idxs):
-                accepted.add("grid_energy_export_kwh")
-            if power_key_prefix == "grid":
-                changed |= self._set_if_changed(
-                    site,
-                    "grid_energy_import_kwh",
-                    _sum_kwh(imp_wh, energy_idxs),
-                )
-                changed |= self._set_if_changed(
-                    site,
-                    "grid_energy_export_kwh",
-                    _sum_kwh(exp_wh, energy_idxs),
-                )
-            else:
-                changed |= self._set_if_changed(
-                    site,
-                    "pv_energy_import_kwh",
-                    _sum_kwh(imp_wh, energy_idxs),
-                )
+        for field, updates in _power_group_updates(
+            payload, power_idxs, current_idxs, energy_idxs, power_key_prefix, power_field
+        ):
+            accepted.add(field)
+            for attr, value in updates.items():
+                changed |= self._set_if_changed(site, attr, value)
         return changed
 
     def _handle_power(
@@ -286,18 +249,9 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
             if _to_int(payload_location_id, -1) != self.site_location_id:
                 return changed
 
-        cp = payload.get("consumptionPower")
-        if isinstance(cp, int | float):
-            accepted.add("house_consumption_power")
-            changed |= self._set_if_changed(site, "house_consumption_power", int(cp))
-        sp = payload.get("solarPower")
-        if isinstance(sp, int | float):
-            accepted.add("pv_power_total")
-            changed |= self._set_if_changed(site, "pv_power_total", int(sp))
-        always_on = payload.get("alwaysOn")
-        if isinstance(always_on, int | float):
-            accepted.add("always_on_power")
-            changed |= self._set_if_changed(site, "always_on_power", int(always_on))
+        for field, value in _power_aggregate_values(payload):
+            accepted.add(field)
+            changed |= self._set_if_changed(site, field, int(value))
         return changed
 
     def apply_mqtt_connection_change(self, up: bool) -> None:

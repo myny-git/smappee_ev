@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 import logging
@@ -141,6 +141,63 @@ def _active_power_values(payload: MqttPayload, field: str | None = None) -> list
         if isinstance(values, list):
             return values
     return []
+
+
+def _power_group_updates(
+    payload: MqttPayload,
+    power_idxs: list[int],
+    current_idxs: list[int],
+    energy_idxs: list[int],
+    prefix: str,
+    power_field: str | None = None,
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Calculate grid/PV updates with their freshness field, without mutating state.
+
+    Yield in processing order so callers retain partial updates if a later
+    calculation fails. Connector energy has different rules and stays separate.
+    """
+    active = _active_power_values(payload, power_field)
+    currents_ma = payload.get("currentData") or []
+    voltage_dv = payload.get("phaseVoltageData") or []
+    imp_wh = payload.get("importActiveEnergyData") or []
+    exp_wh = payload.get("exportActiveEnergyData") or []
+
+    if phases := _pick(active, power_idxs):
+        yield (
+            f"{prefix}_power_total",
+            {
+                f"{prefix}_power_phases": phases,
+                f"{prefix}_power_total": sum(phases),
+            },
+        )
+    if currents := _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs)):
+        field = f"{prefix}_current_phases"
+        yield field, {field: currents}
+    if prefix == "grid" and isinstance(voltage_dv, list):
+        volts = _volts_from_dv(_pick(voltage_dv, range(min(3, len(voltage_dv)))))
+        if volts:
+            yield "grid_voltage_phases", {"grid_voltage_phases": volts}
+    if energy_idxs:
+        imported = _sum_kwh(imp_wh, energy_idxs)
+        if imported is not None:
+            field = "grid_energy_import_kwh" if prefix == "grid" else "pv_energy_import_kwh"
+            yield f"{prefix}_energy_import_kwh", {field: imported}
+        if prefix == "grid":
+            exported = _sum_kwh(exp_wh, energy_idxs)
+            if exported is not None:
+                yield "grid_energy_export_kwh", {"grid_energy_export_kwh": exported}
+
+
+def _power_aggregate_values(payload: MqttPayload) -> Iterator[tuple[str, int | float]]:
+    """Select scalar aggregates in precedence order; callers retain coercion/writes."""
+    for source, field in (
+        ("consumptionPower", "house_consumption_power"),
+        ("solarPower", "pv_power_total"),
+        ("alwaysOn", "always_on_power"),
+    ):
+        value = payload.get(source)
+        if isinstance(value, int | float):
+            yield field, value
 
 
 def _empty_power_topic_map() -> dict[str, Any]:
@@ -520,20 +577,9 @@ class PowerMixin(CoordinatorMixin):
                 result.connector(uuid) if result is not None else None,
             )
 
-        cp = payload.get("consumptionPower")
-        if isinstance(cp, int | float):
-            accepted.add("house_consumption_power")
-            changed |= self._set_if_changed(st, "house_consumption_power", int(cp))
-
-        sp = payload.get("solarPower")
-        if isinstance(sp, int | float):
-            accepted.add("pv_power_total")
-            changed |= self._set_if_changed(st, "pv_power_total", int(sp))
-
-        always_on = payload.get("alwaysOn")
-        if isinstance(always_on, int | float):
-            accepted.add("always_on_power")
-            changed |= self._set_if_changed(st, "always_on_power", int(always_on))
+        for field, value in _power_aggregate_values(payload):
+            accepted.add(field)
+            changed |= self._set_if_changed(st, field, int(value))
 
         return changed
 
@@ -553,56 +599,14 @@ class PowerMixin(CoordinatorMixin):
             power_key_prefix = str(energy_idxs)
             energy_idxs = current_idxs
             current_idxs = []
-        changed = False
-        active = _active_power_values(payload, power_field)
-        currents_ma = payload.get("currentData") or []
-        voltage_dv = payload.get("phaseVoltageData") or []
-        imp_wh = payload.get("importActiveEnergyData") or []
-        exp_wh = payload.get("exportActiveEnergyData") or []
-
-        p_ph = _pick(active, power_idxs)
-        if p_ph:
-            accepted.add(f"{power_key_prefix}_power_total")
-            changed |= self._set_if_changed(st, f"{power_key_prefix}_power_phases", p_ph)
-            changed |= self._set_if_changed(st, f"{power_key_prefix}_power_total", sum(p_ph))
-        i_ph = _amps_from_ma(_pick(currents_ma, current_idxs or power_idxs))
-        if i_ph:
-            accepted.add(f"{power_key_prefix}_current_phases")
-            changed |= self._set_if_changed(st, f"{power_key_prefix}_current_phases", i_ph)
-
-        if power_key_prefix == "grid":
-            v_ph = _volts_from_dv(
-                _pick(voltage_dv, range(min(3, len(voltage_dv))))
-                if isinstance(voltage_dv, list)
-                else []
-            )
-            if v_ph:
-                accepted.add("grid_voltage_phases")
-                changed |= self._set_if_changed(st, "grid_voltage_phases", v_ph)
-
         energy_idx_list = energy_idxs if isinstance(energy_idxs, list) else []
-        if energy_idx_list:
-            if _pick(imp_wh, energy_idx_list):
-                accepted.add(f"{power_key_prefix}_energy_import_kwh")
-            if power_key_prefix == "grid" and _pick(exp_wh, energy_idx_list):
-                accepted.add("grid_energy_export_kwh")
-            if power_key_prefix == "grid":
-                changed |= self._set_if_changed(
-                    st,
-                    "grid_energy_import_kwh",
-                    _sum_kwh(imp_wh, energy_idx_list),
-                )
-                changed |= self._set_if_changed(
-                    st,
-                    "grid_energy_export_kwh",
-                    _sum_kwh(exp_wh, energy_idx_list),
-                )
-            else:
-                changed |= self._set_if_changed(
-                    st,
-                    "pv_energy_import_kwh",
-                    _sum_kwh(imp_wh, energy_idx_list),
-                )
+        changed = False
+        for field, updates in _power_group_updates(
+            payload, power_idxs, current_idxs, energy_idx_list, power_key_prefix, power_field
+        ):
+            accepted.add(field)
+            for attr, value in updates.items():
+                changed |= self._set_if_changed(st, attr, value)
         return changed
 
     def _apply_connector_values(
