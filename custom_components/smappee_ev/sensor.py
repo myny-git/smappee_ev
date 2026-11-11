@@ -1067,6 +1067,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
         "started",
         "suspended",
         "stopped",
+        "smart",
     ]
 
     def __init__(

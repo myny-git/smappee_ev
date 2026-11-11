@@ -177,6 +177,8 @@ def test_connector_sensor_native_values(sensor_cls, expected):
         ("Started", "started"),
         ("Suspended", "suspended"),
         ("Stopped", "stopped"),
+        ("SMART", "smart"),
+        (" smart ", "smart"),
     ],
 )
 def test_charging_state_supports_documented_session_states(raw_session_state, expected):
@@ -193,6 +195,7 @@ def test_charging_state_supports_documented_session_states(raw_session_state, ex
 
     assert entity.native_value == expected
     assert entity.native_value in entity.options
+    assert entity.extra_state_attributes == {"raw_status": raw_session_state}
 
 
 def test_charging_state_default_connector_state_is_supported():
