@@ -7,3 +7,6 @@
 .agents/
 __pycache__/
 pytest-output.txt
+.coverage
+.coverage.*
+coverage.xml

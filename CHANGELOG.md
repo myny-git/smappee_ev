@@ -28,6 +28,17 @@ where the bug report, testing notes or design discussion can be found.
   handled through the REST poll: stale connector power is cleared, session
   refreshes follow the session, and the final session values are fetched. With
   live MQTT charger state the behaviour is unchanged.
+- The session energy sensor now marks the start of each session as a reset.
+  Long-term statistics no longer record the drop to zero at a new session as
+  negative consumption.
+
+### Entities and actions
+
+- Starting or pausing charging with the charging switch now reports a failure
+  as a translated error instead of a raw Smappee or connection error.
+- The support grid sensor is shown in whole amperes.
+- The `config_entry_id` field of every action offers a picker for Smappee EV
+  config entries.
 
 ### Stability
 
@@ -35,6 +46,8 @@ where the bug report, testing notes or design discussion can be found.
 - Cancelling an unload no longer cancels the shared runtime shutdown.
 - A failing status coordinator shutdown no longer skips the remaining cleanup.
 - The Dashboard maintenance state of a removed config entry is released.
+- An unexpected error in the MQTT connection loop now leads to a reconnect
+  with backoff. Previously MQTT stayed down until the integration was reloaded.
 
 ## [2026.11.0] - 2026-11-02
 

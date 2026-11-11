@@ -21,7 +21,7 @@ from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, SiteData
 from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
 from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
-from custom_components.smappee_ev.services import register_services
+from custom_components.smappee_ev.services import async_setup_services
 from tests.factories import (
     configure_loaded_entries,
     make_connector_client,
@@ -714,7 +714,7 @@ async def test_registered_service_call_reaches_connector_and_refreshes_coordinat
     configure_loaded_entries(hass, [entry])
     hass.services = _ServiceRegistry(hass)
 
-    await register_services(hass)
+    async_setup_services(hass)
     await hass.services.async_call(
         DOMAIN,
         "set_current",
@@ -750,7 +750,7 @@ async def test_registered_service_call_preserves_multi_site_validation():
     configure_loaded_entries(hass, entries)
     hass.services = _ServiceRegistry(hass)
 
-    await register_services(hass)
+    async_setup_services(hass)
     with pytest.raises(ServiceValidationError) as exc:
         await hass.services.async_call(DOMAIN, "start_charging", {"connector_id": 1})
 
@@ -832,7 +832,7 @@ async def test_service_call_survives_unload_reload_without_reregistering_service
     entry = make_loaded_config_entry("entry_a", first_runtime)
     configure_loaded_entries(hass, [entry])
 
-    await register_services(hass)
+    async_setup_services(hass)
     assert hass.services.has_service(DOMAIN, "set_current")
 
     await hass.services.async_call(

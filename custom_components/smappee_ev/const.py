@@ -46,15 +46,6 @@ CONF_SMART_DEVICE_ID: str = "smart_device_id"
 CONF_DASHBOARD_REFRESH_TOKEN: str = "dashboard_refresh_token"  # noqa: S105
 CONF_DASHBOARD_TOKEN_EXPIRES_AT: str = "dashboard_token_expires_at"  # noqa: S105
 
-# Service names.
-SERVICE_SET_CHARGING_MODE = "set_charging_mode"
-SERVICE_PAUSE_CHARGING = "pause_charging"
-SERVICE_STOP_CHARGING = "stop_charging"
-SERVICE_START_CHARGING = "start_charging"
-SERVICE_SET_AVAILABLE = "set_available"
-SERVICE_SET_UNAVAILABLE = "set_unavailable"
-SERVICE_RELOAD = "reload"
-
 # Base URLs.
 DASHAPI_URL = "https://dashboard.smappee.net/dashapi"
 DASHBOARD_API_URL = "https://dashboard.smappee.net/api"

@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 
 from custom_components.smappee_ev import switch
-from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
+from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError, SmappeeError
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
@@ -337,9 +337,12 @@ class TestSmappeeChargingSwitch:
 
         charging_switch.async_write_ha_state = MagicMock()
 
-        # Test turn on with error
-        with pytest.raises(ClientError):
+        # Test turn on with error: a translated HA error that keeps the cause
+        with pytest.raises(HomeAssistantError) as caught:
             await charging_switch.async_turn_on()
+        assert caught.value.translation_key == "connector_service_failed"
+        assert caught.value.translation_placeholders["method_name"] == "set_charging_mode"
+        assert isinstance(caught.value.__cause__, ClientError)
 
         # State should remain off, but write_ha_state should be called
         assert charging_switch._is_on is False
@@ -735,3 +738,34 @@ class TestSmappeeOfflineChargingSwitch:
 
         with pytest.raises(HomeAssistantError, match="custom error"):
             await offline_switch.async_turn_off()
+
+
+@pytest.mark.asyncio
+async def test_charging_switch_pause_failure_raises_translated_error():
+    """A Smappee error while pausing reaches the UI as a translated HA error."""
+    coordinator = MagicMock(spec=SmappeeCoordinator)
+    api_client = MagicMock()
+    api_client.pause_charging = AsyncMock(side_effect=SmappeeError("rejected"))
+    with patch(
+        "custom_components.smappee_ev.helpers.build_connector_label",
+        return_value="Connector 1",
+    ):
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
+    charging_switch._is_on = True
+    charging_switch.async_write_ha_state = MagicMock()
+
+    with pytest.raises(HomeAssistantError) as caught:
+        await charging_switch.async_turn_off()
+
+    assert caught.value.translation_key == "connector_service_failed"
+    assert caught.value.translation_placeholders == {
+        "method_name": "pause_charging",
+        "error": "rejected",
+    }
+    assert charging_switch._is_on is True

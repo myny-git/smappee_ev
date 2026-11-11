@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     HomeAssistantError,
@@ -590,7 +590,9 @@ SET_CURRENT_SCHEMA = vol.Schema(
 )
 
 
-async def register_services(hass: HomeAssistant) -> None:
+@callback
+def async_setup_services(hass: HomeAssistant) -> None:
+    """Register the integration actions once, independent of config entries."""
     _LOGGER.info("Registering Smappee EV services")
     hass.services.async_register(
         DOMAIN, "start_charging", handle_start_charging, START_CHARGING_SCHEMA

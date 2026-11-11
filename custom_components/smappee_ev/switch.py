@@ -30,6 +30,17 @@ PARALLEL_UPDATES = 1
 # station_serial no longer needed; provided by base entity
 
 
+def _charging_action_error(method_name: str, err: Exception) -> HomeAssistantError:
+    """Return a translated error for a failed charging action, keeping HA errors as-is."""
+    if isinstance(err, HomeAssistantError):
+        return err
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="connector_service_failed",
+        translation_placeholders={"method_name": method_name, "error": str(err)},
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
@@ -164,7 +175,10 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
                 "Failed to start charging on %s: %s", anonymize_uuid(self.connector_uuid), err
             )
             self.async_write_ha_state()
-            raise
+            error = _charging_action_error("set_charging_mode", err)
+            if error is err:
+                raise
+            raise error from err
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -196,7 +210,10 @@ class SmappeeChargingSwitch(SmappeeConnectorEntity, SwitchEntity, RestoreEntity)
                 "Failed to pause charging on %s: %s", anonymize_uuid(self.connector_uuid), err
             )
             self.async_write_ha_state()
-            raise
+            error = _charging_action_error("pause_charging", err)
+            if error is err:
+                raise
+            raise error from err
 
 
 # ====================================================================================

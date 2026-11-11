@@ -64,7 +64,7 @@ async def test_registered_service_requires_unambiguous_station(
     ]
     for client in clients:
         setattr(client, method, AsyncMock())
-    await services.register_services(hass)
+    services.async_setup_services(hass)
     data = {"service_location_id": 1, "connector_id": 1, **extra}
     with patch("custom_components.smappee_ev.services._iter_loaded_entries", return_value=[entry]):
         with pytest.raises(ServiceValidationError) as err:

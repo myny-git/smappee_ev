@@ -1,6 +1,8 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from homeassistant.components.sensor import SensorStateClass
 import pytest
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
@@ -17,6 +19,7 @@ from custom_components.smappee_ev.sensor import (
     SmappeeChargingStateSensor,
     SmappeeEVCCStateSensor,
     SmappeeEvseStatusSensor,
+    SmappeeSupportGridSensor,
     StationAlwaysOnPower,
     StationGridCurrentL1,
     StationGridCurrentL2,
@@ -328,3 +331,28 @@ def test_session_helpers_ignore_empty_missing_and_invalid_values():
     assert _nested_value({"outer": {}}, ("outer", "value")) is None
     assert _session_ts_to_datetime("not-a-timestamp") is None
     assert _session_ts_to_datetime(999_999_999_999_999_999_999) is None
+
+
+def test_session_energy_resets_statistics_at_each_session_start():
+    """Each session counts from zero again; last_reset marks where it began."""
+    coordinator = _coordinator(
+        recent_sessions=[{"smartDeviceId": "device-1", "energy": 1.5, "from": 1_700_000_000_000}]
+    )
+    entity = ConnectorSessionEnergySensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+
+    assert entity.state_class is SensorStateClass.TOTAL
+    assert entity.last_reset == datetime.fromtimestamp(1_700_000_000, tz=UTC)
+
+    coordinator.data.recent_sessions = [
+        {"smartDeviceId": "device-1", "energy": 0.1, "from": 1_700_100_000_000}
+    ]
+    assert entity.last_reset == datetime.fromtimestamp(1_700_100_000, tz=UTC)
+
+    coordinator.data.recent_sessions = []
+    assert entity.last_reset is None
+
+
+def test_support_grid_is_shown_in_whole_amperes():
+    entity = SmappeeSupportGridSensor(_coordinator(), _api(), 42, "station-uuid", "conn-1")
+
+    assert entity.suggested_display_precision == 0

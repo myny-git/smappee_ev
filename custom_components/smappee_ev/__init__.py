@@ -59,7 +59,7 @@ from .runtime_lifecycle import (
     _register_runtime_stop_cleanup,
     ensure_runtime_shutdown,
 )
-from .services import register_services
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 _SERVICE_REGISTRATION_SENTINEL = "start_charging"
@@ -75,7 +75,7 @@ PLATFORMS = [
     Platform.SWITCH,
 ]
 
-CONFIG_SCHEMA = cv.platform_only_config_schema(DOMAIN)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
@@ -177,7 +177,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Smappee EV component."""
     # Register services once domain-wide (multi-entry safe)
     if not hass.services.has_service(DOMAIN, _SERVICE_REGISTRATION_SENTINEL):
-        await register_services(hass)
+        async_setup_services(hass)
     return True
 
 

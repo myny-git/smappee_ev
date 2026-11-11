@@ -1,6 +1,9 @@
 {
   "domain": "smappee_ev",
   "name": "Smappee EV",
+  "categories": [
+    "energy.ev_charging"
+  ],
   "codeowners": [
     "@myny-git"
   ],

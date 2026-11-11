@@ -659,6 +659,8 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    # Smappee configures grid support in whole amperes.
+    _attr_suggested_display_precision = 0
     _attr_translation_key = "support_grid"
 
     def __init__(
@@ -1404,6 +1406,16 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         with suppress(TypeError, ValueError):
             return round(float(energy_kwh), 2)
         return None
+
+    @property
+    @override
+    def last_reset(self) -> datetime | None:
+        """Start of the reported session: every session counts again from zero.
+
+        Without it, long-term statistics read the drop to zero at a new session
+        as negative consumption.
+        """
+        return _session_ts_to_datetime(self._active_session_data.get("from"))
 
     @property
     @override

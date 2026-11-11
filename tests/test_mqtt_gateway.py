@@ -674,3 +674,46 @@ async def test_reconnect_backoff_grows_is_capped_and_resets_after_all_subscripti
         assert all(len(client.subscriptions) == 2 for client in attempts[:-1])
     assert gw._client is None
     assert gw._track_task is None
+
+
+@pytest.mark.asyncio
+async def test_runner_reconnects_after_unexpected_error(monkeypatch, caplog):
+    """An unexpected exception must lead to a reconnect, not a dead MQTT runner."""
+    events: list[bool] = []
+    gw = SmappeeMqtt(
+        service_location_uuid="u",
+        client_id="c",
+        serial_number="s",
+        on_properties=MagicMock(),
+        service_location_id=1,
+        on_connection_change=events.append,
+    )
+    connects = 0
+    backoffs: list[float] = []
+
+    def client_factory(*_args, **_kwargs):
+        nonlocal connects
+        connects += 1
+        if connects == 1:
+            raise RuntimeError("unexpected bug")
+        gw._stop.set()
+        raise MqttError("stop after reconnect attempt")
+
+    async def record_backoff(awaitable, **kwargs):
+        close = getattr(awaitable, "close", None)
+        if callable(close):
+            close()
+        backoffs.append(kwargs["timeout"])
+
+    monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", client_factory)
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.api.mqtt_gateway.asyncio.wait_for", record_backoff
+    )
+
+    with caplog.at_level("WARNING", logger="custom_components.smappee_ev.api.mqtt_gateway"):
+        await gw._runner_main(MagicMock())
+
+    assert connects == 2
+    assert backoffs[1] == backoffs[0] * 2
+    assert "MQTT runner failed unexpectedly" in caplog.text
+    assert events[0] is False

@@ -732,7 +732,7 @@ class TestDomainSetup:
     async def test_async_setup(self, hass):
         """Test async_setup function."""
         # Mock services registration
-        with patch("custom_components.smappee_ev.register_services") as mock_register_services:
+        with patch("custom_components.smappee_ev.async_setup_services") as mock_register_services:
             mock_register_services.return_value = None
 
             # Initial call should register services

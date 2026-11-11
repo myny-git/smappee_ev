@@ -220,6 +220,15 @@ class SmappeeMqtt:
             if task is not None and not task.done():
                 task.cancel()
 
+    def _log_runner_failure(self, err: Exception, backoff: float) -> None:
+        """Log a lost connection, or an unexpected runner error with its traceback."""
+        if isinstance(err, MqttError | OSError | TimeoutError):
+            self._log_mqtt_connection_transition(False, err, backoff)
+            return
+        _LOGGER.warning(
+            "MQTT runner failed unexpectedly; reconnecting in %.0f s", backoff, exc_info=err
+        )
+
     async def _runner_main(self, ssl_ctx: ssl.SSLContext) -> None:
         """Maintain connection with auto-reconnect."""
         backoff = MQTT_RECONNECT_INITIAL_BACKOFF
@@ -305,8 +314,9 @@ class SmappeeMqtt:
 
                 except asyncio.CancelledError:
                     break
-                except (MqttError, OSError, TimeoutError) as err:
-                    self._log_mqtt_connection_transition(False, err, backoff)
+                except Exception as err:
+                    # Any error reconnects; an unexpected one must not end MQTT until a reload.
+                    self._log_runner_failure(err, backoff)
                     self._notify_conn(False)
 
                     if self._track_task:

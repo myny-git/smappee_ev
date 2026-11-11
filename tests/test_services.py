@@ -1034,10 +1034,9 @@ class TestServiceHandlers:
 class TestServiceRegistration:
     """Test cases for service registration."""
 
-    @pytest.mark.asyncio
-    async def test_register_services(self, mock_hass):
+    def test_register_services(self, mock_hass):
         """Test service registration."""
-        await services.register_services(mock_hass)
+        services.async_setup_services(mock_hass)
 
         # Check that all services were registered
         assert mock_hass.services.async_register.call_count == 6

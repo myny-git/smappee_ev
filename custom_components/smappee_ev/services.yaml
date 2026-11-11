@@ -5,6 +5,9 @@ set_current:
       description: "Optional: Specific config entry id to target (when multiple entries)."
       required: false
       example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: smappee_ev
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -42,6 +45,9 @@ set_charging_mode:
       description: "Optional: Specific config entry id to target (when multiple entries)."
       required: false
       example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: smappee_ev
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -78,6 +84,9 @@ pause_charging:
       description: "Optional: Specific config entry id to target (when multiple entries)."
       required: false
       example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: smappee_ev
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -105,6 +114,9 @@ stop_charging:
       description: "Optional: Specific config entry id to target (when multiple entries)."
       required: false
       example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: smappee_ev
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -132,6 +144,9 @@ resume_charging:
       description: "Optional: Specific config entry id to target (when multiple entries)."
       required: false
       example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: smappee_ev
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
@@ -159,6 +174,9 @@ start_charging:
       description: "Optional: Specific config entry id to target (when multiple entries)."
       required: false
       example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: smappee_ev
     service_location_id:
       description: "Optional: Service Location ID."
       required: false
