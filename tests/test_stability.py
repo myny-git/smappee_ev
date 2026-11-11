@@ -142,7 +142,7 @@ async def test_power_mapping_transient_failure_retries_only_after_backoff(hass):
     assert dashboard.async_get_highlevel_configuration.await_count == 2
 
 
-def test_mqtt_freshness_separates_heartbeat_charger_power_and_clients():
+def test_mqtt_freshness_separates_transport_and_heartbeat():
     freshness = MqttFreshnessState(clients_connected={0: False, 1: False})
     assert freshness.mqtt_transport_connected is False
     assert freshness.record_connection(0, True) is False
@@ -151,19 +151,16 @@ def test_mqtt_freshness_separates_heartbeat_charger_power_and_clients():
     assert freshness.mqtt_transport_connected is True
     assert freshness.record_connection(1, True) is False
 
-    freshness.record_message("servicelocation/x/homeassistant/heartbeat")
-    assert freshness.last_heartbeat_rx is not None
-    assert freshness.last_valid_charger_telemetry_rx is None
-    assert freshness.last_real_power_rx is None
+    heartbeat = datetime(2026, 11, 11, tzinfo=UTC)
+    freshness.record_message("servicelocation/x/homeassistant/heartbeat", now=heartbeat)
+    assert freshness.last_heartbeat_rx == heartbeat
 
     freshness.record_message(
-        "servicelocation/x/etc/carcharger/acchargingcontroller/v1/devices/y/state"
+        "servicelocation/x/etc/carcharger/acchargingcontroller/v1/devices/y/state",
+        now=heartbeat + timedelta(minutes=1),
     )
-    assert freshness.last_valid_charger_telemetry_rx is not None
-    assert freshness.last_real_power_rx is None
-
-    freshness.record_message("servicelocation/x/power")
-    assert freshness.last_real_power_rx is not None
+    freshness.record_message("servicelocation/x/power", now=heartbeat + timedelta(minutes=2))
+    assert freshness.last_heartbeat_rx == heartbeat
     freshness.record_connection(0, False)
     assert freshness.mqtt_transport_connected is False
 

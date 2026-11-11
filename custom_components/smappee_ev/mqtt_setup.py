@@ -40,13 +40,9 @@ _POWER_MEASUREMENT_FIELDS = frozenset(
 
 @dataclass
 class MqttFreshnessState:
-    """Keep transport state separate from meaningful Smappee payload freshness."""
+    """Own shared transport/heartbeat state; coordinators own accepted telemetry."""
 
     clients_connected: dict[int, bool] = field(default_factory=dict)
-    # Last valid charger MQTT telemetry, including energy/current-only messages.
-    last_valid_charger_telemetry_rx: datetime | None = None
-    last_real_power_rx: datetime | None = None
-    last_real_site_power_rx: datetime | None = None
     last_heartbeat_rx: datetime | None = None
 
     @property
@@ -60,30 +56,10 @@ class MqttFreshnessState:
         self.clients_connected[client_index] = up
         return previous != self.mqtt_transport_connected
 
-    def record_message(
-        self,
-        topic: str,
-        *,
-        real_charger: bool | None = None,
-        real_power: bool | None = None,
-        site_power: bool = False,
-        now: datetime | None = None,
-    ) -> None:
-        """Record heartbeat, charger, and power traffic independently."""
-        now = now if now is not None else datetime.now(UTC)
+    def record_message(self, topic: str, *, now: datetime | None = None) -> None:
+        """Record only heartbeats; a routed target records its own telemetry clocks."""
         if topic.endswith(MQTT_HEARTBEAT_TOPIC_SUFFIX):
-            self.last_heartbeat_rx = now
-            return
-        if real_power is None:
-            real_power = topic.endswith("/power")
-        if real_charger is None:
-            real_charger = "/etc/carcharger/" in topic or "/etc/chargingstation/" in topic
-        if real_power:
-            self.last_real_power_rx = now
-        if site_power:
-            self.last_real_site_power_rx = now
-        if real_charger:
-            self.last_valid_charger_telemetry_rx = now
+            self.last_heartbeat_rx = now if now is not None else datetime.now(UTC)
 
 
 def _diagnostic_targets(
@@ -421,6 +397,8 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     )
 
     def _sync_freshness() -> None:
+        # Payloads change neither transport connectivity nor the heartbeat time.
+        # Synchronize these compatibility attributes only at their source events.
         if site_coordinator is not None:
             site_coordinator.mqtt_transport_connected = freshness.mqtt_transport_connected
             site_coordinator.last_heartbeat_rx = freshness.last_heartbeat_rx
@@ -472,13 +450,6 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                     # Any accepted charger measurement proves MQTT telemetry is
                     # live; individual fields retain their own freshness clocks.
                     valid_charger = coord is not site_coordinator and bool(all_fields)
-                    freshness.record_message(
-                        topic,
-                        real_power=valid_power,
-                        site_power=coord is site_coordinator and valid_power,
-                        real_charger=valid_charger,
-                        now=now_utc,
-                    )
                     if coord is site_coordinator and valid_power:
                         coord.last_real_power_rx = now_utc
                     elif coord is not site_coordinator:
@@ -490,7 +461,6 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
                             for uuid, accepted_fields in result.connector_fields.items():
                                 if accepted_fields:
                                     coord.last_connector_rx[uuid] = now_utc
-                    _sync_freshness()
                 except Exception:
                     routing_diagnostics.delivery_failures += 1
                     _LOGGER.exception(
