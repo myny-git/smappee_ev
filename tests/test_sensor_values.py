@@ -1,12 +1,14 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components.sensor import SensorStateClass
+from homeassistant.components.sensor import SensorExtraStoredData, SensorStateClass
+from homeassistant.core import State
 import pytest
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
+from custom_components.smappee_ev.entity import SmappeeConnectorEntity
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import (
     ConnCurrentL1,
@@ -397,3 +399,69 @@ def test_session_energy_ignores_late_answers_with_older_session_data():
         0.1,
         datetime.fromtimestamp(1_700_200_000, tz=UTC),
     )
+
+
+def test_session_energy_picks_the_newest_session_whatever_the_api_order():
+    previous = {"smartDeviceId": "device-1", "energy": 12.0, "from": 1_700_000_000_000}
+    current = {"smartDeviceId": "device-1", "energy": 0.4, "from": 1_700_100_000_000}
+    coordinator = _coordinator(recent_sessions=[previous, current])
+    entity = ConnectorSessionEnergySensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+
+    assert (entity.native_value, entity.last_reset) == (
+        0.4,
+        datetime.fromtimestamp(1_700_100_000, tz=UTC),
+    )
+
+
+def test_session_energy_single_connector_fallback_picks_the_newest_session():
+    coordinator = _coordinator(
+        recent_sessions=[
+            {"energy": 12.0, "from": 1_700_000_000},
+            {"energy": 0.4, "from": 1_700_100_000},
+        ]
+    )
+    entity = ConnectorSessionEnergySensor(coordinator, _api(), 42, "station-uuid", "different")
+
+    assert entity.native_value == 0.4
+
+
+@pytest.mark.asyncio
+async def test_session_energy_does_not_step_back_after_a_restart():
+    """The last reported session survives a restart through the restored state."""
+    previous = {"smartDeviceId": "device-1", "energy": 12.0, "from": 1_700_000_000_000}
+    coordinator = _coordinator(recent_sessions=[previous])
+    entity = ConnectorSessionEnergySensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+    current_reset = datetime.fromtimestamp(1_700_100_000, tz=UTC)
+    entity.async_get_last_sensor_data = AsyncMock(
+        return_value=SensorExtraStoredData(native_value=0.4, native_unit_of_measurement="kWh")
+    )
+    entity.async_get_last_state = AsyncMock(
+        return_value=State("sensor.session", "0.4", {"last_reset": current_reset.isoformat()})
+    )
+
+    with patch.object(SmappeeConnectorEntity, "async_added_to_hass", AsyncMock()):
+        await entity.async_added_to_hass()
+
+    # The first answer after the restart still lists only the previous session.
+    assert (entity.native_value, entity.last_reset) == (0.4, current_reset)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored", "attributes"),
+    [(None, {}), (SensorExtraStoredData(1.0, "kWh"), {}), (None, {"last_reset": "x"})],
+)
+async def test_session_energy_without_complete_restored_state_follows_the_api(stored, attributes):
+    previous = {"smartDeviceId": "device-1", "energy": 12.0, "from": 1_700_000_000_000}
+    entity = ConnectorSessionEnergySensor(
+        _coordinator(recent_sessions=[previous]), _api(), 42, "station-uuid", "conn-1"
+    )
+    entity.async_get_last_sensor_data = AsyncMock(return_value=stored)
+    entity.async_get_last_state = AsyncMock(
+        return_value=State("sensor.session", "1.0", attributes) if attributes else None
+    )
+
+    with patch.object(SmappeeConnectorEntity, "async_added_to_hass", AsyncMock()):
+        await entity.async_added_to_hass()
+
+    assert entity.native_value == 12.0

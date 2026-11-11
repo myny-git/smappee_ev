@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, override
 
 from homeassistant.components.sensor import (
+    ATTR_LAST_RESET,
     RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
@@ -1279,7 +1280,17 @@ def _nested_value(data: dict[str, Any], *paths: tuple[str, ...]) -> object:
     return None
 
 
-class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
+def _newest_session(sessions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return the session that started last; the API order decides only ties."""
+
+    def started(session: dict[str, Any]) -> float:
+        start = _session_ts_to_datetime(session.get("from"))
+        return start.timestamp() if start is not None else float("-inf")
+
+    return max(sessions, key=started)
+
+
+class ConnectorSessionEnergySensor(SmappeeConnectorEntity, RestoreSensor):
     """Energy reported for the current or most recent cloud charging session."""
 
     _unrecorded_attributes = frozenset({"session_queried_at"})
@@ -1302,6 +1313,19 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         )
         self.api_client = api
         self._reported_session: tuple[dict[str, Any], bool] | None = None
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Resume from the last reported session, so a restart cannot step back."""
+        await super().async_added_to_hass()
+        last_data = await self.async_get_last_sensor_data()
+        last_state = await self.async_get_last_state()
+        energy = _coerce_float(last_data.native_value) if last_data else None
+        raw_reset = last_state.attributes.get(ATTR_LAST_RESET) if last_state else None
+        last_reset = dt_util.parse_datetime(raw_reset) if isinstance(raw_reset, str) else None
+        if energy is not None and last_reset is not None and self._reported_session is None:
+            restored = {"energy": energy, "from": int(last_reset.timestamp() * 1000)}
+            self._reported_session = (restored, False)
 
     @override
     async def async_update(self) -> None:
@@ -1382,16 +1406,13 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
         sessions: object = self.coordinator.data.recent_sessions
         if not isinstance(sessions, list):
             return {}, False
-        for session in sessions:
-            if isinstance(session, dict) and self._session_matches_connector(session):
-                return session, True
-        if (
-            len(self.coordinator.connector_clients) == 1
-            and sessions
-            and isinstance(sessions[0], dict)
-            and "energy" in sessions[0]
-        ):
-            return sessions[0], False
+        sessions = [session for session in sessions if isinstance(session, dict)]
+        matched = [session for session in sessions if self._session_matches_connector(session)]
+        if matched:
+            return _newest_session(matched), True
+        with_energy = [session for session in sessions if "energy" in session]
+        if len(self.coordinator.connector_clients) == 1 and with_energy:
+            return _newest_session(with_energy), False
         return {}, False
 
     def _session_to_report(self) -> tuple[dict[str, Any], bool]:

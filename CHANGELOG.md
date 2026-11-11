@@ -32,7 +32,9 @@ where the bug report, testing notes or design discussion can be found.
   Long-term statistics no longer record the drop to zero at a new session as
   negative consumption. A late Dashboard answer that still lists the previous
   session, or an older energy value of the current one, is ignored, so it
-  cannot be counted twice.
+  cannot be counted twice. This also holds right after a restart. When the
+  Dashboard lists several sessions, the one that started last is reported,
+  whatever order the Dashboard uses.
 
 ### Entities and actions
 
