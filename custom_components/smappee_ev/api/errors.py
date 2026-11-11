@@ -35,6 +35,14 @@ class SmappeeNotFoundError(SmappeeProtocolError):
     """The requested Dashboard resource does not exist or is not visible."""
 
 
+class SmappeeAuthorizationError(SmappeeTransientError):
+    """Dashboard denied a request although authentication had just succeeded.
+
+    This is deliberately not an authentication failure: only a rejected
+    username/password login proves that the stored credentials are wrong.
+    """
+
+
 class SmappeeRateLimitError(SmappeeTransientError):
     """Dashboard rate limit, including the minimum delay before another request."""
 

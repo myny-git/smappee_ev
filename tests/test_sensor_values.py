@@ -119,10 +119,12 @@ def test_station_phase_total_sensors_include_phase_attributes():
     grid = StationGridCurrents(coordinator, _api(), 42, "station-uuid")
     pv = StationPvCurrents(coordinator, _api(), 42, "station-uuid")
 
-    assert grid._attr_name == "Grid current (L1-L3)"
+    assert grid.translation_key == "grid_currents"
+    assert not hasattr(grid, "_attr_name")
     assert grid.native_value == 6.667
     assert grid.extra_state_attributes == {"L1": 1.1111, "L2": 2.2222, "L3": 3.3333}
-    assert pv._attr_name == "PV current (L1-L3)"
+    assert pv.translation_key == "pv_currents"
+    assert not hasattr(pv, "_attr_name")
     assert pv.native_value == 16.666
     assert pv.extra_state_attributes == {"L1": 4.4444, "L2": 5.5555, "L3": 6.6666}
 

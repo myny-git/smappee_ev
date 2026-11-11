@@ -12,7 +12,7 @@ from .coordinators.freshness import MeasurementFreshness
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
 if TYPE_CHECKING:
-    from homeassistant.helpers.entity import DeviceInfo
+    from homeassistant.helpers.device_registry import DeviceInfo
 
     from .api.device_handle import SmappeeDeviceHandle
     from .models.state import ConnectorState

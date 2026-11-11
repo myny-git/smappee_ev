@@ -732,7 +732,6 @@ class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
             sid,
             unique_suffix="sensor:grid_currents",
         )
-        self._attr_name = "Grid current (L1-L3)"
 
     @property
     @override
@@ -774,7 +773,6 @@ class StationPvCurrents(SmappeeSitePowerEntity, SensorEntity):
             sid,
             unique_suffix="sensor:pv_currents",
         )
-        self._attr_name = "PV current (L1-L3)"
 
     @property
     @override

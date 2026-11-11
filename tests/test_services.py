@@ -1,9 +1,13 @@
 # tests/test_services.py
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import ServiceCall
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 import pytest
 import voluptuous as vol
 
@@ -1085,3 +1089,45 @@ class TestServiceSchemas:
         # Schema should not raise exception
         result = services.PAUSE_STOP_SCHEMA(data)
         assert result["connector_id"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", ["station", "connector"])
+async def test_service_auth_failure_starts_reauth_and_raises_translated_error(
+    mock_hass_with_entries, mock_config_entry, mock_api_client, scope
+):
+    """An auth failure in an action starts reauth for the entry owning the client."""
+    other_entry = make_loaded_config_entry("other_entry", make_runtime_data(sites={}, mqtt={}))
+    mock_hass_with_entries.config_entries.async_entries.return_value = [
+        mock_config_entry,
+        other_entry,
+    ]
+    mock_api_client.pause_charging = AsyncMock(side_effect=ConfigEntryAuthFailed("rejected"))
+    call = ServiceCall(mock_hass_with_entries, "smappee_ev", "pause_charging", {})
+    handler = (
+        services.async_handle_station_service
+        if scope == "station"
+        else services.async_handle_connector_service
+    )
+
+    with pytest.raises(HomeAssistantError) as caught:
+        await handler(mock_hass_with_entries, call, "pause_charging")
+
+    assert not isinstance(caught.value, ConfigEntryAuthFailed)
+    assert caught.value.translation_key == "reauth_required"
+    assert isinstance(caught.value.__cause__, ConfigEntryAuthFailed)
+    mock_config_entry.async_start_reauth_if_available.assert_called_once_with(
+        mock_hass_with_entries
+    )
+    other_entry.async_start_reauth_if_available.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_service_auth_failure_without_owning_entry_still_raises_translated_error(mock_hass):
+    client = make_connector_client(serial="ORPHAN")
+    client.pause_charging = AsyncMock(side_effect=ConfigEntryAuthFailed("rejected"))
+
+    with pytest.raises(HomeAssistantError) as caught:
+        await services._async_call_connector_client(mock_hass, client, "pause_charging")
+
+    assert caught.value.translation_key == "reauth_required"

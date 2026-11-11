@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -28,13 +28,15 @@ from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
     make_station_device_info,
 )
-from custom_components.smappee_ev.models.runtime_data import RuntimeData
+from custom_components.smappee_ev.models.runtime_data import RuntimeData, RuntimeMode
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_clients
 from custom_components.smappee_ev.mqtt_specs import _group_mqtt_specs_by_credentials
 from custom_components.smappee_ev.runtime_assembly import _prepare_topology
 from custom_components.smappee_ev.runtime_devices import (
     _register_runtime_devices,
+    _remove_entry_device,
     _remove_legacy_led_controller_devices,
+    async_remove_stale_devices,
 )
 from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
 from custom_components.smappee_ev.site_preparation import _prepare_site
@@ -1229,3 +1231,161 @@ async def test_async_remove_config_entry_device_allows_only_stale_station_device
     assert await async_remove_config_entry_device(hass, entry, foreign_device) is True
     assert await async_remove_config_entry_device(hass, entry, current_device) is False
     assert await async_remove_config_entry_device(hass, entry, stale_device) is True
+
+
+def _stale_device_runtime(entry, *, connector_uuid="conn-uuid"):
+    connector_client = MagicMock()
+    connector_client.connector_number = 2
+    runtime = RuntimeData(
+        api=MagicMock(),
+        mqtt={},
+        sites={
+            100: make_site_runtime(
+                site_location_id=100,
+                stations={
+                    "station-uuid": make_station_runtime(
+                        site_location_id=100,
+                        control_location_id=200,
+                        station_uuid="station-uuid",
+                        serial="STATION-1",
+                        station_client=MagicMock(serial_id="STATION-1"),
+                        connectors={
+                            connector_uuid: make_connector_runtime(
+                                connector_key=connector_uuid,
+                                connector_uuid=connector_uuid,
+                                connector_position=2,
+                                connector_client=connector_client,
+                            )
+                        },
+                    )
+                },
+            )
+        },
+    )
+    runtime.status_coordinator = MagicMock(
+        unique_id_prefix=f"{entry.entry_id}:smappee_service_status"
+    )
+    entry.runtime_data = runtime
+    return runtime
+
+
+async def test_stale_devices_are_removed_after_complete_discovery(hass):
+    """Only devices absent from a complete discovery, without live entities, go."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    _stale_device_runtime(entry)
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+
+    def device(identifier, domain=DOMAIN):
+        return devices.async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(domain, identifier)}
+        )
+
+    stale_station = device("station:100:200:OLD-STATION")
+    stale_connector = device("connector:100:200:OLD-STATION:old-conn")
+    stale_site = device("site:999")
+    status = device(f"{entry.entry_id}:smappee_service_status")
+    foreign = device("something", domain="other")
+    restored_only = device("connector:100:200:STATION-1:removed-conn")
+    in_use = device("station:100:100:STATION-1")
+    restored_entity = entities.async_get_or_create(
+        "sensor", DOMAIN, "restored", config_entry=entry, device_id=restored_only.id
+    )
+    hass.states.async_set(restored_entity.entity_id, "unavailable", {"restored": True})
+    live_entity = entities.async_get_or_create(
+        "sensor", DOMAIN, "live", config_entry=entry, device_id=in_use.id
+    )
+    hass.states.async_set(live_entity.entity_id, "1")
+    entities.async_get_or_create(
+        "sensor", DOMAIN, "disabled", config_entry=entry, device_id=in_use.id
+    )
+
+    registered = _register_runtime_devices(hass, entry)
+    assert len(registered) == 3
+    async_remove_stale_devices(hass, entry, registered)
+
+    remaining = {
+        identifier
+        for item in dr.async_entries_for_config_entry(devices, entry.entry_id)
+        for _, identifier in item.identifiers
+    }
+    assert remaining == {
+        "site:100",
+        "station:100:200:STATION-1",
+        "100:STATION-1:station-uuid",
+        "connector:100:200:STATION-1:conn-uuid",
+        f"{entry.entry_id}:smappee_service_status",
+        "something",
+        "station:100:100:STATION-1",
+    }
+    for removed in (stale_station, stale_connector, stale_site, restored_only):
+        assert devices.async_get(removed.id) is None
+    assert devices.async_get(status.id) is not None
+    assert devices.async_get(foreign.id) is not None
+    assert entities.async_get(restored_entity.entity_id) is None
+    assert entities.async_get(live_entity.entity_id) is not None
+
+
+@pytest.mark.parametrize("case", ["mqtt_only", "nothing_registered"])
+async def test_stale_devices_are_kept_without_complete_discovery(hass, case):
+    """A cached topology or an empty registration proves nothing about absence."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    runtime = _stale_device_runtime(entry)
+    devices = dr.async_get(hass)
+    old = devices.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(DOMAIN, "station:100:200:OLD-STATION")}
+    )
+    registered = _register_runtime_devices(hass, entry)
+    if case == "mqtt_only":
+        runtime.mode = RuntimeMode.MQTT_ONLY
+    else:
+        registered = set()
+
+    async_remove_stale_devices(hass, entry, registered)
+
+    assert devices.async_get(old.id) is not None
+
+
+async def test_stale_device_shared_with_another_entry_only_loses_this_entry(hass):
+    """Registries that still share devices keep the other entry's claim."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    _stale_device_runtime(entry)
+    registry = MagicMock()
+    shared = MagicMock(spec=["id", "config_entries"], id="shared", config_entries={"a", "b"})
+    owned = MagicMock(spec=["id", "config_entries"], id="owned", config_entries={entry.entry_id})
+    foreign = MagicMock(spec=["id", "config_entry_id"], id="foreign", config_entry_id="other")
+
+    _remove_entry_device(registry, shared, entry)
+    _remove_entry_device(registry, owned, entry)
+    _remove_entry_device(registry, foreign, entry)
+
+    registry.async_update_device.assert_called_once_with(
+        "shared", remove_config_entry_id=entry.entry_id
+    )
+    registry.async_remove_device.assert_called_once_with("owned")
+
+
+async def test_async_remove_config_entry_device_keeps_every_current_device(hass):
+    """Sites, connectors and the status device are as current as stations."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    _stale_device_runtime(entry, connector_uuid="")
+
+    def allowed(identifier):
+        return async_remove_config_entry_device(
+            hass, entry, MagicMock(identifiers={(DOMAIN, identifier)})
+        )
+
+    assert await allowed("site:100") is False
+    assert await allowed("station:100:200:STATION-1") is False
+    assert await allowed("connector:100:200:STATION-1:position:2") is False
+    assert await allowed(f"{entry.entry_id}:smappee_service_status") is False
+    assert await allowed("site:999") is True
+    assert await allowed("connector:100:200:STATION-1:position:1") is True
+
+    entry.runtime_data.status_coordinator = None
+    entry.runtime_data.sites[100].stations["station-uuid"].charging_station_serial = ""
+    assert await allowed("site:100") is False
+    assert await allowed(f"{entry.entry_id}:smappee_service_status") is True

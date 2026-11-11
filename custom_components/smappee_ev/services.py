@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
@@ -73,7 +73,7 @@ def _loaded_runtime_data(entry: object) -> RuntimeData | None:
     return runtime_data if isinstance(runtime_data, RuntimeData) else None
 
 
-def _iter_loaded_entries(hass: HomeAssistant) -> list[object]:
+def _iter_loaded_entries(hass: HomeAssistant) -> list[ConfigEntry]:
     return [
         entry
         for entry in hass.config_entries.async_entries(DOMAIN)
@@ -303,6 +303,32 @@ def _connector_current_range(
     return min_c, max_c
 
 
+def _runtime_owns_client(runtime: RuntimeData, client: SmappeeDeviceHandle) -> bool:
+    return any(
+        bucket.station_client is client
+        or any(conn.connector_client is client for conn in bucket.connectors.values())
+        for site in runtime.sites.values()
+        for bucket in site.stations.values()
+    )
+
+
+def _reauth_required_error(hass: HomeAssistant, client: SmappeeDeviceHandle) -> HomeAssistantError:
+    """Start reauthentication for the owning entry and describe it to the caller.
+
+    ``ConfigEntryAuthFailed`` only triggers a reauth flow when raised from setup
+    or a coordinator update; from an action it would surface as an unknown error.
+    """
+    for entry in _iter_loaded_entries(hass):
+        runtime = _loaded_runtime_data(entry)
+        if runtime is not None and _runtime_owns_client(runtime, client):
+            entry.async_start_reauth_if_available(hass)
+            break
+    return _home_assistant_error(
+        "Smappee rejected the stored credentials; reauthentication is required",
+        "reauth_required",
+    )
+
+
 # ----------------------------
 # Generic async service handlers
 # ----------------------------
@@ -337,8 +363,8 @@ async def async_handle_station_service(
             method(**(extra_args or {})),
             lambda: _schedule_dashboard_refresh_for_client(hass, client),
         )
-    except ConfigEntryAuthFailed:
-        raise
+    except ConfigEntryAuthFailed as err:
+        raise _reauth_required_error(hass, client) from err
     except Exception as err:
         raise _home_assistant_error(
             f"Station service '{method_name}' failed: {err}",
@@ -393,8 +419,8 @@ async def _async_call_connector_client(
             method(**(extra_args or {})),
             lambda: _schedule_dashboard_refresh_for_client(hass, client),
         )
-    except ConfigEntryAuthFailed:
-        raise
+    except ConfigEntryAuthFailed as err:
+        raise _reauth_required_error(hass, client) from err
     except Exception as err:
         raise _home_assistant_error(
             f"Connector service '{method_name}' failed: {err}",

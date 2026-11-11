@@ -52,7 +52,11 @@ from .mqtt_recovery import start_recovery
 from .mqtt_setup import _mqtt_routing_diagnostics, _start_mqtt_clients
 from .registry import async_migrate_status_registry
 from .runtime_assembly import _log_stored_runtime_shape, _prepare_site_topologies
-from .runtime_devices import _current_station_device_identifiers, _register_runtime_devices
+from .runtime_devices import (
+    _current_device_identifiers,
+    _register_runtime_devices,
+    async_remove_stale_devices,
+)
 from .runtime_lifecycle import (
     _async_shutdown_runtime_resources,
     _register_runtime_stop_cleanup,
@@ -62,6 +66,7 @@ from .services import register_services
 
 _LOGGER = logging.getLogger(__name__)
 _SERVICE_REGISTRATION_SENTINEL = "start_charging"
+_CONFIG_ENTRY_VERSION = 7
 PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
@@ -85,6 +90,16 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
       - v7 makes existing cable locks opt-in, matching newly created entities.
     """
     version = entry.version
+    if version > _CONFIG_ENTRY_VERSION:
+        # Created by a newer release; its data layout is unknown to this one.
+        _LOGGER.error(
+            "Config entry %s has version %s, but this Smappee EV release supports up to "
+            "version %s. Update the integration or restore a backup",
+            entry.entry_id,
+            version,
+            _CONFIG_ENTRY_VERSION,
+        )
+        return False
     data = dict(entry.data)
     options = dict(entry.options)
 
@@ -235,9 +250,10 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
     _register_runtime_stop_cleanup(hass, entry, runtime)
     _log_stored_runtime_shape(runtime)
     try:
-        _register_runtime_devices(hass, entry)
+        registered_device_ids = _register_runtime_devices(hass, entry)
         async_migrate_status_registry(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        async_remove_stale_devices(hass, entry, registered_device_ids)
         _start_runtime_background_work(hass, runtime.sites, runtime.mqtt)
         status_task = hass.async_create_background_task(
             status_coordinator.async_refresh(), f"{entry.entry_id} Smappee service status"
@@ -416,14 +432,14 @@ async def async_remove_config_entry_device(
     entry: SmappeeEvConfigEntry,
     device_entry: dr.DeviceEntry,
 ) -> bool:
-    """Allow users to remove stale Smappee EV devices from the registry."""
+    """Allow users to remove only devices that are no longer part of the topology."""
     domain_identifiers = {
         identifier for domain, identifier in device_entry.identifiers if domain == DOMAIN
     }
     if not domain_identifiers:
         return True
 
-    current_identifiers = _current_station_device_identifiers(entry)
+    current_identifiers = _current_device_identifiers(entry)
     if not current_identifiers:
         return False
 

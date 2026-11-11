@@ -133,7 +133,6 @@ class SmappeeMqttConnectivity(SmappeeSiteEntity, BinarySensorEntity):
         if station_uuid is not None:
             self._station_uuid = station_uuid
         self.api_client = api_client
-        self._attr_name = "MQTT Connected"
 
     @property
     @override

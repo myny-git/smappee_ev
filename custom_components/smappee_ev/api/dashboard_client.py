@@ -27,6 +27,7 @@ from ..const import (
 from ..models.state import DashboardObject, DashboardObjectList, RecentSession
 from .errors import (
     SmappeeAuthenticationError,
+    SmappeeAuthorizationError,
     SmappeeConnectionError,
     SmappeeError,
     SmappeeMaintenanceError,
@@ -83,6 +84,10 @@ def _retry_after_seconds(value: object) -> float:
         return max(0.0, (deadline - datetime.now(UTC)).total_seconds())
     except (ValueError, TypeError, OverflowError):
         return 30.0
+
+
+class _RefreshRefusedError(SmappeeProtocolError):
+    """The Dashboard answered a token refresh with an unexpected HTTP status."""
 
 
 class SmappeeDashboardClient:
@@ -189,7 +194,7 @@ class SmappeeDashboardClient:
             if resp.status in (401, 403):
                 raise SmappeeAuthenticationError("Dashboard refresh token rejected")
             if resp.status != 200:
-                raise SmappeeProtocolError(f"Dashboard refresh failed {resp.status}")
+                raise _RefreshRefusedError(f"Dashboard refresh failed {resp.status}")
             data = await resp.json()
         if (
             not isinstance(data, dict)
@@ -202,6 +207,27 @@ class SmappeeDashboardClient:
             self._maintenance_state.authentication_succeeded()
         return bool(self._token)
 
+    async def _async_refresh_or_login(self) -> bool:
+        """Refresh the token; a refresh the Dashboard refuses falls back to login.
+
+        A refused refresh token does not prove the account credentials are wrong,
+        so reauthentication is requested only when no password login is possible
+        or when that explicit login is itself rejected. Outages and malformed
+        responses are re-raised without trying the password.
+        """
+        if self.refresh_token:
+            try:
+                if await self.async_refresh():
+                    return True
+            except (ConfigEntryAuthFailed, _RefreshRefusedError) as err:
+                if not (self.username and self.password):
+                    raise
+                _LOGGER.debug(
+                    "Dashboard token refresh refused (%s); trying username/password login",
+                    type(err).__name__,
+                )
+        return await self.async_login()
+
     async def async_ensure_auth(self) -> bool:
         """Return True when dashboard auth is available."""
         self._maintenance_state.check_retry_deadline()
@@ -213,17 +239,7 @@ class SmappeeDashboardClient:
                 return True
 
             try:
-                if self.refresh_token:
-                    try:
-                        if await self.async_refresh():
-                            return True
-                    except ConfigEntryAuthFailed:
-                        if not (self.username and self.password):
-                            raise
-                        _LOGGER.debug(
-                            "Dashboard refresh token rejected; trying username/password login"
-                        )
-                if await self.async_login():
+                if await self._async_refresh_or_login():
                     return True
             except (
                 ConfigEntryAuthFailed,
@@ -318,15 +334,7 @@ class SmappeeDashboardClient:
                         refreshed = True
                     else:
                         self._token = None
-                        refreshed = False
-                        if self.refresh_token:
-                            try:
-                                refreshed = await self.async_refresh()
-                            except ConfigEntryAuthFailed:
-                                if not (self.username and self.password):
-                                    raise
-                        if not refreshed:
-                            refreshed = await self.async_login()
+                        refreshed = await self._async_refresh_or_login()
                 if refreshed:
                     return await self._request(
                         method,
@@ -338,7 +346,13 @@ class SmappeeDashboardClient:
                         retry_auth=False,
                     )
             if resp.status in (401, 403):
-                raise SmappeeAuthenticationError("Dashboard authorization failed")
+                if retry_auth:
+                    # No refresh token or password is left to authenticate with.
+                    raise SmappeeAuthenticationError("Dashboard authorization failed")
+                # Fresh credentials were just accepted, so they are not the problem.
+                raise SmappeeAuthorizationError(
+                    f"Dashboard denied the request after re-authentication (HTTP {resp.status})"
+                )
             if resp.status not in expected:
                 if resp.status == 404:
                     raise SmappeeNotFoundError("Dashboard resource not found (HTTP 404)")

@@ -214,3 +214,16 @@ class TestMigration:
         call_kwargs = async_update_mock.call_args[1]
         assert call_kwargs["version"] == 7
         assert call_kwargs["data"] == {CONF_NEEDS_DASHBOARD_REAUTH: True}
+
+
+async def test_migrate_entry_from_newer_release_fails_without_changes(hass, caplog):
+    """A downgrade must not touch data written by a newer release."""
+    data = {CONF_DASHBOARD_REFRESH_TOKEN: "token", "future_key": "value"}
+    entry = MockConfigEntry(domain=DOMAIN, version=8, data=data)
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is False
+
+    assert entry.version == 8
+    assert dict(entry.data) == data
+    assert "supports up to version 7" in caplog.text

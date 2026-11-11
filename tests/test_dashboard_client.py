@@ -10,10 +10,12 @@ import pytest
 
 from custom_components.smappee_ev.api.dashboard_client import SmappeeDashboardClient
 from custom_components.smappee_ev.api.errors import (
+    SmappeeAuthorizationError,
     SmappeeConnectionError,
     SmappeeNotFoundError,
     SmappeeProtocolError,
     SmappeeServerError,
+    SmappeeTransientError,
 )
 
 
@@ -564,15 +566,94 @@ async def test_dashboard_request_retries_only_once_after_repeated_unauthorized()
     client._token = "old-token"  # noqa: S105 - fake token value for retry behavior
     client._token_expires_at_ms = expires_at
 
-    with pytest.raises(ConfigEntryAuthFailed, match="Dashboard authorization failed"):
+    with pytest.raises(SmappeeAuthorizationError, match="after re-authentication") as caught:
         await client._request("GET", "v11/example", return_json=True)
 
+    # The Dashboard just accepted the refresh token, so this must not start reauth.
+    assert not isinstance(caught.value, ConfigEntryAuthFailed)
+    assert isinstance(caught.value, SmappeeTransientError)
     assert len(session.request_calls) == 2
     assert len(session.post_calls) == 1
     assert [call[2]["headers"]["token"] for call in session.request_calls] == [
         "old-token",
         "new-token",
     ]
+
+
+@pytest.mark.asyncio
+async def test_dashboard_request_unauthorized_without_any_credentials_requests_reauth():
+    """With nothing left to authenticate with, only the user can fix a 401."""
+    session = _Session(requests=[_Response(401, text="expired")])
+    client = _client(session)
+    client._token = "old-token"  # noqa: S105 - fake token value
+    client._token_expires_at_ms = int(time.time() * 1000) + 300_000
+
+    with pytest.raises(ConfigEntryAuthFailed, match="Dashboard authorization failed"):
+        await client._request("GET", "v11/example", return_json=True)
+
+    assert len(session.request_calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("refresh_status", [400, 401, 403, 404])
+async def test_dashboard_request_refused_refresh_falls_back_to_login(refresh_status):
+    """A refused refresh token is not proof that the password is wrong."""
+    expires_at = int(time.time() * 1000) + 300_000
+    session = _Session(
+        posts=[
+            _Response(refresh_status, text="refused"),
+            _Response(
+                200,
+                {
+                    "token": "login-token",
+                    "refreshToken": "login-refresh",
+                    "tokenExpirationTimestamp": expires_at,
+                },
+            ),
+        ],
+        requests=[_Response(401, text="expired"), _Response(200, {"ok": True})],
+    )
+    client = _client(
+        session,
+        username="user",
+        password="pass",  # noqa: S106 - fake password
+        refresh_token="old-refresh",  # noqa: S106 - fake refresh token
+    )
+    client._token = "old-token"  # noqa: S105 - fake token value
+    client._token_expires_at_ms = expires_at
+
+    assert await client._request("GET", "v11/example", return_json=True) == {"ok": True}
+    assert [url.rsplit("/", 1)[-1] for url, _ in session.post_calls] == ["refreshToken", "login"]
+    assert client.refresh_token == "login-refresh"  # noqa: S105 - fake refresh token
+
+
+@pytest.mark.asyncio
+async def test_dashboard_rejected_login_after_refused_refresh_requests_reauth():
+    """Only an explicitly rejected username/password login starts reauthentication."""
+    session = _Session(
+        posts=[_Response(400, text="refused"), _Response(401, text="bad credentials")]
+    )
+    client = _client(
+        session,
+        username="user",
+        password="pass",  # noqa: S106 - fake password
+        refresh_token="old-refresh",  # noqa: S106 - fake refresh token
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed, match="Dashboard credentials rejected"):
+        await client.async_ensure_auth()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_refused_refresh_without_password_stays_protocol_error():
+    client = _client(
+        _Session(posts=[_Response(400, text="refused")]),
+        refresh_token="old-refresh",  # noqa: S106 - fake refresh token
+    )
+
+    with pytest.raises(SmappeeProtocolError, match="Dashboard refresh failed 400") as caught:
+        await client.async_ensure_auth()
+    assert not isinstance(caught.value, ConfigEntryAuthFailed)
 
 
 @pytest.mark.asyncio

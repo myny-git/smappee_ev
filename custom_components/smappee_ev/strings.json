@@ -99,6 +99,9 @@
     },
     "ambiguous_connector": {
       "message": "Multiple connectors match. Provide station_serial and connector_id."
+    },
+    "reauth_required": {
+      "message": "Smappee rejected the stored credentials. Re-authenticate the Smappee EV integration to continue."
     }
   },
   "services": {

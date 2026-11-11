@@ -900,7 +900,6 @@ async def test_usable_cache_does_not_mean_rest_recovered(
         _Response(200, payload={}),
         _Response(200, payload={"token": ""}),
         _Response(200, json_exc=ValueError("private response")),
-        _Response(400),
     ],
 )
 async def test_invalid_authentication_response_stays_protocol_error(refresh, response):
@@ -911,6 +910,19 @@ async def test_invalid_authentication_response_stays_protocol_error(refresh, res
         await api.async_ensure_auth()
     assert "private response" not in str(err.value)
     assert len(api._session.post_calls) == 1
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+async def test_unexpected_authentication_status_stays_protocol_error(refresh):
+    """A refused refresh is retried with the password once; neither starts reauth."""
+    api = dashboard(_Session(posts=[_Response(400)] * (2 if refresh else 1)))
+    if not refresh:
+        api.refresh_token = None
+    with pytest.raises(SmappeeProtocolError, match="Dashboard login failed 400"):
+        await api.async_ensure_auth()
+    assert [url.rsplit("/", 1)[-1] for url, _ in api._session.post_calls] == (
+        ["refreshToken", "login"] if refresh else ["login"]
+    )
 
 
 async def test_complete_discovery_can_include_location_without_mqtt_channels(online, entry):

@@ -8,7 +8,7 @@ import logging
 from typing import Any, Literal
 
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import CONFIGURATION_URL, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN, MANUFACTURER
 
@@ -125,17 +125,25 @@ def make_site_device_info(
 ) -> DeviceInfo:
     """Return Home Assistant device_info for a site/service location."""
     name = site_name or f"{MANUFACTURER} {site_sid}"
-    model_parts = [part for part in (gateway_type, "Service Location") if part]
-    device_info: DeviceInfo = {
-        "identifiers": {site_device_identifier(site_sid)},
-        "name": name,
-        "manufacturer": MANUFACTURER,
-        "configuration_url": CONFIGURATION_URL,
-        "model": " / ".join(model_parts) if model_parts else "Service Location",
-    }
+    model = f"{gateway_type} / Service Location" if gateway_type else "Service Location"
+    # Keyword construction works for both the TypedDict (HA < 2026.11) and the
+    # dataclass; optional fields are passed only when known, never assigned later.
     if gateway_serial:
-        device_info["serial_number"] = gateway_serial
-    return device_info
+        return DeviceInfo(
+            identifiers={site_device_identifier(site_sid)},
+            name=name,
+            manufacturer=MANUFACTURER,
+            configuration_url=CONFIGURATION_URL,
+            model=model,
+            serial_number=gateway_serial,
+        )
+    return DeviceInfo(
+        identifiers={site_device_identifier(site_sid)},
+        name=name,
+        manufacturer=MANUFACTURER,
+        configuration_url=CONFIGURATION_URL,
+        model=model,
+    )
 
 
 def make_station_device_info(
@@ -151,15 +159,14 @@ def make_station_device_info(
     identifiers = {station_device_identifier(site_sid, control_sid, charging_station_serial)}
     if legacy_identifier:
         identifiers.add((DOMAIN, legacy_identifier))
-    device_info: DeviceInfo = {
-        "identifiers": identifiers,
-        "name": station_name or f"{MANUFACTURER} EV {charging_station_serial}",
-        "manufacturer": MANUFACTURER,
-        "configuration_url": CONFIGURATION_URL,
-        "model": station_model or "EV Wall",
-        "serial_number": charging_station_serial,
-    }
-    return device_info
+    return DeviceInfo(
+        identifiers=identifiers,
+        name=station_name or f"{MANUFACTURER} EV {charging_station_serial}",
+        manufacturer=MANUFACTURER,
+        configuration_url=CONFIGURATION_URL,
+        model=station_model or "EV Wall",
+        serial_number=charging_station_serial,
+    )
 
 
 def make_connector_device_info(
@@ -173,18 +180,17 @@ def make_connector_device_info(
     """Return connector metadata; runtime registration owns the device hierarchy."""
     label = connector_label or connector_key
     base = station_name or f"{MANUFACTURER} EV {charging_station_serial}"
-    device_info: DeviceInfo = {
-        "identifiers": {
+    return DeviceInfo(
+        identifiers={
             connector_device_identifier(
                 site_sid, control_sid, charging_station_serial, connector_key
             )
         },
-        "name": f"{base} | Connector {label}",
-        "manufacturer": MANUFACTURER,
-        "configuration_url": CONFIGURATION_URL,
-        "model": "Connector",
-    }
-    return device_info
+        name=f"{base} | Connector {label}",
+        manufacturer=MANUFACTURER,
+        configuration_url=CONFIGURATION_URL,
+        model="Connector",
+    )
 
 
 def make_device_info(

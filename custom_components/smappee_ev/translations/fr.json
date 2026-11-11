@@ -52,8 +52,14 @@
     }
   },
   "exceptions": {
+    "dashboard_maintenance": {
+      "message": "Le Smappee Dashboard est en maintenance. Home Assistant réessaiera automatiquement."
+    },
     "service_location_not_in_entry": {
       "message": "La service location {service_location_id} n'appartient pas à la config entry {config_entry_id}"
+    },
+    "service_location_not_found": {
+      "message": "La service location {service_location_id} est introuvable dans les config entries Smappee EV chargées."
     },
     "config_entry_not_loaded": {
       "message": "La config entry {config_entry_id} n'est pas chargée ou n'existe pas."
@@ -93,6 +99,9 @@
     },
     "ambiguous_connector": {
       "message": "Plusieurs connecteurs correspondent. Indiquez station_serial et connector_id."
+    },
+    "reauth_required": {
+      "message": "Smappee a refusé les identifiants enregistrés. Réauthentifiez l'intégration Smappee EV pour continuer."
     }
   },
   "services": {

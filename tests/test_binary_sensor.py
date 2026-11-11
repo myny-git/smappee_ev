@@ -171,7 +171,8 @@ class TestSmappeeMqttConnectivity:
 
         # Check basic properties
         assert entity._attr_has_entity_name is True
-        assert entity._attr_name == "MQTT Connected"
+        assert entity.translation_key == "mqtt_connected"
+        assert not hasattr(entity, "_attr_name")
         assert entity._attr_device_class == BinarySensorDeviceClass.CONNECTIVITY
         assert entity._attr_entity_category == EntityCategory.DIAGNOSTIC
         assert entity.api_client == mock_api_client
