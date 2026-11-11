@@ -91,36 +91,36 @@ async def test_poll_started_after_a_command_is_authoritative(online):
 async def test_dashboard_refresh_that_started_later_wins_over_an_older_poll(online):
     """Two cloud reads overlap on one field: the read that started last wins.
 
-    A poll is waiting for the smart-device list, which still holds LED
-    brightness 10. A Dashboard refresh starts after it, finishes first and
-    reports 75. Intended outcome: 75 stays, because the poll's answer describes
-    an older moment.
+    The minimum surplus percentage is reported by the smart-device poll and by
+    the Dashboard station details. A poll is waiting for an answer that still
+    holds 20. A Dashboard refresh starts after it, finishes first and reports
+    60. Intended outcome: 60 stays, because the poll describes an older moment.
     """
     coord = _coordinator(online)
-    coord.data.station.led_brightness = 10
-    coord._fetch_connector_state = AsyncMock(return_value=ConnectorState(connector_number=1))
+    coord.data.connectors[UUID].min_surpluspct = 20
+    coord._fetch_station_state = AsyncMock(return_value=StationState())
     started, finish = asyncio.Event(), asyncio.Event()
 
-    async def older_rest_station(*_args, **_kwargs):
+    async def older_rest_connector(*_args, **_kwargs):
         started.set()
         await finish.wait()
-        return StationState(led_brightness=10)
+        return ConnectorState(connector_number=1, min_surpluspct=20)
 
     async def dashboard(staged, force=False):
         if force:
-            staged.station.led_brightness = 75
+            staged.connectors[UUID].min_surpluspct = 60
         return force
 
-    coord._fetch_station_state = AsyncMock(side_effect=older_rest_station)
+    coord._fetch_connector_state = AsyncMock(side_effect=older_rest_connector)
     coord._maybe_refresh_dashboard_data = dashboard
     poll = asyncio.create_task(coord._async_fetch_data())
     try:
         await asyncio.wait_for(started.wait(), 1)
         await coord._async_dashboard_refresh_now()
-        assert coord.data.station.led_brightness == 75
+        assert coord.data.connectors[UUID].min_surpluspct == 60
         finish.set()
         result = await asyncio.wait_for(poll, 1)
-        assert result.station.led_brightness == 75
+        assert result.connectors[UUID].min_surpluspct == 60
     finally:
         await _finish(poll)
 
@@ -128,19 +128,21 @@ async def test_dashboard_refresh_that_started_later_wins_over_an_older_poll(onli
 async def test_poll_that_started_later_wins_over_an_older_dashboard_refresh(online):
     """The mirror image: the Dashboard read is the older one.
 
-    A Dashboard refresh is waiting with an outdated brightness of 50. A poll
-    starts after it, finishes first and publishes 75. Intended outcome: 75
-    stays when the older Dashboard answer finally arrives.
+    A Dashboard refresh is waiting with an outdated surplus percentage of 40.
+    A poll starts after it, finishes first and publishes 60. Intended outcome:
+    60 stays when the older Dashboard answer finally arrives.
     """
     coord = _coordinator(online)
-    coord.data.station.led_brightness = 10
-    coord._fetch_connector_state = AsyncMock(return_value=ConnectorState(connector_number=1))
-    coord._fetch_station_state = AsyncMock(return_value=StationState(led_brightness=75))
+    coord.data.connectors[UUID].min_surpluspct = 20
+    coord._fetch_station_state = AsyncMock(return_value=StationState())
+    coord._fetch_connector_state = AsyncMock(
+        return_value=ConnectorState(connector_number=1, min_surpluspct=60)
+    )
     started, finish = asyncio.Event(), asyncio.Event()
 
     async def dashboard(staged, force=False):
         if force:
-            staged.station.led_brightness = 50
+            staged.connectors[UUID].min_surpluspct = 40
             started.set()
             await finish.wait()
         return force
@@ -150,10 +152,10 @@ async def test_poll_that_started_later_wins_over_an_older_dashboard_refresh(onli
     try:
         await asyncio.wait_for(started.wait(), 1)
         coord.async_set_updated_data(await coord._async_fetch_data())
-        assert coord.data.station.led_brightness == 75
+        assert coord.data.connectors[UUID].min_surpluspct == 60
         finish.set()
         await asyncio.wait_for(refresh, 1)
-        assert coord.data.station.led_brightness == 75
+        assert coord.data.connectors[UUID].min_surpluspct == 60
     finally:
         await _finish(refresh)
 

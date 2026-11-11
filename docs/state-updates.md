@@ -13,6 +13,15 @@ The update helpers read the current coordinator data and publish synchronously.
 Do not mutate an earlier station/connector reference or publish a snapshot saved
 before an `await`. Keep UI state unchanged until the write succeeds.
 
+## Publishing
+
+Only a successful REST poll replaces the coordinator data, through Home
+Assistant's normal refresh. Every other writer changes the current data in place
+and calls `async_update_listeners()`: MQTT, confirmed commands, restored values,
+session refreshes and the forced Dashboard refresh. `async_set_updated_data()`
+would also mark the coordinator as successfully updated and restart its poll
+timer, so a local change could report a failed REST connection as recovered.
+
 Successful writes schedule reconciliation with Dashboard. Transport failures,
 timeouts and cancellation also schedule reconciliation because the server may
 have accepted the command before the response was lost. Authentication failures
@@ -35,6 +44,43 @@ Requests started after a confirmation can reconcile those fields normally.
 
 The same rule applies to the forced Dashboard refresh after a write. Recent
 sessions are requested once per physical station, even with multiple connectors.
+
+A confirmation protects against requests that were already in flight; it is not
+a lock. A poll that starts after a command reports what the cloud holds and wins,
+so a change made outside Home Assistant can always be adopted.
+
+## Field ownership between the two cloud reads
+
+The smart-device poll and the Dashboard station details are separate requests
+without a revision or timestamp, so their answers cannot be ordered reliably.
+Prefer one remote owner per field over ordering logic.
+
+- **LED brightness.** The smart-device list is scanned for the whole service
+  location and is not tied to one station; the Dashboard station details are.
+  Once the Dashboard has identified the station's LED
+  (`dashboard_led_device_id`), it owns the brightness together with MQTT and
+  commands. The poll only supplies a value while none is known, or while the
+  Dashboard has not identified an LED.
+- **Connector minimum/maximum current, minimum surplus and grid support.** Both
+  reads report these per connector. When they overlap, the value that changed
+  the published state last is kept (`StateChanges`), and a forced Dashboard
+  refresh is always followed by a forced poll.
+- **Session state.** While MQTT reports charger state live (transport connected
+  and a fresh `charger_state`), a poll does not replace it. Once that state is
+  stale, the poll takes over, including starting and ending sessions.
+- **Everything else** has a single source: MQTT telemetry and status, Dashboard
+  station configuration, or the session query.
+
+## MQTT connection changes
+
+MQTT sends configuration only when it changes, so a change made during an outage
+is not repeated after the reconnect. A lost and a restored connection therefore
+each force one REST poll at once, serialized behind a poll already in flight.
+At most one immediate read per direction is started per
+`MQTT_RESYNC_MIN_INTERVAL`; further changes inside that interval leave the
+forced read pending for the coordinator's next regular tick, so a flapping
+broker cannot become one REST request per flap. The initial connection needs no
+extra poll, and cached monitoring-only runtimes never poll.
 
 ## MQTT measurements
 
@@ -64,9 +110,14 @@ when changing these internals.
 
 ## Tests
 
+- `tests/test_state_reconciliation_contract.py` states the intended outcome of
+  each interleaving in its docstrings; start there.
 - `tests/test_state_concurrency.py` exercises writes while the live snapshot is
   replaced, success/error/auth/cancellation paths, refresh interleaving and shared
   session requests.
+- `tests/test_led_brightness_ownership.py`, `tests/test_mqtt_resync.py` and
+  `tests/test_mqtt_liveness_contract.py` cover the ownership, resync and liveness
+  rules above. See `mqtt_freshness_ownership.md` for the liveness clocks.
 - `tests/test_measurement_freshness.py` routes actual MQTT callbacks and verifies
   stale, invalid, partial, unchanged and zero measurements.
 - `mqtt_smoke/test_transport.py` uses real `aiomqtt` and a local Mosquitto broker
@@ -108,3 +159,29 @@ routes. Only the old site gateway's ownership can be recovered reliably; inherit
 station/client serials are not used as evidence for a different control location.
 Unknown child gateways remain untracked until online discovery establishes their
 identity. Malformed current metadata is still rejected rather than migrated.
+
+## Checking that a protection is still needed
+
+`tests/reconciliation_mutations.py` is an opt-in pytest plugin that disables one
+protection in memory, without editing a source file. A protection is still
+needed when its witness test fails under the mutation:
+
+```text
+python -m pytest -p tests.reconciliation_mutations --reconciliation-mutant=NAME tests/TEST_NODE -q
+```
+
+| Mutation | Protection disabled | Witness test |
+| --- | --- | --- |
+| `rest_diff` | Poll keeps changes made while it was in flight | `test_reconciliation_audit.py::test_restoration_during_rest_poll_needs_snapshot_diff_without_confirmation` |
+| `rest_confirmations` | Poll keeps repeated command values | `test_state_concurrency.py::test_stale_rest_current_limit_preserves_confirmation` |
+| `rest_dashboard_overlay` | Poll applies its own Dashboard enrichment | `test_state_concurrency.py::test_rest_refresh_preserves_mqtt_sessions_and_new_commands` |
+| `dashboard_diff` | Dashboard refresh keeps changes made while it was in flight | `test_state_reconciliation_contract.py::test_poll_that_started_later_wins_over_an_older_dashboard_refresh` |
+| `dashboard_confirmations` | Dashboard refresh keeps repeated command values | `test_state_concurrency.py::test_forced_dashboard_refresh_preserves_in_flight_commands` |
+| `staging_copy` | Remote answers are staged on a copy | `test_reconciliation_audit.py::test_cancelled_dashboard_staging_never_leaks_into_live_state` |
+| `mqtt_precedence` | Live MQTT session state over a poll | `test_session_transitions.py::test_rest_cannot_contradict_live_mqtt_charger_state` |
+| `reconnect_followup` | Follow-up read after an edge during a poll | `test_mqtt_resync.py::test_reconnect_during_older_poll_coalesces_one_fresh_followup` |
+| `session_current_snapshot` | Session refresh writes to the newest snapshot | `test_reconciliation_audit.py::test_session_query_updates_the_snapshot_a_real_poll_replaced` |
+| `local_publication` | Local changes do not report REST recovery | `test_state_reconciliation_contract.py::test_local_publication_does_not_report_a_failed_poll_as_recovered` |
+| `rest_station_fields`, `rest_connector_fields` | Poll merges into current state | `test_coordinator.py::TestSmappeeCoordinator::test_update_data_preserves_mqtt_only_state` |
+| `unchanged_mqtt_confirmation` | Repeated MQTT values count as confirmation | `test_state_concurrency.py::test_stale_rest_current_limit_preserves_confirmation` |
+| `rest_led_owner` | Poll leaves a Dashboard-owned LED alone | `test_led_brightness_ownership.py::test_poll_does_not_write_a_led_the_dashboard_owns` |

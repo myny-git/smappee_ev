@@ -59,10 +59,9 @@ The full-suite arguments were:
 -q -p no:cacheprovider --cov=custom_components.smappee_ev --cov-report=term-missing --cov-report=xml --cov-fail-under=95 --tb=short --show-capture=no
 ```
 
-Mutation witnesses are documented in `../state_reconciliation_audit.md` and
-`../dashboard_rest_read_ordering.md`. This run used the updated connector-field
-`dashboard_diff` witness and the `rest_led_barrier` witness, plus the other twelve
-existing witnesses. All failures were inspected as assertion failures rather
+Mutation witnesses are documented in `../state-updates.md`. This run used the
+connector-field `dashboard_diff` witness and a `rest_led_barrier` witness, which
+has since been replaced by `rest_led_owner`, plus the other twelve witnesses. All failures were inspected as assertion failures rather
 than setup/import errors. Mutations were confined to individual pytest
 processes and did not edit production files.
 

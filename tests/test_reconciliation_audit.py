@@ -202,29 +202,3 @@ async def test_session_query_updates_the_snapshot_a_real_poll_replaced(coord):
         assert initial.recent_sessions == []
     finally:
         await _finish(task)
-
-
-async def test_unchanged_newer_rest_led_read_blocks_an_older_dashboard_value(coord):
-    """A successful overlapping LED read protects even an unchanged observation."""
-    started, finish = asyncio.Event(), asyncio.Event()
-
-    async def dashboard(staged, force=False):
-        if force:
-            staged.station.led_brightness = 50
-            started.set()
-            await finish.wait()
-        return force
-
-    coord._maybe_refresh_dashboard_data = dashboard
-    task = asyncio.create_task(coord._async_dashboard_refresh_now())
-    try:
-        await asyncio.wait_for(started.wait(), 1)
-        version = coord._state_confirmations.version
-        await coord.async_refresh()
-        assert coord.data.station.led_brightness == 10
-        assert coord._state_confirmations.version == version
-        finish.set()
-        await asyncio.wait_for(task, 1)
-        assert coord.data.station.led_brightness == 10
-    finally:
-        await _finish(task)

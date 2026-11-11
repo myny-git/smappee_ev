@@ -13,11 +13,16 @@ import pytest
 
 _ROOT = "custom_components.smappee_ev."
 _MUTATIONS = {
-    "rest_led_barrier": (
-        "coordinator",
-        "SmappeeStationCoordinator",
-        "_async_fetch_data",
-        (('fields.add("led_brightness")', "pass"),),
+    "rest_led_owner": (
+        "coordinators.api_state",
+        "StationApiMixin",
+        "_merge_station_rest_state",
+        (
+            (
+                "if dashboard_owns_led or rest.led_brightness is None",
+                "if rest.led_brightness is None",
+            ),
+        ),
     ),
     "rest_diff": (
         "coordinator",
@@ -67,8 +72,8 @@ _MUTATIONS = {
         "_setup_mqtt",
         (
             (
-                "while coord._force_smartdevice_refresh and not coord._is_stopping:",
-                "if coord._force_smartdevice_refresh and not coord._is_stopping:",
+                "for _ in range(MQTT_RESYNC_MAX_PASSES):",
+                "for _ in range(1):",
             ),
         ),
     ),

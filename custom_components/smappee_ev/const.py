@@ -31,6 +31,11 @@ MQTT_RECONNECT_INITIAL_BACKOFF: Final = 1.0
 MQTT_RECONNECT_MAX_BACKOFF: Final = 60.0
 # A connection must stay up this long before the reconnect delay starts over.
 MQTT_STABLE_CONNECTION_SEC: Final = 60.0
+# A lost and a restored MQTT connection each read REST at once, but at most this
+# often. A further change inside the interval is read at the next regular tick.
+MQTT_RESYNC_MIN_INTERVAL: Final = 60.0
+# One resync task serves the edges that arrive while it runs; this bounds it.
+MQTT_RESYNC_MAX_PASSES: Final = 3
 MQTT_QOS_AT_LEAST_ONCE: Final = 1
 
 # MQTT tracking and payload constants.

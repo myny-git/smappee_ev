@@ -12,6 +12,8 @@ from custom_components.smappee_ev.const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_
 from custom_components.smappee_ev.coordinator import (
     SmappeeSiteCoordinator,
     SmappeeStationCoordinator,
+)
+from custom_components.smappee_ev.coordinators.power import (
     _active_power_values,
     _indexes_and_field_from_aspect_paths,
     _indexes_from_aspect_paths,

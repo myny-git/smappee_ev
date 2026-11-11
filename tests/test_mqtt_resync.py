@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.smappee_ev.const import MQTT_RESYNC_MAX_PASSES
 from custom_components.smappee_ev.models.state import ConnectorState, StationState
 from custom_components.smappee_ev.mqtt_setup import (
     _handle_mqtt_connection_change,
@@ -174,3 +175,43 @@ async def test_monitoring_only_connections_update_state_without_rest(hass, resyn
     await hass.async_block_till_done()
     assert not tasks
     coord._fetch_station_state.assert_not_awaited()
+
+
+async def test_flapping_connection_reads_once_per_direction_then_waits_for_the_tick(
+    hass, resync, monkeypatch
+):
+    """A flapping broker must not turn into one REST request per flap.
+
+    Intended outcome: the first loss and the first recovery each read REST at
+    once. Further flaps inside the interval only leave the forced read pending,
+    and the coordinator's next regular tick performs it. Nothing is skipped.
+    """
+    coord, mqtt, _tasks = resync
+    for _ in range(4):
+        mqtt._on_conn(False)
+        await hass.async_block_till_done()
+        mqtt._on_conn(True)
+        await hass.async_block_till_done()
+    assert coord._fetch_connector_state.await_count == 2
+    assert coord._force_smartdevice_refresh
+
+    await coord.async_refresh()  # the regular tick
+    assert coord._fetch_connector_state.await_count == 3
+    assert not coord._force_smartdevice_refresh
+
+    monkeypatch.setattr("custom_components.smappee_ev.mqtt_setup.MQTT_RESYNC_MIN_INTERVAL", 0)
+    mqtt._on_conn(False)
+    await hass.async_block_till_done()
+    assert coord._fetch_connector_state.await_count == 4
+
+
+async def test_resync_task_ends_when_the_forced_read_is_never_consumed(hass, resync):
+    """The resync loop is bounded, so a refresh that does nothing cannot spin."""
+    coord, mqtt, tasks = resync
+    coord.async_refresh = AsyncMock()
+
+    mqtt._on_conn(False)
+    await hass.async_block_till_done()
+
+    assert coord.async_refresh.await_count == MQTT_RESYNC_MAX_PASSES
+    assert not tasks

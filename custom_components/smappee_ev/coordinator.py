@@ -30,18 +30,13 @@ from .coordinators.freshness_coordinator import FreshnessCoordinator
 from .coordinators.mqtt_apply import MqttMixin
 from .coordinators.power import (
     PowerMixin,
-    _active_power_values,  # noqa: F401 - compatibility re-export
-    _amps_from_ma,  # noqa: F401 - compatibility re-export
     _empty_power_topic_map,
     _indexes_and_field_from_aspect_paths,
     _indexes_from_aspect_paths,
     _mqtt_channel_topic,
-    _pick,  # noqa: F401 - compatibility re-export
     _power_aggregate_values,
     _power_group_updates,
-    _sum_kwh,  # noqa: F401 - compatibility re-export
-    _to_int as _power_to_int,
-    _volts_from_dv,  # noqa: F401 - compatibility re-export
+    _to_int,
 )
 from .coordinators.session_tracking import SessionTrackingMixin
 from .coordinators.storage import StorageMeasurements
@@ -57,11 +52,6 @@ from .models.state import (
 from .state_updates import StateChanges, StateConfirmations, state_staging_copy
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _to_int(value: object, default: int = 0) -> int:
-    """Compatibility wrapper for tests and older internal imports."""
-    return _power_to_int(value, default)
 
 
 class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
@@ -368,7 +358,6 @@ class SmappeeStationCoordinator(
         self._dashboard_refresh_lock = asyncio.Lock()
         self._dashboard_refresh_unsub: CALLBACK_TYPE | None = None
         self._dashboard_refresh_task: asyncio.Task | None = None
-        self._dashboard_rest_read_guards: dict[object, set[str]] = {}
         self._shutting_down = False
 
     @override
@@ -428,8 +417,6 @@ class SmappeeStationCoordinator(
         requests: SmartDeviceRequests = {}
         refresh_start = state_staging_copy(self.data) if self.data is not None else None
         confirmation_version = self._state_confirmations.version
-        # Only Dashboard operations already in flight are older than this read.
-        dashboard_read_guards = tuple(self._dashboard_rest_read_guards.values())
         try:
             # Fetch remote values into isolated objects. Do not preserve live
             # telemetry from a snapshot retained while network I/O is pending.
@@ -504,15 +491,6 @@ class SmappeeStationCoordinator(
             # Last step, on the final merged state and without yielding: the
             # returned snapshot is published as soon as this method returns.
             self._apply_rest_session_transitions(current, data)
-            if (
-                not self._is_stopping
-                and rest_station.api_available
-                and rest_station.led_brightness is not None
-            ):
-                # The successful result is published without another await.
-                # Missing/failed/cancelled reads must not invalidate Dashboard.
-                for fields in dashboard_read_guards:
-                    fields.add("led_brightness")
             return data
 
         except asyncio.CancelledError:

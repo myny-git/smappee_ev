@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 
 from .api.discovery import MqttChannelSpec
 from .api.mqtt_gateway import SmappeeMqtt, redact_mqtt_topic
-from .const import MQTT_HEARTBEAT_TOPIC_SUFFIX
+from .const import MQTT_HEARTBEAT_TOPIC_SUFFIX, MQTT_RESYNC_MAX_PASSES, MQTT_RESYNC_MIN_INTERVAL
 from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import MqttRuntimeValue, SmappeeStationRuntime
@@ -469,22 +469,37 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
 
     refresh_tasks: dict[int, asyncio.Task] = {}
 
+    resync_started: dict[tuple[int, bool | None], float] = {}
+
     async def _refresh_until_synced(coord: SmappeeStationCoordinator) -> None:
         # async_refresh waits for HA's coordinator lock, unlike a debounced
         # request which can be absorbed by a poll already in flight. The force
         # flag is consumed at the START of a REST poll. A later connection edge
         # sets it again, coalescing edges into one fresh follow-up poll.
-        while coord._force_smartdevice_refresh and not coord._is_stopping:
+        # The pass limit keeps a flag that is never consumed from spinning here;
+        # the coordinator's regular tick then performs the pending read.
+        for _ in range(MQTT_RESYNC_MAX_PASSES):
+            if not coord._force_smartdevice_refresh or coord._is_stopping:
+                return
             await coord.async_refresh()
 
     def _schedule_refresh(coord: SmappeeStationCoordinator) -> None:
         if coord._is_stopping:
             return
+        # The forced read always happens: now, or at the next regular tick.
         coord._force_smartdevice_refresh = True
         task_key = id(coord)
         existing = refresh_tasks.get(task_key)
         if existing is not None and not existing.done():
             return
+        # One immediate read per direction and interval: a normal outage reads
+        # when MQTT drops and again when it returns, but a flapping broker
+        # cannot turn into a REST request per flap.
+        edge = (task_key, coord._mqtt_connection_up)
+        now = time.monotonic()
+        if now - resync_started.get(edge, float("-inf")) < MQTT_RESYNC_MIN_INTERVAL:
+            return
+        resync_started[edge] = now
 
         task: asyncio.Task[None] = hass.async_create_task(_refresh_until_synced(coord))
         refresh_tasks[task_key] = task

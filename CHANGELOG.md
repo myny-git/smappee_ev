@@ -47,6 +47,11 @@ where the bug report, testing notes or design discussion can be found.
 - The support grid sensor is shown in whole amperes.
 - The `config_entry_id` field of every action offers a picker for Smappee EV
   config entries.
+- The charging state sensor shows the `Smart` state reported by the charger
+  instead of becoming unknown.
+- LED brightness now follows the charging station's own Dashboard details.
+  With several stations on one service location, the periodic poll could show
+  another station's brightness.
 
 ### Stability
 
@@ -59,6 +64,13 @@ where the bug report, testing notes or design discussion can be found.
 - The MQTT reconnect delay only starts over at 1 s after a connection that
   stayed up for a minute. A connection that drops right after subscribing
   keeps the longer delay instead of retrying every second.
+- After an MQTT outage the integration reads the configuration from Smappee
+  again as soon as the connection is back. Settings changed during the outage
+  previously stayed outdated for up to 30 minutes. A repeatedly dropping
+  connection leads to at most one such read per minute in each direction.
+- A confirmed command, a restored value or a session refresh no longer reports
+  a failed Smappee connection as recovered, which made entities available for
+  a moment and unavailable again.
 
 ## [2026.11.0] - 2026-11-02
 

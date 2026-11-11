@@ -87,14 +87,25 @@ class StationApiMixin(CoordinatorMixin):
 
     @staticmethod
     def _merge_station_rest_state(prev: StationState | None, rest: StationState) -> StationState:
-        """Merge REST station fields into the previous MQTT-rich station state."""
+        """Merge REST station fields into the previous MQTT-rich station state.
+
+        The smart-device list is scanned for the whole service location, so its
+        LED brightness is not tied to this station. The Dashboard station
+        details are. Once they have identified this station's LED, the Dashboard
+        owns the brightness together with MQTT and commands, and the poll only
+        supplies a value while none is known. Two remote reads then never write
+        the same field, so their completion order cannot matter.
+        """
         if prev is None:
             return rest
+        dashboard_owns_led = (
+            prev.dashboard_led_device_id is not None and prev.led_brightness is not None
+        )
         return replace(
             prev,
-            led_brightness=rest.led_brightness
-            if rest.led_brightness is not None
-            else prev.led_brightness,
+            led_brightness=prev.led_brightness
+            if dashboard_owns_led or rest.led_brightness is None
+            else rest.led_brightness,
             dashboard_led_device_id=prev.dashboard_led_device_id,
             api_available=rest.api_available,
         )
@@ -233,7 +244,6 @@ class StationApiMixin(CoordinatorMixin):
         """Read one connector's properties/config from its smartdevice."""
         session_state = "Initialize"
         selected_percentage: int | None = None
-        selected_mode: str | None = None
         reported_min_current: int | None = None
         reported_max_current: int | None = None
         min_surpluspct: int | None = None
@@ -277,7 +287,6 @@ class StationApiMixin(CoordinatorMixin):
                 session_state=session_state,
                 selected_current_limit=None,
                 selected_percentage_limit=selected_percentage,
-                selected_mode=selected_mode,
                 min_current=reported_min_current
                 if reported_min_current is not None
                 else DEFAULT_MIN_CURRENT,

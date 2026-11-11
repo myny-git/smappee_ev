@@ -414,7 +414,8 @@
           "initialize": "Initialisierung",
           "started": "Gestartet",
           "suspended": "Pausiert",
-          "stopped": "Gestoppt"
+          "stopped": "Gestoppt",
+          "smart": "Smart"
         }
       },
       "evcc_state": {
