@@ -368,6 +368,7 @@ class SmappeeStationCoordinator(
         self._dashboard_refresh_lock = asyncio.Lock()
         self._dashboard_refresh_unsub: CALLBACK_TYPE | None = None
         self._dashboard_refresh_task: asyncio.Task | None = None
+        self._dashboard_rest_read_guards: dict[object, set[str]] = {}
         self._shutting_down = False
 
     @override
@@ -427,6 +428,8 @@ class SmappeeStationCoordinator(
         requests: SmartDeviceRequests = {}
         refresh_start = state_staging_copy(self.data) if self.data is not None else None
         confirmation_version = self._state_confirmations.version
+        # Only Dashboard operations already in flight are older than this read.
+        dashboard_read_guards = tuple(self._dashboard_rest_read_guards.values())
         try:
             # Fetch remote values into isolated objects. Do not preserve live
             # telemetry from a snapshot retained while network I/O is pending.
@@ -501,6 +504,15 @@ class SmappeeStationCoordinator(
             # Last step, on the final merged state and without yielding: the
             # returned snapshot is published as soon as this method returns.
             self._apply_rest_session_transitions(current, data)
+            if (
+                not self._is_stopping
+                and rest_station.api_available
+                and rest_station.led_brightness is not None
+            ):
+                # The successful result is published without another await.
+                # Missing/failed/cancelled reads must not invalidate Dashboard.
+                for fields in dashboard_read_guards:
+                    fields.add("led_brightness")
             return data
 
         except asyncio.CancelledError:

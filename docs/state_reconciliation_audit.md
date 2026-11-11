@@ -150,12 +150,17 @@ unmutated witness exits 0. Test node paths below are relative to `tests/`.
 
 ## Reproduced limitation and remaining risks
 
+Follow-up: the LED example below is corrected by the targeted change described
+in `dashboard_rest_read_ordering.md`. Its test is now the desired-behavior
+regression `test_unchanged_newer_rest_led_read_blocks_an_older_dashboard_value`.
+This section retains the original audit finding at baseline `762f519`.
+
 **A later cloud read that repeats the baseline is not an ordering barrier.**
-`test_unchanged_later_poll_is_not_a_general_read_ordering_barrier` starts a
+The original `test_unchanged_later_poll_is_not_a_general_read_ordering_barrier` started a
 Dashboard refresh at brightness 10 and holds its response of 50. A later REST
 poll publishes 10 again. That read creates neither a value diff nor a live
 confirmation. When the older Dashboard response finishes it publishes 50.
-Existing later-read-wins tests prove the changed-value cases, not general
+The audit's later-read-wins tests proved the changed-value cases, not general
 last-started-read ordering. The new test records this observed limitation; it
 does not label the result as the desired future policy.
 

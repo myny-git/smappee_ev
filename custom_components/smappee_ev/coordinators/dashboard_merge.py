@@ -242,6 +242,7 @@ class DashboardMixin(CoordinatorMixin):
         task.add_done_callback(self._log_background_task_exception)
 
     async def _async_dashboard_refresh_now(self) -> None:
+        read_token = object()
         try:
             if self._is_stopping:
                 return
@@ -250,9 +251,15 @@ class DashboardMixin(CoordinatorMixin):
             baseline = state_staging_copy(self.data)
             confirmation_version = self._state_confirmations.version
             staged = state_staging_copy(baseline)
+            rest_fields: set[str] = set()
+            self._dashboard_rest_read_guards[read_token] = rest_fields
             await self._maybe_refresh_dashboard_data(staged, force=True)
             current = self.data
             if current is not None:
+                if "led_brightness" in rest_fields:
+                    # Omit this older observation, even if the newer successful
+                    # REST read repeated the baseline. Keep all other fields.
+                    staged.station.led_brightness = baseline.station.led_brightness
                 concurrent = StateChanges.between(baseline, current)
                 confirmed = self._state_confirmations.since(confirmation_version, current)
                 changed = StateChanges.between(baseline, staged).apply(current)
@@ -272,6 +279,7 @@ class DashboardMixin(CoordinatorMixin):
             if not self._is_stopping:
                 self._start_background_reauth()
         finally:
+            self._dashboard_rest_read_guards.pop(read_token, None)
             if self._dashboard_refresh_task is asyncio.current_task():
                 self._dashboard_refresh_task = None
 

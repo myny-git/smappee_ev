@@ -13,6 +13,12 @@ import pytest
 
 _ROOT = "custom_components.smappee_ev."
 _MUTATIONS = {
+    "rest_led_barrier": (
+        "coordinator",
+        "SmappeeStationCoordinator",
+        "_async_fetch_data",
+        (('fields.add("led_brightness")', "pass"),),
+    ),
     "rest_diff": (
         "coordinator",
         "SmappeeStationCoordinator",

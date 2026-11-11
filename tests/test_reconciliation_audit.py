@@ -204,13 +204,8 @@ async def test_session_query_updates_the_snapshot_a_real_poll_replaced(coord):
         await _finish(task)
 
 
-async def test_unchanged_later_poll_is_not_a_general_read_ordering_barrier(coord):
-    """Audit limitation: diffs track changed values, not generations of cloud reads.
-
-    The existing later-read-wins tests exercise changed values. Here a newer
-    REST poll reads the same brightness as the baseline, so it supplies neither
-    a diff nor a confirmation against an older Dashboard response.
-    """
+async def test_unchanged_newer_rest_led_read_blocks_an_older_dashboard_value(coord):
+    """A successful overlapping LED read protects even an unchanged observation."""
     started, finish = asyncio.Event(), asyncio.Event()
 
     async def dashboard(staged, force=False):
@@ -230,6 +225,6 @@ async def test_unchanged_later_poll_is_not_a_general_read_ordering_barrier(coord
         assert coord._state_confirmations.version == version
         finish.set()
         await asyncio.wait_for(task, 1)
-        assert coord.data.station.led_brightness == 50
+        assert coord.data.station.led_brightness == 10
     finally:
         await _finish(task)
