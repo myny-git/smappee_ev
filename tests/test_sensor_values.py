@@ -2,9 +2,10 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components.sensor import SensorExtraStoredData, SensorStateClass
+from homeassistant.components.sensor import ATTR_LAST_RESET, SensorExtraStoredData, SensorStateClass
 from homeassistant.core import State
 import pytest
+from pytest_homeassistant_custom_component.common import mock_restore_cache_with_extra_data
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
@@ -465,3 +466,48 @@ async def test_session_energy_without_complete_restored_state_follows_the_api(st
         await entity.async_added_to_hass()
 
     assert entity.native_value == 12.0
+
+
+def test_session_energy_empty_answer_is_unknown_and_never_counts_twice():
+    """An empty answer shows unknown; the older session after it is still ignored."""
+    previous = {"smartDeviceId": "device-1", "energy": 12.0, "from": 1_700_000_000_000}
+    current = {"smartDeviceId": "device-1", "energy": 0.4, "from": 1_700_100_000_000}
+    current_reset = datetime.fromtimestamp(1_700_100_000, tz=UTC)
+    coordinator = _coordinator(recent_sessions=[current, previous])
+    entity = ConnectorSessionEnergySensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+    assert (entity.native_value, entity.last_reset) == (0.4, current_reset)
+
+    # Home Assistant skips unknown states in long-term statistics.
+    coordinator.data.recent_sessions = []
+    assert (entity.native_value, entity.last_reset) == (None, None)
+
+    coordinator.data.recent_sessions = [previous]
+    assert (entity.native_value, entity.last_reset) == (0.4, current_reset)
+
+    coordinator.data.recent_sessions = [{**current, "energy": 0.8}, previous]
+    assert (entity.native_value, entity.last_reset) == (0.8, current_reset)
+
+
+async def test_session_energy_restore_round_trip_through_home_assistant(hass):
+    """What the sensor stores is what Home Assistant's restore cache gives back."""
+    current = {"smartDeviceId": "device-1", "energy": 0.4, "from": 1_700_100_000_000}
+    current_reset = datetime.fromtimestamp(1_700_100_000, tz=UTC)
+    before = ConnectorSessionEnergySensor(
+        _coordinator(recent_sessions=[current]), _api(), 42, "station-uuid", "conn-1"
+    )
+    stored_state = State("sensor.smappee_session", "0.4", before.state_attributes)
+    assert stored_state.attributes[ATTR_LAST_RESET] == current_reset.isoformat()
+    mock_restore_cache_with_extra_data(
+        hass, [(stored_state, before.extra_restore_state_data.as_dict())]
+    )
+
+    previous = {"smartDeviceId": "device-1", "energy": 12.0, "from": 1_700_000_000_000}
+    after = ConnectorSessionEnergySensor(
+        _coordinator(recent_sessions=[previous]), _api(), 42, "station-uuid", "conn-1"
+    )
+    after.hass = hass
+    after.entity_id = "sensor.smappee_session"
+    with patch.object(SmappeeConnectorEntity, "async_added_to_hass", AsyncMock()):
+        await after.async_added_to_hass()
+
+    assert (after.native_value, after.last_reset) == (0.4, current_reset)
