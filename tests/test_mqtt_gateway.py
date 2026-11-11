@@ -607,10 +607,15 @@ class TestSmappeeMqtt:
 
 
 @pytest.mark.parametrize("failure_phase", ["connect", "subscribe"])
-async def test_reconnect_backoff_grows_is_capped_and_resets_after_all_subscriptions(
-    monkeypatch, failure_phase
+@pytest.mark.parametrize(("connected_for", "last_delay"), [(5, 60), (60, 1)])
+async def test_reconnect_backoff_grows_is_capped_and_resets_after_stable_connection(
+    monkeypatch, failure_phase, connected_for, last_delay
 ):
-    """Repeated partial subscription failures must not produce a 1 s retry loop."""
+    """Repeated failures must not produce a 1 s retry loop.
+
+    Only a connection that stayed up after subscribing starts over at 1 s; one that
+    drops right after subscribing keeps the grown delay.
+    """
     gw = SmappeeMqtt(
         service_location_uuid="u",
         client_id="c",
@@ -662,12 +667,17 @@ async def test_reconnect_backoff_grows_is_capped_and_resets_after_all_subscripti
         else:
             raise TimeoutError
 
+    monotonic = iter([0.0, float(connected_for)])
     monkeypatch.setattr("custom_components.smappee_ev.api.mqtt_gateway.Client", Client)
+    monkeypatch.setattr(
+        "custom_components.smappee_ev.api.mqtt_gateway.time",
+        SimpleNamespace(monotonic=lambda: next(monotonic)),
+    )
     clock = SimpleNamespace(**{**vars(asyncio), "wait_for": elapse_backoff})
     with patch("custom_components.smappee_ev.api.mqtt_gateway.asyncio", clock):
         await gw._runner_main(MagicMock())
 
-    assert delays == [1, 2, 4, 8, 16, 32, 60, 60, 60, 1]
+    assert delays == [1, 2, 4, 8, 16, 32, 60, 60, 60, last_delay]
     assert len(attempts) == 10
     assert len(attempts[-1].subscriptions) == 6
     if failure_phase == "subscribe":

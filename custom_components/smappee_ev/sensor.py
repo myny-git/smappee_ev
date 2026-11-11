@@ -1301,6 +1301,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             self, c, api, sid, station_uuid, uuid, unique_suffix="sensor:session_energy"
         )
         self.api_client = api
+        self._reported_session: tuple[dict[str, Any], bool] | None = None
 
     @override
     async def async_update(self) -> None:
@@ -1393,9 +1394,37 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
             return sessions[0], False
         return {}, False
 
+    def _session_to_report(self) -> tuple[dict[str, Any], bool]:
+        """Return the session to report, never stepping back to older data.
+
+        A late Dashboard answer can still list the previous session, or an older
+        energy value of the current one. With last_reset, reporting the previous
+        session again would count its energy as a new cycle in the statistics.
+        """
+        session, matched = self._active_session_match()
+        reported = self._reported_session
+        if reported is not None:
+            start = _session_ts_to_datetime(session.get("from"))
+            reported_start = _session_ts_to_datetime(reported[0].get("from"))
+            if start is not None and reported_start is not None:
+                if start < reported_start:
+                    return reported
+                energy = _coerce_float(session.get("energy"))
+                reported_energy = _coerce_float(reported[0].get("energy"))
+                if (
+                    start == reported_start
+                    and energy is not None
+                    and reported_energy is not None
+                    and energy < reported_energy
+                ):
+                    return reported
+        if session:
+            self._reported_session = (session, matched)
+        return session, matched
+
     @property
     def _active_session_data(self) -> dict[str, Any]:
-        return self._active_session_match()[0]
+        return self._session_to_report()[0]
 
     @property
     @override
@@ -1421,7 +1450,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, SensorEntity):
     @override
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes of the sensor."""
-        session, connector_matched = self._active_session_match()
+        session, connector_matched = self._session_to_report()
         queried_at = _session_ts_to_datetime(
             getattr(self.coordinator, "_session_query_success", {}).get(str(self.connector_uuid))
         )

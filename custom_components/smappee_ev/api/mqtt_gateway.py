@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import ssl
+import time
 from typing import Any
 
 from aiomqtt import Client, MqttError
@@ -19,6 +20,7 @@ from ..const import (
     MQTT_QOS_AT_LEAST_ONCE,
     MQTT_RECONNECT_INITIAL_BACKOFF,
     MQTT_RECONNECT_MAX_BACKOFF,
+    MQTT_STABLE_CONNECTION_SEC,
     MQTT_TRACK_INTERVAL_SEC,
     MQTT_TRACKING_TYPE_RT_VALUES,
 )
@@ -50,6 +52,17 @@ def redact_mqtt_topic(topic: str) -> str:
         return f"{prefix}{anonymize_uuid(uuid)}{suffix}"
 
     return _DEVICE_TOPIC_SECRET_RE.sub(replacer, _TOPIC_SECRET_RE.sub(replacer, topic))
+
+
+def _backoff_after_connection(backoff: float, subscribed_at: float | None) -> float:
+    """Start over at the initial delay only after a connection that stayed up.
+
+    A connection that subscribes and then drops at once keeps growing the delay,
+    so a recurring failure cannot turn into a fast reconnect loop.
+    """
+    if subscribed_at is not None and time.monotonic() - subscribed_at >= MQTT_STABLE_CONNECTION_SEC:
+        return MQTT_RECONNECT_INITIAL_BACKOFF
+    return backoff
 
 
 class SmappeeMqtt:
@@ -236,6 +249,7 @@ class SmappeeMqtt:
 
         try:
             while not self._stop.is_set():
+                subscribed_at: float | None = None
                 try:
                     async with Client(
                         hostname=MQTT_HOST,
@@ -253,7 +267,7 @@ class SmappeeMqtt:
 
                         # (Re)subscribe all topics
                         await self._subscribe_all(client)
-                        backoff = MQTT_RECONNECT_INITIAL_BACKOFF
+                        subscribed_at = time.monotonic()
 
                         # First tracking ping en periodically
                         await self._publish_tracking_once()
@@ -316,6 +330,7 @@ class SmappeeMqtt:
                     break
                 except Exception as err:
                     # Any error reconnects; an unexpected one must not end MQTT until a reload.
+                    backoff = _backoff_after_connection(backoff, subscribed_at)
                     self._log_runner_failure(err, backoff)
                     self._notify_conn(False)
 

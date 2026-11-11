@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, TypeVar, override
+from typing import TYPE_CHECKING, Any, TypeVar, override
 
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+from .const import DOMAIN, MANUFACTURER, MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .coordinators.freshness import MeasurementFreshness
 from .helpers import build_connector_id, make_device_info, make_unique_id, station_serial
 
 if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
     from homeassistant.helpers.device_registry import DeviceInfo
 
     from .api.device_handle import SmappeeDeviceHandle
@@ -150,6 +153,23 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
     def _coordinator_available(self) -> bool:
         """Return the base CoordinatorEntity availability state."""
         return super().available
+
+    @override
+    async def async_request_call[T](self, coro: Coroutine[Any, Any, T]) -> T:
+        """Run an entity action; rejected credentials start reauthentication.
+
+        Home Assistant only starts a reauth flow for ``ConfigEntryAuthFailed`` from
+        setup or a coordinator update. From an entity action it would surface as an
+        unexplained error, so start the flow here and report it in translated form.
+        """
+        try:
+            return await super().async_request_call(coro)
+        except ConfigEntryAuthFailed as err:
+            if self.platform is not None and self.platform.config_entry is not None:
+                self.platform.config_entry.async_start_reauth_if_available(self.hass)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="reauth_required"
+            ) from err
 
     @property
     def _dashboard_available(self) -> bool:

@@ -356,3 +356,44 @@ def test_support_grid_is_shown_in_whole_amperes():
     entity = SmappeeSupportGridSensor(_coordinator(), _api(), 42, "station-uuid", "conn-1")
 
     assert entity.suggested_display_precision == 0
+
+
+def test_session_energy_ignores_late_answers_with_older_session_data():
+    """Energy and last_reset come from one session and never step back.
+
+    A late Dashboard answer can still list the previous session, or an older
+    energy value of the current one. Following it would make the statistics
+    count the previous session again as a new cycle.
+    """
+    previous = {"smartDeviceId": "device-1", "energy": 12.0, "from": 1_700_000_000_000}
+    current = {"smartDeviceId": "device-1", "energy": 0.4, "from": 1_700_100_000_000}
+    coordinator = _coordinator(recent_sessions=[previous])
+    entity = ConnectorSessionEnergySensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+    assert (entity.native_value, entity.last_reset) == (
+        12.0,
+        datetime.fromtimestamp(1_700_000_000, tz=UTC),
+    )
+
+    coordinator.data.recent_sessions = [current, previous]
+    current_reset = datetime.fromtimestamp(1_700_100_000, tz=UTC)
+    assert (entity.native_value, entity.last_reset) == (0.4, current_reset)
+
+    # Late answer: the new session is missing again.
+    coordinator.data.recent_sessions = [previous]
+    assert (entity.native_value, entity.last_reset) == (0.4, current_reset)
+    assert entity.extra_state_attributes["session_started_at"] == current_reset.isoformat()
+
+    # Late answer: an older energy value of the current session.
+    coordinator.data.recent_sessions = [{**current, "energy": 1.5}]
+    assert entity.native_value == 1.5
+    coordinator.data.recent_sessions = [{**current, "energy": 0.9}]
+    assert (entity.native_value, entity.last_reset) == (1.5, current_reset)
+
+    # The next session still takes over.
+    coordinator.data.recent_sessions = [
+        {"smartDeviceId": "device-1", "energy": 0.1, "from": 1_700_200_000_000}
+    ]
+    assert (entity.native_value, entity.last_reset) == (
+        0.1,
+        datetime.fromtimestamp(1_700_200_000, tz=UTC),
+    )

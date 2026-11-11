@@ -29,6 +29,8 @@ CHARGING_MODES: Final = ("standard", "smart", "solar")
 # MQTT reconnect and backoff timings.
 MQTT_RECONNECT_INITIAL_BACKOFF: Final = 1.0
 MQTT_RECONNECT_MAX_BACKOFF: Final = 60.0
+# A connection must stay up this long before the reconnect delay starts over.
+MQTT_STABLE_CONNECTION_SEC: Final = 60.0
 MQTT_QOS_AT_LEAST_ONCE: Final = 1
 
 # MQTT tracking and payload constants.

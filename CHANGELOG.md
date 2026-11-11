@@ -30,12 +30,18 @@ where the bug report, testing notes or design discussion can be found.
   live MQTT charger state the behaviour is unchanged.
 - The session energy sensor now marks the start of each session as a reset.
   Long-term statistics no longer record the drop to zero at a new session as
-  negative consumption.
+  negative consumption. A late Dashboard answer that still lists the previous
+  session, or an older energy value of the current one, is ignored, so it
+  cannot be counted twice.
 
 ### Entities and actions
 
 - Starting or pausing charging with the charging switch now reports a failure
   as a translated error instead of a raw Smappee or connection error.
+- When Smappee rejects the stored credentials during an entity action (a
+  switch, button, number, select, light or lock), reauthentication now starts
+  and the error explains it. Previously the action failed with an unexplained
+  error and no reauthentication was offered.
 - The support grid sensor is shown in whole amperes.
 - The `config_entry_id` field of every action offers a picker for Smappee EV
   config entries.
@@ -48,6 +54,9 @@ where the bug report, testing notes or design discussion can be found.
 - The Dashboard maintenance state of a removed config entry is released.
 - An unexpected error in the MQTT connection loop now leads to a reconnect
   with backoff. Previously MQTT stayed down until the integration was reloaded.
+- The MQTT reconnect delay only starts over at 1 s after a connection that
+  stayed up for a minute. A connection that drops right after subscribing
+  keeps the longer delay instead of retrying every second.
 
 ## [2026.11.0] - 2026-11-02
 
