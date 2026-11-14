@@ -5,7 +5,7 @@ from typing import Any, override
 from aiohttp import ClientError
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api.device_handle import SmappeeDeviceHandle
 from .api.errors import SmappeeError
@@ -23,7 +23,7 @@ PARALLEL_UPDATES = 1
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Smappee EV light entities."""
     runtime = config_entry.runtime_data
@@ -37,15 +37,12 @@ async def async_setup_entry(
             if coord is None or st_client is None:
                 continue
             if bucket.connectors:
-                led_key, led_info = next(iter(bucket.led_devices.items()), (None, None))
                 entities.append(
                     SmappeeLedLight(
                         coordinator=coord,
                         api_client=st_client,
                         sid=sid_int,
                         station_uuid=st_uuid,
-                        led_device_id=led_key,
-                        led_name=led_info.led_device_name if led_info else None,
                     )
                 )
 
@@ -66,8 +63,6 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
         api_client: SmappeeDeviceHandle,
         sid: int,
         station_uuid: str,
-        led_device_id: str | None = None,
-        led_name: str | None = None,
     ) -> None:
         SmappeeLedEntity.__init__(
             self,
@@ -75,8 +70,6 @@ class SmappeeLedLight(SmappeeLedEntity, LightEntity):
             sid,
             station_uuid,
             unique_suffix="light:led",
-            led_device_id=led_device_id,
-            led_name=led_name,
         )
         self.api_client = api_client
         self._last_nonzero_brightness: int | None = None

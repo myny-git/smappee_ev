@@ -15,11 +15,11 @@ rules:
   dependency-transparency: done
   docs-actions: done
   docs-triggers:
-    status: done
-    comment: The integration does not provide custom integration-specific triggers. Users can use the standard Home Assistant state, numeric-state, event, and device/entity triggers.
+    status: exempt
+    comment: The integration does not provide integration-specific triggers. Users can use the standard Home Assistant state, numeric-state, event, and device/entity triggers.
   docs-conditions:
-    status: done
-    comment: The integration does not provide custom integration-specific conditions. Users can use the standard Home Assistant state, numeric-state, template, device, and entity conditions.
+    status: exempt
+    comment: The integration does not provide integration-specific conditions. Users can use the standard Home Assistant state, numeric-state, template, device, and entity conditions.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
@@ -47,7 +47,7 @@ rules:
   reauthentication-flow: done
   test-coverage:
     status: done
-    comment: CI measures coverage for the complete integration and fails below 95%. The current test suite passes this enforced threshold.
+    comment: Every module is covered above 95%. CI fails when any single module is not (script/check_module_coverage.py), in addition to the 95% total. Unreachable defensive code was removed rather than covered with artificial tests.
 
   # Gold.
   devices: done
@@ -72,7 +72,9 @@ rules:
   entity-device-class: done
   entity-disabled-by-default: done
   entity-translations: done
-  exception-translations: done
+  exception-translations:
+    status: done
+    comment: Action and entity errors, setup retry and reauthentication reasons, and coordinator update failures use translation keys without a hardcoded message. A failed first refresh therefore shows a translated retry reason.
   icon-translations: done
   reconfiguration-flow: done
   repair-issues:

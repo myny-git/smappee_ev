@@ -267,7 +267,7 @@ def _build_mqtt_clients(
             )
         ]
 
-    spec_groups = _group_mqtt_specs_by_credentials(suuid, sid, mqtt_specs)
+    spec_groups = _group_mqtt_specs_by_credentials(suuid, mqtt_specs)
     mqtt_clients: list[SmappeeMqtt] = []
     for index, (specs, service_location_uuids, service_location_ids_by_uuid) in enumerate(
         spec_groups, start=1

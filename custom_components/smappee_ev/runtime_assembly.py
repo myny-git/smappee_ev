@@ -15,7 +15,6 @@ from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .dashboard_discovery import (
-    _dashboard_client_configured,
     _dashboard_fetch_devices,
     _dashboard_fetch_highlevel_configs,
     _fallback_dashboard_connector_mapping,
@@ -333,23 +332,22 @@ async def _prepare_control_stations(
         _LOGGER.info("No chargers at %s (%s); skipping", topology.control_name, control_sid)
         return {}, serial_str
 
-    station_serial_to_connectors = await _fetch_dashboard_connector_mapping(
-        dashboard_client, station_devs
+    # The devices above were fetched, so the client is configured and the
+    # mapping is a dict: empty when the Dashboard had none to offer.
+    station_serial_to_connectors = (
+        await _fetch_dashboard_connector_mapping(dashboard_client, station_devs) or {}
     )
-    if station_serial_to_connectors == {} and _dashboard_client_configured(dashboard_client):
+    if not station_serial_to_connectors:
         station_serial_to_connectors = _fallback_dashboard_connector_mapping(station_devs, car_devs)
-    if station_serial_to_connectors == {}:
+    if not station_serial_to_connectors:
         station_serial_to_connectors = _fallback_highlevel_connector_mapping(
             station_serial,
             station_highlevel_configs,
         )
-    if station_serial_to_connectors is None:
-        station_serial_to_connectors = {}
-    else:
-        station_serial_to_connectors = _normalize_connector_mapping_station_keys(
-            station_serial_to_connectors,
-            station_serial or serial_str,
-        )
+    station_serial_to_connectors = _normalize_connector_mapping_station_keys(
+        station_serial_to_connectors,
+        station_serial or serial_str,
+    )
 
     has_connector_mapping = any(
         (mapping.get("connectors") or {}) for mapping in station_serial_to_connectors.values()
@@ -539,27 +537,3 @@ async def _prepare_site_topologies(
     site.site_coordinator = site_coordinator
     site.mqtt_clients = mqtt
     return site, mqtt
-
-
-async def _prepare_topology(
-    hass: HomeAssistant,
-    topology: SmappeeLocationTopology,
-    update_interval: int,
-    client_id_prefix: str,
-    config_entry: SmappeeEvConfigEntry | None = None,
-    dashboard_client: SmappeeDashboardClient | None = None,
-    background_tasks: set[asyncio.Task] | None = None,
-    start_runtime: bool = True,
-) -> tuple[dict[str, SmappeeStationRuntime] | None, MqttRuntimeValue]:
-    """Compatibility wrapper for preparing one Dashboard topology."""
-    site, mqtt = await _prepare_site_topologies(
-        hass,
-        [topology],
-        update_interval,
-        client_id_prefix,
-        config_entry=config_entry,
-        dashboard_client=dashboard_client,
-        background_tasks=background_tasks,
-        start_runtime=start_runtime,
-    )
-    return (site.stations if site is not None else None), mqtt

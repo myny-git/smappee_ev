@@ -102,11 +102,7 @@ class TestSelectPlatform:
         """Test select platform setup."""
         async_add_entities = MagicMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            await select.async_setup_entry(hass, mock_config_entry, async_add_entities)
+        await select.async_setup_entry(hass, mock_config_entry, async_add_entities)
 
         # Verify entities were added
         async_add_entities.assert_called_once()
@@ -155,17 +151,13 @@ class TestSmappeeModeSelect:
 
     def test_init(self, mock_coordinator, mock_api_client):
         """Test initialization of mode select entity."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # Check basic properties
         assert entity._attr_has_entity_name is True
@@ -178,34 +170,26 @@ class TestSmappeeModeSelect:
 
     def test_device_info(self, mock_coordinator, mock_api_client):
         """Test device_info property."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # We just verify it's accessible
         assert entity.device_info is not None
 
     def test_current_option(self, mock_coordinator, mock_api_client, mock_connector_state):
         """Test current_option property."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # Test with selected_mode set
         mock_connector_state.selected_mode = "SMART"
@@ -226,17 +210,13 @@ class TestSmappeeModeSelect:
 
     def test_current_option_no_data(self, mock_coordinator, mock_api_client):
         """Test current_option property with no data."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # Test with no data
         mock_coordinator.data = None
@@ -247,17 +227,13 @@ class TestSmappeeModeSelect:
         self, mock_coordinator, mock_api_client, mock_connector_state
     ):
         """Test selecting an option."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         entity.async_write_ha_state = MagicMock()
         mock_coordinator.async_update_listeners = MagicMock()
@@ -280,17 +256,13 @@ class TestSmappeeModeSelect:
     @pytest.mark.asyncio
     async def test_async_select_option_no_data(self, mock_coordinator, mock_api_client):
         """Test selecting an option with no data."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         entity.async_write_ha_state = MagicMock()
         mock_coordinator.async_update_listeners = MagicMock()
@@ -315,17 +287,13 @@ class TestSmappeeModeSelect:
         self, hass, mock_coordinator, mock_api_client, mock_connector_state
     ):
         """Test entity added to hass with state restoration."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # Mock RestoreEntity methods
         entity.hass = hass
@@ -354,17 +322,13 @@ class TestSmappeeModeSelect:
         self, hass, mock_coordinator, mock_api_client, mock_connector_state
     ):
         """Test restore does not overwrite a live mode already provided by the coordinator."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         entity.hass = hass
         entity.platform = object()
@@ -388,17 +352,13 @@ class TestSmappeeModeSelect:
         self, mock_coordinator, mock_api_client, mock_connector_state
     ):
         """A failed mode write leaves local state unchanged."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         entity.async_write_ha_state = MagicMock()
         mock_coordinator.async_update_listeners = MagicMock()
@@ -415,17 +375,13 @@ class TestSmappeeModeSelect:
     @pytest.mark.asyncio
     async def test_async_added_to_hass_no_restore(self, hass, mock_coordinator, mock_api_client):
         """Test entity added to hass without state restoration."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # Mock RestoreEntity methods
         entity.hass = hass
@@ -446,17 +402,13 @@ class TestSmappeeModeSelect:
     @pytest.mark.asyncio
     async def test_async_added_to_hass_unknown_state(self, hass, mock_coordinator, mock_api_client):
         """Test entity added to hass with unknown last state."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # Mock RestoreEntity methods
         entity.hass = hass
@@ -477,17 +429,13 @@ class TestSmappeeModeSelect:
     @pytest.mark.asyncio
     async def test_async_added_to_hass_no_last_state(self, hass, mock_coordinator, mock_api_client):
         """Test entity added to hass with no last state."""
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            entity = select.SmappeeModeSelect(
-                coordinator=mock_coordinator,
-                api_client=mock_api_client,
-                sid=12345,
-                station_uuid="station_uuid_123",
-                connector_uuid="connector_uuid_123",
-            )
+        entity = select.SmappeeModeSelect(
+            coordinator=mock_coordinator,
+            api_client=mock_api_client,
+            sid=12345,
+            station_uuid="station_uuid_123",
+            connector_uuid="connector_uuid_123",
+        )
 
         # Mock RestoreEntity methods
         entity.hass = hass

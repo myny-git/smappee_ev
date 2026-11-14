@@ -5,16 +5,20 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
+from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.coordinators.api_state import ConnectorRestSnapshot
 from custom_components.smappee_ev.coordinators.power import _amps_from_ma, _pick, _to_int
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import ConnectorSessionEnergySensor
+from tests.helpers import raises_translated
 
 CHARGINGSTATE_TOPIC = (
     "servicelocation/site/etc/carcharger/acchargingcontroller/v1"
@@ -557,7 +561,6 @@ class TestSmappeeCoordinator:
 
         mock_connector_client.async_get_recent_sessions.assert_called_once()
         assert coordinator._last_session_api_attempt == 1000.0
-        assert coordinator._last_session_api_update == 0.0
 
     @pytest.mark.asyncio
     async def test_active_session_loop_cancels_without_active_connectors(
@@ -792,7 +795,7 @@ class TestSmappeeCoordinator:
 
         assert isinstance(result, StationState)
         assert result.led_brightness == 75
-        assert result.available is True
+        assert result.available is None
         assert result.api_available is True
 
     @pytest.mark.asyncio
@@ -804,7 +807,7 @@ class TestSmappeeCoordinator:
 
         assert isinstance(result, StationState)
         assert result.led_brightness is None
-        assert result.available is True
+        assert result.available is None
         assert result.api_available is False
 
     @pytest.mark.asyncio
@@ -818,8 +821,18 @@ class TestSmappeeCoordinator:
 
         assert isinstance(result, StationState)
         assert result.led_brightness is None
-        assert result.available is True
+        assert result.available is None
         assert result.api_available is False
+
+    def test_rest_poll_keeps_reported_station_availability(self, coordinator):
+        """The poll never reads availability, so it must not replace a reported value."""
+        reported = StationState(available=False, dashboard_available=False)
+        merged = coordinator._merge_station_rest_state(reported, StationState(led_brightness=70))
+        assert merged.available is False
+        assert merged.dashboard_available is False
+
+        first = coordinator._merge_station_rest_state(None, StationState(led_brightness=70))
+        assert first.available is None
 
     @pytest.mark.asyncio
     async def test_fetch_connector_state_success(self, coordinator):
@@ -1143,7 +1156,7 @@ class TestSmappeeCoordinator:
         # Mock station state fetch with exception
         coordinator._fetch_station_state = AsyncMock(side_effect=ClientError("Network error"))
 
-        with pytest.raises(UpdateFailed, match="Error fetching Smappee data"):
+        with raises_translated(UpdateFailed, "update_failed"):
             await coordinator._async_update_data()
 
     @pytest.mark.asyncio
@@ -1402,14 +1415,6 @@ class TestSmappeeCoordinator:
         )
         assert coordinator._property_name_from_topic("/property/") is None
         assert coordinator._property_name_from_topic("/not-property/state") is None
-
-        # Test station serial extraction
-        assert (
-            coordinator._station_serial_from_topic("/acchargingstation/v1/SN12345/state")
-            == "SN12345"
-        )
-        assert coordinator._station_serial_from_topic("/acchargingstation/v1/") is None
-        assert coordinator._station_serial_from_topic("/not-station/SN12345") is None
 
     def test_as_int_conversion(self, coordinator):
         """Test _as_int conversion method."""
@@ -2320,3 +2325,28 @@ class TestSmappeeCoordinator:
         assert conn.power_phases == [100, 200]
         assert conn.power_total == 300
         assert conn.energy_import_kwh == 10.0  # Unchanged without energy indices
+
+
+async def test_failed_first_refresh_gives_a_translated_setup_retry_reason(hass):
+    """A failed first REST refresh must tell the user why setup is retrying.
+
+    Home Assistant turns the coordinator's UpdateFailed into ConfigEntryNotReady
+    and keeps only its translation. An untranslated UpdateFailed left the
+    integration card without any reason.
+    """
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
+    coordinator = SmappeeCoordinator(
+        hass,
+        station_client=MagicMock(spec=SmappeeDeviceHandle),
+        connector_clients={},
+        update_interval=60,
+        config_entry=entry,
+    )
+    coordinator._fetch_station_state = AsyncMock(side_effect=ClientError("Network error"))
+
+    with raises_translated(ConfigEntryNotReady, "update_failed") as caught:
+        await coordinator.async_config_entry_first_refresh()
+
+    assert caught.value.translation_placeholders == {"error": "Network error"}

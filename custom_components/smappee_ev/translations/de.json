@@ -55,6 +55,33 @@
     "dashboard_maintenance": {
       "message": "Das Smappee Dashboard wird gewartet. Home Assistant versucht es automatisch erneut."
     },
+    "dashboard_credentials_required": {
+      "message": "Zugangsdaten für das Smappee Dashboard sind erforderlich. Authentifizieren Sie die Smappee EV-Integration erneut, um fortzufahren."
+    },
+    "dashboard_unavailable_no_snapshot": {
+      "message": "Das Smappee Dashboard ist vorübergehend nicht verfügbar und es gibt noch keine gespeicherte MQTT-Konfiguration. Home Assistant versucht es automatisch erneut."
+    },
+    "dashboard_not_configured": {
+      "message": "Die Verbindung zum Smappee Dashboard ist noch nicht eingerichtet. Home Assistant versucht es automatisch erneut."
+    },
+    "cannot_load_topology": {
+      "message": "Laden der Smappee-Ladestationen fehlgeschlagen: {error}"
+    },
+    "no_charging_stations": {
+      "message": "Es wurde noch keine Smappee-Ladestation gefunden. Home Assistant versucht es automatisch erneut."
+    },
+    "incomplete_site_discovery": {
+      "message": "Smappee hat unvollständige Angaben zu einem Servicestandort geliefert. Home Assistant versucht es automatisch erneut."
+    },
+    "topology_preparation_failed": {
+      "message": "Vorbereiten der Smappee-Ladestationen fehlgeschlagen: {error}"
+    },
+    "update_failed": {
+      "message": "Abrufen der Daten von Smappee fehlgeschlagen: {error}"
+    },
+    "status_update_failed": {
+      "message": "Abrufen des Smappee-Servicestatus fehlgeschlagen: {error}"
+    },
     "service_location_not_in_entry": {
       "message": "Service location {service_location_id} gehört nicht zu config entry {config_entry_id}"
     },
@@ -67,14 +94,8 @@
     "multiple_service_locations": {
       "message": "Mehrere service locations gefunden. Geben Sie service_location_id an."
     },
-    "no_station_client": {
-      "message": "Kein station client für config entry {config_entry_id} und service location {service_location_id} gefunden."
-    },
     "station_unavailable": {
       "message": "Stationsstatus ist nicht verfügbar."
-    },
-    "station_method_not_found": {
-      "message": "Station-Methode {method_name} nicht gefunden."
     },
     "station_service_failed": {
       "message": "Station-Service {method_name} fehlgeschlagen: {error}"

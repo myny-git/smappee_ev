@@ -361,15 +361,6 @@ class PowerMixin(CoordinatorMixin):
 
         return maps_by_topic or None
 
-    def _connector_uuid_for_highlevel_measurement(self, meas: DashboardObject) -> str | None:
-        """Match a Dashboard highlevel APPLIANCE measurement to a connector UUID.
-
-        Thin wrapper kept for backward compatibility (and simple call sites);
-        prefer ``_resolve_highlevel_measurement`` when the resolution method or
-        position is also needed (e.g. diagnostics), so both stay in sync.
-        """
-        return self._resolve_highlevel_measurement(meas).connector_uuid
-
     def _resolve_highlevel_measurement(
         self, meas: DashboardObject
     ) -> ConnectorMeasurementResolution:

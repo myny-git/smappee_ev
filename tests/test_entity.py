@@ -22,7 +22,6 @@ from custom_components.smappee_ev.entity import (
     SmappeeSitePowerEntity,
     SmappeeStationEntity,
     SmappeeStationRestEntity,
-    _is_int_like,
 )
 from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
@@ -30,6 +29,8 @@ from custom_components.smappee_ev.helpers import (
     station_serial,
 )
 from custom_components.smappee_ev.models.state import ConnectorState, StationState
+
+CONNECTOR_API = SimpleNamespace(connector_number=None)
 
 
 @pytest.fixture
@@ -87,8 +88,6 @@ def test_led_entity_uses_station_device_info(mock_coordinator):
         317418,
         "station-uuid",
         unique_suffix="light:led",
-        led_device_id="LED-controller-123",
-        led_name="LED Ring",
     )
 
     identifiers = led_entity.device_info["identifiers"]
@@ -116,13 +115,6 @@ def test_station_serial_prefers_charging_station_serial():
     )
 
     assert station_serial(coordinator) == "6220017988"
-
-
-def test_entity_helper_int_like_accepts_only_parseable_ints():
-    assert _is_int_like(123) is True
-    assert _is_int_like("123") is True
-    assert _is_int_like("not-int") is False
-    assert _is_int_like(None) is False
 
 
 def test_only_site_power_entity_availability_requires_fresh_real_power_data():
@@ -355,6 +347,7 @@ class TestSmappeeConnectorEntity:
         """Test entity initialization."""
         entity = SmappeeConnectorEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "connector-uuid",
@@ -378,6 +371,7 @@ class TestSmappeeConnectorEntity:
         """Test connector_uuid property."""
         entity = SmappeeConnectorEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "connector-uuid",
@@ -391,6 +385,7 @@ class TestSmappeeConnectorEntity:
         """Test _conn_state property."""
         entity = SmappeeConnectorEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "connector-uuid",
@@ -410,6 +405,7 @@ class TestSmappeeConnectorEntity:
 
         entity = SmappeeConnectorEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "connector-uuid",
@@ -425,6 +421,7 @@ class TestSmappeeConnectorEntity:
         # Use a different connector UUID than what's in the data
         entity = SmappeeConnectorEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "different-uuid",
@@ -443,6 +440,7 @@ class TestSmappeeConnectorEntity:
         )
         entity = SmappeeConnectorEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "connector-uuid",
@@ -456,6 +454,7 @@ class TestSmappeeConnectorEntity:
         """Connector REST entities fail closed when connector state is missing."""
         entity = SmappeeConnectorEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "missing-connector",
@@ -474,6 +473,7 @@ class TestSmappeeConnectorEntity:
         )
         entity = SmappeeConnectorMqttEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "connector-uuid",
@@ -490,6 +490,7 @@ class TestSmappeeConnectorEntity:
         """MQTT connector entities still require a known connector state."""
         entity = SmappeeConnectorMqttEntity(
             mock_coordinator,
+            CONNECTOR_API,
             12345,
             "station-uuid",
             "missing-connector",

@@ -33,15 +33,13 @@ def _is_connector(dev: dict[str, Any]) -> bool:
 
 
 def _safe_str(value: object) -> str | None:
-    """Convert to stripped string or None if not possible."""
+    """Return a stripped string, or None for None, blanks and "none"/"null"."""
     if value is None:
         return None
-    with suppress(TypeError, ValueError):
-        s = str(value).strip()
-        if s.lower() in {"none", "null"}:
-            return None
-        return s or None
-    return None
+    text = str(value).strip()
+    if text.lower() in {"none", "null"}:
+        return None
+    return text or None
 
 
 def _find_in(dev: dict, *keys: str) -> str | None:
@@ -101,53 +99,6 @@ def _split_devices(devices: list[dict]) -> tuple[list[dict], list[dict]]:
     return stations, cars
 
 
-def _charging_station_from_service_location(item: DashboardObject) -> DashboardObject:
-    charging_station = item.get("chargingStation")
-    if not isinstance(charging_station, dict):
-        charging_station = item.get("chargingstation")
-    if isinstance(charging_station, dict):
-        return charging_station
-
-    charging_stations = item.get("chargingStations") or item.get("chargingstations")
-    if isinstance(charging_stations, list):
-        return next((station for station in charging_stations if isinstance(station, dict)), {})
-    return {}
-
-
-def _normalize_dashboard_service_location(
-    item: DashboardObject, *, allow_non_charging_function_type: bool = False
-) -> DashboardObject | None:
-    function_type = _safe_str(item.get("functionType"))
-    charging_station = _charging_station_from_service_location(item)
-    if (
-        function_type
-        and function_type.upper() != "CHARGINGSTATION"
-        and not allow_non_charging_function_type
-        and not charging_station
-    ):
-        return None
-
-    sid = item.get("serviceLocationId") or item.get("id") or item.get("locationId")
-    serial = (
-        _safe_str(charging_station.get("serialNumber"))
-        or _safe_str(charging_station.get("serial"))
-        or _safe_str(item.get("deviceSerialNumber"))
-        or _safe_str(item.get("serialNumber"))
-    )
-    if sid is None:
-        return None
-
-    suuid = item.get("serviceLocationUuid") or item.get("uuid")
-    return {
-        "serviceLocationId": sid,
-        "serviceLocationUuid": suuid,
-        "deviceSerialNumber": serial,
-        "chargingStation": charging_station,
-        "functionType": function_type,
-        "name": item.get("name"),
-    }
-
-
 def _connector_position_from_measurement(measurement: dict[str, Any]) -> int | None:
     for key in ("position", "connectorNumber"):
         value = measurement.get(key)
@@ -156,11 +107,8 @@ def _connector_position_from_measurement(measurement: dict[str, Any]) -> int | N
                 return int(value)
     name = str(measurement.get("name") or "")
     match = re.search(r"(?:^|\s-\s|\s)(\d+)\s*$", name)
-    if not match:
-        return None
-    with suppress(TypeError, ValueError):
-        return int(match.group(1))
-    return None
+    # The pattern only matches digits, so the conversion cannot fail.
+    return int(match.group(1)) if match else None
 
 
 def _fallback_highlevel_connector_mapping(
@@ -214,8 +162,6 @@ def _normalize_connector_mapping_station_keys(
     orphan_metadata: dict[str, object] = {}
 
     for station_serial, bucket in mapping.items():
-        if not isinstance(bucket, dict):
-            continue  # type: ignore[unreachable]
         connectors = bucket.get("connectors") or {}
         metadata = {key: value for key, value in bucket.items() if key != "connectors"}
         key = _safe_str(station_serial)
@@ -253,35 +199,8 @@ def _station_devices_from_connector_mapping(mapping: dict[str, dict]) -> Dashboa
     ]
 
 
-def _derive_service_serial(sl: DashboardObject, station_devs: list[dict]) -> str | None:
-    """Return the best serial to use for site-level handles and MQTT."""
-    serial = _safe_str(sl.get("deviceSerialNumber")) or _safe_str(sl.get("serialNumber"))
-    if serial:
-        return serial
-
-    charging_station = sl.get("chargingStation")
-    if isinstance(charging_station, dict):
-        serial = _safe_str(charging_station.get("serialNumber")) or _safe_str(
-            charging_station.get("serial")
-        )
-        if serial:
-            return serial
-
-    for station in station_devs:
-        serial = _find_in(station, "serialNumber", "serial", "deviceSerialNumber")
-        if serial:
-            return serial
-
-    if len(station_devs) == 1:
-        return _device_uuid(station_devs[0])
-    return None
-
-
-def _make_led_runtimes(led_devices: object) -> dict[str, SmappeeLedRuntime]:
+def _make_led_runtimes(led_devices: dict[str, Any]) -> dict[str, SmappeeLedRuntime]:
     """Convert Dashboard LED metadata into typed runtime containers."""
-    if not isinstance(led_devices, dict):
-        return {}
-
     runtimes: dict[str, SmappeeLedRuntime] = {}
     for led_key, led in led_devices.items():
         key = str(led_key)
@@ -381,9 +300,6 @@ def _make_station_clients_with_mapping_fallback(
         return stations
 
     mapping_station_devs = _station_devices_from_connector_mapping(station_serial_to_connectors)
-    if not mapping_station_devs:
-        return stations
-
     _LOGGER.debug(
         "Connector mapping at %s yielded no usable station smartdevices; "
         "using %d station serials from Dashboard mapping",
@@ -444,10 +360,7 @@ def _fallback_assign(
     total_assigned = sum(len(bucket.connectors) for bucket in stations.values())
     if total_assigned > 0:
         return
-    first_uuid = next(iter(stations.keys()), None)
-    if not first_uuid:
-        return
-    first_bucket = stations.get(first_uuid)
+    first_bucket = next(iter(stations.values()), None)
     if first_bucket is None:
         return
     st_serial = first_bucket.charging_station_serial

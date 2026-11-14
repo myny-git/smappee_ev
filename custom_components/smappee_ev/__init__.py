@@ -202,9 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
         return await _async_setup_entry(hass, entry)
     except SmappeeMaintenanceError as err:
         raise ConfigEntryNotReady(
-            "Smappee Dashboard under maintenance. Home Assistant will retry automatically.",
-            translation_domain=DOMAIN,
-            translation_key="dashboard_maintenance",
+            translation_domain=DOMAIN, translation_key="dashboard_maintenance"
         ) from err
 
 
@@ -221,7 +219,7 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
         dashboard_client
     ):
         raise ConfigEntryAuthFailed(
-            "Smappee Dashboard credentials are required after migration to API v10/v11"
+            translation_domain=DOMAIN, translation_key="dashboard_credentials_required"
         )
 
     try:
@@ -232,7 +230,7 @@ async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -
             if isinstance(err, SmappeeMaintenanceError):
                 raise
             raise ConfigEntryNotReady(
-                "Dashboard temporarily unavailable; no MQTT bootstrap available"
+                translation_domain=DOMAIN, translation_key="dashboard_unavailable_no_snapshot"
             ) from err
         runtime = build_cached_runtime(hass, entry, dashboard_client, snapshot)
         _LOGGER.warning("Dashboard unavailable; using saved MQTT configuration for monitoring only")
@@ -332,7 +330,11 @@ async def _async_prepare_runtime(
             if mqtt:
                 mqtt_clients[sid] = mqtt
             if site is None:
-                errors.append(ConfigEntryNotReady("Incomplete site discovery"))
+                errors.append(
+                    ConfigEntryNotReady(
+                        translation_domain=DOMAIN, translation_key="incomplete_site_discovery"
+                    )
+                )
                 continue
             sites[sid] = site
 
@@ -347,12 +349,16 @@ async def _async_prepare_runtime(
             ):
                 raise hard_error
             raise ConfigEntryNotReady(
-                f"Preparing Smappee EV topology failed: {hard_error}"
+                translation_domain=DOMAIN,
+                translation_key="topology_preparation_failed",
+                translation_placeholders={"error": str(hard_error)},
             ) from hard_error
 
         if not sites:
             _LOGGER.debug("Discovered service locations but no stations mapped yet (retry later)")
-            raise ConfigEntryNotReady("No Smappee EV stations discovered (will retry)")
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN, translation_key="no_charging_stations"
+            )
 
     except BaseException:
         # A sibling may already have prepared resources when setup/recovery is

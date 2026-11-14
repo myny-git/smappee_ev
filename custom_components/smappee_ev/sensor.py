@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import UTC, datetime
+import logging
 from typing import Any, Protocol, override
 
 from homeassistant.components.sensor import (
@@ -22,7 +23,7 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -36,9 +37,11 @@ from .entity import (
     SmappeeSiteEntity,
     SmappeeSitePowerEntity,
 )
-from .helpers import format_as_hms, safe_sum, update_total_increasing
+from .helpers import TOTAL_RESET_CONFIRMATIONS, format_as_hms, next_total_increasing, safe_sum
 from .models.runtime_data import RuntimeMode, SmappeeEvConfigEntry
 from .models.state import SiteState, StationState
+
+_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -46,7 +49,7 @@ PARALLEL_UPDATES = 0
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     # Access runtime data directly (preferred over hass.data lookups)
     runtime = config_entry.runtime_data
@@ -207,6 +210,15 @@ def _coerce_float(value: object) -> float | None:
 
 class _RestoredTotalSensor(Protocol):
     _last_value: float | None
+    _reset_evidence: frozenset[datetime]
+
+    @property
+    def entity_id(self) -> str:
+        """Return the entity ID, for logging."""
+
+    @property
+    def _measurement_received(self) -> datetime | None:
+        """Return when the measurement was last accepted."""
 
     async def async_get_last_sensor_data(self) -> SensorExtraStoredData | None:
         """Return restored sensor data."""
@@ -329,10 +341,22 @@ class StationPvPower(SmappeeSitePowerEntity, SensorEntity):
 
 
 def _total_increasing_value(entity: _RestoredTotalSensor, candidate: object) -> float | None:
-    """Protect total-increasing sensors from decreasing across restarts."""
+    """Hold totals steady against glitches, across restarts, but follow a meter reset."""
     last = entity._last_value
-    raw_value = _coerce_float(candidate)
-    value = update_total_increasing(last, raw_value)
+    value, entity._reset_evidence = next_total_increasing(
+        last,
+        _coerce_float(candidate),
+        received=entity._measurement_received,
+        reset_evidence=entity._reset_evidence,
+    )
+    if last is not None and value is not None and value < last:
+        _LOGGER.info(
+            "%s dropped from %s to %s in %s measurements; treating it as a meter reset",
+            entity.entity_id,
+            last,
+            value,
+            TOTAL_RESET_CONFIRMATIONS,
+        )
     entity._last_value = value
     return value
 
@@ -350,6 +374,7 @@ class RestoredEnergyStationSensor(SmappeeSitePowerEntity, RestoreSensor):
     """Station energy sensor with restore support and coordinator lifecycle."""
 
     _last_value: float | None = None
+    _reset_evidence: frozenset[datetime] = frozenset()
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -367,6 +392,7 @@ class RestoredEnergyConnectorSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     """Connector energy sensor with restore support and coordinator lifecycle."""
 
     _last_value: float | None = None
+    _reset_evidence: frozenset[datetime] = frozenset()
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import mock_restore_cache_with
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
+from custom_components.smappee_ev.coordinators.freshness import MeasurementFreshness
 from custom_components.smappee_ev.entity import SmappeeConnectorEntity
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import (
@@ -112,6 +113,45 @@ def test_station_sensor_native_values(sensor_cls, expected):
     entity = sensor_cls(coordinator, _api(), 42, "station-uuid")
 
     assert entity.native_value == expected
+
+
+@pytest.mark.parametrize(
+    ("sensor_cls", "connector_key", "field"),
+    [
+        (StationGridEnergyImport, None, "grid_energy_import_kwh"),
+        (ConnEnergyImport, "conn-1", "energy_import_kwh"),
+    ],
+)
+def test_energy_total_follows_a_meter_reset_confirmed_by_new_measurements(
+    sensor_cls, connector_key, field, caplog
+):
+    """A replaced or reset meter must not freeze the total at the old value."""
+    coordinator = _coordinator()
+    freshness = MeasurementFreshness()
+    coordinator.measurement_freshness = freshness
+    if connector_key is None:
+        entity = sensor_cls(coordinator, _api(), 42, "station-uuid")
+        state = coordinator.data.station
+    else:
+        entity = sensor_cls(coordinator, _api(), 42, "station-uuid", connector_key)
+        state = coordinator.data.connectors[connector_key]
+    entity.entity_id = "sensor.energy_total"
+    start = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
+
+    def receive(value: float, second: int) -> float | None:
+        setattr(state, field, value)
+        freshness.received[connector_key, field] = start + timedelta(seconds=second)
+        return entity.native_value
+
+    assert receive(1000.0, 0) == 1000.0
+    # The first reset readings are held back, even when evaluated repeatedly.
+    assert receive(1.0, 10) == 1000.0
+    assert entity.native_value == 1000.0
+    assert receive(1.1, 20) == 1000.0
+    with caplog.at_level("INFO"):
+        assert receive(1.2, 30) == 1.2
+    assert "treating it as a meter reset" in caplog.text
+    assert receive(1.3, 40) == 1.3
 
 
 def test_station_phase_total_sensors_include_phase_attributes():

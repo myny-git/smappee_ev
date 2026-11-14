@@ -55,6 +55,33 @@
     "dashboard_maintenance": {
       "message": "Le Smappee Dashboard est en maintenance. Home Assistant réessaiera automatiquement."
     },
+    "dashboard_credentials_required": {
+      "message": "Les identifiants du Smappee Dashboard sont requis. Réauthentifiez l'intégration Smappee EV pour continuer."
+    },
+    "dashboard_unavailable_no_snapshot": {
+      "message": "Le Smappee Dashboard est temporairement indisponible et aucune configuration MQTT enregistrée n'existe encore. Home Assistant réessaiera automatiquement."
+    },
+    "dashboard_not_configured": {
+      "message": "La connexion au Smappee Dashboard n'est pas encore configurée. Home Assistant réessaiera automatiquement."
+    },
+    "cannot_load_topology": {
+      "message": "Échec du chargement des bornes de recharge Smappee : {error}"
+    },
+    "no_charging_stations": {
+      "message": "Aucune borne de recharge Smappee n'a encore été trouvée. Home Assistant réessaiera automatiquement."
+    },
+    "incomplete_site_discovery": {
+      "message": "Smappee a renvoyé des informations incomplètes pour un emplacement de service. Home Assistant réessaiera automatiquement."
+    },
+    "topology_preparation_failed": {
+      "message": "Échec de la préparation des bornes de recharge Smappee : {error}"
+    },
+    "update_failed": {
+      "message": "Échec de la récupération des données Smappee : {error}"
+    },
+    "status_update_failed": {
+      "message": "Échec de la récupération de l'état du service Smappee : {error}"
+    },
     "service_location_not_in_entry": {
       "message": "La service location {service_location_id} n'appartient pas à la config entry {config_entry_id}"
     },
@@ -67,14 +94,8 @@
     "multiple_service_locations": {
       "message": "Plusieurs service locations détectées. Indiquez service_location_id."
     },
-    "no_station_client": {
-      "message": "Aucun station client trouvé pour la config entry {config_entry_id} et la service location {service_location_id}."
-    },
     "station_unavailable": {
       "message": "L'état de la station est indisponible."
-    },
-    "station_method_not_found": {
-      "message": "Méthode station {method_name} introuvable."
     },
     "station_service_failed": {
       "message": "Service station {method_name} échoué : {error}"

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, TypeVar, override
 
@@ -40,15 +39,6 @@ def _text_attr(obj: object, name: str) -> str | None:
     if isinstance(value, int):
         return str(value)
     return None
-
-
-def _is_int_like(value: object) -> bool:
-    if not isinstance(value, int | str):
-        return False
-    with suppress(TypeError, ValueError):
-        int(value)
-        return True
-    return False
 
 
 type SmappeeEntityCoordinator = SmappeeSiteCoordinator | SmappeeStationCoordinator
@@ -102,6 +92,14 @@ class SmappeeBaseEntity(CoordinatorEntity[CoordinatorT]):
         if self._mqtt_field is None or not isinstance(freshness, MeasurementFreshness):
             return None
         return freshness.is_fresh(self._mqtt_field, self._connector_key)
+
+    @property
+    def _measurement_received(self) -> datetime | None:
+        """Return when this entity's MQTT measurement was last accepted."""
+        freshness = getattr(self.coordinator, "measurement_freshness", None)
+        if self._mqtt_field is None or not isinstance(freshness, MeasurementFreshness):
+            return None
+        return freshness.received.get((self._connector_key, self._mqtt_field))
 
     @property
     @override
@@ -284,8 +282,6 @@ class SmappeeLedEntity(SmappeeStationRestEntity):
         sid: int,
         station_uuid: str,
         unique_suffix: str,
-        led_device_id: str | None = None,
-        led_name: str | None = None,
     ) -> None:
         super().__init__(
             coordinator,
@@ -302,33 +298,19 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
     def __init__(
         self,
         coordinator: SmappeeCoordinator,
-        api: SmappeeDeviceHandle | int,
-        sid: int | str,
+        api: SmappeeDeviceHandle,
+        sid: int,
         station_uuid: str,
         connector_uuid: str,
         unique_suffix: str,
         name: str | None = None,
     ) -> None:
-        if not _is_int_like(sid) and isinstance(api, int):
-            old_sid = api
-            old_station_uuid = str(sid)
-            old_connector_uuid = str(station_uuid)
-            old_unique_suffix = str(connector_uuid)
-            old_name = str(unique_suffix) if unique_suffix is not None else name
-            api = old_sid
-            sid = old_sid
-            station_uuid = old_station_uuid
-            connector_uuid = old_connector_uuid
-            unique_suffix = old_unique_suffix
-            name = old_name
         self._connector_uuid = connector_uuid
         self._api = api
-        self._unique_suffix = unique_suffix
-        sid_int = int(sid)
-        connector_label = build_connector_id(self._api, connector_uuid)
+        connector_label = build_connector_id(api, connector_uuid)
         super().__init__(
             coordinator,
-            sid_int,
+            sid,
             station_uuid,
             unique_suffix=unique_suffix,
             connector_uuid=connector_uuid,

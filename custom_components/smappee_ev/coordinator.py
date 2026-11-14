@@ -19,6 +19,7 @@ from .api.dashboard_client import SmappeeDashboardClient
 from .api.device_handle import SmappeeDeviceHandle, SmartDeviceRequests
 from .api.errors import SmappeeError
 from .const import (
+    DOMAIN,
     MQTT_REAL_POWER_FRESHNESS_TIMEOUT,
     SMARTDEVICE_FALLBACK_INTERVAL,
     SMARTDEVICE_REFRESH_INTERVAL,
@@ -339,7 +340,6 @@ class SmappeeStationCoordinator(
         self._session_query_success: dict[str, float] = {}
         self._complete_control: dict[str, dict[str, str]] = {}
         self._last_session_api_attempt = 0.0
-        self._last_session_api_update = 0.0
         self._session_refresh_unsub: CALLBACK_TYPE | None = None
         self._session_active_loop_unsub: CALLBACK_TYPE | None = None
         self._session_active_loop_interval: int | None = None
@@ -498,7 +498,12 @@ class SmappeeStationCoordinator(
         except ConfigEntryAuthFailed:
             raise
         except (SmappeeError, ClientError, TimeoutError) as err:
-            raise UpdateFailed(f"Error fetching Smappee data: {err}") from err
+            # Translated: a failed first refresh shows this as the setup retry reason.
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
     def async_start_session_tracking(self) -> None:
         """Start the state-driven recent-session refresh manager."""

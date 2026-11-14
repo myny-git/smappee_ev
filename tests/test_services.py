@@ -25,6 +25,7 @@ from tests.factories import (
     make_site_runtime,
     make_station_runtime,
 )
+from tests.helpers import raises_translated
 
 
 @pytest.fixture
@@ -110,20 +111,6 @@ class TestServiceHelpers:
         assert len(result) == 1
         assert result[0].entry_id == "test_entry_id"
 
-    def test_first_runtime(self, mock_hass_with_entries, mock_loaded_entries, mock_runtime_data):
-        """Test getting first runtime data."""
-        result = services._first_runtime(mock_hass_with_entries)
-
-        assert result is mock_runtime_data
-
-    def test_first_runtime_no_entries(self, mock_hass):
-        """Test getting first runtime data with no entries."""
-        mock_hass.config_entries.async_entries.return_value = []
-
-        result = services._first_runtime(mock_hass)
-
-        assert result is None
-
     def test_runtime_by_entry_id(
         self, mock_hass_with_entries, mock_loaded_entries, mock_runtime_data
     ):
@@ -200,7 +187,7 @@ class TestServiceHelpers:
             hass=mock_hass_with_entries,
         )
 
-        with pytest.raises(ServiceValidationError, match="does not belong"):
+        with raises_translated(ServiceValidationError, "service_location_not_in_entry"):
             services._resolve_sid(mock_hass_with_entries, call)
 
     def test_resolve_sid_accepts_service_location_inside_explicit_entry(
@@ -250,33 +237,8 @@ class TestServiceHelpers:
             hass=mock_hass_with_entries,
         )
 
-        with pytest.raises(ServiceValidationError, match="was not found"):
+        with raises_translated(ServiceValidationError, "service_location_not_found"):
             services._resolve_sid(mock_hass_with_entries, call)
-
-    def test_get_station_client(self, mock_runtime_data, mock_api_client):
-        """Test getting station client."""
-        result = services.get_station_client(mock_runtime_data, 12345)
-
-        assert result is mock_api_client
-
-    def test_get_station_client_no_runtime(self):
-        """Test getting station client with no runtime data."""
-        result = services.get_station_client(None, 12345)
-
-        assert result is None
-
-    def test_get_station_client_no_sid(self, mock_runtime_data):
-        """Test station lookup without a resolved service location."""
-        assert services.get_station_client(mock_runtime_data, None) is None
-
-    def test_get_station_client_without_site_or_station(self, mock_runtime_data):
-        """Test station client lookup when site data is missing or empty."""
-        assert services.get_station_client(mock_runtime_data, 99999) is None
-        mock_runtime_data.sites[12345] = make_site_runtime(
-            site_location_id=12345,
-            stations={},
-        )
-        assert services.get_station_client(mock_runtime_data, 12345) is None
 
     def test_get_connector_client_by_id(self, mock_runtime_data, mock_api_client):
         """Test getting connector client by connector ID."""
@@ -552,7 +514,7 @@ class TestServiceHandlers:
 
         call = ServiceCall(domain="smappee_ev", service="start_charging", data={}, hass=mock_hass)
 
-        with pytest.raises(ServiceValidationError, match="No matching connector client"):
+        with raises_translated(ServiceValidationError, "no_connector_client"):
             await services.handle_start_charging(call)
 
     @pytest.mark.asyncio
@@ -563,7 +525,7 @@ class TestServiceHandlers:
 
         call = ServiceCall(domain="smappee_ev", service="start_charging", data={}, hass=mock_hass)
 
-        with pytest.raises(ServiceValidationError, match="Multiple service locations"):
+        with raises_translated(ServiceValidationError, "multiple_service_locations"):
             await services.handle_start_charging(call)
 
     @pytest.mark.asyncio
@@ -591,7 +553,7 @@ class TestServiceHandlers:
             hass=mock_hass,
         )
 
-        with pytest.raises(ServiceValidationError, match="Multiple service locations"):
+        with raises_translated(ServiceValidationError, "multiple_service_locations"):
             await services.handle_start_charging(call)
 
         site_a_client.start_charging.assert_not_called()
@@ -818,7 +780,7 @@ class TestServiceHandlers:
             hass=mock_hass,
         )
 
-        with pytest.raises(ServiceValidationError, match="does not belong"):
+        with raises_translated(ServiceValidationError, "service_location_not_in_entry"):
             await services.handle_start_charging(call)
 
         site_a_client.start_charging.assert_not_called()
@@ -837,79 +799,8 @@ class TestServiceHandlers:
             hass=mock_hass,
         )
 
-        with pytest.raises(HomeAssistantError, match="Connector service 'start_charging' failed"):
+        with raises_translated(HomeAssistantError, "connector_service_failed"):
             await services.handle_start_charging(call)
-
-    @pytest.mark.asyncio
-    async def test_async_handle_station_service_success(
-        self, mock_hass_with_entries, mock_api_client
-    ):
-        """Test generic station service dispatch."""
-        call = ServiceCall(
-            domain="smappee_ev",
-            service="station",
-            data={},
-            hass=mock_hass_with_entries,
-        )
-
-        await services.async_handle_station_service(
-            mock_hass_with_entries, call, "pause_charging", {"reason": "test"}
-        )
-
-        mock_api_client.pause_charging.assert_awaited_once_with(reason="test")
-
-    @pytest.mark.asyncio
-    async def test_async_handle_station_service_validation_paths(
-        self, mock_hass_with_entries, mock_loaded_entries
-    ):
-        """Test station service validation for ambiguous, missing, and unknown methods."""
-        mock_loaded_entries[0].runtime_data.sites[67890] = make_site_runtime(site_location_id=67890)
-        call = ServiceCall(
-            domain="smappee_ev",
-            service="station",
-            data={},
-            hass=mock_hass_with_entries,
-        )
-
-        with pytest.raises(ServiceValidationError, match="Multiple service locations"):
-            await services.async_handle_station_service(
-                mock_hass_with_entries, call, "pause_charging"
-            )
-
-        del mock_loaded_entries[0].runtime_data.sites[67890]
-        call = ServiceCall(
-            domain="smappee_ev",
-            service="station",
-            data={"service_location_id": 99999},
-            hass=mock_hass_with_entries,
-        )
-        with pytest.raises(ServiceValidationError, match="was not found"):
-            await services.async_handle_station_service(
-                mock_hass_with_entries, call, "pause_charging"
-            )
-
-        call = ServiceCall(
-            domain="smappee_ev", service="station", data={}, hass=mock_hass_with_entries
-        )
-        with pytest.raises(ServiceValidationError, match="Station method"):
-            await services.async_handle_station_service(
-                mock_hass_with_entries, call, "missing_method"
-            )
-
-    @pytest.mark.asyncio
-    async def test_async_handle_station_service_api_error(
-        self, mock_hass_with_entries, mock_api_client
-    ):
-        """Test station service wraps API failures."""
-        mock_api_client.pause_charging.side_effect = Exception("station failed")
-        call = ServiceCall(
-            domain="smappee_ev", service="station", data={}, hass=mock_hass_with_entries
-        )
-
-        with pytest.raises(HomeAssistantError, match="Station service 'pause_charging' failed"):
-            await services.async_handle_station_service(
-                mock_hass_with_entries, call, "pause_charging"
-            )
 
     @pytest.mark.asyncio
     async def test_async_handle_connector_service_method_missing(self, mock_hass_with_entries):
@@ -921,7 +812,7 @@ class TestServiceHandlers:
             hass=mock_hass_with_entries,
         )
 
-        with pytest.raises(ServiceValidationError, match="Connector method"):
+        with raises_translated(ServiceValidationError, "connector_method_not_found"):
             await services.async_handle_connector_service(
                 mock_hass_with_entries, call, "missing_method"
             )
@@ -939,7 +830,7 @@ class TestServiceHandlers:
             hass=mock_hass_with_entries,
         )
 
-        with pytest.raises(ServiceValidationError, match="Multiple service locations"):
+        with raises_translated(ServiceValidationError, "multiple_service_locations"):
             await services.async_handle_connector_service(
                 mock_hass_with_entries, call, "pause_charging"
             )
@@ -951,7 +842,7 @@ class TestServiceHandlers:
             data={"connector_id": 99},
             hass=mock_hass_with_entries,
         )
-        with pytest.raises(ServiceValidationError, match="No matching connector client"):
+        with raises_translated(ServiceValidationError, "no_connector_client"):
             await services.async_handle_connector_service(
                 mock_hass_with_entries, call, "pause_charging"
             )
@@ -980,7 +871,7 @@ class TestServiceHandlers:
             data={"connector_id": 99, "current": 17},
             hass=mock_hass_with_entries,
         )
-        with pytest.raises(ServiceValidationError, match="No matching connector client"):
+        with raises_translated(ServiceValidationError, "no_connector_client"):
             await services.handle_set_current(no_client_call)
 
         out_of_range_call = ServiceCall(
@@ -989,7 +880,7 @@ class TestServiceHandlers:
             data={"connector_id": 1, "current": 40},
             hass=mock_hass_with_entries,
         )
-        with pytest.raises(ServiceValidationError, match="out of range"):
+        with raises_translated(ServiceValidationError, "current_out_of_range"):
             await services.handle_set_current(out_of_range_call)
 
     @pytest.mark.asyncio
@@ -1091,9 +982,8 @@ class TestServiceSchemas:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("scope", ["station", "connector"])
 async def test_service_auth_failure_starts_reauth_and_raises_translated_error(
-    mock_hass_with_entries, mock_config_entry, mock_api_client, scope
+    mock_hass_with_entries, mock_config_entry, mock_api_client
 ):
     """An auth failure in an action starts reauth for the entry owning the client."""
     other_entry = make_loaded_config_entry("other_entry", make_runtime_data(sites={}, mqtt={}))
@@ -1103,14 +993,10 @@ async def test_service_auth_failure_starts_reauth_and_raises_translated_error(
     ]
     mock_api_client.pause_charging = AsyncMock(side_effect=ConfigEntryAuthFailed("rejected"))
     call = ServiceCall(mock_hass_with_entries, "smappee_ev", "pause_charging", {})
-    handler = (
-        services.async_handle_station_service
-        if scope == "station"
-        else services.async_handle_connector_service
-    )
-
     with pytest.raises(HomeAssistantError) as caught:
-        await handler(mock_hass_with_entries, call, "pause_charging")
+        await services.async_handle_connector_service(
+            mock_hass_with_entries, call, "pause_charging"
+        )
 
     assert not isinstance(caught.value, ConfigEntryAuthFailed)
     assert caught.value.translation_key == "reauth_required"

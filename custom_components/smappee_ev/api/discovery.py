@@ -283,15 +283,3 @@ def parse_mqtt_channel_specs_from_highlevel(
                 add_spec(role, key, update_channel)
 
     return specs
-
-
-def unique_mqtt_channel_specs(specs: list[MqttChannelSpec]) -> list[MqttChannelSpec]:
-    """Return one MQTT spec per topic, preserving first-seen credentials."""
-    out: list[MqttChannelSpec] = []
-    seen_topics: set[str] = set()
-    for spec in specs:
-        if spec.topic in seen_topics:
-            continue
-        seen_topics.add(spec.topic)
-        out.append(spec)
-    return out

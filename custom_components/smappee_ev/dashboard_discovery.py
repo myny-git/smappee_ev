@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from aiohttp import ClientError, ClientSession
@@ -17,16 +16,10 @@ from .api.errors import (
     SmappeeNotFoundError,
     SmappeeTransientError,
 )
-from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME
+from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import DashboardObjectList, HighLevelConfigMap
-from .topology import (
-    _connector_uuid,
-    _is_connector,
-    _normalize_dashboard_service_location,
-    _safe_str,
-    _station_serial,
-)
+from .topology import _connector_uuid, _is_connector, _safe_str, _station_serial
 
 _LOGGER = logging.getLogger(__name__)
 _MAINTENANCE_STATES = "smappee_ev_dashboard_maintenance"
@@ -45,67 +38,14 @@ def _dashboard_client_configured(dashboard_client: SmappeeDashboardClient | None
     )
 
 
-async def _dashboard_discover_service_locations(
-    dashboard_client: SmappeeDashboardClient | None,
-) -> DashboardObjectList | None:
-    if not _dashboard_client_configured(dashboard_client):
-        return None
-    if dashboard_client is None:
-        return None
-    try:
-        locations = await dashboard_client.async_get_service_locations_full_details()
-    except asyncio.CancelledError:
-        raise
-    except (
-        ConfigEntryAuthFailed,
-        SmappeeMaintenanceError,
-        SmappeeTransientError,
-    ):
-        raise
-    except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
-        _LOGGER.warning("Dashboard service location discovery failed: %s", err)
-        raise
-
-    normalized = [
-        loc
-        for item in locations or []
-        if isinstance(item, dict)
-        for loc in [_normalize_dashboard_service_location(item)]
-        if loc is not None
-    ]
-    if normalized:
-        return normalized
-
-    fallback = [
-        loc
-        for item in locations or []
-        if isinstance(item, dict)
-        for loc in [
-            _normalize_dashboard_service_location(item, allow_non_charging_function_type=True)
-        ]
-        if loc is not None
-    ]
-    if fallback:
-        _LOGGER.debug(
-            "Dashboard discovery found no CHARGINGSTATION functionType entries; "
-            "trying %d service locations without functionType filtering",
-            len(fallback),
-        )
-    return fallback
-
-
 async def _dashboard_discover_topologies(
     dashboard_client: SmappeeDashboardClient | None,
 ) -> list[SmappeeLocationTopology] | None:
     """Discover Dashboard service locations and build site-first topologies."""
-    if not _dashboard_client_configured(dashboard_client):
-        return None
-    if dashboard_client is None:
+    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
         return None
     try:
         locations = await dashboard_client.async_get_service_locations_full_details()
-    except asyncio.CancelledError:
-        raise
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,
@@ -206,14 +146,10 @@ async def _dashboard_discover_topologies_by_serial(
 async def _dashboard_fetch_devices(
     dashboard_client: SmappeeDashboardClient | None, sid: int | str
 ) -> DashboardObjectList | None:
-    if not _dashboard_client_configured(dashboard_client):
-        return None
-    if dashboard_client is None:
+    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
         return None
     try:
         devices = await dashboard_client.async_get_smart_devices(sid)
-    except asyncio.CancelledError:
-        raise
     except (
         ConfigEntryAuthFailed,
         SmappeeMaintenanceError,
@@ -235,15 +171,13 @@ async def _dashboard_fetch_highlevel_configs(
     measurement_sids: list[int],
 ) -> HighLevelConfigMap:
     """Fetch highlevelconfiguration for all measurement service locations."""
-    if not _dashboard_client_configured(dashboard_client) or dashboard_client is None:
+    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
         return {}
 
     configs: HighLevelConfigMap = {}
     for sid in dict.fromkeys(measurement_sids):
         try:
             cfg = await dashboard_client.async_get_highlevel_configuration(sid)
-        except asyncio.CancelledError:
-            raise
         except (
             ConfigEntryAuthFailed,
             SmappeeMaintenanceError,
@@ -265,12 +199,10 @@ async def _dashboard_fetch_highlevel_configs(
     return configs
 
 
-async def _fetch_dashboard_connector_mapping(  # noqa: C901 - validates nested remote payload
+async def _fetch_dashboard_connector_mapping(
     dashboard_client: SmappeeDashboardClient | None, station_devs: list[dict]
 ) -> dict[str, dict] | None:
-    if not _dashboard_client_configured(dashboard_client):
-        return None
-    if dashboard_client is None:
+    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
         return None
 
     out: dict[str, dict] = {}
@@ -280,8 +212,6 @@ async def _fetch_dashboard_connector_mapping(  # noqa: C901 - validates nested r
             continue
         try:
             details = await dashboard_client.async_get_charging_station_details(station_serial)
-        except asyncio.CancelledError:
-            raise
         except (
             ConfigEntryAuthFailed,
             SmappeeMaintenanceError,
@@ -391,30 +321,6 @@ def _create_dashboard_client(
     )
 
 
-async def _load_dashboard_service_locations(
-    dashboard_client: SmappeeDashboardClient,
-) -> DashboardObjectList:
-    try:
-        locations = await _dashboard_discover_service_locations(dashboard_client)
-    except (
-        ConfigEntryAuthFailed,
-        SmappeeMaintenanceError,
-        SmappeeTransientError,
-    ):
-        raise
-    except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
-        _LOGGER.debug("Transient error loading dashboard service locations: %s", err)
-        raise ConfigEntryNotReady(f"Loading service locations failed: {err}") from err
-
-    if locations is None:
-        _LOGGER.debug("Dashboard discovery is not configured yet (retry later)")
-        raise ConfigEntryNotReady("Dashboard API is not configured")
-    if not locations:
-        _LOGGER.debug("No candidate charging service locations found (retry later)")
-        raise ConfigEntryNotReady("No candidate charging service locations found")
-    return locations
-
-
 async def _load_dashboard_topologies(
     dashboard_client: SmappeeDashboardClient,
     station_serial: str | None = None,
@@ -434,12 +340,18 @@ async def _load_dashboard_topologies(
         raise
     except (SmappeeError, ClientError, RuntimeError, TimeoutError, TypeError, ValueError) as err:
         _LOGGER.debug("Transient error loading dashboard topologies: %s", err)
-        raise ConfigEntryNotReady(f"Loading service location topology failed: {err}") from err
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="cannot_load_topology",
+            translation_placeholders={"error": str(err)},
+        ) from err
 
     if topologies is None:
         _LOGGER.debug("Dashboard discovery is not configured yet (retry later)")
-        raise ConfigEntryNotReady("Dashboard API is not configured")
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN, translation_key="dashboard_not_configured"
+        )
     if not topologies:
         _LOGGER.debug("No candidate charging topologies found (retry later)")
-        raise ConfigEntryNotReady("No candidate charging topologies found")
+        raise ConfigEntryNotReady(translation_domain=DOMAIN, translation_key="no_charging_stations")
     return topologies

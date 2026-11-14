@@ -1061,7 +1061,7 @@ async def test_station_dashboard_scheduled_refresh_reauth_and_cleanup(hass):
     coord.config_entry = entry
     coord._maybe_refresh_dashboard_data = AsyncMock(side_effect=ConfigEntryAuthFailed("reauth"))
 
-    await coord._async_delayed_dashboard_refresh(0)
+    await coord._async_dashboard_refresh_now()
 
     entry.async_start_reauth_if_available.assert_called_once_with(hass)
     assert coord._dashboard_refresh_task is None
@@ -1073,7 +1073,7 @@ async def test_station_dashboard_scheduled_refresh_skips_during_shutdown(hass):
     coord._maybe_refresh_dashboard_data = AsyncMock(return_value=True)
 
     coord.cancel_delayed_refreshes()
-    await coord._async_delayed_dashboard_refresh(0)
+    await coord._async_dashboard_refresh_now()
 
     coord._maybe_refresh_dashboard_data.assert_not_called()
     assert coord._dashboard_refresh_task is None
@@ -1097,23 +1097,6 @@ def test_dashboard_delayed_refresh_uses_unsub_and_leaves_no_sleeping_task_on_shu
 
     unsub.assert_called_once()
     assert coord._dashboard_refresh_unsub is None
-    assert coord._dashboard_refresh_task is None
-    coord._maybe_refresh_dashboard_data.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_compat_dashboard_delayed_refresh_delegates_positive_delay(hass):
-    coord = _station_coordinator(hass)
-    coord._maybe_refresh_dashboard_data = AsyncMock(return_value=True)
-    unsub = MagicMock()
-
-    with patch(
-        "custom_components.smappee_ev.coordinators.dashboard_merge.async_call_later",
-        return_value=unsub,
-    ):
-        await coord._async_delayed_dashboard_refresh(30)
-
-    assert coord._dashboard_refresh_unsub is unsub
     assert coord._dashboard_refresh_task is None
     coord._maybe_refresh_dashboard_data.assert_not_called()
 
@@ -1181,7 +1164,7 @@ async def test_recent_session_refresh_lock_throttle_reauth_and_success(hass, mon
     coord._async_get_recent_sessions.return_value = [{"session": 2}]
     await coord._async_refresh_recent_sessions("success", force=True)
     coord.async_update_listeners.assert_called_once()
-    assert coord._last_session_api_update == 1000.0
+    assert coord.data.recent_sessions == [{"session": 2}]
 
 
 @pytest.mark.asyncio

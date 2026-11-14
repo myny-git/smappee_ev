@@ -6,7 +6,6 @@ from custom_components.smappee_ev.api.discovery import (
     _measurement_role,
     build_topologies_from_full_details,
     parse_mqtt_channel_specs_from_highlevel,
-    unique_mqtt_channel_specs,
 )
 
 
@@ -294,25 +293,6 @@ def test_parse_highlevel_mqtt_specs_for_measurements_and_update_specs():
     assert specs[2].username is None
     assert specs[2].password is None
     assert specs[0].aspect_paths == [{"path": "$.activePowerData[0]"}]
-
-
-def test_unique_mqtt_channel_specs_deduplicates_topics():
-    config = {
-        "measurements": [
-            {
-                "type": "GRID",
-                "updateChannels": {
-                    "activePower": _mqtt_channel("same-topic", "$.activePowerData[0]"),
-                    "current": _mqtt_channel("same-topic", "$.currentData[0]"),
-                },
-            }
-        ]
-    }
-
-    specs = unique_mqtt_channel_specs(parse_mqtt_channel_specs_from_highlevel(123, config))
-
-    assert len(specs) == 1
-    assert specs[0].topic == "same-topic"
 
 
 def test_parse_highlevel_mqtt_specs_filters_invalid_channels_and_duplicates():

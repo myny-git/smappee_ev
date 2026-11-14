@@ -210,11 +210,7 @@ class StationApiMixin(CoordinatorMixin):
             if devices is None:
                 err = RuntimeError("smartdevice list request returned no data")
                 self._log_station_api_transition(False, err)
-                return StationState(
-                    led_brightness=led_brightness,
-                    available=True,
-                    api_available=False,
-                )
+                return StationState(led_brightness=led_brightness, api_available=False)
             for dev in devices:
                 for prop in dev.get("configurationProperties", []):
                     spec = prop.get("spec", {}) or {}
@@ -234,9 +230,9 @@ class StationApiMixin(CoordinatorMixin):
             raise
         except (SmappeeError, TimeoutError, ClientError, RuntimeError) as err:
             self._log_station_api_transition(False, err)
-            return StationState(led_brightness=led_brightness, available=True, api_available=False)
+            return StationState(led_brightness=led_brightness, api_available=False)
 
-        return StationState(led_brightness=led_brightness, available=True, api_available=True)
+        return StationState(led_brightness=led_brightness, api_available=True)
 
     async def _fetch_connector_state(
         self, client: SmappeeDeviceHandle, *, requests: SmartDeviceRequests | None = None

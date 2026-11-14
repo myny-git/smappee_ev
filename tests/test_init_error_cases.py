@@ -7,33 +7,12 @@ import pytest
 
 from custom_components.smappee_ev import async_unload_entry
 from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
-from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
 from custom_components.smappee_ev.dashboard_discovery import _fetch_dashboard_connector_mapping
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
 from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
-from custom_components.smappee_ev.site_preparation import _prepare_site
 from custom_components.smappee_ev.topology import _assign_connectors
 from tests.factories import make_site_runtime, make_station_runtime
-
-
-@pytest.fixture
-def mock_dashboard_handle():
-    """Create a generic dashboard/runtime handle."""
-    return MagicMock()
-
-
-@pytest.fixture
-def mock_session():
-    """Create a mock aiohttp ClientSession."""
-    session = MagicMock()
-    mock_response = MagicMock()
-    mock_response.status = 200
-    mock_response.json = AsyncMock()
-    mock_response.text = AsyncMock(return_value="")
-    session.get = AsyncMock(return_value=mock_response)
-    session.post = AsyncMock(return_value=mock_response)
-    return session, mock_response
 
 
 class TestErrorHandling:
@@ -148,48 +127,6 @@ class TestErrorHandling:
         # Should not modify the stations dict
         _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
         assert stations["station1_uuid"].connectors == {}
-
-    @pytest.mark.asyncio
-    async def test_prepare_site_exception_handling(self, hass, mock_dashboard_handle, mock_session):
-        """Test _prepare_site with exceptions during execution."""
-        session, _ = mock_session
-
-        # Create a service location with valid deviceSerialNumber
-        service_location = {
-            "serviceLocationId": 12345,
-            "serviceLocationUuid": "test-service-uuid",
-            "deviceSerialNumber": "STATION-SERIAL",
-            "name": "Test Location",
-        }
-
-        # Mock dashboard device discovery to succeed but _split_devices to raise an exception
-        with (
-            patch(
-                "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
-                return_value=[{"type": "CHARGINGSTATION"}],
-            ),
-            patch(
-                "custom_components.smappee_ev.site_preparation._split_devices",
-                side_effect=Exception("Test exception"),
-            ),
-            patch(
-                "custom_components.smappee_ev.site_preparation._LOGGER.exception"
-            ) as mock_log_exception,
-        ):
-            # Call _prepare_site - should handle the exception
-            result = await _prepare_site(
-                hass,
-                session,
-                service_location,
-                UPDATE_INTERVAL_DEFAULT,
-                "client-prefix",
-            )
-
-            # Should return (None, None) on error
-            assert result == (None, None)
-
-            # Verify exception was logged
-            mock_log_exception.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_mqtt_stop_exception_handling(self, hass):

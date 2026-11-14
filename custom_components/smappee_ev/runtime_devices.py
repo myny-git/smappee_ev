@@ -7,8 +7,18 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN, MANUFACTURER
-from .helpers import connector_device_identifier, site_device_identifier, station_device_identifier
+from .const import CONFIGURATION_URL, DOMAIN, MANUFACTURER
+from .helpers import (
+    build_connector_id,
+    connector_device_identifier,
+    connector_device_name,
+    site_device_identifier,
+    site_device_model,
+    site_device_name,
+    station_device_identifier,
+    station_device_model,
+    station_device_name,
+)
 from .models.runtime_data import RuntimeData, SmappeeConnectorRuntime, SmappeeEvConfigEntry
 
 
@@ -42,15 +52,14 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
     rd = entry.runtime_data
     for site_sid, site in (rd.sites or {}).items():
         site_identifier = site_device_identifier(site_sid)
-        site_name = site.site_name or f"Smappee {site_sid}"
         gateway_serial = site.gateway_serial
-        gateway_type = site.gateway_type
         site_device = registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={site_identifier},
             manufacturer=MANUFACTURER,
-            name=f"Smappee {site_name}",
-            model=f"{gateway_type} / Service Location" if gateway_type else "Service Location",
+            configuration_url=CONFIGURATION_URL,
+            name=site_device_name(site_sid, site.site_name),
+            model=site_device_model(site.gateway_type),
             serial_number=str(gateway_serial) if gateway_serial else None,
         )
 
@@ -68,14 +77,18 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
                 config_entry_id=entry.entry_id,
                 identifiers=station_identifiers,
                 manufacturer=MANUFACTURER,
-                name=bucket.station_name or f"Smappee EV {station_serial}",
-                model=bucket.charging_station_model or "EV Wall",
+                configuration_url=CONFIGURATION_URL,
+                name=station_device_name(station_serial, bucket.station_name),
+                model=station_device_model(bucket.charging_station_model),
                 serial_number=str(station_serial),
                 via_device_id=site_device.id,
             )
 
             for connector_uuid, info in bucket.connectors.items():
                 connector_key, label = _connector_device_key(connector_uuid, info)
+                if connector_uuid:
+                    # Entities label a connector by its number, else its UUID tail.
+                    label = build_connector_id(info.connector_client, connector_uuid)
                 registry.async_get_or_create(
                     config_entry_id=entry.entry_id,
                     identifiers={
@@ -84,7 +97,8 @@ def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) 
                         )
                     },
                     manufacturer=MANUFACTURER,
-                    name=f"Smappee EV {station_serial} | Connector {label}",
+                    configuration_url=CONFIGURATION_URL,
+                    name=connector_device_name(station_serial, label, bucket.station_name),
                     model="Connector",
                     via_device_id=station_device.id,
                 )

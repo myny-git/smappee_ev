@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
 import inspect
 from typing import Any
+
+import pytest
+
+from custom_components.smappee_ev.const import DOMAIN
 
 
 async def wait_until(
@@ -23,3 +28,14 @@ async def wait_until(
             if result:
                 return
             await asyncio.sleep(interval)
+
+
+@contextmanager
+def raises_translated(
+    exc_type: type[BaseException], translation_key: str
+) -> Iterator[pytest.ExceptionInfo[Any]]:
+    """Expect an exception whose user-facing message comes from strings.json."""
+    with pytest.raises(exc_type) as caught:
+        yield caught
+    assert caught.value.translation_domain == DOMAIN
+    assert caught.value.translation_key == translation_key

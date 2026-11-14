@@ -1,6 +1,6 @@
 """Rejected credentials during an entity action start reauthentication."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 import pytest
@@ -12,17 +12,13 @@ from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 def _charging_switch(platform):
     api_client = MagicMock()
     api_client.set_charging_mode = AsyncMock(side_effect=ConfigEntryAuthFailed("rejected"))
-    with patch(
-        "custom_components.smappee_ev.helpers.build_connector_label",
-        return_value="Connector 1",
-    ):
-        entity = switch.SmappeeChargingSwitch(
-            coordinator=MagicMock(spec=SmappeeCoordinator),
-            api_client=api_client,
-            sid=12345,
-            station_uuid="station_uuid",
-            connector_uuid="connector_uuid1",
-        )
+    entity = switch.SmappeeChargingSwitch(
+        coordinator=MagicMock(spec=SmappeeCoordinator),
+        api_client=api_client,
+        sid=12345,
+        station_uuid="station_uuid",
+        connector_uuid="connector_uuid1",
+    )
     entity.hass = MagicMock()
     entity.platform = platform
     entity.parallel_updates = None

@@ -4,7 +4,6 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from aiohttp import ClientError
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 import pytest
@@ -21,28 +20,26 @@ from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
     _MAINTENANCE_STATES,
     _create_dashboard_client,
-    _dashboard_discover_service_locations,
     _dashboard_fetch_devices,
     _dashboard_fetch_highlevel_configs,
     _fallback_dashboard_connector_mapping,
     _fetch_dashboard_connector_mapping,
-    _load_dashboard_service_locations,
     _load_dashboard_topologies,
 )
 from custom_components.smappee_ev.helpers import (
     make_connector_device_info,
+    make_device_info,
     make_station_device_info,
 )
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_clients
 from custom_components.smappee_ev.mqtt_specs import _group_mqtt_specs_by_credentials
-from custom_components.smappee_ev.runtime_assembly import _prepare_topology
+from custom_components.smappee_ev.runtime_assembly import _prepare_site_topologies
 from custom_components.smappee_ev.runtime_devices import (
     _register_runtime_devices,
     _remove_legacy_led_controller_devices,
 )
 from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
-from custom_components.smappee_ev.site_preparation import _prepare_site
 from custom_components.smappee_ev.topology import (
     _fallback_highlevel_connector_mapping,
     _find_in,
@@ -58,6 +55,7 @@ from tests.factories import (
     make_site_runtime,
     make_station_runtime,
 )
+from tests.helpers import raises_translated
 
 
 def _configured_dashboard(**methods):
@@ -179,7 +177,7 @@ def test_group_mqtt_specs_by_credentials_uses_topic_uuid_and_explicit_credential
         ),
     ]
 
-    groups = _group_mqtt_specs_by_credentials("fallback-uuid", 99, specs)
+    groups = _group_mqtt_specs_by_credentials("fallback-uuid", specs)
 
     assert len(groups) == 2
     grouped_by_credentials = {
@@ -196,60 +194,11 @@ def test_group_mqtt_specs_by_credentials_uses_topic_uuid_and_explicit_credential
 
 
 @pytest.mark.asyncio
-async def test_dashboard_discovery_filters_then_falls_back_to_non_charging_locations():
-    dashboard = _configured_dashboard(
-        async_get_service_locations_full_details=AsyncMock(
-            return_value=[
-                "malformed",
-                {"id": 1, "functionType": "SOLAR"},
-                {"id": 2, "functionType": "SOLAR", "serialNumber": "GW-2"},
-            ]
-        )
-    )
-
-    locations = await _dashboard_discover_service_locations(dashboard)
-
-    assert locations == [
-        {
-            "serviceLocationId": 1,
-            "serviceLocationUuid": None,
-            "deviceSerialNumber": None,
-            "chargingStation": {},
-            "functionType": "SOLAR",
-            "name": None,
-        },
-        {
-            "serviceLocationId": 2,
-            "serviceLocationUuid": None,
-            "deviceSerialNumber": "GW-2",
-            "chargingStation": {},
-            "functionType": "SOLAR",
-            "name": None,
-        },
-    ]
-
-
-@pytest.mark.asyncio
-async def test_dashboard_load_helpers_raise_not_ready_for_missing_or_transient_data():
-    unconfigured = MagicMock()
-    unconfigured._token = None
-    unconfigured.refresh_token = None
-    unconfigured.username = None
-    unconfigured.password = None
-
-    with pytest.raises(ConfigEntryNotReady, match="Dashboard API is not configured"):
-        await _load_dashboard_service_locations(unconfigured)
-
-    failing = _configured_dashboard(
-        async_get_service_locations_full_details=AsyncMock(side_effect=ClientError("down"))
-    )
-    with pytest.raises(ConfigEntryNotReady, match="Loading service locations failed"):
-        await _load_dashboard_service_locations(failing)
-
+async def test_dashboard_load_topologies_raises_not_ready_without_charging_stations():
     empty = _configured_dashboard(
         async_get_service_locations_full_details=AsyncMock(return_value=[])
     )
-    with pytest.raises(ConfigEntryNotReady, match="No candidate charging topologies found"):
+    with raises_translated(ConfigEntryNotReady, "no_charging_stations"):
         await _load_dashboard_topologies(empty)
 
 
@@ -291,8 +240,6 @@ async def test_optional_dashboard_discovery_never_swallows_authentication_errors
         await _dashboard_fetch_devices(dashboard, 100)
 
     dashboard.async_get_service_locations_full_details = AsyncMock(side_effect=auth_error)
-    with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
-        await _dashboard_discover_service_locations(dashboard)
     with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
         await _load_dashboard_topologies(dashboard)
 
@@ -645,7 +592,7 @@ def test_build_mqtt_clients_groups_specs_by_credentials_and_tracks_routes(hass):
 
 
 @pytest.mark.asyncio
-async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highlevel(hass):
+async def test_prepare_site_topologies_builds_station_metadata_from_dashboard_and_highlevel(hass):
     topology = SmappeeLocationTopology(
         site_location_id=100,
         site_location_uuid="site-uuid",
@@ -756,9 +703,9 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
             "custom_components.smappee_ev.runtime_assembly._setup_mqtt", return_value=mqtt
         ) as setup_mqtt,
     ):
-        stations, mqtt_result = await _prepare_topology(
+        site, mqtt_result = await _prepare_site_topologies(
             hass,
-            topology,
+            [topology],
             update_interval=60,
             client_id_prefix="client",
             dashboard_client=dashboard,
@@ -766,6 +713,8 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
         )
 
     assert mqtt_result is mqtt
+    assert site is not None
+    stations = site.stations
     assert list(stations) == ["STATION-1"]
     bucket = stations["STATION-1"]
     assert bucket.site_location_id == 100
@@ -783,100 +732,7 @@ async def test_prepare_topology_builds_station_metadata_from_dashboard_and_highl
 
 
 @pytest.mark.asyncio
-async def test_prepare_site_uses_service_serial_when_dashboard_has_only_connectors(hass):
-    dashboard = _configured_dashboard(
-        async_get_smart_devices=AsyncMock(
-            return_value=[
-                {
-                    "id": "conn-id",
-                    "uuid": "conn-uuid",
-                    "type": {"category": "CARCHARGER"},
-                    "connectorNumber": 1,
-                }
-            ]
-        ),
-        async_get_charging_station_details=AsyncMock(
-            return_value={
-                "modules": [
-                    {
-                        "position": 1,
-                        "smartDevice": {
-                            "id": "conn-id",
-                            "uuid": "conn-uuid",
-                            "type": {"category": "CARCHARGER"},
-                            "carCharger": {
-                                "chargingStateUpdateChannel": {
-                                    "name": "servicelocation/site/etc/devices/conn-uuid/property/chargingstate"
-                                }
-                            },
-                        },
-                    }
-                ]
-            }
-        ),
-    )
-    mqtt = MagicMock()
-
-    with (
-        patch(
-            "custom_components.smappee_ev.site_preparation._create_coordinators", AsyncMock()
-        ) as create_coords,
-        patch(
-            "custom_components.smappee_ev.site_preparation._setup_mqtt", return_value=mqtt
-        ) as setup_mqtt,
-    ):
-        stations, mqtt_result = await _prepare_site(
-            hass,
-            MagicMock(),
-            {
-                "serviceLocationId": 300,
-                "serviceLocationUuid": "site-uuid",
-                "deviceSerialNumber": "GATEWAY-1",
-                "name": "Garage",
-            },
-            update_interval=60,
-            client_id_prefix="client",
-            dashboard_client=dashboard,
-        )
-
-    assert mqtt_result is mqtt
-    assert list(stations) == ["GATEWAY-1"]
-    bucket = stations["GATEWAY-1"]
-    assert bucket.charging_station_serial == "GATEWAY-1"
-    assert set(bucket.connectors) == {"conn-uuid"}
-    create_coords.assert_awaited_once()
-    setup_mqtt.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_prepare_site_skips_when_dashboard_devices_unavailable_or_no_serial(hass):
-    dashboard = _configured_dashboard(async_get_smart_devices=AsyncMock(return_value=[]))
-
-    with patch(
-        "custom_components.smappee_ev.site_preparation._dashboard_fetch_devices",
-        AsyncMock(return_value=None),
-    ):
-        assert await _prepare_site(
-            hass,
-            MagicMock(),
-            {"serviceLocationId": 300},
-            update_interval=60,
-            client_id_prefix="client",
-            dashboard_client=dashboard,
-        ) == (None, None)
-
-    assert await _prepare_site(
-        hass,
-        MagicMock(),
-        {"serviceLocationId": 301, "name": "No Serial"},
-        update_interval=60,
-        client_id_prefix="client",
-        dashboard_client=dashboard,
-    ) == (None, None)
-
-
-@pytest.mark.asyncio
-async def test_prepare_topology_skips_non_charger_topology_without_serial(hass):
+async def test_prepare_site_topologies_skips_non_charger_topology_without_serial(hass):
     topology = SmappeeLocationTopology(
         site_location_id=100,
         site_location_uuid="site-uuid",
@@ -899,9 +755,9 @@ async def test_prepare_topology_skips_non_charger_topology_without_serial(hass):
         async_get_smart_devices=AsyncMock(return_value=[]),
     )
 
-    assert await _prepare_topology(
+    assert await _prepare_site_topologies(
         hass,
-        topology,
+        [topology],
         update_interval=60,
         client_id_prefix="client",
         dashboard_client=dashboard,
@@ -909,7 +765,7 @@ async def test_prepare_topology_skips_non_charger_topology_without_serial(hass):
 
 
 @pytest.mark.asyncio
-async def test_prepare_topology_mqtt_construction_failure_rolls_back_coordinators(hass):
+async def test_prepare_site_topologies_mqtt_construction_failure_rolls_back_coordinators(hass):
     topology = SmappeeLocationTopology(
         site_location_id=100,
         site_location_uuid="site-uuid",
@@ -969,7 +825,7 @@ async def test_prepare_topology_mqtt_construction_failure_rolls_back_coordinator
         ),
         pytest.raises(RuntimeError, match="mqtt construction failed"),
     ):
-        await _prepare_topology(hass, topology, 60, "client")
+        await _prepare_site_topologies(hass, [topology], 60, "client")
 
     station_coordinator.async_shutdown.assert_awaited_once()
     site_coordinator.async_shutdown.assert_awaited_once()
@@ -1071,6 +927,98 @@ async def test_register_runtime_devices_creates_site_station_and_connector_devic
     } == {site.id, station.id, connector.id}
     assert registry.async_get(station.id).via_device_id == site.id
     assert registry.async_get(connector.id).via_device_id == station.id
+
+
+@pytest.mark.parametrize(
+    ("site_name", "gateway_serial", "station_name"),
+    [("Home", "GATEWAY-1", "Garage Charger"), (None, None, None)],
+)
+async def test_registration_and_entities_write_the_same_device_metadata(
+    hass, site_name, gateway_serial, station_name
+):
+    """Setup registration and entity device_info must not rename devices in turn."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    connector_client = MagicMock()
+    connector_client.connector_number = 1
+    entry.runtime_data = RuntimeData(
+        api=MagicMock(),
+        mqtt={},
+        sites={
+            100: make_site_runtime(
+                site_location_id=100,
+                site_name=site_name,
+                gateway_serial=gateway_serial,
+                gateway_type="Genius",
+                stations={
+                    "station-uuid": make_station_runtime(
+                        site_location_id=100,
+                        control_location_id=200,
+                        station_uuid="station-uuid",
+                        serial="STATION-1",
+                        station_client=MagicMock(serial_id="STATION-1"),
+                        station_name=station_name,
+                        station_model="EV Wall",
+                        connectors={
+                            "conn-uuid": make_connector_runtime(
+                                connector_key="conn-uuid",
+                                connector_uuid="conn-uuid",
+                                connector_position=1,
+                                connector_client=connector_client,
+                            )
+                        },
+                    )
+                },
+            )
+        },
+    )
+    registry = dr.async_get(hass)
+    _register_runtime_devices(hass, entry)
+
+    def snapshot() -> dict[str, tuple[object, ...]]:
+        return {
+            identifier: (device.name, device.model, device.serial_number)
+            for identifier in (
+                "site:100",
+                "station:100:200:STATION-1",
+                "connector:100:200:STATION-1:conn-uuid",
+            )
+            if (
+                device := registry.async_get_device_by_identifier(
+                    (DOMAIN, identifier), entry.entry_id
+                )
+            )
+        }
+
+    registered = snapshot()
+    assert len(registered) == 3
+
+    # The metadata entity device_info supplies when the platforms load.
+    for info in (
+        make_device_info(
+            100,
+            "unknown",
+            "site-100",
+            scope="site",
+            site_name=site_name,
+            gateway_serial=gateway_serial,
+            gateway_type="Genius",
+        ),
+        make_station_device_info(
+            100, 200, "STATION-1", station_name=station_name, station_model="EV Wall"
+        ),
+        make_connector_device_info(
+            100, 200, "STATION-1", "conn-uuid", "1", station_name=station_name
+        ),
+    ):
+        registry.async_get_or_create(config_entry_id=entry.entry_id, **info)
+
+    assert snapshot() == registered
+    assert registered["site:100"][0] == (site_name or "Smappee 100")
+    expected_station = station_name or "Smappee EV STATION-1"
+    assert registered["connector:100:200:STATION-1:conn-uuid"][0] == (
+        f"{expected_station} | Connector 1"
+    )
 
 
 def test_remove_legacy_led_devices_removes_only_led_devices():

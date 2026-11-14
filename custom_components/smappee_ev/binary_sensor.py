@@ -5,7 +5,7 @@ from typing import override
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
@@ -24,7 +24,7 @@ def _station_serial(coord: SmappeeCoordinator) -> str:
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     runtime = config_entry.runtime_data
 

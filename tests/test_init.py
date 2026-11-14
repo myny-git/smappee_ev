@@ -23,7 +23,6 @@ from custom_components.smappee_ev.const import (
 )
 from custom_components.smappee_ev.dashboard_discovery import (
     _dashboard_client_configured,
-    _dashboard_discover_service_locations,
     _fetch_dashboard_connector_mapping,
 )
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
@@ -38,7 +37,6 @@ from custom_components.smappee_ev.topology import (
     _is_station,
     _make_station_clients,
     _normalize_connector_mapping_station_keys,
-    _normalize_dashboard_service_location,
     _safe_str,
     _split_devices,
 )
@@ -314,12 +312,6 @@ class TestInitFunctions:
         # The actual implementation in __init__.py converts None to 'None' string
         assert _safe_str(None) is None
 
-        # This is a separate mock test with a custom implementation
-        with patch("custom_components.smappee_ev.topology._safe_str") as mock_safe_str:
-            # Make our mocked function return None only for "TypeError" input
-            mock_safe_str.side_effect = lambda x: None if x == "TypeError" else _safe_str(x)
-            assert mock_safe_str("TypeError") is None
-
     def test_dashboard_client_configured_with_username_password(self):
         """Test dashboard setup can start from username/password credentials."""
         dashboard_client = MagicMock()
@@ -329,98 +321,6 @@ class TestInitFunctions:
         dashboard_client.password = "test_password"  # noqa: S105
 
         assert _dashboard_client_configured(dashboard_client) is True
-
-    def test_normalize_dashboard_service_location_keeps_missing_serial(self):
-        """Test discovery keeps candidate charging locations without top-level serials."""
-        result = _normalize_dashboard_service_location(
-            {
-                "serviceLocationId": 12345,
-                "serviceLocationUuid": "sl_uuid_1",
-                "functionType": "CHARGINGSTATION",
-                "name": "Home",
-            }
-        )
-
-        assert result == {
-            "serviceLocationId": 12345,
-            "serviceLocationUuid": "sl_uuid_1",
-            "deviceSerialNumber": None,
-            "chargingStation": {},
-            "functionType": "CHARGINGSTATION",
-            "name": "Home",
-        }
-
-    def test_normalize_dashboard_service_location_keeps_nested_charging_station(self):
-        """Test chargingStation details override a non-charging functionType."""
-        result = _normalize_dashboard_service_location(
-            {
-                "serviceLocationId": 12345,
-                "serviceLocationUuid": "sl_uuid_1",
-                "functionType": "ELECTRICITY",
-                "chargingStation": {"serialNumber": "STATION123"},
-                "name": "Home",
-            }
-        )
-
-        assert result == {
-            "serviceLocationId": 12345,
-            "serviceLocationUuid": "sl_uuid_1",
-            "deviceSerialNumber": "STATION123",
-            "chargingStation": {"serialNumber": "STATION123"},
-            "functionType": "ELECTRICITY",
-            "name": "Home",
-        }
-
-    def test_normalize_dashboard_service_location_uses_plural_charging_stations(self):
-        """Test discovery accepts Dashboard payloads with chargingStations lists."""
-        result = _normalize_dashboard_service_location(
-            {
-                "serviceLocationId": 12345,
-                "serviceLocationUuid": "sl_uuid_1",
-                "chargingStations": [{"serial": "STATION123"}],
-                "name": "Home",
-            }
-        )
-
-        assert result == {
-            "serviceLocationId": 12345,
-            "serviceLocationUuid": "sl_uuid_1",
-            "deviceSerialNumber": "STATION123",
-            "chargingStation": {"serial": "STATION123"},
-            "functionType": None,
-            "name": "Home",
-        }
-
-    @pytest.mark.asyncio
-    async def test_dashboard_discover_service_locations_falls_back_without_function_type(self):
-        """Test discovery still tries locations when Dashboard omits charging function types."""
-        dashboard_client = MagicMock()
-        dashboard_client._token = "dashboard_token"  # noqa: S105
-        dashboard_client.refresh_token = None
-        dashboard_client.async_get_service_locations_full_details = AsyncMock(
-            return_value=[
-                {
-                    "serviceLocationId": 12345,
-                    "serviceLocationUuid": "sl_uuid_1",
-                    "functionType": "ELECTRICITY",
-                    "deviceSerialNumber": "GATEWAY123",
-                    "name": "Home",
-                }
-            ]
-        )
-
-        result = await _dashboard_discover_service_locations(dashboard_client)
-
-        assert result == [
-            {
-                "serviceLocationId": 12345,
-                "serviceLocationUuid": "sl_uuid_1",
-                "deviceSerialNumber": "GATEWAY123",
-                "chargingStation": {},
-                "functionType": "ELECTRICITY",
-                "name": "Home",
-            }
-        ]
 
     def test_find_in(self):
         """Test _find_in function."""

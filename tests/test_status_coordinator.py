@@ -12,6 +12,7 @@ from custom_components.smappee_ev.coordinators.status import (
     SmappeeStatusData,
 )
 from tests.factories import make_site_runtime, make_station_runtime
+from tests.helpers import raises_translated
 
 
 @pytest.fixture
@@ -81,7 +82,7 @@ async def test_network_error_raises_update_failed(mock_hass):
             "custom_components.smappee_ev.coordinators.status.async_get_clientsession",
             return_value=mock_session,
         ),
-        pytest.raises(UpdateFailed, match="Error fetching Smappee status"),
+        raises_translated(UpdateFailed, "status_update_failed"),
     ):
         await coord._async_update_data()
 
@@ -166,9 +167,10 @@ async def test_empty_response_is_a_controlled_failure(mock_hass):
             "custom_components.smappee_ev.coordinators.status.async_get_clientsession",
             return_value=mock_session,
         ),
-        pytest.raises(UpdateFailed, match="no subsystem status"),
+        raises_translated(UpdateFailed, "status_update_failed") as caught,
     ):
         await coord._async_update_data()
+    assert "no subsystem status" in caught.value.translation_placeholders["error"]
     assert not coord._last_status_fetch_success
 
 

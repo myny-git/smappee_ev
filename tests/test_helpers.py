@@ -1,3 +1,6 @@
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+
 import pytest
 
 from custom_components.smappee_ev.const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT
@@ -30,15 +33,92 @@ def test_make_unique_id_connector():
     assert uid == "2:SER999:STX:CONN1:power_total"
 
 
-def test_update_total_increasing_basic():
-    assert helpers.update_total_increasing(None, None) is None
-    assert helpers.update_total_increasing(None, 5) == 5
+def _next_total(last: float | None, candidate: float | None) -> float | None:
+    """Evaluate a reading without a receive time; such a reading never resets."""
+    value, evidence = helpers.next_total_increasing(
+        last, candidate, received=None, reset_evidence=frozenset()
+    )
+    assert evidence == frozenset()
+    return value
+
+
+def test_next_total_increasing_basic():
+    assert _next_total(None, None) is None
+    assert _next_total(None, 5) == 5
     # Decrease rejected
-    assert helpers.update_total_increasing(10, 9) == 10
+    assert _next_total(10, 9) == 10
     # Reset / zero rejected once we have a previous value
-    assert helpers.update_total_increasing(10, 0) == 10
+    assert _next_total(10, 0) == 10
     # Increase accepted
-    assert helpers.update_total_increasing(10, 15) == 15
+    assert _next_total(10, 15) == 15
+    # A reading without a receive time never confirms a reset.
+    assert _next_total(1000, 2) == 1000
+
+
+def _times(count: int) -> list[datetime]:
+    start = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
+    return [start + timedelta(seconds=10 * index) for index in range(count)]
+
+
+def test_next_total_increasing_follows_a_confirmed_meter_reset():
+    """A real reset must not freeze the total until the new meter passes the old one."""
+    last: float | None = 1000.0
+    evidence: frozenset[datetime] = frozenset()
+    shown = []
+    for received, reading in zip(_times(3), (2.0, 2.1, 2.2), strict=True):
+        last, evidence = helpers.next_total_increasing(
+            last, reading, received=received, reset_evidence=evidence
+        )
+        shown.append(last)
+
+    assert helpers.TOTAL_RESET_CONFIRMATIONS == 3
+    assert shown == [1000.0, 1000.0, 2.2]
+    assert evidence == frozenset()
+
+
+def test_next_total_increasing_counts_measurements_not_evaluations():
+    """Re-reading the same measurement must not confirm a reset."""
+    received = _times(1)[0]
+    last: float | None = 1000.0
+    evidence: frozenset[datetime] = frozenset()
+    for _ in range(5):
+        last, evidence = helpers.next_total_increasing(
+            last, 2.0, received=received, reset_evidence=evidence
+        )
+    assert last == 1000.0
+    assert evidence == {received}
+
+
+def test_next_total_increasing_normal_reading_discards_reset_evidence():
+    first, second, third, fourth = _times(4)
+    last, evidence = helpers.next_total_increasing(
+        1000.0, 2.0, received=first, reset_evidence=frozenset()
+    )
+    last, evidence = helpers.next_total_increasing(
+        last, 2.0, received=second, reset_evidence=evidence
+    )
+    # A complete reading in between shows the drop was a glitch.
+    last, evidence = helpers.next_total_increasing(
+        last, 1000.5, received=third, reset_evidence=evidence
+    )
+    assert (last, evidence) == (1000.5, frozenset())
+    last, evidence = helpers.next_total_increasing(
+        last, 2.0, received=fourth, reset_evidence=evidence
+    )
+    assert last == 1000.5
+
+
+@pytest.mark.parametrize("reading", [0.0, 950.0, 999.9])
+def test_next_total_increasing_never_resets_on_zero_or_small_dips(reading):
+    """Zero is an incomplete reading; a dip of under 10% is a correction, not a reset."""
+    last: float | None = 1000.0
+    evidence: frozenset[datetime] = frozenset()
+    for received in _times(5):
+        last, evidence = helpers.next_total_increasing(
+            last, reading, received=received, reset_evidence=evidence
+        )
+    assert last == 1000.0
+    assert evidence == frozenset()
 
 
 def test_safe_sum_valid():
@@ -157,3 +237,17 @@ def test_connector_percentage_setpoint_falls_back_to_the_ampere_setpoint():
 def test_connector_percentage_setpoint_is_none_when_unknown():
     assert helpers.connector_percentage_setpoint(None) is None
     assert helpers.connector_percentage_setpoint(ConnectorState(connector_number=1)) is None
+
+
+@pytest.mark.parametrize(
+    ("connector_number", "expected"),
+    [(2, "2"), (None, "uuid")],
+)
+def test_connector_label_prefers_number_over_uuid_tail(connector_number, expected):
+    """The connector device is named "<station> | Connector <label>".
+
+    A numbered connector must show its number; without one, the UUID tail keeps
+    the label short yet distinct, never the full UUID.
+    """
+    client = SimpleNamespace(connector_number=connector_number)
+    assert helpers.build_connector_id(client, "connector-uuid") == expected

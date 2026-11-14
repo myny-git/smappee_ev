@@ -2,27 +2,15 @@
 
 from __future__ import annotations
 
-from contextlib import suppress
 import logging
 import re
 
 from .api.discovery import MqttChannelSpec, parse_mqtt_channel_specs_from_highlevel
 from .api.mqtt_gateway import redact_mqtt_topic
 from .models.state import HighLevelConfigMap
+from .topology import _safe_str
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _safe_str(value: object) -> str | None:
-    """Convert to stripped string or None if not possible."""
-    if value is None:
-        return None
-    with suppress(TypeError, ValueError):
-        text = str(value).strip()
-        if text.lower() in {"none", "null"}:
-            return None
-        return text or None
-    return None
 
 
 def _mqtt_specs_from_highlevel_configs(configs: HighLevelConfigMap) -> list[MqttChannelSpec]:
@@ -72,7 +60,6 @@ def _service_location_uuid_from_mqtt_topic(topic: str | None) -> str | None:
 
 def _group_mqtt_specs_by_credentials(
     suuid: str | None,
-    sid: int | str,
     mqtt_specs: list[MqttChannelSpec],
 ) -> list[
     tuple[
@@ -98,8 +85,5 @@ def _group_mqtt_specs_by_credentials(
     for key, specs in grouped_specs.items():
         service_location_ids_by_uuid = service_location_ids_by_group.get(key, {})
         service_location_uuids = list(service_location_ids_by_uuid)
-        if not service_location_uuids and suuid:
-            service_location_uuids = [suuid]
-            service_location_ids_by_uuid = {suuid: sid}
         groups.append((specs, service_location_uuids, service_location_ids_by_uuid))
     return groups

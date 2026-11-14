@@ -55,6 +55,33 @@
     "dashboard_maintenance": {
       "message": "Smappee Dashboard is in onderhoud. Home Assistant probeert het automatisch opnieuw."
     },
+    "dashboard_credentials_required": {
+      "message": "Inloggegevens voor het Smappee Dashboard zijn vereist. Meld de Smappee EV-integratie opnieuw aan om verder te gaan."
+    },
+    "dashboard_unavailable_no_snapshot": {
+      "message": "Smappee Dashboard is tijdelijk niet beschikbaar en er is nog geen opgeslagen MQTT-configuratie. Home Assistant probeert het automatisch opnieuw."
+    },
+    "dashboard_not_configured": {
+      "message": "De verbinding met het Smappee Dashboard is nog niet ingesteld. Home Assistant probeert het automatisch opnieuw."
+    },
+    "cannot_load_topology": {
+      "message": "Laden van de Smappee-laadstations mislukt: {error}"
+    },
+    "no_charging_stations": {
+      "message": "Er is nog geen Smappee-laadstation gevonden. Home Assistant probeert het automatisch opnieuw."
+    },
+    "incomplete_site_discovery": {
+      "message": "Smappee gaf onvolledige gegevens voor een servicelocatie. Home Assistant probeert het automatisch opnieuw."
+    },
+    "topology_preparation_failed": {
+      "message": "Voorbereiden van de Smappee-laadstations mislukt: {error}"
+    },
+    "update_failed": {
+      "message": "Ophalen van gegevens bij Smappee mislukt: {error}"
+    },
+    "status_update_failed": {
+      "message": "Ophalen van de Smappee-servicestatus mislukt: {error}"
+    },
     "service_location_not_in_entry": {
       "message": "Service location {service_location_id} hoort niet bij config entry {config_entry_id}"
     },
@@ -67,14 +94,8 @@
     "multiple_service_locations": {
       "message": "Meerdere service locations gevonden. Geef service_location_id op."
     },
-    "no_station_client": {
-      "message": "Geen station client gevonden voor config entry {config_entry_id} en service location {service_location_id}."
-    },
     "station_unavailable": {
       "message": "Stationstatus is niet beschikbaar."
-    },
-    "station_method_not_found": {
-      "message": "Stationmethode {method_name} niet gevonden."
     },
     "station_service_failed": {
       "message": "Stationservice {method_name} mislukt: {error}"

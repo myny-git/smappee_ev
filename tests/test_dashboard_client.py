@@ -113,7 +113,6 @@ def test_dashboard_token_update_handles_missing_and_invalid_expiration():
     assert client.refresh_token == "refresh"  # noqa: S105 - fake test token
     assert client._token_expires_at_ms == 0
     token_callback.assert_called_once_with({"dashboard_refresh_token": "refresh"})
-    assert client._headers() == {"token": "access", "content-type": "application/json"}
 
     client._update_token_data({"token": "", "tokenExpirationTimestamp": 1234})
     assert client._token is None

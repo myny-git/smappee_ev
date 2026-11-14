@@ -44,7 +44,6 @@ class SmappeeDeviceHandle:
         self.connector_number = connector_number
 
         self.is_station = is_station
-        self.station_action_uuid: str | None = None
         self.dashboard_client: Any | None = None
         self.dashboard_device_id: str | None = None
         # Stateless: no per-connector mutable charging attributes kept here.

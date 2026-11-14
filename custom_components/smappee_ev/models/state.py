@@ -89,8 +89,10 @@ class StationState:
 
     led_brightness: int | None = None
     dashboard_led_device_id: str | None = None
-    available: bool = True
+    # Live availability from MQTT or a confirmed command; None until one reports it.
+    available: bool | None = None
     api_available: bool = True
+    # Availability reported by the slower Dashboard station details.
     dashboard_available: bool | None = None
     station_features: list[str] = field(default_factory=list)
     maximum_capacity_a: int | None = None

@@ -1,7 +1,7 @@
 """Tests for the switch platform."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from aiohttp import ClientError
 from homeassistant.components.switch import SwitchEntity
@@ -111,11 +111,7 @@ class TestSwitchPlatform:
         """Test switch platform setup."""
         async_add_entities = MagicMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            side_effect=lambda client, uuid: f"Connector {1 if uuid == 'connector_uuid1' else 2}",
-        ):
-            await switch.async_setup_entry(hass, mock_config_entry, async_add_entities)
+        await switch.async_setup_entry(hass, mock_config_entry, async_add_entities)
 
         # Verify entities were added
         async_add_entities.assert_called_once()
@@ -172,17 +168,13 @@ class TestSmappeeChargingSwitch:
         # Mock the connector number since it's used in the name
         api_client.connector_number = 1
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         assert charging_switch.connector_uuid == "connector_uuid1"
         assert charging_switch._sid == 12345
@@ -196,17 +188,13 @@ class TestSmappeeChargingSwitch:
         coordinator = MagicMock(spec=SmappeeCoordinator)
         api_client = MagicMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         # Default state
         assert charging_switch.is_on is False
@@ -221,17 +209,13 @@ class TestSmappeeChargingSwitch:
         coordinator = MagicMock(spec=SmappeeCoordinator)
         api_client = MagicMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         # Mock last state - ON
         last_state = MagicMock()
@@ -264,17 +248,13 @@ class TestSmappeeChargingSwitch:
         api_client = MagicMock()
         api_client.set_charging_mode = AsyncMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         charging_switch.async_write_ha_state = MagicMock()
 
@@ -294,17 +274,13 @@ class TestSmappeeChargingSwitch:
         api_client = MagicMock()
         api_client.set_charging_mode = AsyncMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         charging_switch.async_write_ha_state = MagicMock()
 
@@ -323,17 +299,13 @@ class TestSmappeeChargingSwitch:
         api_client = MagicMock()
         api_client.set_charging_mode = AsyncMock(side_effect=ClientError("Connection error"))
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         charging_switch.async_write_ha_state = MagicMock()
 
@@ -357,17 +329,13 @@ class TestSmappeeChargingSwitch:
         api_client = MagicMock()
         api_client.set_charging_mode = AsyncMock(side_effect=asyncio.CancelledError())
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         charging_switch.async_write_ha_state = MagicMock()
 
@@ -390,17 +358,13 @@ class TestSmappeeChargingSwitch:
             api_method,
             AsyncMock(side_effect=SmappeeAuthenticationError("reauth required")),
         )
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
         charging_switch.async_write_ha_state = MagicMock()
 
         with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
@@ -415,17 +379,13 @@ class TestSmappeeChargingSwitch:
         api_client = MagicMock()
         api_client.pause_charging = AsyncMock()
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         charging_switch._is_on = True
         charging_switch.async_write_ha_state = MagicMock()
@@ -444,17 +404,13 @@ class TestSmappeeChargingSwitch:
         api_client = MagicMock()
         api_client.pause_charging = AsyncMock(side_effect=UpdateFailed("Failed to pause"))
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         charging_switch._is_on = True
         charging_switch.async_write_ha_state = MagicMock()
@@ -474,17 +430,13 @@ class TestSmappeeChargingSwitch:
         api_client = MagicMock()
         api_client.pause_charging = AsyncMock(side_effect=asyncio.CancelledError())
 
-        with patch(
-            "custom_components.smappee_ev.helpers.build_connector_label",
-            return_value="Connector 1",
-        ):
-            charging_switch = switch.SmappeeChargingSwitch(
-                coordinator=coordinator,
-                api_client=api_client,
-                sid=12345,
-                station_uuid="station_uuid",
-                connector_uuid="connector_uuid1",
-            )
+        charging_switch = switch.SmappeeChargingSwitch(
+            coordinator=coordinator,
+            api_client=api_client,
+            sid=12345,
+            station_uuid="station_uuid",
+            connector_uuid="connector_uuid1",
+        )
 
         charging_switch._is_on = True
         charging_switch.async_write_ha_state = MagicMock()
@@ -535,9 +487,34 @@ class TestSmappeeAvailabilitySwitch:
         mock_integration_data.station.available = False
         assert availability_switch.is_on is False
 
-        # Test with None data
+        # Without data the state is unknown, never assumed available.
         coordinator.data = None
-        assert availability_switch.is_on is True  # Default to True when no data
+        assert availability_switch.is_on is None
+
+    def test_is_on_uses_dashboard_until_live_state_arrives(self, mock_integration_data):
+        """A stored "unavailable" setting must not show as on after a restart."""
+        coordinator = MagicMock(spec=SmappeeCoordinator)
+        coordinator.data = mock_integration_data
+        availability_switch = switch.SmappeeAvailabilitySwitch(
+            coordinator=coordinator,
+            api_client=MagicMock(),
+            sid=12345,
+            station_uuid="station_uuid",
+        )
+        station = mock_integration_data.station
+
+        # No live report and no Dashboard details yet: unknown.
+        station.available = None
+        station.dashboard_available = None
+        assert availability_switch.is_on is None
+
+        # The Dashboard shows the stored setting until MQTT or a command reports.
+        station.dashboard_available = False
+        assert availability_switch.is_on is False
+
+        # Live state takes precedence over the slower Dashboard details.
+        station.available = True
+        assert availability_switch.is_on is True
 
     @pytest.mark.asyncio
     async def test_async_turn_on(self, mock_integration_data):
@@ -746,17 +723,13 @@ async def test_charging_switch_pause_failure_raises_translated_error():
     coordinator = MagicMock(spec=SmappeeCoordinator)
     api_client = MagicMock()
     api_client.pause_charging = AsyncMock(side_effect=SmappeeError("rejected"))
-    with patch(
-        "custom_components.smappee_ev.helpers.build_connector_label",
-        return_value="Connector 1",
-    ):
-        charging_switch = switch.SmappeeChargingSwitch(
-            coordinator=coordinator,
-            api_client=api_client,
-            sid=12345,
-            station_uuid="station_uuid",
-            connector_uuid="connector_uuid1",
-        )
+    charging_switch = switch.SmappeeChargingSwitch(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=12345,
+        station_uuid="station_uuid",
+        connector_uuid="connector_uuid1",
+    )
     charging_switch._is_on = True
     charging_switch.async_write_ha_state = MagicMock()
 

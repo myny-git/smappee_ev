@@ -10,3 +10,4 @@ pytest-output.txt
 .coverage
 .coverage.*
 coverage.xml
+coverage.json

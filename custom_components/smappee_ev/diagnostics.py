@@ -453,7 +453,7 @@ def _classify_appliance_measurement(meas: dict[str, Any]) -> dict[str, Any]:
 def _measurement_identifiers(meas: dict[str, Any]) -> dict[str, Any]:
     """Return redacted identifier fields present on one highlevel measurement.
 
-    Includes fields beyond the ones ``_connector_uuid_for_highlevel_measurement``
+    Includes fields beyond the ones connector routing
     currently matches on, so a future/alternate identifier field (e.g. a
     ``smartDeviceId`` instead of a ``smartDeviceUuid``) becomes visible instead
     of silently resulting in an unresolved connector.

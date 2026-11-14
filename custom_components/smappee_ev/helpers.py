@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -13,6 +13,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from .const import CONFIGURATION_URL, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN, MANUFACTURER
 
 _LOGGER = logging.getLogger(__name__)
+
+# Home Assistant's statistics treat a drop below 90% of the previous total as a reset.
+TOTAL_RESET_RATIO: Final = 0.9
+# Separate measurements that must report such a drop before it is shown.
+TOTAL_RESET_CONFIRMATIONS: Final = 3
 
 
 def charging_session_phase(
@@ -117,6 +122,39 @@ def connector_device_identifier(
     )
 
 
+# Device metadata is written twice: by runtime device registration at setup and
+# by every entity's device_info. Both use these functions, so neither overwrites
+# the other with a different name or model.
+
+
+def site_device_name(site_sid: int | str, site_name: str | None) -> str:
+    """Return the device name of a site/service location."""
+    return site_name or f"{MANUFACTURER} {site_sid}"
+
+
+def site_device_model(gateway_type: str | None) -> str:
+    """Return the device model of a site/service location."""
+    return f"{gateway_type} / Service Location" if gateway_type else "Service Location"
+
+
+def station_device_name(charging_station_serial: str, station_name: str | None) -> str:
+    """Return the device name of a charging station."""
+    return station_name or f"{MANUFACTURER} EV {charging_station_serial}"
+
+
+def station_device_model(station_model: str | None) -> str:
+    """Return the device model of a charging station."""
+    return station_model or "EV Wall"
+
+
+def connector_device_name(
+    charging_station_serial: str, connector_label: str, station_name: str | None
+) -> str:
+    """Return the device name of a connector, prefixed by its station's name."""
+    station = station_device_name(charging_station_serial, station_name)
+    return f"{station} | Connector {connector_label}"
+
+
 def make_site_device_info(
     site_sid: int | str,
     site_name: str | None,
@@ -124,8 +162,8 @@ def make_site_device_info(
     gateway_type: str | None = None,
 ) -> DeviceInfo:
     """Return Home Assistant device_info for a site/service location."""
-    name = site_name or f"{MANUFACTURER} {site_sid}"
-    model = f"{gateway_type} / Service Location" if gateway_type else "Service Location"
+    name = site_device_name(site_sid, site_name)
+    model = site_device_model(gateway_type)
     # Keyword construction works for both the TypedDict (HA < 2026.11) and the
     # dataclass; optional fields are passed only when known, never assigned later.
     if gateway_serial:
@@ -161,10 +199,10 @@ def make_station_device_info(
         identifiers.add((DOMAIN, legacy_identifier))
     return DeviceInfo(
         identifiers=identifiers,
-        name=station_name or f"{MANUFACTURER} EV {charging_station_serial}",
+        name=station_device_name(charging_station_serial, station_name),
         manufacturer=MANUFACTURER,
         configuration_url=CONFIGURATION_URL,
-        model=station_model or "EV Wall",
+        model=station_device_model(station_model),
         serial_number=charging_station_serial,
     )
 
@@ -179,14 +217,13 @@ def make_connector_device_info(
 ) -> DeviceInfo:
     """Return connector metadata; runtime registration owns the device hierarchy."""
     label = connector_label or connector_key
-    base = station_name or f"{MANUFACTURER} EV {charging_station_serial}"
     return DeviceInfo(
         identifiers={
             connector_device_identifier(
                 site_sid, control_sid, charging_station_serial, connector_key
             )
         },
-        name=f"{base} | Connector {label}",
+        name=connector_device_name(charging_station_serial, label, station_name),
         manufacturer=MANUFACTURER,
         configuration_url=CONFIGURATION_URL,
         model="Connector",
@@ -211,7 +248,8 @@ def make_device_info(
 ) -> DeviceInfo:
     """Return a Home Assistant device_info dict for a station or connector."""
     if scope == "site":
-        return make_site_device_info(sid, site_name, gateway_serial or serial, gateway_type)
+        # The station serial is not the site's: registration leaves it empty too.
+        return make_site_device_info(sid, site_name, gateway_serial, gateway_type)
 
     resolved_control_sid = control_sid or sid
     resolved_station_serial = charging_station_serial or serial
@@ -275,14 +313,6 @@ def station_serial(coord: Any) -> str:
         or getattr(station_client, "serial_id", None)
         or "unknown"
     )
-
-
-def connector_state(coordinator: Any, connector_uuid: str) -> Any | None:
-    """Lookup a connector state object from coordinator data."""
-    data = getattr(coordinator, "data", None)
-    if not data:
-        return None
-    return (getattr(data, "connectors", None) or {}).get(connector_uuid)
 
 
 def resolve_connector_current_range(
@@ -362,33 +392,42 @@ def connector_percentage_setpoint(state: Any) -> int | None:
     )
 
 
-def build_connector_label(api_client: Any, connector_uuid: str) -> str:
-    """Return a human friendly connector label (prefers numeric connector number)."""
-    num = getattr(api_client, "connector_number", None)
-    return f"Connector {num}" if num is not None else f"Connector {connector_uuid[-4:]}"
-
-
 def build_connector_id(api_client: Any, connector_uuid: str) -> str:
     """Return a human friendly connector label (prefers numeric connector number)."""
     num = getattr(api_client, "connector_number", None)
     return str(num) if num is not None else str(connector_uuid[-4:])
 
 
-def update_total_increasing(last: float | None, candidate: float | None) -> float | None:
-    """
-    Enforce monotonic increasing semantics for total energy-like sensors.
+def next_total_increasing(
+    last: float | None,
+    candidate: float | None,
+    *,
+    received: datetime | None,
+    reset_evidence: frozenset[datetime],
+) -> tuple[float | None, frozenset[datetime]]:
+    """Return the total to expose and the updated evidence of a meter reset.
 
     Rules:
-      * If candidate is None -> keep last
-      * If last exists and candidate < last or candidate == 0 -> keep last (guards resets)
-      * Else accept candidate
-    Returns the value to expose (which may be unchanged last).
+      * A missing candidate keeps the last total.
+      * A candidate at or above the last total is accepted.
+      * Zero, and a dip to 90% or more of the last total, keep the last total.
+        Those are incomplete or corrected readings, not resets.
+      * A drop below 90% is a meter reset, as Home Assistant's statistics define
+        it. It is accepted once ``TOTAL_RESET_CONFIRMATIONS`` separate
+        measurements (distinct receive times) have reported it without a normal
+        reading in between. One glitch cannot reset the statistics, but a real
+        reset is no longer ignored until the new meter passes the old total.
     """
     if candidate is None:
-        return last
-    if last is not None and (candidate < last or candidate == 0):
-        return last
-    return candidate
+        return last, reset_evidence
+    if last is None or candidate >= last:
+        return candidate, frozenset()
+    if candidate == 0 or candidate >= last * TOTAL_RESET_RATIO or received is None:
+        return last, reset_evidence
+    evidence = reset_evidence | {received}
+    if len(evidence) < TOTAL_RESET_CONFIRMATIONS:
+        return last, evidence
+    return candidate, frozenset()
 
 
 def safe_sum(values: object) -> float | None:
@@ -412,9 +451,7 @@ __all__ = [
     "make_connector_device_info",
     "make_unique_id",
     "station_serial",
-    "connector_state",
-    "build_connector_label",
-    "update_total_increasing",
+    "next_total_increasing",
     "safe_sum",
 ]
 

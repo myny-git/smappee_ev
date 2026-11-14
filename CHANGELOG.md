@@ -21,6 +21,10 @@ where the bug report, testing notes or design discussion can be found.
   Dashboard API can return an incomplete topology, which previously could
   remove a charging station or connector that still existed. A device that is
   no longer part of the topology can be deleted from its device page.
+- Device names and models no longer change twice at every start. Setup and the
+  entities now use the same names, so the site and connector names users saw
+  after startup stay as they were. The site no longer shows a charging-station
+  serial number as its own when the gateway serial is unknown.
 
 ### Charging sessions
 
@@ -52,6 +56,19 @@ where the bug report, testing notes or design discussion can be found.
 - LED brightness now follows the charging station's own Dashboard details.
   With several stations on one service location, the periodic poll could show
   another station's brightness.
+- The **Station available** switch no longer shows on before the station has
+  reported its availability. After a restart it showed on until the first MQTT
+  message, even for a station set to unavailable. It now shows the setting from
+  the Dashboard until MQTT or a command reports, and unknown without either.
+- When setup has to retry, the integration card now explains why in the user's
+  language, for example that no charging station was found yet or that the
+  Dashboard could not be reached. A failed first data refresh previously showed
+  no reason at all.
+- Energy totals now follow a real meter reset, for example after a gateway is
+  replaced. Previously they stayed at the old value until the new meter passed
+  it. A drop below 90% of the last total is shown once three separate MQTT
+  measurements report it; a single low reading, zero or a small correction is
+  still ignored.
 
 ### Stability
 

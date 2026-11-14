@@ -55,6 +55,33 @@
     "dashboard_maintenance": {
       "message": "Smappee Dashboard under maintenance. Home Assistant will retry automatically."
     },
+    "dashboard_credentials_required": {
+      "message": "Smappee Dashboard credentials are required. Re-authenticate the Smappee EV integration to continue."
+    },
+    "dashboard_unavailable_no_snapshot": {
+      "message": "Smappee Dashboard is temporarily unavailable and no saved MQTT configuration exists yet. Home Assistant will retry automatically."
+    },
+    "dashboard_not_configured": {
+      "message": "Smappee Dashboard connection is not set up yet. Home Assistant will retry automatically."
+    },
+    "cannot_load_topology": {
+      "message": "Loading the Smappee charging stations failed: {error}"
+    },
+    "no_charging_stations": {
+      "message": "No Smappee charging station was found yet. Home Assistant will retry automatically."
+    },
+    "incomplete_site_discovery": {
+      "message": "Smappee returned incomplete information for a service location. Home Assistant will retry automatically."
+    },
+    "topology_preparation_failed": {
+      "message": "Preparing the Smappee charging stations failed: {error}"
+    },
+    "update_failed": {
+      "message": "Fetching data from Smappee failed: {error}"
+    },
+    "status_update_failed": {
+      "message": "Fetching the Smappee service status failed: {error}"
+    },
     "service_location_not_in_entry": {
       "message": "Service location {service_location_id} does not belong to config entry {config_entry_id}"
     },
@@ -67,14 +94,8 @@
     "multiple_service_locations": {
       "message": "Multiple service locations detected. Provide service_location_id."
     },
-    "no_station_client": {
-      "message": "No station client found for config entry {config_entry_id} and service location {service_location_id}."
-    },
     "station_unavailable": {
       "message": "Station state is unavailable."
-    },
-    "station_method_not_found": {
-      "message": "Station method {method_name} not found."
     },
     "station_service_failed": {
       "message": "Station service {method_name} failed: {error}"

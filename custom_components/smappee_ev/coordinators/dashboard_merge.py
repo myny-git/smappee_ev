@@ -57,18 +57,9 @@ class DashboardMixin(CoordinatorMixin):
         ):
             return False
 
+        # No await separates these checks from taking the free lock, so they
+        # still hold inside it; a concurrent caller sees the lock as taken.
         async with self._dashboard_refresh_lock:
-            if self._is_stopping:
-                return False
-
-            now = _now()
-            if (
-                not force
-                and self._last_dashboard_refresh
-                and now - self._last_dashboard_refresh < DASHBOARD_REFRESH_INTERVAL.total_seconds()
-            ):
-                return False
-
             service_location_id = self.station_client.service_location_id
             site_service_location_id = (
                 getattr(self.station_client, "site_location_id", None) or service_location_id
@@ -148,8 +139,6 @@ class DashboardMixin(CoordinatorMixin):
 
     async def _refresh_dashboard_load_management(self, data: IntegrationData) -> bool:
         """Refresh per-connector Dashboard load-management state."""
-        if self.dashboard_client is None:
-            return False
         method = getattr(self.dashboard_client, "async_get_load_management", None)
         if method is None or not iscoroutinefunction(method):
             return False
@@ -231,9 +220,7 @@ class DashboardMixin(CoordinatorMixin):
         self._dashboard_refresh_unsub = async_call_later(self.hass, delay, _refresh)
 
     def _start_dashboard_refresh_task(self) -> None:
-        """Start the dashboard refresh task if shutdown has not begun."""
-        if self._is_stopping:
-            return
+        """Start a dashboard refresh; callers have checked that shutdown has not begun."""
         task = self._dashboard_refresh_task
         if task is not None and not task.done():
             task.cancel()
@@ -274,13 +261,6 @@ class DashboardMixin(CoordinatorMixin):
         finally:
             if self._dashboard_refresh_task is asyncio.current_task():
                 self._dashboard_refresh_task = None
-
-    async def _async_delayed_dashboard_refresh(self, delay: float) -> None:
-        """Compatibility wrapper for older tests and callers."""
-        if delay > 0:
-            self.async_schedule_dashboard_refresh(delay=delay)
-            return
-        await self._async_dashboard_refresh_now()
 
     def _cancel_dashboard_refresh_timer(self) -> None:
         """Cancel a scheduled dashboard refresh timer."""

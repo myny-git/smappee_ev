@@ -16,13 +16,10 @@ def test_const_values_are_stable():
     assert const.CONF_USERNAME == ha_const.CONF_USERNAME
     assert const.CONF_PASSWORD == ha_const.CONF_PASSWORD
     assert const.CONF_DASHBOARD_REFRESH_TOKEN == "dashboard_refresh_token"  # noqa: S105
-    assert const.CONF_DASHBOARD_TOKEN_EXPIRES_AT == "dashboard_token_expires_at"  # noqa: S105
 
     assert const.DEFAULT_MIN_CURRENT == 6
     assert const.DEFAULT_MAX_CURRENT == 32
     assert const.DEFAULT_LED_BRIGHTNESS == 70
-    assert const.DEFAULT_MIN_SURPLUS_PERCENT == 100
-    assert const.FULL_PERCENTAGE == 100
     assert const.CHARGING_MODES == ("standard", "smart", "solar")
 
     assert const.MQTT_HOST == "mqtt.smappee.net"

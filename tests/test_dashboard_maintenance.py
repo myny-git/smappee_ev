@@ -30,7 +30,8 @@ from tests.factories import make_site_runtime
 from tests.test_dashboard_client import _Response, _Session
 
 NOTICE = "<html>The Smappee dashboard is currently under maintenance.</html>"
-MESSAGE = "Smappee Dashboard under maintenance. Home Assistant will retry automatically."
+# Home Assistant builds the setup retry reason from strings.json, without the final period.
+MESSAGE = "Smappee Dashboard under maintenance. Home Assistant will retry automatically"
 
 
 def make_client(session, *, refresh=False):
@@ -158,6 +159,8 @@ async def test_setup_retry_reason_survives_client_recreation_and_recovers(
         domain=DOMAIN, version=6, data={"username": "user", "password": "password"}
     )
     entry.add_to_hass(hass)
+    # As in a running instance: the integration is loaded before its entries set up.
+    hass.config.components.add(DOMAIN)
     await async_get_translations(hass, "en", "exceptions", {DOMAIN})
     session = _Session(
         posts=[

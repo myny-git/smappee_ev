@@ -176,6 +176,7 @@ def mock_runtime_data():
     coordinator.data = IntegrationData(
         station=StationState(
             mqtt_connected=True,
+            available=False,
             led_brightness=50,
             grid_power_total=1000,
             pv_power_total=2000,
@@ -300,7 +301,7 @@ class TestDiagnostics:
         station = diagnostics["stations"][0]
         assert station["station_uuid"] == "stat...id-1"
         assert station["station_handle"]["serial_id"] == "STAT...N001"
-        assert station["available"] is not None
+        assert station["available"] is False
         assert station["led_brightness"] == 50
         assert station["grid_power_total"] == 1000
         assert station["pv_power_total"] == 2000
@@ -807,7 +808,6 @@ class _FakePowerCoord:
         PowerMixin._name_trailing_position_from_measurement
     )
     _normalize_device_name = staticmethod(PowerMixin._normalize_device_name)
-    _connector_uuid_for_highlevel_measurement = PowerMixin._connector_uuid_for_highlevel_measurement
     _resolve_highlevel_measurement = PowerMixin._resolve_highlevel_measurement
     _connector_uuid_by_measurement_name = PowerMixin._connector_uuid_by_measurement_name
 

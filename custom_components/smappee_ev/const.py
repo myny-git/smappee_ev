@@ -20,10 +20,8 @@ SMARTDEVICE_FALLBACK_INTERVAL: Final = timedelta(minutes=5)
 DEFAULT_MIN_CURRENT: Final = 6
 DEFAULT_MAX_CURRENT: Final = 32
 DEFAULT_LED_BRIGHTNESS: Final = 70
-DEFAULT_MIN_SURPLUS_PERCENT: Final = 100
 
-# Charging percentages.
-FULL_PERCENTAGE: Final = 100
+# Charging modes.
 CHARGING_MODES: Final = ("standard", "smart", "solar")
 
 # MQTT reconnect and backoff timings.
@@ -45,13 +43,8 @@ MQTT_HEARTBEAT_TOPIC_SUFFIX: Final = "/homeassistant/heartbeat"
 # Config keys.
 CONF_USERNAME: Final = ha_const.CONF_USERNAME
 CONF_PASSWORD: Final = ha_const.CONF_PASSWORD
-CONF_SERVICE_LOCATION_ID: str = "service_location_id"
 CONF_STATION_SERIAL: str = "station_serial"
-CONF_SERVICE_LOCATION_UUID: str = "service_location_uuid"
-CONF_SMART_DEVICE_UUID: str = "smart_device_uuid"
-CONF_SMART_DEVICE_ID: str = "smart_device_id"
 CONF_DASHBOARD_REFRESH_TOKEN: str = "dashboard_refresh_token"  # noqa: S105
-CONF_DASHBOARD_TOKEN_EXPIRES_AT: str = "dashboard_token_expires_at"  # noqa: S105
 
 # Base URLs.
 DASHAPI_URL = "https://dashboard.smappee.net/dashapi"

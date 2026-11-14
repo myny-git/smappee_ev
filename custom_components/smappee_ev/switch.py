@@ -9,7 +9,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -44,7 +44,7 @@ def _charging_action_error(method_name: str, err: Exception) -> HomeAssistantErr
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Smappee EV switches (multi-station)."""
     runtime = config_entry.runtime_data
@@ -250,9 +250,19 @@ class SmappeeAvailabilitySwitch(SmappeeStationRestEntity, SwitchEntity):
 
     @property
     @override
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
+        """Return live availability, else the Dashboard's, else unknown.
+
+        MQTT and confirmed commands are the live source. Until one of them
+        reports, the Dashboard station details show the stored setting. Without
+        either, the state is unknown rather than assumed available.
+        """
         st = self._station_state()
-        return bool(getattr(st, "available", True)) if st else True
+        if st is None:
+            return None
+        if st.available is not None:
+            return st.available
+        return st.dashboard_available
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:

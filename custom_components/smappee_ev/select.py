@@ -4,7 +4,7 @@ from aiohttp import ClientError
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api.device_handle import SmappeeDeviceHandle
@@ -31,7 +31,7 @@ def _connector_action_error(method_name: str, err: BaseException) -> HomeAssista
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     runtime = config_entry.runtime_data
 

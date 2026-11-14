@@ -20,7 +20,6 @@ from custom_components.smappee_ev import (
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.helpers import (
-    build_connector_label,
     connector_device_identifier,
     make_device_info,
     make_unique_id,
@@ -614,16 +613,6 @@ class TestSmappeeLedLight:
 
 class TestPlatformHelpers:
     """Test platform helper functions."""
-
-    def test_build_connector_label(self):
-        """Test connector label building."""
-        api_client = MagicMock()
-        api_client.connector_number = 1
-
-        assert build_connector_label(api_client, "connector-test-uuid") == "Connector 1"
-
-        api_client.connector_number = None
-        assert build_connector_label(api_client, "connector-test-uuid") == "Connector uuid"
 
     def test_make_unique_id(self):
         """Test unique ID generation."""

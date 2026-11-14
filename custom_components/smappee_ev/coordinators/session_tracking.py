@@ -399,7 +399,6 @@ class SessionTrackingMixin(CoordinatorMixin):
                 _LOGGER.warning("Recent session refresh failed for %s: %s", reason, err)
                 return
 
-            self._last_session_api_update = now
             if self.data:
                 self.data.recent_sessions = recent_sessions
                 self.async_update_listeners()

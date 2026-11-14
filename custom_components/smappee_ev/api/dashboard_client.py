@@ -258,9 +258,6 @@ class SmappeeDashboardClient:
             self._missing_credentials_logged = True
         return False
 
-    def _headers(self) -> dict[str, str]:
-        return {"token": str(self._token), "content-type": "application/json"}
-
     @asynccontextmanager
     async def _response(self, context: Any) -> AsyncIterator[Any]:
         """Classify outages, including failures while entering/reading a response."""

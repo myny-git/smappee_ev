@@ -16,7 +16,7 @@ from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent, UnitOfPower
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api.device_handle import SmappeeDeviceHandle
 from .api.errors import SmappeeError
@@ -63,7 +63,7 @@ def _dashboard_coord_for_site(site: SmappeeSiteRuntime) -> SmappeeCoordinator | 
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: SmappeeEvConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Smappee EV number entities (multi-station)."""
     async_migrate_site_setting_ids(hass, config_entry)

@@ -52,15 +52,6 @@ class MqttMixin(CoordinatorMixin):
         name = topic[i + len(marker) :]
         return name.split("/", 1)[0] if name else None
 
-    def _station_serial_from_topic(self, topic: str) -> str | None:
-        """Return station serial from .../acchargingstation/v1/<serial>/..."""
-        marker = "/acchargingstation/v1/"
-        i = topic.find(marker)
-        if i == -1:
-            return None
-        rest = topic[i + len(marker) :]
-        return rest.split("/", 1)[0] if rest else None
-
     @staticmethod
     def _as_int(v: object, default: int | None = None) -> int | None:
         if not isinstance(v, int | float | str):

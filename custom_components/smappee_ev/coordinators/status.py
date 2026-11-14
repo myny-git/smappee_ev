@@ -208,7 +208,11 @@ class SmappeeStatusCoordinator(DataUpdateCoordinator[SmappeeStatusData]):
                 resp.raise_for_status()
                 data = _parse_status_data(await resp.json(content_type=None))
         except Exception as err:
-            raise UpdateFailed(f"Error fetching Smappee status: {err}") from err
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="status_update_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         for subsystem, status in data.subsystems.items():
             if (
