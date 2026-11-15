@@ -15,7 +15,7 @@ THRESHOLD = 95.0
 def modules_below(report: dict, threshold: float = THRESHOLD) -> dict[str, float]:
     """Return modules whose statement coverage is not above the threshold."""
     return {
-        Path(name).as_posix(): data["summary"]["percent_covered"]
+        name.replace("\\", "/"): data["summary"]["percent_covered"]
         for name, data in report["files"].items()
         if data["summary"]["num_statements"] and data["summary"]["percent_covered"] <= threshold
     }
