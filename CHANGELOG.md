@@ -66,9 +66,11 @@ where the bug report, testing notes or design discussion can be found.
   no reason at all.
 - Energy totals now follow a real meter reset, for example after a gateway is
   replaced. Previously they stayed at the old value until the new meter passed
-  it. A drop below 90% of the last total is shown once three separate MQTT
-  measurements report it; a single low reading, zero or a small correction is
-  still ignored.
+  it. A drop below 90% of the last total is shown once at least three
+  separate MQTT measurements over five minutes report it, each at or above the
+  previous one. A short run of wrong readings, zero or a small correction is
+  still ignored, so a glitch cannot make the statistics count the old total
+  twice.
 
 ### Stability
 

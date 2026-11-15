@@ -37,7 +37,13 @@ from .entity import (
     SmappeeSiteEntity,
     SmappeeSitePowerEntity,
 )
-from .helpers import TOTAL_RESET_CONFIRMATIONS, format_as_hms, next_total_increasing, safe_sum
+from .helpers import (
+    NO_RESET_EVIDENCE,
+    ResetEvidence,
+    format_as_hms,
+    next_total_increasing,
+    safe_sum,
+)
 from .models.runtime_data import RuntimeMode, SmappeeEvConfigEntry
 from .models.state import SiteState, StationState
 
@@ -210,7 +216,7 @@ def _coerce_float(value: object) -> float | None:
 
 class _RestoredTotalSensor(Protocol):
     _last_value: float | None
-    _reset_evidence: frozenset[datetime]
+    _reset_evidence: ResetEvidence
 
     @property
     def entity_id(self) -> str:
@@ -351,11 +357,10 @@ def _total_increasing_value(entity: _RestoredTotalSensor, candidate: object) -> 
     )
     if last is not None and value is not None and value < last:
         _LOGGER.info(
-            "%s dropped from %s to %s in %s measurements; treating it as a meter reset",
+            "%s dropped from %s to %s and stayed there; treating it as a meter reset",
             entity.entity_id,
             last,
             value,
-            TOTAL_RESET_CONFIRMATIONS,
         )
     entity._last_value = value
     return value
@@ -374,7 +379,7 @@ class RestoredEnergyStationSensor(SmappeeSitePowerEntity, RestoreSensor):
     """Station energy sensor with restore support and coordinator lifecycle."""
 
     _last_value: float | None = None
-    _reset_evidence: frozenset[datetime] = frozenset()
+    _reset_evidence: ResetEvidence = NO_RESET_EVIDENCE
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -392,7 +397,7 @@ class RestoredEnergyConnectorSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     """Connector energy sensor with restore support and coordinator lifecycle."""
 
     _last_value: float | None = None
-    _reset_evidence: frozenset[datetime] = frozenset()
+    _reset_evidence: ResetEvidence = NO_RESET_EVIDENCE
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR

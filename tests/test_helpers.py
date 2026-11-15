@@ -34,11 +34,11 @@ def test_make_unique_id_connector():
 
 
 def _next_total(last: float | None, candidate: float | None) -> float | None:
-    """Evaluate a reading without a receive time; such a reading never resets."""
+    """A single reading without a receive time never confirms a reset."""
     value, evidence = helpers.next_total_increasing(
-        last, candidate, received=None, reset_evidence=frozenset()
+        last, candidate, received=None, reset_evidence=helpers.NO_RESET_EVIDENCE
     )
-    assert evidence == frozenset()
+    assert evidence == helpers.NO_RESET_EVIDENCE
     return value
 
 
@@ -51,74 +51,74 @@ def test_next_total_increasing_basic():
     assert _next_total(10, 0) == 10
     # Increase accepted
     assert _next_total(10, 15) == 15
-    # A reading without a receive time never confirms a reset.
+    # A single reading never confirms a reset.
     assert _next_total(1000, 2) == 1000
 
 
-def _times(count: int) -> list[datetime]:
-    start = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
-    return [start + timedelta(seconds=10 * index) for index in range(count)]
+_START = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
 
 
-def test_next_total_increasing_follows_a_confirmed_meter_reset():
-    """A real reset must not freeze the total until the new meter passes the old one."""
-    last: float | None = 1000.0
-    evidence: frozenset[datetime] = frozenset()
-    shown = []
-    for received, reading in zip(_times(3), (2.0, 2.1, 2.2), strict=True):
-        last, evidence = helpers.next_total_increasing(
-            last, reading, received=received, reset_evidence=evidence
+def _feed(last: float, readings: list[tuple[float, float]]) -> list[float | None]:
+    """Feed (minutes after start, reading) pairs and return the totals shown."""
+    evidence = helpers.NO_RESET_EVIDENCE
+    shown: list[float | None] = []
+    value: float | None = last
+    for minutes, reading in readings:
+        value, evidence = helpers.next_total_increasing(
+            value,
+            reading,
+            received=_START + timedelta(minutes=minutes),
+            reset_evidence=evidence,
         )
-        shown.append(last)
+        shown.append(value)
+    return shown
 
+
+def test_reset_rule_constants_match_home_assistant_and_require_persistence():
+    assert helpers.TOTAL_RESET_RATIO == 0.9
     assert helpers.TOTAL_RESET_CONFIRMATIONS == 3
-    assert shown == [1000.0, 1000.0, 2.2]
-    assert evidence == frozenset()
+    assert timedelta(minutes=5) == helpers.TOTAL_RESET_MIN_DURATION
 
 
-def test_next_total_increasing_counts_measurements_not_evaluations():
-    """Re-reading the same measurement must not confirm a reset."""
-    received = _times(1)[0]
-    last: float | None = 1000.0
-    evidence: frozenset[datetime] = frozenset()
-    for _ in range(5):
-        last, evidence = helpers.next_total_increasing(
-            last, 2.0, received=received, reset_evidence=evidence
-        )
-    assert last == 1000.0
-    assert evidence == {received}
+def test_real_reset_with_a_quickly_rising_new_meter_is_followed():
+    """A replaced meter that counts up again is shown once it has lasted five minutes."""
+    shown = _feed(1000.0, [(0, 1.0), (2, 1.6), (4, 2.3), (5, 2.9), (6, 3.4)])
+    assert shown == [1000.0, 1000.0, 1000.0, 2.9, 3.4]
 
 
-def test_next_total_increasing_normal_reading_discards_reset_evidence():
-    first, second, third, fourth = _times(4)
-    last, evidence = helpers.next_total_increasing(
-        1000.0, 2.0, received=first, reset_evidence=frozenset()
-    )
-    last, evidence = helpers.next_total_increasing(
-        last, 2.0, received=second, reset_evidence=evidence
-    )
-    # A complete reading in between shows the drop was a glitch.
-    last, evidence = helpers.next_total_increasing(
-        last, 1000.5, received=third, reset_evidence=evidence
-    )
-    assert (last, evidence) == (1000.5, frozenset())
-    last, evidence = helpers.next_total_increasing(
-        last, 2.0, received=fourth, reset_evidence=evidence
-    )
-    assert last == 1000.5
+def test_burst_of_low_readings_then_normal_values_never_resets():
+    """Three wrong readings within a minute must not reset the statistics.
+
+    Accepting them would make the energy dashboard count the whole old total
+    again as consumption when the normal readings return.
+    """
+    shown = _feed(1000.0, [(0, 2.0), (0.2, 2.0), (0.4, 2.0), (1, 1000.4), (2, 1000.6)])
+    assert shown == [1000.0, 1000.0, 1000.0, 1000.4, 1000.6]
 
 
-@pytest.mark.parametrize("reading", [0.0, 950.0, 999.9])
-def test_next_total_increasing_never_resets_on_zero_or_small_dips(reading):
-    """Zero is an incomplete reading; a dip of under 10% is a correction, not a reset."""
-    last: float | None = 1000.0
-    evidence: frozenset[datetime] = frozenset()
-    for received in _times(5):
-        last, evidence = helpers.next_total_increasing(
-            last, reading, received=received, reset_evidence=evidence
-        )
-    assert last == 1000.0
-    assert evidence == frozenset()
+def test_falling_low_series_restarts_the_evidence():
+    """A new meter only counts up; a lower reading cannot confirm a reset."""
+    # 2.0 -> 1.0 restarts the evidence at minute 3, so five minutes run from there.
+    shown = _feed(1000.0, [(0, 2.0), (3, 1.0), (5, 1.1), (7, 1.2), (8, 1.3)])
+    assert shown == [1000.0, 1000.0, 1000.0, 1000.0, 1.3]
+
+
+def test_old_meter_reading_between_low_readings_discards_them():
+    """A reading close to the old total proves the old meter is still there."""
+    shown = _feed(1000.0, [(0, 2.0), (3, 2.1), (4, 995.0), (5, 2.2), (6, 2.3)])
+    assert shown == [1000.0] * 5
+
+
+def test_zero_reading_neither_resets_nor_breaks_a_real_reset():
+    """Zero is an incomplete reading: it is ignored, not counted for or against."""
+    shown = _feed(1000.0, [(0, 2.0), (2, 0.0), (4, 2.1), (6, 2.2)])
+    assert shown == [1000.0, 1000.0, 1000.0, 2.2]
+
+
+def test_reevaluating_one_measurement_does_not_confirm_a_reset():
+    """Entities re-read their state often; only new measurements count."""
+    shown = _feed(1000.0, [(0, 2.0)] * 5)
+    assert shown == [1000.0] * 5
 
 
 def test_safe_sum_valid():

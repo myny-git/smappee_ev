@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 from typing import Any, Final, Literal
@@ -16,8 +17,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Home Assistant's statistics treat a drop below 90% of the previous total as a reset.
 TOTAL_RESET_RATIO: Final = 0.9
-# Separate measurements that must report such a drop before it is shown.
+# Separate measurements, over at least this period, that must report such a drop.
 TOTAL_RESET_CONFIRMATIONS: Final = 3
+TOTAL_RESET_MIN_DURATION: Final = timedelta(minutes=5)
 
 
 def charging_session_phase(
@@ -398,36 +400,60 @@ def build_connector_id(api_client: Any, connector_uuid: str) -> str:
     return str(num) if num is not None else str(connector_uuid[-4:])
 
 
+@dataclass(frozen=True)
+class ResetEvidence:
+    """Low readings collected so far that may show a meter reset."""
+
+    receptions: frozenset[datetime] = frozenset()
+    # The latest low reading: a new meter only counts up from here.
+    last_reading: float = 0.0
+
+
+NO_RESET_EVIDENCE: Final = ResetEvidence()
+
+
 def next_total_increasing(
     last: float | None,
     candidate: float | None,
     *,
     received: datetime | None,
-    reset_evidence: frozenset[datetime],
-) -> tuple[float | None, frozenset[datetime]]:
+    reset_evidence: ResetEvidence,
+) -> tuple[float | None, ResetEvidence]:
     """Return the total to expose and the updated evidence of a meter reset.
 
     Rules:
       * A missing candidate keeps the last total.
       * A candidate at or above the last total is accepted.
-      * Zero, and a dip to 90% or more of the last total, keep the last total.
-        Those are incomplete or corrected readings, not resets.
+      * Zero keeps the last total and leaves the evidence as it is: it is an
+        incomplete reading, not a statement about the meter.
+      * A dip to 90% or more of the last total keeps the last total. It comes
+        from the old meter, so earlier low readings were glitches.
       * A drop below 90% is a meter reset, as Home Assistant's statistics define
-        it. It is accepted once ``TOTAL_RESET_CONFIRMATIONS`` separate
-        measurements (distinct receive times) have reported it without a normal
-        reading in between. One glitch cannot reset the statistics, but a real
-        reset is no longer ignored until the new meter passes the old total.
+        it. Accepting a false one would make the statistics count the whole old
+        total again once the meter returns, so it must be confirmed: at least
+        ``TOTAL_RESET_CONFIRMATIONS`` separate measurements (distinct receive
+        times) spanning ``TOTAL_RESET_MIN_DURATION``, each at or above the
+        previous low reading, because a new meter only counts up.
     """
     if candidate is None:
         return last, reset_evidence
     if last is None or candidate >= last:
-        return candidate, frozenset()
-    if candidate == 0 or candidate >= last * TOTAL_RESET_RATIO or received is None:
+        return candidate, NO_RESET_EVIDENCE
+    if candidate == 0 or received is None:
         return last, reset_evidence
-    evidence = reset_evidence | {received}
-    if len(evidence) < TOTAL_RESET_CONFIRMATIONS:
+    if candidate >= last * TOTAL_RESET_RATIO:
+        return last, NO_RESET_EVIDENCE
+    if candidate < reset_evidence.last_reading:
+        # The low series went down: start over from this reading.
+        reset_evidence = NO_RESET_EVIDENCE
+    receptions = reset_evidence.receptions | {received}
+    evidence = ResetEvidence(receptions, candidate)
+    if (
+        len(receptions) < TOTAL_RESET_CONFIRMATIONS
+        or max(receptions) - min(receptions) < TOTAL_RESET_MIN_DURATION
+    ):
         return last, evidence
-    return candidate, frozenset()
+    return candidate, NO_RESET_EVIDENCE
 
 
 def safe_sum(values: object) -> float | None:
@@ -451,6 +477,8 @@ __all__ = [
     "make_connector_device_info",
     "make_unique_id",
     "station_serial",
+    "NO_RESET_EVIDENCE",
+    "ResetEvidence",
     "next_total_increasing",
     "safe_sum",
 ]

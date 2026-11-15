@@ -138,9 +138,9 @@ def test_energy_total_follows_a_meter_reset_confirmed_by_new_measurements(
     entity.entity_id = "sensor.energy_total"
     start = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
 
-    def receive(value: float, second: int) -> float | None:
+    def receive(value: float, minute: int) -> float | None:
         setattr(state, field, value)
-        freshness.received[connector_key, field] = start + timedelta(seconds=second)
+        freshness.received[connector_key, field] = start + timedelta(minutes=minute)
         return entity.native_value
 
     assert receive(1000.0, 0) == 1000.0
