@@ -4,6 +4,7 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientError
+from homeassistant.core import CoreState
 from homeassistant.exceptions import ConfigEntryAuthFailed
 import pytest
 
@@ -195,6 +196,37 @@ def test_station_mqtt_connection_change_logs_only_on_transitions(hass, caplog):
     coord.apply_mqtt_connection_change(False)
     coord.async_update_listeners.assert_not_called()
     assert "Station MQTT unavailable" not in caplog.text
+
+
+def test_mqtt_unavailable_during_shutdown_is_debug_only(hass, caplog):
+    """Stopping Home Assistant closes MQTT on purpose; that is not worth an INFO line."""
+    station = _station_coordinator(hass)
+    station.async_update_listeners = MagicMock()
+    site = SmappeeSiteCoordinator(
+        hass,
+        site_location_id=100,
+        site_name="Home",
+        site_uuid="site-uuid",
+        gateway_serial="GATEWAY",
+        gateway_type="Genius",
+        update_interval=60,
+    )
+    site.async_update_listeners = MagicMock()
+    site.data = SiteData(site=SiteState(mqtt_connected=True))
+    station.data.station.mqtt_connected = True
+    caplog.set_level(logging.DEBUG, logger="custom_components.smappee_ev")
+
+    previous_state = hass.state
+    hass.set_state(CoreState.stopping)
+    try:
+        site.apply_mqtt_connection_change(False)
+        station.apply_mqtt_connection_change(False)
+    finally:
+        hass.set_state(previous_state)
+
+    unavailable = [r for r in caplog.records if "MQTT unavailable" in r.getMessage()]
+    assert len(unavailable) == 2
+    assert all(r.levelno == logging.DEBUG for r in unavailable)
 
 
 def test_site_apply_mqtt_properties_without_data_is_safe(hass):
@@ -485,6 +517,22 @@ def test_site_power_index_map_empty_or_invalid_highlevel_config_is_safe(hass):
     assert coord._handle_power("servicelocation/site/power", {"channelData": [999]}) is False
     assert coord.data.site.grid_power_total == 123
     assert coord.data.site.grid_power_total == 123
+
+
+def test_power_apply_debug_line_only_logs_new_payload_shapes(hass, caplog):
+    """Power frames arrive every ~5 s; repeat frames must not repeat the debug line."""
+    coord = _station_coordinator(hass)
+    coord._power_index_maps_by_topic = {}
+    caplog.set_level(logging.DEBUG, logger="custom_components.smappee_ev.coordinators.power")
+
+    def apply_count(payload: dict) -> int:
+        caplog.clear()
+        coord._handle_power("servicelocation/site/power", payload)
+        return caplog.text.count("Smappee MQTT power apply")
+
+    assert apply_count({"channelData": [1]}) == 1
+    assert apply_count({"channelData": [2]}) == 0
+    assert apply_count({"channelData": [3], "solarPower": 5}) == 1
 
 
 def test_station_coordinator_highlevel_power_map_applies_station_and_connector_values(hass):

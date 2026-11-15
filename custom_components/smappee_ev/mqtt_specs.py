@@ -13,12 +13,14 @@ from .topology import _safe_str
 _LOGGER = logging.getLogger(__name__)
 
 
-def _mqtt_specs_from_highlevel_configs(configs: HighLevelConfigMap) -> list[MqttChannelSpec]:
-    """Return all highlevel MQTT specs."""
+def _mqtt_specs_from_highlevel_configs(
+    configs: HighLevelConfigMap, *, log: bool = True
+) -> list[MqttChannelSpec]:
+    """Return all highlevel MQTT specs; ``log=False`` skips the per-spec debug dump."""
     specs: list[MqttChannelSpec] = []
     for sid, cfg in configs.items():
         parsed = parse_mqtt_channel_specs_from_highlevel(sid, cfg)
-        for spec in parsed:
+        for spec in parsed if log else ():
             _LOGGER.debug(
                 "Smappee highlevel mapping: sid=%s role=%s metric=%s topic=%s paths=%s",
                 spec.service_location_id,

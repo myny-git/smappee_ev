@@ -526,12 +526,18 @@ class PowerMixin(CoordinatorMixin):
             roles.append("pv")
         if cars:
             roles.append("cars")
-        _LOGGER.debug(
-            "Smappee MQTT power apply: topic=%s roles=%s payload_keys=%s",
-            redact_mqtt_topic(topic),
-            roles,
-            list(payload.keys()),
-        )
+        # Power frames arrive every few seconds with an identical shape; only log
+        # the shape when it first appears or changes for this topic.
+        shape = (tuple(roles), tuple(payload.keys()))
+        logged_shapes = self.__dict__.setdefault("_power_logged_shapes", {})
+        if logged_shapes.get(topic) != shape:
+            logged_shapes[topic] = shape
+            _LOGGER.debug(
+                "Smappee MQTT power apply: topic=%s roles=%s payload_keys=%s",
+                redact_mqtt_topic(topic),
+                roles,
+                list(payload.keys()),
+            )
 
         changed |= self._apply_station_group(
             st,

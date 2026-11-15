@@ -119,7 +119,10 @@ class MqttMixin(CoordinatorMixin):
         elif getattr(st, "mqtt_connected", None) is not False:
             st.mqtt_connected = False
             changed = True
-            _LOGGER.info("Station MQTT unavailable")
+            _LOGGER.log(
+                logging.DEBUG if self.hass.is_stopping is True else logging.INFO,
+                "Station MQTT unavailable",
+            )
 
         if changed:
             # Mutated the existing snapshot. Preserve the REST poll deadline so

@@ -259,7 +259,11 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
         elif not up and getattr(site, "mqtt_connected", None) is not False:
             site.mqtt_connected = False
             changed = True
-            _LOGGER.info("Site %s MQTT unavailable", anonymize_uuid(self.site_uuid))
+            _LOGGER.log(
+                logging.DEBUG if self.hass.is_stopping is True else logging.INFO,
+                "Site %s MQTT unavailable",
+                anonymize_uuid(self.site_uuid),
+            )
         if changed:
             self.async_update_listeners()
 

@@ -208,7 +208,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) ->
 
 async def _async_setup_entry(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> bool:
     """Set up a Smappee EV account entry that discovers all service locations with a charger."""
-    _LOGGER.debug("Setting up Smappee EV account entry: %s", entry.title)
+    _LOGGER.debug("Setting up Smappee EV account entry %s", entry.entry_id)
 
     # Use HA's aiohttp session
     session: ClientSession = async_get_clientsession(hass)

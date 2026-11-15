@@ -269,7 +269,9 @@ def snapshot_from_runtime(runtime: RuntimeData, entry: SmappeeEvConfigEntry) -> 
                 "stations": stations,
                 "specs": [
                     asdict(spec)
-                    for spec in _mqtt_specs_from_highlevel_configs(site.highlevel_configs)
+                    for spec in _mqtt_specs_from_highlevel_configs(
+                        site.highlevel_configs, log=False
+                    )
                 ],
                 "power_maps": site.site_coordinator._power_index_maps_by_topic or {},
             }
