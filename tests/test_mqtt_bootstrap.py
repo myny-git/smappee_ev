@@ -571,6 +571,25 @@ async def test_unload_cancels_recovery_and_freshness_callbacks(hass, entry, snap
         reload.assert_not_awaited()
 
 
+async def test_recovery_reload_is_skipped_for_a_replaced_runtime(hass, entry, snapshot):
+    """A reload queued by an old runtime must not reload the runtime that replaced it."""
+    cached = build_cached_runtime(hass, entry, dashboard(), snapshot)
+    replacement = build_cached_runtime(hass, entry, dashboard(), snapshot)
+    try:
+        with patch.object(hass.config_entries, "async_schedule_reload") as schedule:
+            entry.runtime_data = cached
+            _schedule_reload(hass, entry, cached)
+            schedule.assert_called_once_with(entry.entry_id)
+
+            schedule.reset_mock()
+            entry.runtime_data = replacement
+            _schedule_reload(hass, entry, cached)
+            schedule.assert_not_called()
+    finally:
+        await _async_shutdown_runtime_resources(cached)
+        await _async_shutdown_runtime_resources(replacement)
+
+
 @pytest.mark.parametrize("failure", [aiohttp.ClientConnectionError, TimeoutError])
 @pytest.mark.parametrize("method", ["login", "refresh", "request"])
 async def test_transport_failure_entering_response_propagates(failure, method):
