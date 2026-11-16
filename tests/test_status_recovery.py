@@ -16,7 +16,7 @@ from custom_components.smappee_ev.coordinators.status import (
     SmappeeStatusCoordinator,
 )
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
 from tests import test_mqtt_bootstrap as bootstrap
 
 entry = bootstrap.entry
@@ -50,7 +50,7 @@ async def test_pending_status_request_does_not_block_setup_and_is_cancelled_on_u
     session.get.return_value.__aenter__.side_effect = wait_for_response
     with (
         patch("custom_components.smappee_ev._async_prepare_runtime", return_value=online),
-        patch("custom_components.smappee_ev._register_runtime_devices"),
+        patch("custom_components.smappee_ev.register_runtime_devices"),
         patch.object(hass.config_entries, "async_forward_entry_setups", new=AsyncMock()),
         patch("custom_components.smappee_ev._start_runtime_background_work") as start_mqtt,
         patch("custom_components.smappee_ev.async_save_snapshot", new=AsyncMock()),
@@ -67,7 +67,7 @@ async def test_pending_status_request_does_not_block_setup_and_is_cancelled_on_u
         timeout = session.get.call_args.kwargs["timeout"]
         assert timeout.total == 15
         assert timeout.connect == 5
-        await _async_shutdown_runtime_resources(online)
+        await async_shutdown_runtime_resources(online)
 
     assert cancelled.is_set()
     assert not online.background_tasks

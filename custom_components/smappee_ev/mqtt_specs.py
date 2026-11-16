@@ -8,12 +8,12 @@ import re
 from .api.discovery import MqttChannelSpec, parse_mqtt_channel_specs_from_highlevel
 from .api.mqtt_gateway import redact_mqtt_topic
 from .models.state import HighLevelConfigMap
-from .topology import _safe_str
+from .topology import safe_str
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _mqtt_specs_from_highlevel_configs(
+def mqtt_specs_from_highlevel_configs(
     configs: HighLevelConfigMap, *, log: bool = True
 ) -> list[MqttChannelSpec]:
     """Return all highlevel MQTT specs; ``log=False`` skips the per-spec debug dump."""
@@ -33,7 +33,7 @@ def _mqtt_specs_from_highlevel_configs(
     return specs
 
 
-def _split_highlevel_configs_by_scope(
+def split_highlevel_configs_by_scope(
     configs: HighLevelConfigMap,
 ) -> tuple[HighLevelConfigMap, HighLevelConfigMap]:
     """Return ``(site_configs, station_configs)`` based on highlevel MQTT roles."""
@@ -57,10 +57,10 @@ def _service_location_uuid_from_mqtt_topic(topic: str | None) -> str | None:
     if not topic:
         return None
     match = re.match(r"^servicelocation/([^/]+)/", topic)
-    return _safe_str(match.group(1)) if match else None
+    return safe_str(match.group(1)) if match else None
 
 
-def _group_mqtt_specs_by_credentials(
+def group_mqtt_specs_by_credentials(
     suuid: str | None,
     mqtt_specs: list[MqttChannelSpec],
 ) -> list[

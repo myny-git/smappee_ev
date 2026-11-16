@@ -22,10 +22,10 @@ from .api.errors import (
     SmappeeRateLimitError,
     SmappeeServerError,
 )
-from .dashboard_discovery import _create_dashboard_client
+from .dashboard_discovery import create_dashboard_client
 from .models.runtime_data import RuntimeData, SmappeeEvConfigEntry
 from .mqtt_bootstrap import snapshot_from_runtime
-from .runtime_lifecycle import _async_shutdown_runtime_resources
+from .runtime_lifecycle import async_shutdown_runtime_resources
 
 _LOGGER = logging.getLogger(__name__)
 type PrepareRuntime = Callable[
@@ -115,7 +115,7 @@ async def _async_recovery_loop(
         probe: RuntimeData | None = None
         recovered = False
         try:
-            client = _create_dashboard_client(hass, entry, async_get_clientsession(hass))
+            client = create_dashboard_client(hass, entry, async_get_clientsession(hass))
             probe = await prepare(hass, entry, client)
             snapshot_from_runtime(probe, entry)
             _validate_rest_recovery(probe)
@@ -142,7 +142,7 @@ async def _async_recovery_loop(
             runtime.recovery.last_error_category = None
         finally:
             if probe is not None:
-                await _async_shutdown_runtime_resources(probe)
+                await async_shutdown_runtime_resources(probe)
         if recovered:
             if not runtime.stopping and not hass.is_stopping:
                 runtime.recovery.status = "recovered"

@@ -34,7 +34,7 @@ from custom_components.smappee_ev.registry import (
     async_migrate_site_setting_ids,
     site_setting_unique_id,
 )
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
 from tests import test_mqtt_bootstrap as bootstrap
 from tests.test_dashboard_client import _Response, _Session
 from tests.test_mqtt_bootstrap import dashboard
@@ -271,7 +271,7 @@ async def test_recovery_respects_retry_after_beyond_backoff_cap(hass, entry, onl
             assert [call.args[0] for call in sleep.await_args_list] == [30, 1200]
         assert not cached.stopping
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_cached_current_topic_is_routed_without_refreshing_power(hass, entry, online):
@@ -310,7 +310,7 @@ async def test_cached_current_topic_is_routed_without_refreshing_power(hass, ent
         assert conn.current_phases == [4.0]
         assert conn.power_total is None
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize("status", [408, 429])

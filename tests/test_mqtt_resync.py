@@ -11,7 +11,7 @@ from custom_components.smappee_ev.models.state import ConnectorState, StationSta
 from custom_components.smappee_ev.mqtt_setup import (
     _handle_mqtt_connection_change,
     _handle_mqtt_refresh_done,
-    _setup_mqtt,
+    setup_mqtt,
 )
 from tests import test_mqtt_bootstrap as bootstrap
 
@@ -31,7 +31,7 @@ def resync(hass, online):
     coord._ensure_power_index_map = AsyncMock()
     coord._maybe_refresh_dashboard_data = AsyncMock(return_value=False)
     tasks = set()
-    mqtt = _setup_mqtt(
+    mqtt = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",

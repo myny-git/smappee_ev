@@ -32,9 +32,7 @@ REQ_KEYS = (CONF_USERNAME, CONF_PASSWORD)
 @pytest.fixture(autouse=True)
 def _normal_discovery():
     """Existing credential tests represent accounts with discoverable chargers."""
-    with patch.object(
-        config_flow_module, "_dashboard_discover_topologies", return_value=[object()]
-    ):
+    with patch.object(config_flow_module, "dashboard_discover_topologies", return_value=[object()]):
         yield
 
 

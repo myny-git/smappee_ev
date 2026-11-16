@@ -12,10 +12,10 @@ from custom_components.smappee_ev.coordinator import (
 )
 from custom_components.smappee_ev.coordinators.power import (
     _active_power_values,
-    _indexes_and_field_from_aspect_paths,
-    _indexes_from_aspect_paths,
-    _mqtt_channel_topic,
     _volts_from_dv,
+    indexes_and_field_from_aspect_paths,
+    indexes_from_aspect_paths,
+    mqtt_channel_topic,
 )
 from custom_components.smappee_ev.models.state import (
     ConnectorState,
@@ -73,12 +73,12 @@ def test_mqtt_channel_helpers_ignore_invalid_shapes_and_pick_first_field():
         ],
     }
 
-    assert _mqtt_channel_topic(None) is None
-    assert _mqtt_channel_topic({"protocol": "HTTP", "name": "topic"}) is None
-    assert _mqtt_channel_topic({"protocol": "MQTT", "name": " "}) is None
-    assert _indexes_and_field_from_aspect_paths(None, "channelData") == ([], None)
-    assert _indexes_from_aspect_paths(channel, "channelData") == [3, 5]
-    assert _indexes_and_field_from_aspect_paths(channel, "channelData", "activePowerData") == (
+    assert mqtt_channel_topic(None) is None
+    assert mqtt_channel_topic({"protocol": "HTTP", "name": "topic"}) is None
+    assert mqtt_channel_topic({"protocol": "MQTT", "name": " "}) is None
+    assert indexes_and_field_from_aspect_paths(None, "channelData") == ([], None)
+    assert indexes_from_aspect_paths(channel, "channelData") == [3, 5]
+    assert indexes_and_field_from_aspect_paths(channel, "channelData", "activePowerData") == (
         [3, 5],
         "channelData",
     )

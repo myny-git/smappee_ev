@@ -15,7 +15,7 @@ from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
 from custom_components.smappee_ev.coordinators.api_state import ConnectorRestSnapshot
-from custom_components.smappee_ev.coordinators.power import _amps_from_ma, _pick, _to_int
+from custom_components.smappee_ev.coordinators.power import _amps_from_ma, _pick, to_int
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import ConnectorSessionEnergySensor
 from tests.helpers import raises_translated
@@ -28,12 +28,12 @@ CHARGINGSTATE_TOPIC = (
 
 def test_helper_functions():
     """Test standalone helper functions in coordinator.py."""
-    # Test _to_int
-    assert _to_int(10) == 10
-    assert _to_int("10") == 10
-    assert _to_int(None) == 0
-    assert _to_int(None, 5) == 5
-    assert _to_int("invalid", 5) == 5
+    # Test to_int
+    assert to_int(10) == 10
+    assert to_int("10") == 10
+    assert to_int(None) == 0
+    assert to_int(None, 5) == 5
+    assert to_int("invalid", 5) == 5
 
     # Test _pick
     seq = [1, 2, 3, 4, 5]

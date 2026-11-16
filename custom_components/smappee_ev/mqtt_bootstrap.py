@@ -28,8 +28,8 @@ from .models.runtime_data import (
     SmappeeStationRuntime,
 )
 from .models.state import ConnectorState, IntegrationData, SiteData, SiteState, StationState
-from .mqtt_setup import _setup_mqtt
-from .mqtt_specs import _mqtt_specs_from_highlevel_configs
+from .mqtt_setup import setup_mqtt
+from .mqtt_specs import mqtt_specs_from_highlevel_configs
 
 _LOGGER = logging.getLogger(__name__)
 _TEXT = vol.Any(None, str)
@@ -269,9 +269,7 @@ def snapshot_from_runtime(runtime: RuntimeData, entry: SmappeeEvConfigEntry) -> 
                 "stations": stations,
                 "specs": [
                     asdict(spec)
-                    for spec in _mqtt_specs_from_highlevel_configs(
-                        site.highlevel_configs, log=False
-                    )
+                    for spec in mqtt_specs_from_highlevel_configs(site.highlevel_configs, log=False)
                 ],
                 "power_maps": site.site_coordinator._power_index_maps_by_topic or {},
             }
@@ -391,7 +389,7 @@ def build_cached_runtime(
             )
             bucket.station_coordinator = coord
         specs = [MqttChannelSpec(**spec) for spec in saved_site["specs"]]
-        mqtt = _setup_mqtt(
+        mqtt = setup_mqtt(
             hass,
             site.site_uuid,
             site.gateway_serial or f"smappee-{sid}",

@@ -46,7 +46,7 @@ async def test_smart_charging_state_updates_after_mqtt_and_entry_reload(
     recovery_dashboard.async_get_recent_sessions = AsyncMock(return_value=[])
     with (
         patch(
-            "custom_components.smappee_ev._create_dashboard_client", return_value=recovery_dashboard
+            "custom_components.smappee_ev.create_dashboard_client", return_value=recovery_dashboard
         ),
         patch("custom_components.smappee_ev.api.mqtt_gateway.SmappeeMqtt.start", new=AsyncMock()),
     ):

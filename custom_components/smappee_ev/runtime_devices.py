@@ -43,7 +43,7 @@ def _remove_legacy_led_controller_devices(
         registry.async_remove_device(device.id)
 
 
-def _register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> None:
+def register_runtime_devices(hass: HomeAssistant, entry: SmappeeEvConfigEntry) -> None:
     """Ensure the registry contains the real Smappee hierarchy."""
     if hass.config_entries.async_get_entry(entry.entry_id) is None:
         return
@@ -132,7 +132,7 @@ def _current_station_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]
     return identifiers
 
 
-def _current_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]:
+def current_device_identifiers(entry: SmappeeEvConfigEntry) -> set[str]:
     """Return every device identifier in use: sites, stations, connectors and status."""
     identifiers = _current_station_device_identifiers(entry)
     if not identifiers:

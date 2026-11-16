@@ -10,7 +10,7 @@ from custom_components.smappee_ev import sensor
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.coordinators.freshness import MqttApplyResult
 from custom_components.smappee_ev.models.state import ConnectorState
-from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
+from custom_components.smappee_ev.mqtt_setup import setup_mqtt
 from tests import test_mqtt_bootstrap as bootstrap
 from tests.helpers import connector_sensor, site_sensor
 
@@ -343,7 +343,7 @@ def test_shared_topic_routes_to_site_and_station_once_with_separate_state(
             MqttChannelSpec(1, role, "activePower", TOPIC, None, None, [])
             for role in ("grid", "production", "car_charger", "car_charger")
         ]
-    mqtt = _setup_mqtt(
+    mqtt = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",

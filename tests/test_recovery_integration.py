@@ -13,8 +13,8 @@ from custom_components.smappee_ev.api.errors import SmappeeServerError
 from custom_components.smappee_ev.models.runtime_data import RuntimeMode
 from custom_components.smappee_ev.mqtt_bootstrap import build_cached_runtime
 from custom_components.smappee_ev.mqtt_recovery import _async_recover
-from custom_components.smappee_ev.mqtt_setup import _iter_mqtt_clients
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.mqtt_setup import iter_mqtt_clients
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
 from custom_components.smappee_ev.state_updates import update_connector
 from tests import test_mqtt_bootstrap as bootstrap
 from tests.test_functional_flows import _FakeDashboard
@@ -114,7 +114,7 @@ async def test_loaded_entry_recovers_through_real_prepare_and_closes_probes_befo
         with (
             patch("custom_components.smappee_ev.mqtt_recovery.asyncio", wraps=asyncio) as clock,
             patch(
-                "custom_components.smappee_ev.mqtt_recovery._create_dashboard_client",
+                "custom_components.smappee_ev.mqtt_recovery.create_dashboard_client",
                 return_value=recovery_dashboard,
             ),
             patch.object(entry, "async_on_unload", wraps=entry.async_on_unload) as on_unload,
@@ -139,9 +139,9 @@ async def test_loaded_entry_recovers_through_real_prepare_and_closes_probes_befo
                 for bucket in site.stations.values()
             ] == initial_states
             for mqtt in cached.mqtt.values():
-                assert all(not client._stop.is_set() for client in _iter_mqtt_clients(mqtt))
+                assert all(not client._stop.is_set() for client in iter_mqtt_clients(mqtt))
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize("phase", ["site", "station"])
@@ -190,7 +190,7 @@ async def test_cancelled_real_prepare_closes_every_created_coordinator(
         if not task.done():
             task.cancel()
         await asyncio.gather(task, return_exceptions=True)
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_real_recovery_auth_failure_cleans_up_and_starts_one_reauth(
@@ -209,7 +209,7 @@ async def test_real_recovery_auth_failure_cleans_up_and_starts_one_reauth(
         with (
             patch("custom_components.smappee_ev.mqtt_recovery.asyncio", wraps=asyncio) as clock,
             patch(
-                "custom_components.smappee_ev.mqtt_recovery._create_dashboard_client",
+                "custom_components.smappee_ev.mqtt_recovery.create_dashboard_client",
                 return_value=recovery_dashboard,
             ),
             patch.object(entry, "async_start_reauth_if_available") as reauth,
@@ -230,7 +230,7 @@ async def test_real_recovery_auth_failure_cleans_up_and_starts_one_reauth(
             assert not cached.stopping
             assert entry.runtime_data is cached
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_normal_setup_keeps_entry_and_uses_homeassistant_first_refresh(
@@ -258,7 +258,7 @@ async def test_normal_setup_keeps_entry_and_uses_homeassistant_first_refresh(
         assert all(coord.last_update_success for coord in first_refreshes)
         assert runtime.mode is RuntimeMode.NORMAL
     finally:
-        await _async_shutdown_runtime_resources(runtime)
+        await async_shutdown_runtime_resources(runtime)
 
 
 @pytest.mark.parametrize(
@@ -297,7 +297,7 @@ async def test_real_rest_poll_preserves_missing_percentage_and_reconciles_explic
         assert state.power_total == 3200
         assert state.api_available
     finally:
-        await _async_shutdown_runtime_resources(runtime)
+        await async_shutdown_runtime_resources(runtime)
 
 
 @pytest.mark.parametrize("failure_phase", ["discovery", "rest"])
@@ -389,7 +389,7 @@ async def test_multi_site_recovery_waits_for_all_sites_and_closes_successful_sib
         with (
             patch("custom_components.smappee_ev.mqtt_recovery.asyncio", wraps=asyncio) as clock,
             patch(
-                "custom_components.smappee_ev.mqtt_recovery._create_dashboard_client",
+                "custom_components.smappee_ev.mqtt_recovery.create_dashboard_client",
                 return_value=recovery_dashboard,
             ),
             patch.object(
@@ -407,4 +407,4 @@ async def test_multi_site_recovery_waits_for_all_sites_and_closes_successful_sib
             assert cached.recovery.status == "recovered"
             assert entry.runtime_data is cached
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)

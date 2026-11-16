@@ -3,8 +3,8 @@
 import pytest
 
 from custom_components.smappee_ev.api.discovery import (
-    _measurement_role,
     build_topologies_from_full_details,
+    measurement_role,
     parse_mqtt_channel_specs_from_highlevel,
 )
 
@@ -34,7 +34,7 @@ def _mqtt_channel(topic: str, path: str, username: str | None = "user") -> dict:
     ],
 )
 def test_measurement_role_accepts_car_charger_variants(measurement):
-    assert _measurement_role(measurement) == "car_charger"
+    assert measurement_role(measurement) == "car_charger"
 
 
 def test_measurement_role_prefers_usable_appliance_type_over_category():
@@ -44,7 +44,7 @@ def test_measurement_role_prefers_usable_appliance_type_over_category():
         "category": "CAR_CHARGER",
     }
 
-    assert _measurement_role(measurement) is None
+    assert measurement_role(measurement) is None
 
 
 def test_build_topology_default_with_charging_station():

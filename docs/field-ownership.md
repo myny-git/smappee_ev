@@ -112,10 +112,7 @@ confirmed defect.
    `select.py` write a restored value straight into an empty field. A poll in
    flight is kept from overwriting it by the snapshot comparison alone (mutation
    `rest_diff`).
-5. **One merge branch never runs.** `_merge_connector_rest_state` copies
-   `selected_mode` from the poll, but the poll never reads a mode, so the value
-   is always `None` and the previous mode is kept.
-6. **`optimization_strategy` has two remote writers.** MQTT and the Dashboard
+5. **`optimization_strategy` has two remote writers.** MQTT and the Dashboard
    load-management read both write it without an owner rule. The in-flight
    protection applies; a load-management answer that starts after an MQTT update
    wins.

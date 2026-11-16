@@ -9,11 +9,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.smappee_ev import async_remove_entry, async_unload_entry
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
-    _MAINTENANCE_STATES,
-    _create_dashboard_client,
+    MAINTENANCE_STATES,
+    create_dashboard_client,
 )
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
 from tests.factories import make_site_runtime, make_station_runtime
 
 
@@ -57,7 +57,7 @@ async def test_shutdown_runtime_resources_stops_mqtt_and_cancels_background_task
         background_tasks={pending},
     )
 
-    await _async_shutdown_runtime_resources(runtime)
+    await async_shutdown_runtime_resources(runtime)
 
     station_coord.async_shutdown.assert_awaited_once()
     async_mqtt.stop.assert_awaited_once()
@@ -97,12 +97,12 @@ async def test_async_unload_entry_handles_missing_invalid_and_active_runtime(has
 async def test_remove_entry_forgets_dashboard_maintenance_state(hass):
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
-    _create_dashboard_client(hass, entry, MagicMock())
-    assert entry.entry_id in hass.data[_MAINTENANCE_STATES]
+    create_dashboard_client(hass, entry, MagicMock())
+    assert entry.entry_id in hass.data[MAINTENANCE_STATES]
 
     await async_remove_entry(hass, entry)
 
-    assert entry.entry_id not in hass.data[_MAINTENANCE_STATES]
+    assert entry.entry_id not in hass.data[MAINTENANCE_STATES]
 
 
 async def test_cancelled_unload_does_not_cancel_runtime_shutdown(hass):

@@ -23,9 +23,9 @@ from custom_components.smappee_ev.mqtt_setup import (
     MqttFreshnessState,
     _dynamic_mqtt_targets,
     _handle_mqtt_connection_change,
-    _mqtt_routing_diagnostics,
-    _setup_mqtt,
     _station_targets_for_power_spec,
+    mqtt_routing_diagnostics,
+    setup_mqtt,
 )
 from custom_components.smappee_ev.runtime_assembly import _create_coordinators
 from custom_components.smappee_ev.runtime_lifecycle import ensure_runtime_shutdown
@@ -271,7 +271,7 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
     mqtt.track_start_task = MagicMock()
 
     with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", return_value=mqtt) as cls:
-        mqtt_runtime = _setup_mqtt(
+        mqtt_runtime = setup_mqtt(
             hass,
             "site-uuid",
             "station",
@@ -302,7 +302,7 @@ async def test_mqtt_freshness_fallback_and_concurrent_shutdown_end_to_end(hass):
             on_properties("servicelocation/x/power", {"activePowerData": [1]})
             assert coordinator.last_real_power_rx > coordinator.last_heartbeat_rx
 
-        (routing,) = _mqtt_routing_diagnostics(mqtt_runtime)
+        (routing,) = mqtt_routing_diagnostics(mqtt_runtime)
         assert routing.started is True
         assert routing.messages_received == 3
         assert routing.heartbeat_messages == 1
@@ -346,7 +346,7 @@ def test_route_aware_power_freshness_is_copied_to_site_coordinator(hass):
     mqtt.track_start_task = MagicMock()
 
     with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", return_value=mqtt) as cls:
-        _setup_mqtt(
+        setup_mqtt(
             hass,
             "site-uuid",
             "station",
@@ -453,7 +453,7 @@ def test_unrouted_power_does_not_refresh_any_coordinator(hass):
     mqtt.track_start_task = MagicMock()
 
     with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", return_value=mqtt) as cls:
-        _setup_mqtt(
+        setup_mqtt(
             hass,
             "site-uuid",
             "station",
@@ -504,7 +504,7 @@ def test_routed_site_aggregate_updates_freshness_and_state_without_index_map(
     mqtt.track_start_task = MagicMock()
 
     with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", return_value=mqtt) as cls:
-        _setup_mqtt(
+        setup_mqtt(
             hass,
             "site-uuid",
             "station",

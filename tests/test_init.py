@@ -22,23 +22,23 @@ from custom_components.smappee_ev.const import (
     DOMAIN,
 )
 from custom_components.smappee_ev.dashboard_discovery import (
-    _dashboard_client_configured,
-    _fetch_dashboard_connector_mapping,
+    dashboard_client_configured,
+    fetch_dashboard_connector_mapping,
 )
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_routes
-from custom_components.smappee_ev.mqtt_specs import _mqtt_specs_from_highlevel_configs
+from custom_components.smappee_ev.mqtt_specs import mqtt_specs_from_highlevel_configs
 from custom_components.smappee_ev.topology import (
-    _assign_connectors,
-    _connector_uuid,
-    _fallback_assign,
     _find_in,
-    _is_connector,
     _is_station,
     _make_station_clients,
-    _normalize_connector_mapping_station_keys,
-    _safe_str,
-    _split_devices,
+    assign_connectors,
+    device_connector_uuid,
+    fallback_assign,
+    is_connector,
+    normalize_connector_mapping_station_keys,
+    safe_str,
+    split_devices,
 )
 from tests.factories import make_connector_runtime, make_site_runtime, make_station_runtime
 
@@ -193,7 +193,7 @@ def test_mqtt_specs_keep_all_roles_for_shared_power_topic():
         },
     }
 
-    specs = _mqtt_specs_from_highlevel_configs({123: config})
+    specs = mqtt_specs_from_highlevel_configs({123: config})
 
     assert [spec.role for spec in specs] == [
         "car_charger",
@@ -260,27 +260,27 @@ class TestInitFunctions:
         assert _is_station({}) is False
 
     def test_is_connector(self):
-        """Test _is_connector function."""
+        """Test is_connector function."""
         # Test with type as string
-        assert _is_connector({"type": "CARCHARGER"}) is True
-        assert _is_connector({"type": "carcharger"}) is True
-        assert _is_connector({"type": "OTHER"}) is False
+        assert is_connector({"type": "CARCHARGER"}) is True
+        assert is_connector({"type": "carcharger"}) is True
+        assert is_connector({"type": "OTHER"}) is False
 
         # Test with type as dict
-        assert _is_connector({"type": {"category": "CARCHARGER"}}) is True
-        assert _is_connector({"type": {"category": "carcharger"}}) is True
-        assert _is_connector({"type": {"category": "OTHER"}}) is False
+        assert is_connector({"type": {"category": "CARCHARGER"}}) is True
+        assert is_connector({"type": {"category": "carcharger"}}) is True
+        assert is_connector({"type": {"category": "OTHER"}}) is False
 
         # Test with missing type
-        assert _is_connector({}) is False
+        assert is_connector({}) is False
 
         # Dashboard detail payloads can omit the category but still carry carCharger metadata.
-        assert _is_connector({"carCharger": {}}) is True
+        assert is_connector({"carCharger": {}}) is True
 
     def test_connector_uuid_prefers_mqtt_channel_uuid(self):
         """Test connector UUID discovery prefers the MQTT device UUID."""
         assert (
-            _connector_uuid(
+            device_connector_uuid(
                 {
                     "uuid": "dashboard_uuid",
                     "carCharger": {
@@ -297,20 +297,20 @@ class TestInitFunctions:
         )
 
     def test_safe_str(self):
-        """Test _safe_str function."""
+        """Test safe_str function."""
         # Valid strings
-        assert _safe_str("test") == "test"
-        assert _safe_str(" test ") == "test"  # Strips whitespace
+        assert safe_str("test") == "test"
+        assert safe_str(" test ") == "test"  # Strips whitespace
 
         # Empty strings should return None
-        assert _safe_str("") is None
-        assert _safe_str(" ") is None
+        assert safe_str("") is None
+        assert safe_str(" ") is None
 
         # Non-string types
-        assert _safe_str(123) == "123"
+        assert safe_str(123) == "123"
 
         # The actual implementation in __init__.py converts None to 'None' string
-        assert _safe_str(None) is None
+        assert safe_str(None) is None
 
     def test_dashboard_client_configured_with_username_password(self):
         """Test dashboard setup can start from username/password credentials."""
@@ -320,7 +320,7 @@ class TestInitFunctions:
         dashboard_client.username = "test_user"
         dashboard_client.password = "test_password"  # noqa: S105
 
-        assert _dashboard_client_configured(dashboard_client) is True
+        assert dashboard_client_configured(dashboard_client) is True
 
     def test_find_in(self):
         """Test _find_in function."""
@@ -331,8 +331,8 @@ class TestInitFunctions:
         # Empty/None value
         assert _find_in({"serialNumber": ""}, "serialNumber") is None
 
-        # Mock _safe_str for None input
-        with patch("custom_components.smappee_ev.topology._safe_str", return_value=None):
+        # Mock safe_str for None input
+        with patch("custom_components.smappee_ev.topology.safe_str", return_value=None):
             assert _find_in({"serialNumber": None}, "serialNumber") is None
 
         # Property-based match in configurationProperties
@@ -361,7 +361,7 @@ class TestDeviceSplitting:
             {"id": "connector2", "type": {"category": "CARCHARGER"}},
         ]
 
-        stations, connectors = _split_devices(devices)
+        stations, connectors = split_devices(devices)
 
         assert len(stations) == 2
         assert stations[0]["id"] == "station1"
@@ -397,7 +397,7 @@ class TestSitePreparation:
         )
 
         station_devs = [{"uuid": "station_uuid", "id": "station_id", "serialNumber": "STATION1"}]
-        result = await _fetch_dashboard_connector_mapping(dashboard_client, station_devs)
+        result = await fetch_dashboard_connector_mapping(dashboard_client, station_devs)
 
         dashboard_client.async_get_charging_station_details.assert_awaited_once_with("STATION1")
         assert result == {
@@ -425,7 +425,7 @@ class TestSitePreparation:
         dashboard_client.async_get_charging_station_details = AsyncMock(side_effect=ClientError())
 
         station_devs = [{"uuid": "station_uuid", "id": "station_id"}]
-        result = await _fetch_dashboard_connector_mapping(dashboard_client, station_devs)
+        result = await fetch_dashboard_connector_mapping(dashboard_client, station_devs)
 
         assert result == {}
 
@@ -442,7 +442,7 @@ class TestSitePreparation:
             }
         }
 
-        result = _normalize_connector_mapping_station_keys(mapping, None)
+        result = normalize_connector_mapping_station_keys(mapping, None)
 
         assert result["6220017988"]["station_name"] == "Garage charger"
         assert result["6220017988"]["station_model"] == "Smappee EV Wall"
@@ -461,7 +461,7 @@ class TestSitePreparation:
             }
         }
 
-        result = _normalize_connector_mapping_station_keys(
+        result = normalize_connector_mapping_station_keys(
             mapping,
             fallback_station_serial="6220017988",
         )
@@ -485,7 +485,7 @@ class TestSitePreparation:
             },
         }
 
-        result = _normalize_connector_mapping_station_keys(
+        result = normalize_connector_mapping_station_keys(
             mapping,
             fallback_station_serial="6220017988",
         )
@@ -541,7 +541,7 @@ class TestSitePreparation:
                 }
             }
 
-            _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
+            assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
 
             # Check that connector was assigned to station
             assert "connector1_uuid" in stations["station1_uuid"].connectors
@@ -578,7 +578,7 @@ class TestSitePreparation:
                 {"uuid": "connector2_uuid", "id": "connector2_id", "connectorNumber": 2},
             ]
 
-            _fallback_assign(stations, car_devs, "SITE_SERIAL", 12345)
+            fallback_assign(stations, car_devs, "SITE_SERIAL", 12345)
 
             # Check that connectors were assigned to the first station
             assert len(stations["station1_uuid"].connectors) == 2
@@ -694,11 +694,11 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery.dashboard_discover_topologies",
                 return_value=[self._topology()],
             ),
             patch(
-                "custom_components.smappee_ev._prepare_site_topologies",
+                "custom_components.smappee_ev.prepare_site_topologies",
                 return_value=(prepared_site, mqtt_client),
             ),
             patch.object(
@@ -770,11 +770,11 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery.dashboard_discover_topologies",
                 return_value=[self._topology()],
             ),
             patch(
-                "custom_components.smappee_ev._prepare_site_topologies",
+                "custom_components.smappee_ev.prepare_site_topologies",
                 return_value=(prepared_site, None),
             ),
             patch.object(hass.config_entries, "async_forward_entry_setups", return_value=None),
@@ -802,7 +802,7 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery.dashboard_discover_topologies",
                 side_effect=ClientError("Auth failed"),
             ),
             pytest.raises(ConfigEntryNotReady),
@@ -817,7 +817,7 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery.dashboard_discover_topologies",
                 return_value=[],
             ),
             pytest.raises(ConfigEntryNotReady),
@@ -832,10 +832,10 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies"
+                "custom_components.smappee_ev.dashboard_discovery.dashboard_discover_topologies"
             ) as mock_discover,
             patch(
-                "custom_components.smappee_ev._prepare_site_topologies",
+                "custom_components.smappee_ev.prepare_site_topologies",
                 return_value=(None, None),
             ),
         ):
@@ -876,18 +876,18 @@ class TestDomainSetup:
         with (
             patch("custom_components.smappee_ev.async_get_clientsession", return_value=session),
             patch(
-                "custom_components.smappee_ev.dashboard_discovery._dashboard_discover_topologies",
+                "custom_components.smappee_ev.dashboard_discovery.dashboard_discover_topologies",
                 return_value=[self._topology(), second_topology],
             ),
             patch(
-                "custom_components.smappee_ev._prepare_site_topologies",
+                "custom_components.smappee_ev.prepare_site_topologies",
                 side_effect=[
                     (prepared_site, mqtt_client),
                     ConfigEntryAuthFailed("dashboard auth failed"),
                 ],
             ),
             patch(
-                "custom_components.smappee_ev._async_shutdown_runtime_resources",
+                "custom_components.smappee_ev.async_shutdown_runtime_resources",
                 new_callable=AsyncMock,
             ) as shutdown,
             pytest.raises(ConfigEntryAuthFailed, match="dashboard auth failed"),

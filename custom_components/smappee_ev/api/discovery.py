@@ -194,7 +194,7 @@ def _iter_mqtt_channels(channels: Any) -> list[tuple[str, dict[str, Any]]]:
     return out
 
 
-def _measurement_role(measurement: dict[str, Any]) -> str | None:
+def measurement_role(measurement: dict[str, Any]) -> str | None:
     mtype = str(measurement.get("type") or "").upper()
     if mtype == "GRID":
         return "grid"
@@ -256,7 +256,7 @@ def parse_mqtt_channel_specs_from_highlevel(
     for measurement in config.get("measurements") or []:
         if not isinstance(measurement, dict):
             continue
-        role = _measurement_role(measurement)
+        role = measurement_role(measurement)
         if not role:
             continue
         for metric, channel in _iter_mqtt_channels(measurement.get("updateChannels")):

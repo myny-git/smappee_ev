@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_component import EntityComponent
 import pytest
 
 from custom_components.smappee_ev.api.errors import SmappeeConnectionError
-from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
+from custom_components.smappee_ev.mqtt_setup import setup_mqtt
 from custom_components.smappee_ev.number import SmappeeMinSurplusPctNumber
 from custom_components.smappee_ev.sensor import ConnectorPowerSensor
 from tests import test_mqtt_bootstrap as bootstrap
@@ -101,7 +101,7 @@ async def test_mqtt_reconnect_restores_connector_entities_without_reload(
     monkeypatch.setattr(
         "custom_components.smappee_ev.api.mqtt_gateway.MQTT_RECONNECT_INITIAL_BACKOFF", 0.01
     )
-    mqtt = _setup_mqtt(
+    mqtt = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",

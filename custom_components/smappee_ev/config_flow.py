@@ -24,8 +24,8 @@ from .const import (
     DOMAIN,
 )
 from .dashboard_discovery import (
-    _dashboard_discover_topologies,
-    _dashboard_discover_topologies_by_serial,
+    dashboard_discover_topologies,
+    dashboard_discover_topologies_by_serial,
 )
 from .registry import async_remove_config_entry_registry_entries
 
@@ -118,9 +118,9 @@ class SmappeeEvConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         topologies: list[SmappeeLocationTopology] | None
         try:
             if serial is not None:
-                topologies = await _dashboard_discover_topologies_by_serial(client, serial)
+                topologies = await dashboard_discover_topologies_by_serial(client, serial)
             else:
-                topologies = await _dashboard_discover_topologies(client)
+                topologies = await dashboard_discover_topologies(client)
             if topologies is None:
                 return ERROR_UNKNOWN
             return None if topologies else "invalid_station_serial"

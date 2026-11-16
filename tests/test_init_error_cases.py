@@ -7,11 +7,11 @@ import pytest
 
 from custom_components.smappee_ev import async_unload_entry
 from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
-from custom_components.smappee_ev.dashboard_discovery import _fetch_dashboard_connector_mapping
+from custom_components.smappee_ev.dashboard_discovery import fetch_dashboard_connector_mapping
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
-from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
-from custom_components.smappee_ev.topology import _assign_connectors
+from custom_components.smappee_ev.mqtt_setup import setup_mqtt
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
+from custom_components.smappee_ev.topology import assign_connectors
 from tests.factories import make_site_runtime, make_station_runtime
 
 
@@ -20,7 +20,7 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_fetch_dashboard_connector_mapping_value_error(self):
-        """Test _fetch_dashboard_connector_mapping with ValueError exception."""
+        """Test fetch_dashboard_connector_mapping with ValueError exception."""
         dashboard_client = MagicMock()
         dashboard_client._token = "dashboard_token"  # noqa: S105
         dashboard_client.refresh_token = None
@@ -29,13 +29,13 @@ class TestErrorHandling:
         )
 
         station_devs = [{"uuid": "station_uuid", "id": "station_id"}]
-        result = await _fetch_dashboard_connector_mapping(dashboard_client, station_devs)
+        result = await fetch_dashboard_connector_mapping(dashboard_client, station_devs)
 
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_fetch_dashboard_connector_mapping_runtime_error(self):
-        """Test _fetch_dashboard_connector_mapping with RuntimeError exception."""
+        """Test fetch_dashboard_connector_mapping with RuntimeError exception."""
         dashboard_client = MagicMock()
         dashboard_client._token = "dashboard_token"  # noqa: S105
         dashboard_client.refresh_token = None
@@ -44,13 +44,13 @@ class TestErrorHandling:
         )
 
         station_devs = [{"uuid": "station_uuid", "id": "station_id"}]
-        result = await _fetch_dashboard_connector_mapping(dashboard_client, station_devs)
+        result = await fetch_dashboard_connector_mapping(dashboard_client, station_devs)
 
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_fetch_dashboard_connector_mapping_timeout_error(self):
-        """Test _fetch_dashboard_connector_mapping with TimeoutError exception."""
+        """Test fetch_dashboard_connector_mapping with TimeoutError exception."""
         dashboard_client = MagicMock()
         dashboard_client._token = "dashboard_token"  # noqa: S105
         dashboard_client.refresh_token = None
@@ -59,20 +59,20 @@ class TestErrorHandling:
         )
 
         station_devs = [{"uuid": "station_uuid", "id": "station_id"}]
-        result = await _fetch_dashboard_connector_mapping(dashboard_client, station_devs)
+        result = await fetch_dashboard_connector_mapping(dashboard_client, station_devs)
 
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_assign_connectors_empty_cases(self):
-        """Test _assign_connectors with empty inputs."""
+        """Test assign_connectors with empty inputs."""
         # Create empty stations and car_devs
         stations = {}
         car_devs = []
         mapping = {}
 
         # Should not raise any exceptions
-        _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
+        assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
 
         # Create stations with no matching serial
         stations = {
@@ -89,12 +89,12 @@ class TestErrorHandling:
         }
 
         # Should not modify the stations dict
-        _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
+        assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
         assert stations["station1_uuid"].connectors == {}
 
     @pytest.mark.asyncio
     async def test_assign_connectors_no_matching_car(self):
-        """Test _assign_connectors with no matching car devices."""
+        """Test assign_connectors with no matching car devices."""
         # Create stations with a serial that matches the mapping
         stations = {
             "station1_uuid": make_station_runtime(
@@ -125,7 +125,7 @@ class TestErrorHandling:
         }
 
         # Should not modify the stations dict
-        _assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
+        assign_connectors(stations, car_devs, mapping, "SITE_SERIAL", 12345)
         assert stations["station1_uuid"].connectors == {}
 
     @pytest.mark.asyncio
@@ -201,7 +201,7 @@ class TestErrorHandling:
         await started.wait()
         runtime = RuntimeData(api=MagicMock(), sites={}, mqtt={}, background_tasks={task})
 
-        await _async_shutdown_runtime_resources(runtime)
+        await async_shutdown_runtime_resources(runtime)
 
         assert task.cancelled()
         assert not runtime.background_tasks
@@ -249,7 +249,7 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_setup_mqtt_callback_exception_handling(self, hass):
-        """Test _setup_mqtt callback exception handling."""
+        """Test setup_mqtt callback exception handling."""
         # Create test stations data with coordinator
         mock_coordinator = MagicMock()
         mock_coordinator.data = MagicMock()
@@ -272,8 +272,8 @@ class TestErrorHandling:
                 "custom_components.smappee_ev.mqtt_setup._LOGGER.exception"
             ) as mock_log_exception,
         ):
-            # Call _setup_mqtt to get the callback
-            _setup_mqtt(
+            # Call setup_mqtt to get the callback
+            setup_mqtt(
                 hass,
                 "test-service-uuid",
                 "STATION-SERIAL",

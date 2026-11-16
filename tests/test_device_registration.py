@@ -16,8 +16,8 @@ from custom_components.smappee_ev.helpers import (
 )
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.runtime_devices import (
-    _register_runtime_devices,
     _remove_legacy_led_controller_devices,
+    register_runtime_devices,
 )
 from tests.factories import (
     make_connector_runtime,
@@ -107,7 +107,7 @@ async def test_register_runtime_devices_creates_site_station_and_connector_devic
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "led:100:200:STATION-1:led-id")},
     )
-    _register_runtime_devices(hass, entry)
+    register_runtime_devices(hass, entry)
     assert registry.async_get(legacy_led.id) is None
 
     site = registry.async_get_device_by_identifier((DOMAIN, "site:100"), entry.entry_id)
@@ -135,7 +135,7 @@ async def test_register_runtime_devices_creates_site_station_and_connector_devic
     )
     assert registry.async_get(station.id).via_device_id == site.id
     assert registry.async_get(connector.id).via_device_id == station.id
-    _register_runtime_devices(hass, entry)
+    register_runtime_devices(hass, entry)
     assert {
         device.id for device in dr.async_entries_for_config_entry(registry, entry.entry_id)
     } == {site.id, station.id, connector.id}
@@ -187,7 +187,7 @@ async def test_registration_and_entities_write_the_same_device_metadata(
         },
     )
     registry = dr.async_get(hass)
-    _register_runtime_devices(hass, entry)
+    register_runtime_devices(hass, entry)
 
     def snapshot() -> dict[str, tuple[object, ...]]:
         return {

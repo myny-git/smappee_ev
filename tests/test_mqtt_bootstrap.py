@@ -68,7 +68,7 @@ from custom_components.smappee_ev.mqtt_recovery import (
     _schedule_reload,
     start_recovery,
 )
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
 from tests.test_dashboard_client import _Response, _Session
 from tests.test_storage import storage_config
 
@@ -107,7 +107,7 @@ async def test_legacy_cache_migration_does_not_guess_child_gateway(hass, entry, 
     api._request.assert_not_awaited()
     assert cached.mode is RuntimeMode.MQTT_ONLY
     assert coord.monitoring_only
-    await _async_shutdown_runtime_resources(cached)
+    await async_shutdown_runtime_resources(cached)
 
 
 async def test_storage_survives_cached_bootstrap_without_changing_existing_entities(
@@ -278,7 +278,7 @@ async def online(hass, entry):
     }
     runtime = RuntimeData(api=api, dashboard=api, sites={1: site}, mqtt={})
     yield runtime
-    await _async_shutdown_runtime_resources(runtime)
+    await async_shutdown_runtime_resources(runtime)
 
 
 @pytest.fixture
@@ -385,7 +385,7 @@ async def test_cached_runtime_routes_live_data_and_preserves_ids(hass, entry, sn
         assert bucket.station_coordinator.update_interval is None
         api._session.request.assert_not_called()
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize("platform", [button, light, number, select, switch])
@@ -399,7 +399,7 @@ async def test_all_controls_unavailable_in_cached_runtime(hass, entry, snapshot,
         assert entities
         assert all(not entity.available for entity in entities)
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize(
@@ -426,7 +426,7 @@ async def test_direct_handle_commands_blocked_before_io(hass, entry, snapshot, m
         api._session.request.assert_not_called()
         api._session.post.assert_not_called()
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_domain_service_and_site_number_blocked(hass, entry, snapshot):
@@ -452,7 +452,7 @@ async def test_domain_service_and_site_number_blocked(hass, entry, snapshot):
                 await entity.async_set_native_value(5)
         api._session.request.assert_not_called()
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize(
@@ -463,7 +463,7 @@ async def test_setup_outage_uses_saved_snapshot(hass, entry, online, error, hass
     await async_save_snapshot(hass, entry, online)
     with (
         patch("custom_components.smappee_ev._async_prepare_runtime", side_effect=error("outage")),
-        patch("custom_components.smappee_ev._start_mqtt_clients") as start,
+        patch("custom_components.smappee_ev.start_mqtt_clients") as start,
         patch("custom_components.smappee_ev.start_recovery") as recover,
         patch.object(hass.config_entries, "async_forward_entry_setups", new=AsyncMock()),
         patch.object(hass.config_entries, "async_unload_platforms", return_value=True),
@@ -490,7 +490,7 @@ async def test_setup_outage_uses_saved_snapshot(hass, entry, online, error, hass
 async def test_no_snapshot_or_disallowed_error_never_starts_mqtt(hass, entry, error):
     with (
         patch("custom_components.smappee_ev._async_prepare_runtime", side_effect=error("failed")),
-        patch("custom_components.smappee_ev._start_mqtt_clients") as start,
+        patch("custom_components.smappee_ev.start_mqtt_clients") as start,
     ):
         with pytest.raises((ConfigEntryNotReady, ConfigEntryAuthFailed, SmappeeProtocolError)):
             await async_setup_entry(hass, entry)
@@ -533,7 +533,7 @@ async def test_recovery_requires_full_discovery_then_schedules_one_reload(
             reload.assert_awaited_once_with(entry.entry_id)
             assert online.stopping  # Probe resources closed before reload.
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_recovery_auth_failure_starts_reauth_and_keeps_monitoring(hass, entry, snapshot):
@@ -552,7 +552,7 @@ async def test_recovery_auth_failure_starts_reauth_and_keeps_monitoring(hass, en
             reload.assert_not_awaited()
             assert not cached.stopping
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_unload_cancels_recovery_and_freshness_callbacks(hass, entry, snapshot):
@@ -562,7 +562,7 @@ async def test_unload_cancels_recovery_and_freshness_callbacks(hass, entry, snap
     start_recovery(hass, entry, cached, probe)
     tasks = list(cached.background_tasks)
     assert len(tasks) == 1
-    await _async_shutdown_runtime_resources(cached)
+    await async_shutdown_runtime_resources(cached)
     assert all(task.done() for task in tasks)
     assert not cached.cleanup_callbacks
     probe.assert_not_awaited()
@@ -586,8 +586,8 @@ async def test_recovery_reload_is_skipped_for_a_replaced_runtime(hass, entry, sn
             _schedule_reload(hass, entry, cached)
             schedule.assert_not_called()
     finally:
-        await _async_shutdown_runtime_resources(cached)
-        await _async_shutdown_runtime_resources(replacement)
+        await async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(replacement)
 
 
 @pytest.mark.parametrize("failure", [aiohttp.ClientConnectionError, TimeoutError])
@@ -632,10 +632,10 @@ async def test_bootstrap_auth_wins_over_outage_and_success_is_cleaned_up(
         outcomes.reverse()
     with (
         patch(
-            "custom_components.smappee_ev._load_dashboard_topologies",
+            "custom_components.smappee_ev.load_dashboard_topologies",
             return_value=[topology_a, topology_b],
         ),
-        patch("custom_components.smappee_ev._prepare_site_topologies", side_effect=outcomes),
+        patch("custom_components.smappee_ev.prepare_site_topologies", side_effect=outcomes),
         pytest.raises(ConfigEntryAuthFailed),
     ):
         await _async_prepare_runtime(hass, entry, dashboard())
@@ -726,7 +726,7 @@ async def test_cached_multi_credential_connections_require_all_transports(hass, 
         clients[0]._on_conn(False)
         assert not coord.mqtt_transport_connected
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_cached_diagnostics_redact_mqtt_credentials(hass, entry, snapshot):
@@ -742,7 +742,7 @@ async def test_cached_diagnostics_redact_mqtt_credentials(hass, entry, snapshot)
         assert "mqtt-user" not in text
         assert TOPIC not in text
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 async def test_live_mqtt_updates_preserve_scheduled_rest_poll(hass, online):
@@ -812,10 +812,10 @@ async def test_cancelled_discovery_cleans_up_already_prepared_site(hass, entry, 
 
     with (
         patch(
-            "custom_components.smappee_ev._load_dashboard_topologies",
+            "custom_components.smappee_ev.load_dashboard_topologies",
             return_value=[MagicMock(site_location_id=1), MagicMock(site_location_id=2)],
         ),
-        patch("custom_components.smappee_ev._prepare_site_topologies", side_effect=prepare_site),
+        patch("custom_components.smappee_ev.prepare_site_topologies", side_effect=prepare_site),
     ):
         task = asyncio.create_task(_async_prepare_runtime(hass, entry, dashboard()))
         await pending_started.wait()
@@ -861,7 +861,7 @@ async def test_first_cache_survives_rest_state_failure_and_next_outage(
 async def test_missing_measurement_configuration_cannot_replace_cache(
     hass, entry, online, hass_storage, bad_config
 ):
-    from custom_components.smappee_ev.dashboard_discovery import _dashboard_fetch_highlevel_configs
+    from custom_components.smappee_ev.dashboard_discovery import dashboard_fetch_highlevel_configs
 
     await async_save_snapshot(hass, entry, online)
     before = await async_load_snapshot(hass, entry)
@@ -873,7 +873,7 @@ async def test_missing_measurement_configuration_cannot_replace_cache(
         "async_get_highlevel_configuration",
         new=AsyncMock(side_effect=[good, bad_config]),
     ):
-        site.highlevel_configs = await _dashboard_fetch_highlevel_configs(online.dashboard, [1, 2])
+        site.highlevel_configs = await dashboard_fetch_highlevel_configs(online.dashboard, [1, 2])
     await async_save_snapshot(hass, entry, online)
     assert await async_load_snapshot(hass, entry) == before
     await bootstrap_store(hass, entry).async_remove()
@@ -908,7 +908,7 @@ async def test_usable_cache_does_not_mean_rest_recovered(
             assert online.stopping
             assert not cached.stopping
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize("refresh", [False, True])

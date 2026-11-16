@@ -32,8 +32,8 @@ from custom_components.smappee_ev.mqtt_bootstrap import (
 )
 from custom_components.smappee_ev.mqtt_recovery import _async_recover, start_recovery
 from custom_components.smappee_ev.runtime_lifecycle import (
-    _async_shutdown_runtime_resources,
     _begin_runtime_shutdown,
+    async_shutdown_runtime_resources,
 )
 from tests import test_mqtt_bootstrap as bootstrap
 
@@ -241,7 +241,7 @@ async def test_cached_runtime_freshness_tick_refreshes_entities_until_shutdown(
     cached = build_cached_runtime(hass, entry, bootstrap.dashboard(), snapshot)
     entry.runtime_data = cached
     monkeypatch.setattr(
-        "custom_components.smappee_ev.mqtt_recovery._create_dashboard_client",
+        "custom_components.smappee_ev.mqtt_recovery.create_dashboard_client",
         MagicMock(return_value=cached.api),
     )
     listeners = _listeners(cached)
@@ -264,7 +264,7 @@ async def test_cached_runtime_freshness_tick_refreshes_entities_until_shutdown(
         await hass.async_block_till_done()
         assert all(listener.call_count == 1 for listener in listeners)
     finally:
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize("stop", ["runtime", "homeassistant"])
@@ -286,7 +286,7 @@ async def test_recovery_does_not_probe_dashboard_while_stopping(hass, entry, onl
         with (
             patch("custom_components.smappee_ev.mqtt_recovery.asyncio.sleep", new=wait),
             patch(
-                "custom_components.smappee_ev.mqtt_recovery._create_dashboard_client"
+                "custom_components.smappee_ev.mqtt_recovery.create_dashboard_client"
             ) as create_client,
         ):
             await _async_recover(hass, entry, online, prepare)
@@ -329,7 +329,7 @@ async def test_unclassified_smappee_error_reports_api_error_and_keeps_retrying(
         patch("custom_components.smappee_ev.mqtt_recovery.asyncio.sleep", new=wait),
         patch("custom_components.smappee_ev.mqtt_recovery.random.uniform", return_value=1),
         patch(
-            "custom_components.smappee_ev.mqtt_recovery._create_dashboard_client",
+            "custom_components.smappee_ev.mqtt_recovery.create_dashboard_client",
             return_value=online.api,
         ),
         patch.object(entry, "async_start_reauth_if_available") as reauth,

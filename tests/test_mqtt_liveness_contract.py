@@ -13,8 +13,8 @@ from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.binary_sensor import SmappeeMqttConnectivity
 from custom_components.smappee_ev.models.state import ConnectorState
 from custom_components.smappee_ev.mqtt_bootstrap import build_cached_runtime, snapshot_from_runtime
-from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.mqtt_setup import setup_mqtt
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
 from custom_components.smappee_ev.sensor import (
     ConnectorCurrentASensor,
     ConnectorPowerSensor,
@@ -64,7 +64,7 @@ def liveness(hass, online, monkeypatch):
             "cars": {"connector-1": group(1), "connector-2": group(2)},
         }
     }
-    mqtt = _setup_mqtt(
+    mqtt = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",
@@ -235,7 +235,7 @@ async def test_reconnect_resync_and_notifications_cannot_hide_rest_failure(hass,
 def test_partial_client_connectivity_is_not_recovered_by_valid_payloads(hass, liveness):
     ctx = liveness
     ctx.coord.monitoring_only = ctx.site.monitoring_only = True
-    clients = _setup_mqtt(
+    clients = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",
@@ -315,7 +315,7 @@ async def test_restored_energy_value_does_not_restore_mqtt_freshness(
         assert entity.native_value == 13
     finally:
         await component._async_reset()
-        await _async_shutdown_runtime_resources(cached)
+        await async_shutdown_runtime_resources(cached)
 
 
 @pytest.mark.parametrize("age", [-1, 299, 300, 301])

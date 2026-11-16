@@ -197,7 +197,7 @@ def _site_state(
 
 
 def _safe_write_ha_state(entity: SensorEntity) -> None:
-    if getattr(entity, "platform", None) is not None:
+    if entity.platform is not None:
         entity.async_write_ha_state()
 
 

@@ -31,13 +31,13 @@ from .coordinators.freshness_coordinator import FreshnessCoordinator
 from .coordinators.mqtt_apply import MqttMixin
 from .coordinators.power import (
     PowerMixin,
-    _empty_power_topic_map,
-    _indexes_and_field_from_aspect_paths,
-    _indexes_from_aspect_paths,
-    _mqtt_channel_topic,
-    _power_aggregate_values,
-    _power_group_updates,
-    _to_int,
+    empty_power_topic_map,
+    indexes_and_field_from_aspect_paths,
+    indexes_from_aspect_paths,
+    mqtt_channel_topic,
+    power_aggregate_values,
+    power_group_updates,
+    to_int,
 )
 from .coordinators.session_tracking import SessionTrackingMixin
 from .coordinators.storage import StorageMeasurements
@@ -117,7 +117,7 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
             if not mapping:
                 continue
             for topic, topic_map in mapping.items():
-                merged = maps_by_topic.setdefault(topic, _empty_power_topic_map())
+                merged = maps_by_topic.setdefault(topic, empty_power_topic_map())
                 for role in ("grid", "pv"):
                     for key in ("power", "power_field", "current", "energy"):
                         value = topic_map[role].get(key)
@@ -135,39 +135,39 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
             channels = meas.get("updateChannels") or {}
             if not isinstance(channels, dict):
                 continue
-            power_idx, power_field = _indexes_and_field_from_aspect_paths(
+            power_idx, power_field = indexes_and_field_from_aspect_paths(
                 channels.get("activePower"), "activePowerData", "channelData"
             )
-            power_topic = _mqtt_channel_topic(channels.get("activePower"))
-            current_idx = _indexes_from_aspect_paths(channels.get("current"), "currentData")
-            current_topic = _mqtt_channel_topic(channels.get("current"))
-            energy_idx = _indexes_from_aspect_paths(
+            power_topic = mqtt_channel_topic(channels.get("activePower"))
+            current_idx = indexes_from_aspect_paths(channels.get("current"), "currentData")
+            current_topic = mqtt_channel_topic(channels.get("current"))
+            energy_idx = indexes_from_aspect_paths(
                 channels.get("meterReadings"), "importActiveEnergyData"
             )
-            energy_topic = _mqtt_channel_topic(channels.get("meterReadings"))
+            energy_topic = mqtt_channel_topic(channels.get("meterReadings"))
             mtype = str(meas.get("type") or "").upper()
             if mtype == "GRID":
                 if power_topic:
-                    topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
+                    topic_map = maps_by_topic.setdefault(power_topic, empty_power_topic_map())
                     topic_map["grid"]["power"] = power_idx
                     topic_map["grid"]["power_field"] = power_field
                 if current_topic:
-                    topic_map = maps_by_topic.setdefault(current_topic, _empty_power_topic_map())
+                    topic_map = maps_by_topic.setdefault(current_topic, empty_power_topic_map())
                     topic_map["grid"]["current"] = current_idx
                 if energy_topic:
-                    topic_map = maps_by_topic.setdefault(energy_topic, _empty_power_topic_map())
+                    topic_map = maps_by_topic.setdefault(energy_topic, empty_power_topic_map())
                     topic_map["grid"]["energy"] = energy_idx
                 continue
             if mtype == "PRODUCTION":
                 if power_topic:
-                    topic_map = maps_by_topic.setdefault(power_topic, _empty_power_topic_map())
+                    topic_map = maps_by_topic.setdefault(power_topic, empty_power_topic_map())
                     topic_map["pv"]["power"] = power_idx
                     topic_map["pv"]["power_field"] = power_field
                 if current_topic:
-                    topic_map = maps_by_topic.setdefault(current_topic, _empty_power_topic_map())
+                    topic_map = maps_by_topic.setdefault(current_topic, empty_power_topic_map())
                     topic_map["pv"]["current"] = current_idx
                 if energy_topic:
-                    topic_map = maps_by_topic.setdefault(energy_topic, _empty_power_topic_map())
+                    topic_map = maps_by_topic.setdefault(energy_topic, empty_power_topic_map())
                     topic_map["pv"]["energy"] = energy_idx
         return maps_by_topic or None
 
@@ -193,7 +193,7 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
     ) -> bool:
         accepted = accepted if accepted is not None else set()
         changed = False
-        for field, updates in _power_group_updates(
+        for field, updates in power_group_updates(
             payload, power_idxs, current_idxs, energy_idxs, power_key_prefix, power_field
         ):
             accepted.add(field)
@@ -236,11 +236,11 @@ class SmappeeSiteCoordinator(FreshnessCoordinator[SiteData]):
 
         payload_location_id = payload.get("serviceLocationId")
         if payload_location_id is not None:
-            # _to_int returns 0 (or a default) if parsing fails safely
-            if _to_int(payload_location_id, -1) != self.site_location_id:
+            # to_int returns 0 (or a default) if parsing fails safely
+            if to_int(payload_location_id, -1) != self.site_location_id:
                 return changed
 
-        for field, value in _power_aggregate_values(payload):
+        for field, value in power_aggregate_values(payload):
             accepted.add(field)
             changed |= self._set_if_changed(site, field, int(value))
         return changed

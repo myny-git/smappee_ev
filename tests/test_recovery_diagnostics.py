@@ -75,7 +75,7 @@ async def test_recovery_diagnostics_record_failures_retry_deadlines_and_cancella
         patch("custom_components.smappee_ev.mqtt_recovery.asyncio", clock),
         patch("custom_components.smappee_ev.mqtt_recovery.random.uniform", return_value=1),
         patch(
-            "custom_components.smappee_ev.mqtt_recovery._create_dashboard_client",
+            "custom_components.smappee_ev.mqtt_recovery.create_dashboard_client",
             return_value=online.api,
         ),
         patch(

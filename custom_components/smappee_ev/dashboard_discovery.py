@@ -20,16 +20,16 @@ from .api.errors import (
 from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import DashboardObjectList, HighLevelConfigMap
-from .topology import _connector_uuid, _is_connector, _safe_str, _station_serial
+from .topology import device_connector_uuid, device_station_serial, is_connector, safe_str
 
 _LOGGER = logging.getLogger(__name__)
 # Kept outside runtime_data: the state must survive failed setups and reloads.
-_MAINTENANCE_STATES: HassKey[dict[str, DashboardMaintenanceState]] = HassKey(
+MAINTENANCE_STATES: HassKey[dict[str, DashboardMaintenanceState]] = HassKey(
     "smappee_ev_dashboard_maintenance"
 )
 
 
-def _dashboard_client_configured(dashboard_client: SmappeeDashboardClient | None) -> bool:
+def dashboard_client_configured(dashboard_client: SmappeeDashboardClient | None) -> bool:
     if dashboard_client is None:
         return False
     return bool(
@@ -42,11 +42,11 @@ def _dashboard_client_configured(dashboard_client: SmappeeDashboardClient | None
     )
 
 
-async def _dashboard_discover_topologies(
+async def dashboard_discover_topologies(
     dashboard_client: SmappeeDashboardClient | None,
 ) -> list[SmappeeLocationTopology] | None:
     """Discover Dashboard service locations and build site-first topologies."""
-    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
+    if dashboard_client is None or not dashboard_client_configured(dashboard_client):
         return None
     try:
         locations = await dashboard_client.async_get_service_locations_full_details()
@@ -92,7 +92,7 @@ def _direct_location_id(value: object) -> int | None:
     return location_id if location_id > 0 else None
 
 
-async def _dashboard_discover_topologies_by_serial(
+async def dashboard_discover_topologies_by_serial(
     dashboard_client: SmappeeDashboardClient, serial: str
 ) -> list[SmappeeLocationTopology]:
     """Resolve a station into the existing site-first topology model."""
@@ -105,7 +105,7 @@ async def _dashboard_discover_topologies_by_serial(
         return []
     if not isinstance(station, dict):
         return []
-    if "serialNumber" in station and _safe_str(station["serialNumber"]) != serial:
+    if "serialNumber" in station and safe_str(station["serialNumber"]) != serial:
         _LOGGER.debug("Station details do not match the requested serial")
         return []
     location = station.get("serviceLocation")
@@ -147,10 +147,10 @@ async def _dashboard_discover_topologies_by_serial(
     return topologies
 
 
-async def _dashboard_fetch_devices(
+async def dashboard_fetch_devices(
     dashboard_client: SmappeeDashboardClient | None, sid: int | str
 ) -> DashboardObjectList | None:
-    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
+    if dashboard_client is None or not dashboard_client_configured(dashboard_client):
         return None
     try:
         devices = await dashboard_client.async_get_smart_devices(sid)
@@ -170,12 +170,12 @@ async def _dashboard_fetch_devices(
     return devices
 
 
-async def _dashboard_fetch_highlevel_configs(
+async def dashboard_fetch_highlevel_configs(
     dashboard_client: SmappeeDashboardClient | None,
     measurement_sids: list[int],
 ) -> HighLevelConfigMap:
     """Fetch highlevelconfiguration for all measurement service locations."""
-    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
+    if dashboard_client is None or not dashboard_client_configured(dashboard_client):
         return {}
 
     configs: HighLevelConfigMap = {}
@@ -203,15 +203,15 @@ async def _dashboard_fetch_highlevel_configs(
     return configs
 
 
-async def _fetch_dashboard_connector_mapping(
+async def fetch_dashboard_connector_mapping(
     dashboard_client: SmappeeDashboardClient | None, station_devs: list[dict]
 ) -> dict[str, dict] | None:
-    if dashboard_client is None or not _dashboard_client_configured(dashboard_client):
+    if dashboard_client is None or not dashboard_client_configured(dashboard_client):
         return None
 
     out: dict[str, dict] = {}
     for station in station_devs:
-        station_serial = _station_serial(station)
+        station_serial = device_station_serial(station)
         if not station_serial:
             continue
         try:
@@ -239,12 +239,12 @@ async def _fetch_dashboard_connector_mapping(
         charging_station = details.get("chargingStation")
         station_model = None
         if isinstance(charging_station, dict):
-            station_model = _safe_str(charging_station.get("model"))
+            station_model = safe_str(charging_station.get("model"))
         bucket = out.setdefault(station_serial, {"connectors": {}})
-        station_model = station_model or _safe_str(details.get("model"))
+        station_model = station_model or safe_str(details.get("model"))
         if station_model:
             bucket["station_model"] = station_model
-        station_name = _safe_str(details.get("name"))
+        station_name = safe_str(details.get("name"))
         if station_name:
             bucket["station_name"] = station_name
         for module in details.get("modules") or []:
@@ -256,54 +256,54 @@ async def _fetch_dashboard_connector_mapping(
             device_type = smart_device.get("type")
             category = device_type.get("category") if isinstance(device_type, dict) else device_type
             if str(category or "").upper() == "LED":
-                led_id = _safe_str(smart_device.get("id")) or _safe_str(
+                led_id = safe_str(smart_device.get("id")) or safe_str(
                     smart_device.get("smartDeviceId")
                 )
                 if led_id:
                     bucket.setdefault("led_devices", {})[led_id] = {
                         "id": led_id,
-                        "uuid": _safe_str(smart_device.get("uuid"))
-                        or _safe_str(smart_device.get("smartDeviceUuid")),
-                        "name": _safe_str(smart_device.get("name")),
+                        "uuid": safe_str(smart_device.get("uuid"))
+                        or safe_str(smart_device.get("smartDeviceUuid")),
+                        "name": safe_str(smart_device.get("name")),
                         "smart_device": smart_device,
                     }
                 continue
-            if not _is_connector(smart_device):
+            if not is_connector(smart_device):
                 continue
-            connector_uuid = _connector_uuid(smart_device)
+            connector_uuid = device_connector_uuid(smart_device)
             if not connector_uuid:
                 continue
             bucket["connectors"][connector_uuid] = {
-                "id": _safe_str(smart_device.get("id"))
-                or _safe_str(smart_device.get("smartDeviceId")),
+                "id": safe_str(smart_device.get("id"))
+                or safe_str(smart_device.get("smartDeviceId")),
                 "position": module.get("position"),
                 "smart_device": smart_device,
             }
     return out
 
 
-def _fallback_dashboard_connector_mapping(
+def fallback_dashboard_connector_mapping(
     station_devs: list[dict], car_devs: list[dict]
 ) -> dict[str, dict]:
     if len(station_devs) != 1:
         return {}
-    station_serial = _station_serial(station_devs[0])
+    station_serial = device_station_serial(station_devs[0])
     if not station_serial:
         return {}
 
     connectors: dict[str, dict] = {}
     for index, car in enumerate(car_devs, start=1):
-        connector_uuid = _connector_uuid(car)
+        connector_uuid = device_connector_uuid(car)
         if not connector_uuid:
             continue
         connectors[connector_uuid] = {
-            "id": _safe_str(car.get("id")) or _safe_str(car.get("smartDeviceId")),
+            "id": safe_str(car.get("id")) or safe_str(car.get("smartDeviceId")),
             "position": car.get("connectorNumber") or car.get("position") or index,
         }
     return {station_serial: {"connectors": connectors}} if connectors else {}
 
 
-def _create_dashboard_client(
+def create_dashboard_client(
     hass: HomeAssistant, entry: SmappeeEvConfigEntry, session: ClientSession
 ) -> SmappeeDashboardClient:
     """Create the optional Dashboard API client for one config entry."""
@@ -319,21 +319,21 @@ def _create_dashboard_client(
         refresh_token=entry.data.get(CONF_DASHBOARD_REFRESH_TOKEN),
         session=session,
         token_update_callback=_store_dashboard_tokens,
-        maintenance_state=hass.data.setdefault(_MAINTENANCE_STATES, {}).setdefault(
+        maintenance_state=hass.data.setdefault(MAINTENANCE_STATES, {}).setdefault(
             entry.entry_id, DashboardMaintenanceState()
         ),
     )
 
 
-async def _load_dashboard_topologies(
+async def load_dashboard_topologies(
     dashboard_client: SmappeeDashboardClient,
     station_serial: str | None = None,
 ) -> list[SmappeeLocationTopology]:
     try:
-        topologies = await _dashboard_discover_topologies(dashboard_client)
+        topologies = await dashboard_discover_topologies(dashboard_client)
         if topologies == [] and station_serial:
             _LOGGER.debug("Automatic discovery empty; trying configured station serial")
-            topologies = await _dashboard_discover_topologies_by_serial(
+            topologies = await dashboard_discover_topologies_by_serial(
                 dashboard_client, station_serial
             )
     except (

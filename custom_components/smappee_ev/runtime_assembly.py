@@ -15,10 +15,10 @@ from .api.dashboard_client import SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology
 from .coordinator import SmappeeCoordinator, SmappeeSiteCoordinator
 from .dashboard_discovery import (
-    _dashboard_fetch_devices,
-    _dashboard_fetch_highlevel_configs,
-    _fallback_dashboard_connector_mapping,
-    _fetch_dashboard_connector_mapping,
+    dashboard_fetch_devices,
+    dashboard_fetch_highlevel_configs,
+    fallback_dashboard_connector_mapping,
+    fetch_dashboard_connector_mapping,
 )
 from .models.runtime_data import (
     MqttRuntimeValue,
@@ -28,20 +28,20 @@ from .models.runtime_data import (
     SmappeeStationRuntime,
 )
 from .models.state import HighLevelConfigMap
-from .mqtt_setup import _setup_mqtt
-from .mqtt_specs import _mqtt_specs_from_highlevel_configs, _split_highlevel_configs_by_scope
-from .runtime_lifecycle import _async_shutdown_coordinator
+from .mqtt_setup import setup_mqtt
+from .mqtt_specs import mqtt_specs_from_highlevel_configs, split_highlevel_configs_by_scope
+from .runtime_lifecycle import async_shutdown_coordinator
 from .topology import (
-    _assign_connectors,
-    _connector_uuid,
-    _fallback_assign,
-    _fallback_highlevel_connector_mapping,
-    _make_station_clients_with_mapping_fallback,
-    _normalize_connector_mapping_station_keys,
-    _safe_str,
-    _split_devices,
-    _station_devices_from_connector_mapping,
-    _station_serial,
+    assign_connectors,
+    device_connector_uuid,
+    device_station_serial,
+    fallback_assign,
+    fallback_highlevel_connector_mapping,
+    make_station_clients_with_mapping_fallback,
+    normalize_connector_mapping_station_keys,
+    safe_str,
+    split_devices,
+    station_devices_from_connector_mapping,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ def _log_station_runtime_shape(context: str, stations: Mapping[str, object]) -> 
     )
 
 
-def _log_stored_runtime_shape(runtime: RuntimeData) -> None:
+def log_stored_runtime_shape(runtime: RuntimeData) -> None:
     """Log the stored RuntimeData shape without exposing raw identifiers."""
     site_count = len(runtime.sites or {})
     site_types = sorted({type(site).__name__ for site in (runtime.sites or {}).values()}) or [
@@ -149,7 +149,7 @@ async def _create_coordinators(
             bucket.station_coordinator = coord
     except BaseException:
         for coord in created:
-            await _async_shutdown_coordinator(coord, "Station")
+            await async_shutdown_coordinator(coord, "Station")
         raise
 
     if start_tracking:
@@ -180,7 +180,7 @@ async def _create_site_coordinator(
     try:
         await _async_initial_refresh(coord)
     except BaseException:
-        await _async_shutdown_coordinator(coord, "Site")
+        await async_shutdown_coordinator(coord, "Site")
         raise
     return coord
 
@@ -300,11 +300,11 @@ async def _prepare_control_stations(
     site_sid = topology.site_location_id
     control_sid = topology.control_location_id
 
-    devices = await _dashboard_fetch_devices(dashboard_client, control_sid)
+    devices = await dashboard_fetch_devices(dashboard_client, control_sid)
     if devices is None:
         return {}, f"smappee-{site_sid}"
 
-    station_devs, car_devs = _split_devices(devices)
+    station_devs, car_devs = split_devices(devices)
     station_serial = topology.charging_station_serial
     serial_str = (
         topology.site_gateway_serial
@@ -335,16 +335,16 @@ async def _prepare_control_stations(
     # The devices above were fetched, so the client is configured and the
     # mapping is a dict: empty when the Dashboard had none to offer.
     station_serial_to_connectors = (
-        await _fetch_dashboard_connector_mapping(dashboard_client, station_devs) or {}
+        await fetch_dashboard_connector_mapping(dashboard_client, station_devs) or {}
     )
     if not station_serial_to_connectors:
-        station_serial_to_connectors = _fallback_dashboard_connector_mapping(station_devs, car_devs)
+        station_serial_to_connectors = fallback_dashboard_connector_mapping(station_devs, car_devs)
     if not station_serial_to_connectors:
-        station_serial_to_connectors = _fallback_highlevel_connector_mapping(
+        station_serial_to_connectors = fallback_highlevel_connector_mapping(
             station_serial,
             station_highlevel_configs,
         )
-    station_serial_to_connectors = _normalize_connector_mapping_station_keys(
+    station_serial_to_connectors = normalize_connector_mapping_station_keys(
         station_serial_to_connectors,
         station_serial or serial_str,
     )
@@ -358,13 +358,13 @@ async def _prepare_control_stations(
         filtered_station_devs = [
             station
             for station in station_devs
-            if (_station_serial(station) or _safe_str(station.get("uuid")))
+            if (device_station_serial(station) or safe_str(station.get("uuid")))
             in allowed_station_serials
         ]
         if filtered_station_devs:
             station_devs = filtered_station_devs
         elif has_connector_mapping:
-            station_devs = _station_devices_from_connector_mapping(station_serial_to_connectors)
+            station_devs = station_devices_from_connector_mapping(station_serial_to_connectors)
 
     allowed_connector_uuids = {
         connector_uuid
@@ -375,10 +375,10 @@ async def _prepare_control_stations(
         car_devs = [
             connector
             for connector in car_devs
-            if _connector_uuid(connector) in allowed_connector_uuids
+            if device_connector_uuid(connector) in allowed_connector_uuids
         ]
 
-    stations = _make_station_clients_with_mapping_fallback(
+    stations = make_station_clients_with_mapping_fallback(
         serial_str,
         control_sid,
         station_devs,
@@ -395,7 +395,7 @@ async def _prepare_control_stations(
     )
 
     if has_connector_mapping:
-        _assign_connectors(
+        assign_connectors(
             stations,
             car_devs,
             station_serial_to_connectors,
@@ -404,7 +404,7 @@ async def _prepare_control_stations(
         )
         total_assigned = sum(len(bucket.connectors) for bucket in stations.values())
         if total_assigned == 0 and len(stations) == 1:
-            _fallback_assign(stations, car_devs, serial_str, control_sid)
+            fallback_assign(stations, car_devs, serial_str, control_sid)
         elif total_assigned == 0:
             _LOGGER.warning(
                 "Connector mapping exists at control %s, but no connectors could be "
@@ -416,7 +416,7 @@ async def _prepare_control_stations(
     return stations, serial_str
 
 
-async def _prepare_site_topologies(
+async def prepare_site_topologies(
     hass: HomeAssistant,
     topologies: list[SmappeeLocationTopology],
     update_interval: int,
@@ -443,8 +443,8 @@ async def _prepare_site_topologies(
             for measurement_sid in topology.measurement_location_ids
         )
     )
-    highlevel_configs = await _dashboard_fetch_highlevel_configs(dashboard_client, measurement_sids)
-    site_highlevel_configs, station_highlevel_configs = _split_highlevel_configs_by_scope(
+    highlevel_configs = await dashboard_fetch_highlevel_configs(dashboard_client, measurement_sids)
+    site_highlevel_configs, station_highlevel_configs = split_highlevel_configs_by_scope(
         highlevel_configs
     )
 
@@ -499,13 +499,13 @@ async def _prepare_site_topologies(
             start_tracking=start_runtime,
         )
         coordinators_ready = True
-        mqtt_specs = _mqtt_specs_from_highlevel_configs(highlevel_configs)
+        mqtt_specs = mqtt_specs_from_highlevel_configs(highlevel_configs)
         serial_str = (
             primary.site_gateway_serial
             or next((serial for serial in serials if serial), None)
             or f"smappee-{site_sid}"
         )
-        mqtt = _setup_mqtt(
+        mqtt = setup_mqtt(
             hass,
             primary.site_location_uuid or primary.control_location_uuid,
             serial_str,
@@ -522,8 +522,8 @@ async def _prepare_site_topologies(
     except BaseException:
         if coordinators_ready:
             for bucket in stations.values():
-                await _async_shutdown_coordinator(bucket.station_coordinator, "Station")
-        await _async_shutdown_coordinator(site_coordinator, "Site")
+                await async_shutdown_coordinator(bucket.station_coordinator, "Station")
+        await async_shutdown_coordinator(site_coordinator, "Site")
         raise
 
     for bucket in stations.values():

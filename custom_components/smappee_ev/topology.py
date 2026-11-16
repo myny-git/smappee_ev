@@ -22,7 +22,7 @@ def _is_station(dev: dict[str, Any]) -> bool:
     return (dev.get("type") or "").upper() == "CHARGINGSTATION"
 
 
-def _is_connector(dev: dict[str, Any]) -> bool:
+def is_connector(dev: dict[str, Any]) -> bool:
     """True if device is a CARCHARGER smartdevice."""
     if isinstance(dev.get("carCharger"), dict):
         return True
@@ -32,7 +32,7 @@ def _is_connector(dev: dict[str, Any]) -> bool:
     return (dev.get("type") or "").upper() == "CARCHARGER"
 
 
-def _safe_str(value: object) -> str | None:
+def safe_str(value: object) -> str | None:
     """Return a stripped string, or None for None, blanks and "none"/"null"."""
     if value is None:
         return None
@@ -45,8 +45,8 @@ def _safe_str(value: object) -> str | None:
 def _find_in(dev: dict, *keys: str) -> str | None:
     """Try to discover a 'serialNumber' (or similar) inside a smartdevice."""
     for k in keys:
-        if k in dev and _safe_str(dev[k]):
-            return _safe_str(dev[k])
+        if k in dev and safe_str(dev[k]):
+            return safe_str(dev[k])
     for bag in ("configurationProperties", "properties"):
         for prop in dev.get(bag, []) or []:
             spec = prop.get("spec") or {}
@@ -55,8 +55,8 @@ def _find_in(dev: dict, *keys: str) -> str | None:
                 v = prop.get("value")
                 if isinstance(v, dict):
                     v = v.get("value")
-                if _safe_str(v):
-                    return _safe_str(v)
+                if safe_str(v):
+                    return safe_str(v)
     return None
 
 
@@ -66,9 +66,9 @@ def _uuid_from_dashboard_channel(smart_device: DashboardObject) -> str | None:
         return None
     channel = car_charger.get("chargingStateUpdateChannel")
     if isinstance(channel, dict):
-        channel_name = _safe_str(channel.get("name"))
+        channel_name = safe_str(channel.get("name"))
     else:
-        channel_name = _safe_str(channel)
+        channel_name = safe_str(channel)
     if not channel_name:
         return None
     marker = "/devices/"
@@ -79,23 +79,23 @@ def _uuid_from_dashboard_channel(smart_device: DashboardObject) -> str | None:
 
 def _device_uuid(dev: DashboardObject) -> str | None:
     return (
-        _safe_str(dev.get("uuid"))
-        or _safe_str(dev.get("smartDeviceUuid"))
+        safe_str(dev.get("uuid"))
+        or safe_str(dev.get("smartDeviceUuid"))
         or _uuid_from_dashboard_channel(dev)
     )
 
 
-def _connector_uuid(dev: DashboardObject) -> str | None:
+def device_connector_uuid(dev: DashboardObject) -> str | None:
     return _uuid_from_dashboard_channel(dev) or _device_uuid(dev)
 
 
-def _station_serial(dev: DashboardObject) -> str | None:
+def device_station_serial(dev: DashboardObject) -> str | None:
     return _find_in(dev, "serialNumber", "serial") or _device_uuid(dev)
 
 
-def _split_devices(devices: list[dict]) -> tuple[list[dict], list[dict]]:
+def split_devices(devices: list[dict]) -> tuple[list[dict], list[dict]]:
     stations = [d for d in (devices or []) if _is_station(d)]
-    cars = [d for d in (devices or []) if _is_connector(d)]
+    cars = [d for d in (devices or []) if is_connector(d)]
     return stations, cars
 
 
@@ -111,7 +111,7 @@ def _connector_position_from_measurement(measurement: dict[str, Any]) -> int | N
     return int(match.group(1)) if match else None
 
 
-def _fallback_highlevel_connector_mapping(
+def fallback_highlevel_connector_mapping(
     station_serial: str | None,
     highlevel_configs: dict[int, dict[str, Any]],
 ) -> dict[str, dict]:
@@ -132,12 +132,12 @@ def _fallback_highlevel_connector_mapping(
             if str(appliance_type or "").upper() != "CAR_CHARGER":
                 continue
             connector_uuid = (
-                _safe_str(measurement.get("uuid"))
-                or _safe_str(measurement.get("smartDeviceUuid"))
-                or _safe_str(measurement.get("deviceUuid"))
-                or _safe_str(appliance_data.get("uuid"))
-                or _safe_str(appliance_data.get("smartDeviceUuid"))
-                or _safe_str(appliance_data.get("deviceUuid"))
+                safe_str(measurement.get("uuid"))
+                or safe_str(measurement.get("smartDeviceUuid"))
+                or safe_str(measurement.get("deviceUuid"))
+                or safe_str(appliance_data.get("uuid"))
+                or safe_str(appliance_data.get("smartDeviceUuid"))
+                or safe_str(appliance_data.get("deviceUuid"))
             )
             if not connector_uuid:
                 continue
@@ -153,7 +153,7 @@ def _fallback_highlevel_connector_mapping(
     return {station_serial: {"connectors": connectors}} if connectors else {}
 
 
-def _normalize_connector_mapping_station_keys(
+def normalize_connector_mapping_station_keys(
     mapping: dict[Any, dict], fallback_station_serial: str | None
 ) -> dict[str, dict]:
     """Move connector buckets with missing station keys under a usable station serial."""
@@ -164,7 +164,7 @@ def _normalize_connector_mapping_station_keys(
     for station_serial, bucket in mapping.items():
         connectors = bucket.get("connectors") or {}
         metadata = {key: value for key, value in bucket.items() if key != "connectors"}
-        key = _safe_str(station_serial)
+        key = safe_str(station_serial)
         if not key:
             orphan_connectors.update(connectors)
             for meta_key, meta_value in metadata.items():
@@ -176,7 +176,7 @@ def _normalize_connector_mapping_station_keys(
             target.setdefault(meta_key, meta_value)
 
     if orphan_connectors:
-        fallback_key = _safe_str(fallback_station_serial) or next(iter(normalized), None)
+        fallback_key = safe_str(fallback_station_serial) or next(iter(normalized), None)
         if fallback_key:
             target = normalized.setdefault(fallback_key, {"connectors": {}})
             target["connectors"].update(orphan_connectors)
@@ -186,7 +186,7 @@ def _normalize_connector_mapping_station_keys(
     return normalized
 
 
-def _station_devices_from_connector_mapping(mapping: dict[str, dict]) -> DashboardObjectList:
+def station_devices_from_connector_mapping(mapping: dict[str, dict]) -> DashboardObjectList:
     return [
         {
             "uuid": station_serial,
@@ -195,7 +195,7 @@ def _station_devices_from_connector_mapping(mapping: dict[str, dict]) -> Dashboa
             "type": "CHARGINGSTATION",
         }
         for station_serial, bucket in mapping.items()
-        if _safe_str(station_serial) and (bucket.get("connectors") or {})
+        if safe_str(station_serial) and (bucket.get("connectors") or {})
     ]
 
 
@@ -251,11 +251,11 @@ def _make_station_clients(
     station_metadata = station_metadata or {}
     for sd in station_devs:
         st_uuid = _device_uuid(sd)
-        st_id = _safe_str(sd.get("id")) or st_uuid
+        st_id = safe_str(sd.get("id")) or st_uuid
         if not st_uuid or not st_id:
             continue
 
-        st_serial = _station_serial(sd) or st_uuid
+        st_serial = device_station_serial(sd) or st_uuid
         metadata = station_metadata.get(st_serial, {})
         resolved_site_location_id = site_location_id if site_location_id is not None else sid
         st_client = SmappeeDeviceHandle(
@@ -287,7 +287,7 @@ def _make_station_clients(
     return stations
 
 
-def _make_station_clients_with_mapping_fallback(
+def make_station_clients_with_mapping_fallback(
     serial_str: str,
     sid: int,
     station_devs: list[dict],
@@ -299,7 +299,7 @@ def _make_station_clients_with_mapping_fallback(
     if stations or not has_connector_mapping:
         return stations
 
-    mapping_station_devs = _station_devices_from_connector_mapping(station_serial_to_connectors)
+    mapping_station_devs = station_devices_from_connector_mapping(station_serial_to_connectors)
     _LOGGER.debug(
         "Connector mapping at %s yielded no usable station smartdevices; "
         "using %d station serials from Dashboard mapping",
@@ -309,7 +309,7 @@ def _make_station_clients_with_mapping_fallback(
     return _make_station_clients(serial_str, sid, mapping_station_devs, **metadata)
 
 
-def _assign_connectors(
+def assign_connectors(
     stations: dict[str, SmappeeStationRuntime],
     car_devs: DashboardObjectList,
     mapping: dict[str, DashboardObject],
@@ -321,14 +321,14 @@ def _assign_connectors(
         if not st_serial or st_serial not in mapping:
             continue
         for cuuid, info in mapping[st_serial]["connectors"].items():
-            src = next((d for d in car_devs if _connector_uuid(d) == cuuid), None)
+            src = next((d for d in car_devs if device_connector_uuid(d) == cuuid), None)
             if src is None and isinstance(info, dict):
                 module_device = info.get("smart_device")
                 if isinstance(module_device, dict):
                     src = module_device
             if not src:
                 continue
-            cid = _safe_str(src.get("id")) or info.get("id") or cuuid
+            cid = safe_str(src.get("id")) or info.get("id") or cuuid
             site_location_id = bucket.site_location_id
             position = (
                 info.get("position") or src.get("connectorNumber") or src.get("position") or 1
@@ -351,7 +351,7 @@ def _assign_connectors(
             )
 
 
-def _fallback_assign(
+def fallback_assign(
     stations: dict[str, SmappeeStationRuntime],
     car_devs: DashboardObjectList,
     serial_str: str,
@@ -368,8 +368,8 @@ def _fallback_assign(
         "Could not map connectors to stations at %s; assigning all to first station", sid
     )
     for dev in car_devs:
-        cuuid = _connector_uuid(dev)
-        cid = _safe_str(dev.get("id")) or cuuid
+        cuuid = device_connector_uuid(dev)
+        cid = safe_str(dev.get("id")) or cuuid
         if not cuuid or not cid:
             continue
         site_location_id = first_bucket.site_location_id

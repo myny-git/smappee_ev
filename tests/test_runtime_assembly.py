@@ -6,8 +6,8 @@ import pytest
 
 from custom_components.smappee_ev.api.discovery import MqttChannelSpec, SmappeeLocationTopology
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_clients
-from custom_components.smappee_ev.mqtt_specs import _group_mqtt_specs_by_credentials
-from custom_components.smappee_ev.runtime_assembly import _prepare_site_topologies
+from custom_components.smappee_ev.mqtt_specs import group_mqtt_specs_by_credentials
+from custom_components.smappee_ev.runtime_assembly import prepare_site_topologies
 from tests.factories import make_station_runtime
 
 
@@ -53,7 +53,7 @@ def test_group_mqtt_specs_by_credentials_uses_topic_uuid_and_explicit_credential
         ),
     ]
 
-    groups = _group_mqtt_specs_by_credentials("fallback-uuid", specs)
+    groups = group_mqtt_specs_by_credentials("fallback-uuid", specs)
 
     assert len(groups) == 2
     grouped_by_credentials = {
@@ -209,10 +209,10 @@ async def test_prepare_site_topologies_builds_station_metadata_from_dashboard_an
             "custom_components.smappee_ev.runtime_assembly._create_coordinators", AsyncMock()
         ) as create_stations,
         patch(
-            "custom_components.smappee_ev.runtime_assembly._setup_mqtt", return_value=mqtt
+            "custom_components.smappee_ev.runtime_assembly.setup_mqtt", return_value=mqtt
         ) as setup_mqtt,
     ):
-        site, mqtt_result = await _prepare_site_topologies(
+        site, mqtt_result = await prepare_site_topologies(
             hass,
             [topology],
             update_interval=60,
@@ -264,7 +264,7 @@ async def test_prepare_site_topologies_skips_non_charger_topology_without_serial
         async_get_smart_devices=AsyncMock(return_value=[]),
     )
 
-    assert await _prepare_site_topologies(
+    assert await prepare_site_topologies(
         hass,
         [topology],
         update_interval=60,
@@ -304,20 +304,20 @@ async def test_prepare_site_topologies_mqtt_construction_failure_rolls_back_coor
 
     with (
         patch(
-            "custom_components.smappee_ev.runtime_assembly._dashboard_fetch_highlevel_configs",
+            "custom_components.smappee_ev.runtime_assembly.dashboard_fetch_highlevel_configs",
             AsyncMock(return_value={}),
         ),
         patch(
-            "custom_components.smappee_ev.runtime_assembly._dashboard_fetch_devices",
+            "custom_components.smappee_ev.runtime_assembly.dashboard_fetch_devices",
             AsyncMock(return_value=[{"serialNumber": "STATION-1", "type": "CHARGINGSTATION"}]),
         ),
         patch(
-            "custom_components.smappee_ev.runtime_assembly._fetch_dashboard_connector_mapping",
+            "custom_components.smappee_ev.runtime_assembly.fetch_dashboard_connector_mapping",
             AsyncMock(return_value={"STATION-1": {"connectors": {}}}),
         ),
         patch(
             "custom_components.smappee_ev.runtime_assembly."
-            "_make_station_clients_with_mapping_fallback",
+            "make_station_clients_with_mapping_fallback",
             return_value={"station-uuid": station},
         ),
         patch(
@@ -329,12 +329,12 @@ async def test_prepare_site_topologies_mqtt_construction_failure_rolls_back_coor
             AsyncMock(),
         ),
         patch(
-            "custom_components.smappee_ev.runtime_assembly._setup_mqtt",
+            "custom_components.smappee_ev.runtime_assembly.setup_mqtt",
             side_effect=RuntimeError("mqtt construction failed"),
         ),
         pytest.raises(RuntimeError, match="mqtt construction failed"),
     ):
-        await _prepare_site_topologies(hass, [topology], 60, "client")
+        await prepare_site_topologies(hass, [topology], 60, "client")
 
     station_coordinator.async_shutdown.assert_awaited_once()
     site_coordinator.async_shutdown.assert_awaited_once()

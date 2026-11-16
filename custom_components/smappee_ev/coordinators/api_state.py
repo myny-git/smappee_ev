@@ -22,7 +22,7 @@ from ..helpers import (
 )
 from ..models.state import ConnectorState, StationState
 from .base import CoordinatorMixin
-from .power import _to_int
+from .power import to_int
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -178,9 +178,6 @@ class StationApiMixin(CoordinatorMixin):
             selected_percentage_limit=rest_state.selected_percentage_limit
             if rest_state.selected_percentage_limit is not None
             else prev.selected_percentage_limit,
-            selected_mode=rest_state.selected_mode
-            if rest_state.selected_mode is not None
-            else prev.selected_mode,
             min_current=min_current,
             max_current=max_current,
             min_surpluspct=rest_state.min_surpluspct
@@ -275,7 +272,7 @@ class StationApiMixin(CoordinatorMixin):
                         min_surpluspct = int(val)
             elif name == "etc.smart.device.type.car.charger.config.max.gridassistanceamps":
                 with suppress(TypeError, ValueError):
-                    support_grid = _to_int(val)
+                    support_grid = to_int(val)
 
         return ConnectorRestSnapshot(
             state=ConnectorState(

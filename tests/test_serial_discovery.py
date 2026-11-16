@@ -49,7 +49,7 @@ async def test_serial_builds_existing_topology(client, parent):
     if not parent:
         child.pop("parentId")
     client.async_get_service_location_details.side_effect = [child, PARENT]
-    result = await discovery._dashboard_discover_topologies_by_serial(client, "BASE123")
+    result = await discovery.dashboard_discover_topologies_by_serial(client, "BASE123")
     assert len(result) == 1
     topology = result[0]
     assert topology.site_location_id == (10 if parent else 20)
@@ -74,7 +74,7 @@ async def test_serial_builds_existing_topology(client, parent):
 )
 async def test_invalid_station(client, station):
     client.async_get_charging_station_details.return_value = station
-    assert await discovery._dashboard_discover_topologies_by_serial(client, "bad") == []
+    assert await discovery.dashboard_discover_topologies_by_serial(client, "bad") == []
     client.async_get_service_location_details.assert_not_awaited()
 
 
@@ -83,13 +83,13 @@ async def test_invalid_station(client, station):
 )
 async def test_serial_resource_not_found(client, lookup):
     getattr(client, lookup).side_effect = SmappeeNotFoundError()
-    assert await discovery._dashboard_discover_topologies_by_serial(client, "bad") == []
+    assert await discovery.dashboard_discover_topologies_by_serial(client, "bad") == []
 
 
 async def test_invalid_parent_id(client):
     client.async_get_service_location_details.side_effect = [{**CHILD, "parentId": "bad"}]
     with pytest.raises(ValueError, match="invalid parent id"):
-        await discovery._dashboard_discover_topologies_by_serial(client, "BASE123")
+        await discovery.dashboard_discover_topologies_by_serial(client, "BASE123")
 
 
 async def test_malformed_automatic_response_is_not_empty(client):
@@ -97,12 +97,12 @@ async def test_malformed_automatic_response_is_not_empty(client):
     client.password = "pass"  # noqa: S105 - fake test password
     client.async_get_service_locations_full_details.return_value = None
     with pytest.raises(ValueError, match="no valid list"):
-        await discovery._dashboard_discover_topologies(client)
+        await discovery.dashboard_discover_topologies(client)
 
 
 async def test_blank_serial_does_not_call_api(flow):
     flow._pending_data = dict(DATA)
-    with patch.object(flow_module, "_dashboard_discover_topologies_by_serial") as fallback:
+    with patch.object(flow_module, "dashboard_discover_topologies_by_serial") as fallback:
         result = await flow.async_step_station_serial({CONF_STATION_SERIAL: "  "})
     assert result["errors"] == {"base": "invalid_station_serial"}
     fallback.assert_not_called()
@@ -114,7 +114,7 @@ async def test_blank_serial_does_not_call_api(flow):
 )
 async def test_missing_or_unusable_child(client, child):
     client.async_get_service_location_details.side_effect = [child]
-    assert await discovery._dashboard_discover_topologies_by_serial(client, "BASE123") == []
+    assert await discovery.dashboard_discover_topologies_by_serial(client, "BASE123") == []
 
 
 @pytest.mark.parametrize(
@@ -124,13 +124,13 @@ async def test_missing_or_unusable_child(client, child):
 async def test_known_parent_must_resolve(client, parent):
     client.async_get_service_location_details.side_effect = [CHILD, parent]
     with pytest.raises((ValueError, TimeoutError, SmappeeServerError, SmappeeMaintenanceError)):
-        await discovery._dashboard_discover_topologies_by_serial(client, "BASE123")
+        await discovery.dashboard_discover_topologies_by_serial(client, "BASE123")
 
 
 @pytest.mark.parametrize("serial", ["BASE456", "", None])
 async def test_station_details_serial_must_match(client, serial):
     client.async_get_charging_station_details.return_value["serialNumber"] = serial
-    assert await discovery._dashboard_discover_topologies_by_serial(client, "BASE123") == []
+    assert await discovery.dashboard_discover_topologies_by_serial(client, "BASE123") == []
     client.async_get_service_location_details.assert_not_awaited()
 
 
@@ -138,20 +138,20 @@ async def test_topology_serial_must_match(client):
     client.async_get_charging_station_details.return_value["serialNumber"] = "BASE123"
     child = {**CHILD, "chargingStation": {"serialNumber": "BASE456"}}
     client.async_get_service_location_details.side_effect = [child, PARENT]
-    assert await discovery._dashboard_discover_topologies_by_serial(client, "BASE123") == []
+    assert await discovery.dashboard_discover_topologies_by_serial(client, "BASE123") == []
 
 
 async def test_serial_comparison_trims_whitespace(client):
     client.async_get_charging_station_details.return_value["serialNumber"] = " BASE123 "
     child = {**CHILD, "chargingStation": {"serialNumber": " BASE123 "}}
     client.async_get_service_location_details.side_effect = [child, PARENT]
-    result = await discovery._dashboard_discover_topologies_by_serial(client, " BASE123 ")
+    result = await discovery.dashboard_discover_topologies_by_serial(client, " BASE123 ")
     assert result[0].charging_station_serial == "BASE123"
     client.async_get_charging_station_details.assert_awaited_once_with("BASE123")
 
 
 async def test_empty_bootstrap_serial_does_not_call_api(client):
-    assert await discovery._dashboard_discover_topologies_by_serial(client, "  ") == []
+    assert await discovery.dashboard_discover_topologies_by_serial(client, "  ") == []
     client.async_get_charging_station_details.assert_not_awaited()
 
 
@@ -200,16 +200,16 @@ async def test_direct_location_client_propagates_error():
 )
 async def test_runtime_fallback(client, automatic, serial, used):
     with (
-        patch.object(discovery, "_dashboard_discover_topologies", return_value=automatic),
+        patch.object(discovery, "dashboard_discover_topologies", return_value=automatic),
         patch.object(
-            discovery, "_dashboard_discover_topologies_by_serial", return_value=[object()]
+            discovery, "dashboard_discover_topologies_by_serial", return_value=[object()]
         ) as fallback,
     ):
         if not automatic and not serial:
             with pytest.raises(ConfigEntryNotReady):
-                await discovery._load_dashboard_topologies(client, serial)
+                await discovery.load_dashboard_topologies(client, serial)
         else:
-            assert await discovery._load_dashboard_topologies(client, serial)
+            assert await discovery.load_dashboard_topologies(client, serial)
     assert fallback.called == used
 
 
@@ -219,8 +219,8 @@ async def test_runtime_fallback(client, automatic, serial, used):
 )
 async def test_runtime_error_never_uses_serial(client, error):
     with (
-        patch.object(discovery, "_dashboard_discover_topologies", side_effect=error),
-        patch.object(discovery, "_dashboard_discover_topologies_by_serial") as fallback,
+        patch.object(discovery, "dashboard_discover_topologies", side_effect=error),
+        patch.object(discovery, "dashboard_discover_topologies_by_serial") as fallback,
         pytest.raises(
             (
                 ConfigEntryNotReady,
@@ -230,7 +230,7 @@ async def test_runtime_error_never_uses_serial(client, error):
             )
         ),
     ):
-        await discovery._load_dashboard_topologies(client, "BASE123")
+        await discovery.load_dashboard_topologies(client, "BASE123")
     fallback.assert_not_called()
 
 
@@ -247,11 +247,11 @@ def flow(hass):
 
 
 async def test_empty_discovery_prompts_and_validates_serial(flow):
-    with patch.object(flow_module, "_dashboard_discover_topologies", return_value=[]):
+    with patch.object(flow_module, "dashboard_discover_topologies", return_value=[]):
         result = await flow.async_step_user(DATA)
     assert result["step_id"] == "station_serial"
     with patch.object(
-        flow_module, "_dashboard_discover_topologies_by_serial", side_effect=[[], [object()]]
+        flow_module, "dashboard_discover_topologies_by_serial", side_effect=[[], [object()]]
     ) as fallback:
         result = await flow.async_step_station_serial({CONF_STATION_SERIAL: "bad"})
         assert result["errors"] == {"base": "invalid_station_serial"}
@@ -272,7 +272,7 @@ async def test_empty_discovery_prompts_and_validates_serial(flow):
     ],
 )
 async def test_flow_discovery_errors_do_not_prompt(flow, error, expected):
-    with patch.object(flow_module, "_dashboard_discover_topologies", side_effect=error):
+    with patch.object(flow_module, "dashboard_discover_topologies", side_effect=error):
         result = await flow.async_step_user(DATA)
     assert result["step_id"] == "user"
     assert result["errors"] == {"base": expected}
@@ -287,10 +287,10 @@ async def test_reconfigure_reuses_or_replaces_serial(flow, stored, valid):
     entry.add_to_hass(flow.hass)
     flow.context = {"source": "reconfigure", "entry_id": entry.entry_id}
     with (
-        patch.object(flow_module, "_dashboard_discover_topologies", return_value=[]),
+        patch.object(flow_module, "dashboard_discover_topologies", return_value=[]),
         patch.object(
             flow_module,
-            "_dashboard_discover_topologies_by_serial",
+            "dashboard_discover_topologies_by_serial",
             return_value=[object()] if valid else [],
         ) as fallback,
         patch.object(flow.hass.config_entries, "async_schedule_reload") as reload,
@@ -315,8 +315,8 @@ async def test_reauth_preserves_serial_without_discovery(flow):
     entry.add_to_hass(flow.hass)
     flow.context = {"source": "reauth", "entry_id": entry.entry_id}
     with (
-        patch.object(flow_module, "_dashboard_discover_topologies") as automatic,
-        patch.object(flow_module, "_dashboard_discover_topologies_by_serial") as fallback,
+        patch.object(flow_module, "dashboard_discover_topologies") as automatic,
+        patch.object(flow_module, "dashboard_discover_topologies_by_serial") as fallback,
         patch.object(flow.hass.config_entries, "async_schedule_reload"),
     ):
         result = await flow.async_step_reauth_confirm(DATA)

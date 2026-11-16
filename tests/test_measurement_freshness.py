@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
-from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
+from custom_components.smappee_ev.mqtt_setup import setup_mqtt
 from custom_components.smappee_ev.sensor import (
     ConnectorCurrentASensor,
     ConnectorPowerSensor,
@@ -44,7 +44,7 @@ async def test_only_valid_power_renews_power_freshness(hass, online, monkeypatch
             "cars": {"connector-1": group} if scope == "connector" else {},
         }
     }
-    mqtt = _setup_mqtt(
+    mqtt = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",
@@ -91,7 +91,7 @@ async def test_mqtt_notifies_once_for_changes_and_freshness_recovery(
     site = online.sites[1]
     bucket = site.stations["station-1"]
     coord = site.site_coordinator if scope == "site" else bucket.station_coordinator
-    mqtt = _setup_mqtt(
+    mqtt = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",
@@ -147,7 +147,7 @@ async def test_empty_charger_message_does_not_refresh_state(hass, online, payloa
     coord = bucket.station_coordinator
     coord.data.connectors["connector-1"].session_state = "Started"
     topic = "servicelocation/site-uuid/etc/carcharger/acchargingcontroller/v1/devices/connector-1/property/chargingstate"
-    mqtt = _setup_mqtt(
+    mqtt = setup_mqtt(
         hass,
         suuid="site-uuid",
         serial_str="gateway",

@@ -22,10 +22,10 @@ from custom_components.smappee_ev.api.errors import (
     SmappeeServerError,
 )
 from custom_components.smappee_ev.dashboard_discovery import (
-    _dashboard_fetch_devices,
-    _load_dashboard_topologies,
+    dashboard_fetch_devices,
+    load_dashboard_topologies,
 )
-from custom_components.smappee_ev.mqtt_specs import _group_mqtt_specs_by_credentials
+from custom_components.smappee_ev.mqtt_specs import group_mqtt_specs_by_credentials
 
 DISCOVERY_LOGGER = "custom_components.smappee_ev.dashboard_discovery"
 
@@ -73,7 +73,7 @@ async def test_setup_loaders_propagate_auth_and_outage_errors_unchanged(error):
     dashboard = _dashboard(async_get_service_locations_full_details=AsyncMock(side_effect=error))
 
     with pytest.raises(type(error)) as caught:
-        await _load_dashboard_topologies(dashboard)
+        await load_dashboard_topologies(dashboard)
 
     assert caught.value is error
     assert not isinstance(caught.value, ConfigEntryNotReady)
@@ -91,7 +91,7 @@ async def test_setup_loaders_retry_when_account_has_nothing_to_set_up():
     dashboard = _dashboard(async_get_service_locations_full_details=AsyncMock(return_value=[]))
 
     with pytest.raises(ConfigEntryNotReady) as caught:
-        await _load_dashboard_topologies(dashboard)
+        await load_dashboard_topologies(dashboard)
 
     assert caught.value.translation_key == "no_charging_stations"
 
@@ -102,7 +102,7 @@ async def test_topology_loader_retries_when_dashboard_is_not_configured():
     Prevents: an entry without (yet) usable credentials loading with no stations.
     """
     with pytest.raises(ConfigEntryNotReady) as caught:
-        await _load_dashboard_topologies(_unconfigured_dashboard())
+        await load_dashboard_topologies(_unconfigured_dashboard())
 
     assert caught.value.translation_key == "dashboard_not_configured"
 
@@ -115,7 +115,7 @@ async def test_topology_loader_treats_missing_location_list_as_retryable_failure
     dashboard = _dashboard(async_get_service_locations_full_details=AsyncMock(return_value=None))
 
     with pytest.raises(ConfigEntryNotReady) as caught:
-        await _load_dashboard_topologies(dashboard)
+        await load_dashboard_topologies(dashboard)
 
     assert caught.value.translation_key == "cannot_load_topology"
     assert isinstance(caught.value.__cause__, ValueError)
@@ -138,7 +138,7 @@ async def test_discovery_logs_warning_and_retries_on_dashboard_error(caplog, err
         caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER),
         pytest.raises(ConfigEntryNotReady) as caught,
     ):
-        await _load_dashboard_topologies(dashboard)
+        await load_dashboard_topologies(dashboard)
 
     assert caught.value.translation_key == "cannot_load_topology"
     assert caught.value.translation_placeholders == {"error": "dashboard unreachable"}
@@ -168,7 +168,7 @@ async def test_smart_device_discovery_treats_none_answer_as_failure():
     dashboard = _dashboard(async_get_smart_devices=AsyncMock(return_value=None))
 
     with pytest.raises(RuntimeError, match="returned no data"):
-        await _dashboard_fetch_devices(dashboard, 42)
+        await dashboard_fetch_devices(dashboard, 42)
 
 
 async def test_smart_device_discovery_keeps_genuinely_empty_list():
@@ -179,7 +179,7 @@ async def test_smart_device_discovery_keeps_genuinely_empty_list():
     """
     dashboard = _dashboard(async_get_smart_devices=AsyncMock(return_value=[]))
 
-    assert await _dashboard_fetch_devices(dashboard, 42) == []
+    assert await dashboard_fetch_devices(dashboard, 42) == []
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +211,7 @@ def test_mqtt_specs_without_topic_uuid_route_to_site_uuid(topic):
     logging in as "null" (or with no credentials) and subscribing to a
     service location that does not exist, so live values never arrive.
     """
-    groups = _group_mqtt_specs_by_credentials("site-uuid", [_spec(topic, sid=99)])
+    groups = group_mqtt_specs_by_credentials("site-uuid", [_spec(topic, sid=99)])
 
     assert len(groups) == 1
     specs, service_location_uuids, ids_by_uuid = groups[0]
@@ -231,7 +231,7 @@ def test_mqtt_specs_with_and_without_topic_uuid_share_site_credentials():
         _spec("servicelocation/null/current", sid=99),
     ]
 
-    groups = _group_mqtt_specs_by_credentials("site-uuid", specs)
+    groups = group_mqtt_specs_by_credentials("site-uuid", specs)
 
     assert len(groups) == 1
     assert [spec.topic for spec in groups[0][0]] == [spec.topic for spec in specs]

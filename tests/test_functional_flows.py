@@ -19,8 +19,8 @@ from custom_components.smappee_ev.const import (
 from custom_components.smappee_ev.coordinators.freshness import MqttApplyResult
 from custom_components.smappee_ev.models.runtime_data import RuntimeData
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, SiteData
-from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
-from custom_components.smappee_ev.runtime_lifecycle import _async_shutdown_runtime_resources
+from custom_components.smappee_ev.mqtt_setup import setup_mqtt
+from custom_components.smappee_ev.runtime_lifecycle import async_shutdown_runtime_resources
 from custom_components.smappee_ev.services import async_setup_services
 from tests.factories import (
     configure_loaded_entries,
@@ -432,11 +432,11 @@ async def test_failed_setup_rolls_back_platforms_and_runtime(hass, failing_step,
     async def shutdown(runtime):
         if rollback_error == "shutdown":
             raise RuntimeError("shutdown failed")
-        await _async_shutdown_runtime_resources(runtime)
+        await async_shutdown_runtime_resources(runtime)
 
     with (
         patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
-        patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
+        patch("custom_components.smappee_ev.create_dashboard_client", return_value=dashboard),
         patch(
             "custom_components.smappee_ev.runtime_assembly.SmappeeSiteCoordinator",
             _FakeSiteCoordinator,
@@ -446,14 +446,14 @@ async def test_failed_setup_rolls_back_platforms_and_runtime(hass, failing_step,
             _FakeStationCoordinator,
         ),
         patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
-        patch("custom_components.smappee_ev._register_runtime_devices"),
+        patch("custom_components.smappee_ev.register_runtime_devices"),
         patch.object(hass.config_entries, "async_forward_entry_setups", forward),
         patch.object(hass.config_entries, "async_unload_platforms", unload),
         patch(
             "custom_components.smappee_ev._start_runtime_background_work",
             side_effect=setup_error,
         ),
-        patch("custom_components.smappee_ev._async_shutdown_runtime_resources", shutdown),
+        patch("custom_components.smappee_ev.async_shutdown_runtime_resources", shutdown),
         pytest.raises(RuntimeError, match="setup step failed"),
     ):
         await async_setup_entry(hass, entry)
@@ -508,7 +508,7 @@ async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass, serial_f
 
     with (
         patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
-        patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
+        patch("custom_components.smappee_ev.create_dashboard_client", return_value=dashboard),
         patch(
             "custom_components.smappee_ev.runtime_assembly.SmappeeSiteCoordinator",
             _FakeSiteCoordinator,
@@ -518,7 +518,7 @@ async def test_setup_entry_builds_runtime_from_dashboard_payloads(hass, serial_f
             _FakeStationCoordinator,
         ),
         patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
-        patch("custom_components.smappee_ev._register_runtime_devices"),
+        patch("custom_components.smappee_ev.register_runtime_devices"),
         patch.object(hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
     ):
         assert await async_setup_entry(hass, entry) is True
@@ -591,7 +591,7 @@ async def test_setup_entry_merges_multi_location_before_coordinators_and_mqtt(ha
 
     with (
         patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
-        patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
+        patch("custom_components.smappee_ev.create_dashboard_client", return_value=dashboard),
         patch(
             "custom_components.smappee_ev.runtime_assembly.SmappeeSiteCoordinator",
             _FakeSiteCoordinator,
@@ -601,7 +601,7 @@ async def test_setup_entry_merges_multi_location_before_coordinators_and_mqtt(ha
             _FakeStationCoordinator,
         ),
         patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt),
-        patch("custom_components.smappee_ev._register_runtime_devices"),
+        patch("custom_components.smappee_ev.register_runtime_devices"),
         patch.object(hass.config_entries, "async_forward_entry_setups", new_callable=AsyncMock),
     ):
         assert await async_setup_entry(hass, entry) is True
@@ -690,7 +690,7 @@ async def test_setup_entry_dashboard_auth_failure_propagates_reauth(hass):
 
     with (
         patch("custom_components.smappee_ev.async_get_clientsession", return_value=MagicMock()),
-        patch("custom_components.smappee_ev._create_dashboard_client", return_value=dashboard),
+        patch("custom_components.smappee_ev.create_dashboard_client", return_value=dashboard),
         pytest.raises(ConfigEntryAuthFailed, match="Dashboard refresh token rejected"),
     ):
         await async_setup_entry(hass, entry)
@@ -787,7 +787,7 @@ def test_mqtt_routes_deliver_properties_to_site_and_station_coordinators(hass):
     ]
 
     with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt", _FakeMqtt):
-        mqtt_clients = _setup_mqtt(
+        mqtt_clients = setup_mqtt(
             hass,
             "site-uuid",
             "GATEWAY123",

@@ -10,7 +10,7 @@ from custom_components.smappee_ev.api.discovery import MqttChannelSpec
 from custom_components.smappee_ev.api.mqtt_gateway import SmappeeMqtt
 from custom_components.smappee_ev.const import UPDATE_INTERVAL_DEFAULT
 from custom_components.smappee_ev.coordinator import SmappeeCoordinator
-from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
+from custom_components.smappee_ev.mqtt_setup import setup_mqtt
 from custom_components.smappee_ev.runtime_assembly import _create_coordinators
 from tests.factories import make_connector_runtime, make_station_runtime
 
@@ -188,8 +188,8 @@ class TestMqttSetup:
             # Set the return value of the MQTT class
             mock_mqtt_class.return_value = mock_mqtt
 
-            # Call _setup_mqtt with valid UUID
-            result = _setup_mqtt(
+            # Call setup_mqtt with valid UUID
+            result = setup_mqtt(
                 hass,
                 "test-service-uuid",
                 "STATION-SERIAL",
@@ -246,8 +246,8 @@ class TestMqttSetup:
 
         # Mock SmappeeMqtt
         with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
-            # Call _setup_mqtt with no UUID
-            result = _setup_mqtt(
+            # Call setup_mqtt with no UUID
+            result = setup_mqtt(
                 hass,
                 None,  # No UUID
                 "STATION-SERIAL",
@@ -285,7 +285,7 @@ class TestMqttSetup:
             mock_mqtt.start = AsyncMock()
             mock_mqtt_class.return_value = mock_mqtt
 
-            result = _setup_mqtt(
+            result = setup_mqtt(
                 hass,
                 "fallback-site",
                 "STATION-SERIAL",
@@ -332,7 +332,7 @@ class TestMqttSetup:
             mqtt_b.start = AsyncMock()
             mock_mqtt_class.side_effect = [mqtt_a, mqtt_b]
 
-            result = _setup_mqtt(
+            result = setup_mqtt(
                 hass,
                 "fallback-site",
                 "STATION-SERIAL",
@@ -367,8 +367,8 @@ class TestMqttSetup:
 
         # Mock SmappeeMqtt to capture the callback
         with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
-            # Call _setup_mqtt to get the callback
-            _setup_mqtt(
+            # Call setup_mqtt to get the callback
+            setup_mqtt(
                 hass,
                 "test-service-uuid",
                 "STATION-SERIAL",
@@ -413,8 +413,8 @@ class TestMqttSetup:
 
         # Mock SmappeeMqtt to capture the callback
         with patch("custom_components.smappee_ev.mqtt_setup.SmappeeMqtt") as mock_mqtt_class:
-            # Call _setup_mqtt to get the callback
-            _setup_mqtt(
+            # Call setup_mqtt to get the callback
+            setup_mqtt(
                 hass,
                 "test-service-uuid",
                 "STATION-SERIAL",
@@ -466,7 +466,7 @@ class TestMqttSetup:
             mock_mqtt.start = AsyncMock()
             mock_mqtt_class.return_value = mock_mqtt
 
-            _setup_mqtt(
+            setup_mqtt(
                 hass,
                 "test-service-uuid",
                 "STATION-SERIAL",

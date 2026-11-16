@@ -16,7 +16,7 @@ from custom_components.smappee_ev.coordinators import storage as storage_module
 from custom_components.smappee_ev.coordinators.storage import StorageMeasurements
 from custom_components.smappee_ev.models.state import SiteData, SiteState
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_routes
-from custom_components.smappee_ev.mqtt_specs import _split_highlevel_configs_by_scope
+from custom_components.smappee_ev.mqtt_specs import split_highlevel_configs_by_scope
 from tests.factories import make_config_entry, make_runtime_data, make_site_runtime
 from tests.helpers import site_sensor
 
@@ -79,7 +79,7 @@ async def test_storage_discovery_routes_only_to_site(hass):
     cfg = storage_config()
     specs = parse_mqtt_channel_specs_from_highlevel(1, cfg)
     assert {spec.role for spec in specs} == {"storage"}
-    assert _split_highlevel_configs_by_scope({1: cfg}) == ({1: cfg}, {})
+    assert split_highlevel_configs_by_scope({1: cfg}) == ({1: cfg}, {})
     coord = coordinator(hass, cfg)
     station = MagicMock()
     routes = _build_mqtt_routes(specs, coord, {"station": station})

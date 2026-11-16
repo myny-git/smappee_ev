@@ -22,9 +22,9 @@ from custom_components.smappee_ev.api.errors import (
 )
 from custom_components.smappee_ev.const import DOMAIN
 from custom_components.smappee_ev.dashboard_discovery import (
-    _dashboard_fetch_highlevel_configs,
-    _fetch_dashboard_connector_mapping,
-    _load_dashboard_topologies,
+    dashboard_fetch_highlevel_configs,
+    fetch_dashboard_connector_mapping,
+    load_dashboard_topologies,
 )
 from tests.factories import make_site_runtime
 from tests.test_dashboard_client import _Response, _Session
@@ -145,11 +145,11 @@ async def test_optional_discovery_does_not_swallow_outage(error):
     ):
         setattr(client, method, AsyncMock(side_effect=error("outage")))
     with pytest.raises(error):
-        await _dashboard_fetch_highlevel_configs(client, [100])
+        await dashboard_fetch_highlevel_configs(client, [100])
     with pytest.raises(error):
-        await _fetch_dashboard_connector_mapping(client, [{"serialNumber": "station"}])
+        await fetch_dashboard_connector_mapping(client, [{"serialNumber": "station"}])
     with pytest.raises(error):
-        await _load_dashboard_topologies(client)
+        await load_dashboard_topologies(client)
 
 
 async def test_setup_retry_reason_survives_client_recreation_and_recovers(
@@ -185,10 +185,10 @@ async def test_setup_retry_reason_survives_client_recreation_and_recovers(
             return_value=[MagicMock(site_location_id=100)],
         ),
         patch(
-            "custom_components.smappee_ev._prepare_site_topologies",
+            "custom_components.smappee_ev.prepare_site_topologies",
             new=AsyncMock(return_value=(make_site_runtime(site_location_id=100), None)),
         ),
-        patch("custom_components.smappee_ev._register_runtime_devices") as register_devices,
+        patch("custom_components.smappee_ev.register_runtime_devices") as register_devices,
         patch.object(hass.config_entries, "async_forward_entry_setups", new=AsyncMock()) as forward,
         patch.object(entry, "async_start_reauth_if_available") as reauth,
     ):
@@ -231,15 +231,15 @@ async def test_setup_converts_maintenance_during_site_preparation(hass):
     entry.add_to_hass(hass)
     with (
         patch(
-            "custom_components.smappee_ev._load_dashboard_topologies",
+            "custom_components.smappee_ev.load_dashboard_topologies",
             new=AsyncMock(return_value=[SimpleNamespace(site_location_id=100)]),
         ),
         patch(
-            "custom_components.smappee_ev._prepare_site_topologies",
+            "custom_components.smappee_ev.prepare_site_topologies",
             new=AsyncMock(side_effect=SmappeeMaintenanceError("maintenance")),
         ),
         patch(
-            "custom_components.smappee_ev._async_shutdown_runtime_resources", new=AsyncMock()
+            "custom_components.smappee_ev.async_shutdown_runtime_resources", new=AsyncMock()
         ) as cleanup,
     ):
         with pytest.raises(ConfigEntryNotReady) as caught:

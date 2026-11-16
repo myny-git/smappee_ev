@@ -18,7 +18,7 @@ from .coordinator import SmappeeSiteCoordinator, SmappeeStationCoordinator
 from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import MqttRuntimeValue, SmappeeStationRuntime
 from .models.state import MqttPayload
-from .mqtt_specs import _group_mqtt_specs_by_credentials
+from .mqtt_specs import group_mqtt_specs_by_credentials
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -267,7 +267,7 @@ def _build_mqtt_clients(
             )
         ]
 
-    spec_groups = _group_mqtt_specs_by_credentials(suuid, mqtt_specs)
+    spec_groups = group_mqtt_specs_by_credentials(suuid, mqtt_specs)
     mqtt_clients: list[SmappeeMqtt] = []
     for index, (specs, service_location_uuids, service_location_ids_by_uuid) in enumerate(
         spec_groups, start=1
@@ -366,7 +366,7 @@ def _handle_mqtt_connection_change(
                 schedule_refresh(coord)
 
 
-def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
+def setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
     hass: HomeAssistant,
     suuid: str | None,
     serial_str: str,
@@ -558,26 +558,26 @@ def _setup_mqtt(  # noqa: C901 - setup keeps callback state in one closure
             object.__setattr__(coord, "update_interval", timedelta(seconds=update_interval))
     mqtt_runtime = _mqtt_runtime_value(mqtt_clients)
     if start_clients:
-        _start_mqtt_clients(hass, mqtt_runtime)
+        start_mqtt_clients(hass, mqtt_runtime)
 
     _log_mqtt_subscriptions(sid, suuid, mqtt_specs)
     return mqtt_runtime
 
 
-def _start_mqtt_clients(hass: HomeAssistant, value: MqttRuntimeValue) -> None:
+def start_mqtt_clients(hass: HomeAssistant, value: MqttRuntimeValue) -> None:
     """Start prepared MQTT clients after topology commit."""
-    for mqtt_client in _iter_mqtt_clients(value):
+    for mqtt_client in iter_mqtt_clients(value):
         diagnostics = getattr(mqtt_client, "_routing_diagnostics", None)
         if isinstance(diagnostics, MqttRoutingDiagnostics):
             diagnostics.started = True
         mqtt_client.track_start_task(hass.async_create_task(mqtt_client.start()))
 
 
-def _mqtt_routing_diagnostics(value: MqttRuntimeValue) -> list[MqttRoutingDiagnostics]:
+def mqtt_routing_diagnostics(value: MqttRuntimeValue) -> list[MqttRoutingDiagnostics]:
     """Return distinct routing diagnostic states attached to MQTT clients."""
     states: list[MqttRoutingDiagnostics] = []
     seen: set[int] = set()
-    for mqtt in _iter_mqtt_clients(value):
+    for mqtt in iter_mqtt_clients(value):
         state = getattr(mqtt, "_routing_diagnostics", None)
         if not isinstance(state, MqttRoutingDiagnostics) or id(state) in seen:
             continue
@@ -586,7 +586,7 @@ def _mqtt_routing_diagnostics(value: MqttRuntimeValue) -> list[MqttRoutingDiagno
     return states
 
 
-def _iter_mqtt_clients(value: MqttRuntimeValue) -> list[SmappeeMqtt]:
+def iter_mqtt_clients(value: MqttRuntimeValue) -> list[SmappeeMqtt]:
     """Return MQTT clients from single-client or grouped-client runtime values."""
     if isinstance(value, list):
         return list(value)
@@ -595,4 +595,4 @@ def _iter_mqtt_clients(value: MqttRuntimeValue) -> list[SmappeeMqtt]:
 
 def _mqtt_client_count(mqtt_by_site: dict[int, MqttRuntimeValue]) -> int:
     """Return the total number of MQTT clients across all sites."""
-    return sum(len(_iter_mqtt_clients(mqtt)) for mqtt in mqtt_by_site.values())
+    return sum(len(iter_mqtt_clients(mqtt)) for mqtt in mqtt_by_site.values())

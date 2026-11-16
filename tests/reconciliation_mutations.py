@@ -69,7 +69,7 @@ _MUTATIONS = {
     "reconnect_followup": (
         "mqtt_setup",
         None,
-        "_setup_mqtt",
+        "setup_mqtt",
         (
             (
                 "for _ in range(MQTT_RESYNC_MAX_PASSES):",

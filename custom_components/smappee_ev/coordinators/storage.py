@@ -9,7 +9,7 @@ from math import isfinite
 from ..api.discovery import MqttChannelSpec, parse_mqtt_channel_specs_from_highlevel
 from ..const import MQTT_REAL_POWER_FRESHNESS_TIMEOUT
 from ..models.state import HighLevelConfigMap, MqttPayload, SiteState
-from .power import _MQTT_PATH_RE, _mqtt_channel_topic
+from .power import MQTT_PATH_RE, mqtt_channel_topic
 
 
 @dataclass(frozen=True)
@@ -24,13 +24,13 @@ class StoragePath:
 
 def _storage_paths(channel: object, fields: set[str]) -> list[StoragePath]:
     """Read usable paths without assuming fixed array positions or directions."""
-    if not isinstance(channel, dict) or not (topic := _mqtt_channel_topic(channel)):
+    if not isinstance(channel, dict) or not (topic := mqtt_channel_topic(channel)):
         return []
     paths = []
     for aspect in channel.get("aspectPaths") or []:
         if not isinstance(aspect, dict):
             continue
-        match = _MQTT_PATH_RE.fullmatch(str(aspect.get("path") or ""))
+        match = MQTT_PATH_RE.fullmatch(str(aspect.get("path") or ""))
         if not match or match[1] not in fields:
             continue
         # Power may omit its identity multiplier. Energy direction must be

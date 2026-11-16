@@ -18,12 +18,12 @@ from custom_components.smappee_ev.api.discovery import SmappeeLocationTopology
 from custom_components.smappee_ev.runtime_assembly import (
     _deduplicate_stations,
     _prepare_control_stations,
-    _prepare_site_topologies,
+    prepare_site_topologies,
 )
 from custom_components.smappee_ev.topology import (
-    _connector_uuid,
-    _fallback_assign,
-    _fallback_highlevel_connector_mapping,
+    device_connector_uuid,
+    fallback_assign,
+    fallback_highlevel_connector_mapping,
 )
 from tests.factories import make_connector_runtime, make_led_runtime, make_station_runtime
 
@@ -127,9 +127,9 @@ async def test_station_advertised_by_two_control_locations_becomes_one_device():
     with (
         patch(f"{_ASSEMBLY}._create_site_coordinator", AsyncMock(return_value=MagicMock())),
         patch(f"{_ASSEMBLY}._create_coordinators", AsyncMock()),
-        patch(f"{_ASSEMBLY}._setup_mqtt", return_value=MagicMock()),
+        patch(f"{_ASSEMBLY}.setup_mqtt", return_value=MagicMock()),
     ):
-        site, _mqtt = await _prepare_site_topologies(
+        site, _mqtt = await prepare_site_topologies(
             MagicMock(), [parent, direct], 60, "client", dashboard_client=dashboard
         )
 
@@ -291,7 +291,7 @@ async def test_topologies_from_different_sites_are_refused():
     merged under a single site device.
     """
     with pytest.raises(ValueError, match="different physical sites"):
-        await _prepare_site_topologies(
+        await prepare_site_topologies(
             MagicMock(),
             [_topology(200, site_location_id=100), _topology(300, site_location_id=101)],
             60,
@@ -302,7 +302,7 @@ async def test_topologies_from_different_sites_are_refused():
 @pytest.mark.asyncio
 async def test_empty_topology_list_prepares_nothing():
     """A site without control topologies yields no runtime instead of crashing setup."""
-    assert await _prepare_site_topologies(MagicMock(), [], 60, "client") == (None, None)
+    assert await prepare_site_topologies(MagicMock(), [], 60, "client") == (None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +431,7 @@ async def test_unassignable_connectors_across_several_stations_are_not_guessed(c
 
     with (
         patch(
-            f"{_ASSEMBLY}._fetch_dashboard_connector_mapping",
+            f"{_ASSEMBLY}.fetch_dashboard_connector_mapping",
             AsyncMock(return_value=mapping),
         ),
         caplog.at_level(logging.WARNING, logger=_ASSEMBLY),
@@ -469,7 +469,7 @@ def test_connector_position_prefers_explicit_field_over_name(fields, expected_po
     wrong current commands) when the user renamed the measurement, and keeps a
     usable position when the explicit field is not numeric.
     """
-    mapping = _fallback_highlevel_connector_mapping(
+    mapping = fallback_highlevel_connector_mapping(
         "ST-1", {200: {"measurements": [_car_measurement("c1", **fields)]}}
     )
 
@@ -481,7 +481,7 @@ def test_two_connector_station_gets_connectors_one_and_two():
 
     Prevents both connectors collapsing onto position 1.
     """
-    mapping = _fallback_highlevel_connector_mapping(
+    mapping = fallback_highlevel_connector_mapping(
         "ST-1",
         {
             200: {
@@ -520,11 +520,11 @@ def test_connector_uuid_ignores_malformed_charging_state_channel(channel, expect
         "carCharger": {"chargingStateUpdateChannel": channel},
     }
 
-    assert _connector_uuid(device) == expected
+    assert device_connector_uuid(device) == expected
 
 
 # ---------------------------------------------------------------------------
-# _fallback_assign guards
+# fallback_assign guards
 # ---------------------------------------------------------------------------
 
 
@@ -537,7 +537,7 @@ def test_fallback_assign_puts_car_chargers_on_the_only_station_and_skips_unident
     station = make_station_runtime(serial="ST-1", connectors={})
     stations = {"st-uuid": station}
 
-    _fallback_assign(
+    fallback_assign(
         stations,
         [_car_device("c1", connectorNumber=2), _car_device("c2"), {"type": "CARCHARGER"}],
         "GATEWAY-1",
@@ -558,7 +558,7 @@ def test_fallback_assign_never_reassigns_already_assigned_connectors():
     first = make_station_runtime(serial="ST-1", connectors={})
     second = make_station_runtime(serial="ST-2", connectors={"c1": existing})
 
-    _fallback_assign({"st-1": first, "st-2": second}, [_car_device("c9")], "GATEWAY-1", 200)
+    fallback_assign({"st-1": first, "st-2": second}, [_car_device("c9")], "GATEWAY-1", 200)
 
     assert first.connectors == {}
     assert second.connectors == {"c1": existing}
@@ -568,6 +568,6 @@ def test_fallback_assign_without_stations_is_a_no_op():
     """Without a station there is nothing to attach connectors to, and no crash."""
     stations: dict[str, Any] = {}
 
-    _fallback_assign(stations, [_car_device("c1")], "GATEWAY-1", 200)
+    fallback_assign(stations, [_car_device("c1")], "GATEWAY-1", 200)
 
     assert stations == {}

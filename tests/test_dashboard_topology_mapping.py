@@ -7,21 +7,21 @@ import pytest
 
 from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
 from custom_components.smappee_ev.dashboard_discovery import (
-    _create_dashboard_client,
-    _dashboard_fetch_devices,
-    _dashboard_fetch_highlevel_configs,
-    _fallback_dashboard_connector_mapping,
-    _fetch_dashboard_connector_mapping,
-    _load_dashboard_topologies,
+    create_dashboard_client,
+    dashboard_fetch_devices,
+    dashboard_fetch_highlevel_configs,
+    fallback_dashboard_connector_mapping,
+    fetch_dashboard_connector_mapping,
+    load_dashboard_topologies,
 )
 from custom_components.smappee_ev.topology import (
-    _fallback_highlevel_connector_mapping,
     _find_in,
-    _is_connector,
-    _normalize_connector_mapping_station_keys,
-    _safe_str,
-    _station_serial,
     _uuid_from_dashboard_channel,
+    device_station_serial,
+    fallback_highlevel_connector_mapping,
+    is_connector,
+    normalize_connector_mapping_station_keys,
+    safe_str,
 )
 from tests.helpers import raises_translated
 
@@ -38,15 +38,15 @@ def _configured_dashboard(**methods):
 
 
 def test_dashboard_device_parsing_helpers_handle_fallback_shapes():
-    assert _safe_str(None) is None
-    assert _safe_str(" none ") is None
-    assert _safe_str(" null ") is None
-    assert _safe_str(" SERIAL ") == "SERIAL"
+    assert safe_str(None) is None
+    assert safe_str(" none ") is None
+    assert safe_str(" null ") is None
+    assert safe_str(" SERIAL ") == "SERIAL"
 
-    assert _is_connector({"carCharger": {}}) is True
-    assert _is_connector({"type": {"category": "CARCHARGER"}}) is True
-    assert _is_connector({"type": "CARCHARGER"}) is True
-    assert _is_connector({"type": "SENSOR"}) is False
+    assert is_connector({"carCharger": {}}) is True
+    assert is_connector({"type": {"category": "CARCHARGER"}}) is True
+    assert is_connector({"type": "CARCHARGER"}) is True
+    assert is_connector({"type": "SENSOR"}) is False
 
     assert (
         _find_in(
@@ -104,7 +104,7 @@ def test_dashboard_channel_uuid_helpers_extract_connector_and_station_ids():
         == "channel-uuid"
     )
     assert (
-        _station_serial(
+        device_station_serial(
             {
                 "serialNumber": " ",
                 "uuid": "station-uuid",
@@ -120,7 +120,7 @@ async def test_dashboard_load_topologies_raises_not_ready_without_charging_stati
         async_get_service_locations_full_details=AsyncMock(return_value=[])
     )
     with raises_translated(ConfigEntryNotReady, "no_charging_stations"):
-        await _load_dashboard_topologies(empty)
+        await load_dashboard_topologies(empty)
 
 
 @pytest.mark.asyncio
@@ -133,10 +133,10 @@ async def test_dashboard_fetch_helpers_handle_errors_duplicates_and_bad_shapes()
     )
 
     with pytest.raises(RuntimeError, match="boom"):
-        await _dashboard_fetch_devices(dashboard, 1)
+        await dashboard_fetch_devices(dashboard, 1)
     with pytest.raises(TypeError, match="malformed"):
-        await _dashboard_fetch_devices(dashboard, 1)
-    configs = await _dashboard_fetch_highlevel_configs(dashboard, [10, 20, 10])
+        await dashboard_fetch_devices(dashboard, 1)
+    configs = await dashboard_fetch_highlevel_configs(dashboard, [10, 20, 10])
 
     assert configs == {10: {"ok": 1}}
     assert dashboard.async_get_highlevel_configuration.await_count == 2
@@ -152,17 +152,17 @@ async def test_optional_dashboard_discovery_never_swallows_authentication_errors
     station = {"serialNumber": "STATION-1", "type": "CHARGINGSTATION"}
 
     with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
-        await _fetch_dashboard_connector_mapping(dashboard, [station])
+        await fetch_dashboard_connector_mapping(dashboard, [station])
     with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
-        await _dashboard_fetch_highlevel_configs(dashboard, [100])
+        await dashboard_fetch_highlevel_configs(dashboard, [100])
 
     dashboard.async_get_smart_devices = AsyncMock(side_effect=auth_error)
     with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
-        await _dashboard_fetch_devices(dashboard, 100)
+        await dashboard_fetch_devices(dashboard, 100)
 
     dashboard.async_get_service_locations_full_details = AsyncMock(side_effect=auth_error)
     with pytest.raises(ConfigEntryAuthFailed, match="reauth required"):
-        await _load_dashboard_topologies(dashboard)
+        await load_dashboard_topologies(dashboard)
 
 
 @pytest.mark.asyncio
@@ -200,7 +200,7 @@ async def test_fetch_dashboard_connector_mapping_extracts_station_led_and_connec
         )
     )
 
-    mapping = await _fetch_dashboard_connector_mapping(dashboard, [station])
+    mapping = await fetch_dashboard_connector_mapping(dashboard, [station])
 
     assert mapping["STATION-1"]["station_model"] == "EV Wall"
     assert mapping["STATION-1"]["station_name"] == "Garage Charger"
@@ -240,7 +240,7 @@ async def test_fetch_dashboard_connector_mapping_ignores_incomplete_dashboard_sh
         )
     )
 
-    mapping = await _fetch_dashboard_connector_mapping(
+    mapping = await fetch_dashboard_connector_mapping(
         dashboard,
         [
             {"type": "CHARGINGSTATION"},
@@ -258,17 +258,17 @@ def test_fallback_dashboard_connector_mapping_rejects_ambiguous_or_unserialed_st
     connector = {"uuid": "connector-uuid", "id": "connector-id", "type": "CARCHARGER"}
 
     assert (
-        _fallback_dashboard_connector_mapping(
+        fallback_dashboard_connector_mapping(
             [{"serialNumber": "STATION-1"}, {"serialNumber": "STATION-2"}],
             [connector],
         )
         == {}
     )
-    assert _fallback_dashboard_connector_mapping([{"type": "CHARGINGSTATION"}], [connector]) == {}
+    assert fallback_dashboard_connector_mapping([{"type": "CHARGINGSTATION"}], [connector]) == {}
 
 
 def test_fallback_dashboard_connector_mapping_position_precedence_and_uuid_skip():
-    mapping = _fallback_dashboard_connector_mapping(
+    mapping = fallback_dashboard_connector_mapping(
         [{"serialNumber": "STATION-1"}],
         [
             {"id": "missing-uuid", "type": "CARCHARGER"},
@@ -307,7 +307,7 @@ def test_fallback_dashboard_connector_mapping_position_precedence_and_uuid_skip(
 
 
 def test_fallback_highlevel_connector_mapping_uses_measurement_position_and_appliance_uuid():
-    mapping = _fallback_highlevel_connector_mapping(
+    mapping = fallback_highlevel_connector_mapping(
         "STATION-1",
         {
             1: {
@@ -329,7 +329,7 @@ def test_fallback_highlevel_connector_mapping_uses_measurement_position_and_appl
 
 
 def test_fallback_highlevel_connector_mapping_ignores_invalid_measurements():
-    mapping = _fallback_highlevel_connector_mapping(
+    mapping = fallback_highlevel_connector_mapping(
         "STATION-1",
         {
             1: {
@@ -344,12 +344,12 @@ def test_fallback_highlevel_connector_mapping_ignores_invalid_measurements():
     )
 
     assert mapping == {}
-    assert _fallback_highlevel_connector_mapping(None, {1: {"measurements": []}}) == {}
+    assert fallback_highlevel_connector_mapping(None, {1: {"measurements": []}}) == {}
 
 
 def test_fallback_highlevel_connector_mapping_uses_expected_uuid_fallback_order():
     def mapping_for(measurement):
-        return _fallback_highlevel_connector_mapping(
+        return fallback_highlevel_connector_mapping(
             "STATION-1",
             {1: {"measurements": [measurement]}},
         )["STATION-1"]["connectors"]
@@ -429,7 +429,7 @@ def test_normalize_connector_mapping_preserves_station_metadata():
         }
     }
 
-    result = _normalize_connector_mapping_station_keys(mapping, None)
+    result = normalize_connector_mapping_station_keys(mapping, None)
 
     assert result["6220017988"]["station_name"] == "Garage charger"
     assert result["6220017988"]["station_model"] == "Smappee EV Wall"
@@ -448,7 +448,7 @@ def test_normalize_connector_mapping_preserves_orphan_metadata_on_fallback():
         }
     }
 
-    result = _normalize_connector_mapping_station_keys(
+    result = normalize_connector_mapping_station_keys(
         mapping,
         fallback_station_serial="6220017988",
     )
@@ -472,7 +472,7 @@ def test_normalize_connector_mapping_keeps_existing_station_metadata_over_fallba
         },
     }
 
-    result = _normalize_connector_mapping_station_keys(
+    result = normalize_connector_mapping_station_keys(
         mapping,
         fallback_station_serial="6220017988",
     )
@@ -486,7 +486,7 @@ def test_create_dashboard_client_persists_refresh_token_updates():
     entry = MagicMock()
     entry.data = {"username": "user", "password": "pass"}
 
-    client = _create_dashboard_client(hass, entry, MagicMock())
+    client = create_dashboard_client(hass, entry, MagicMock())
     client._token_update_callback({"dashboard_refresh_token": "new-refresh"})
 
     hass.config_entries.async_update_entry.assert_called_once_with(

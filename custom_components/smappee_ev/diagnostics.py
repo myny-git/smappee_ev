@@ -15,7 +15,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
-from .api.discovery import _measurement_role
+from .api.discovery import measurement_role
 from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import (
     DashboardRecoveryDiagnostics,
@@ -24,7 +24,7 @@ from .models.runtime_data import (
     SmappeeStationRuntime,
 )
 from .models.state import IntegrationData
-from .mqtt_setup import _mqtt_routing_diagnostics
+from .mqtt_setup import mqtt_routing_diagnostics
 
 REDACT_KEYS = {
     "access_token",
@@ -438,7 +438,7 @@ def _classify_appliance_measurement(meas: dict[str, Any]) -> dict[str, Any]:
     appliance = appliance_raw if isinstance(appliance_raw, dict) else {}
     appliance_type = appliance.get("type") if isinstance(appliance_raw, dict) else None
 
-    classification = _measurement_role(meas)
+    classification = measurement_role(meas)
 
     return {
         "category": category,
@@ -827,7 +827,7 @@ async def async_get_config_entry_diagnostics(
         mqtt_obj = rt.mqtt.get(site_id) if rt else None
         routing_states = list(getattr(rt, "mqtt_diagnostics", {}).get(site_id, [])) if rt else []
         if not routing_states:
-            routing_states = _mqtt_routing_diagnostics(mqtt_obj)
+            routing_states = mqtt_routing_diagnostics(mqtt_obj)
         site_alias = site_aliases.get(site_id, _obfuscate(site_id))
         # Aggregate counts
         station_count = len(stations)
