@@ -10,7 +10,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
-import voluptuous as vol
+import probatio as vol
 
 from .api.dashboard_client import SmappeeDashboardClient
 from .api.device_handle import SmappeeDeviceHandle

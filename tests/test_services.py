@@ -8,8 +8,8 @@ from homeassistant.exceptions import (
     HomeAssistantError,
     ServiceValidationError,
 )
+import probatio as vol
 import pytest
-import voluptuous as vol
 
 from custom_components.smappee_ev import services
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
