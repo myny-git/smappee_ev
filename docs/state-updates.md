@@ -71,6 +71,8 @@ Prefer one remote owner per field over ordering logic.
 - **Everything else** has a single source: MQTT telemetry and status, Dashboard
   station configuration, or the session query.
 
+[field-ownership.md](field-ownership.md) lists the writers of every field.
+
 ## MQTT connection changes
 
 MQTT sends configuration only when it changes, so a change made during an outage
