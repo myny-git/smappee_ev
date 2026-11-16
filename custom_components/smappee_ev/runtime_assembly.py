@@ -20,6 +20,7 @@ from .dashboard_discovery import (
     fallback_dashboard_connector_mapping,
     fetch_dashboard_connector_mapping,
 )
+from .helpers import anonymize_uuid
 from .models.runtime_data import (
     MqttRuntimeValue,
     RuntimeData,
@@ -325,7 +326,7 @@ async def _prepare_control_stations(
         _LOGGER.debug(
             "No CHARGINGSTATION smartdevice at control %s; using topology station serial %s",
             control_sid,
-            station_serial,
+            anonymize_uuid(station_serial),
         )
 
     if not station_devs and not car_devs and not station_serial:

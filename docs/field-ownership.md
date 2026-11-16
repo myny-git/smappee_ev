@@ -108,6 +108,9 @@ confirmed defect.
    entity applies the confirmed value at once through `update_connector`. The
    `set_current` action and the other actions in `services.py` only schedule a
    refresh, so entities show the old value until MQTT or the refresh reports.
+   Measured on one station on 2026-11-16: MQTT reported each change 70 to 170 ms
+   after the write, before the REST call had returned. The delay only shows
+   while MQTT is down.
 4. **Restored values are not recorded as confirmed.** `number.py` and
    `select.py` write a restored value straight into an empty field. A poll in
    flight is kept from overwriting it by the snapshot comparison alone (mutation
@@ -115,7 +118,8 @@ confirmed defect.
 5. **`optimization_strategy` has two remote writers.** MQTT and the Dashboard
    load-management read both write it without an owner rule. The in-flight
    protection applies; a load-management answer that starts after an MQTT update
-   wins.
+   wins. Measured on one station on 2026-11-16: the refresh two minutes after a
+   mode change did not move the mode back.
 
 ## Keeping this current
 

@@ -18,6 +18,7 @@ from .api.errors import (
     SmappeeTransientError,
 )
 from .const import CONF_DASHBOARD_REFRESH_TOKEN, CONF_PASSWORD, CONF_USERNAME, DOMAIN
+from .helpers import anonymize_uuid
 from .models.runtime_data import SmappeeEvConfigEntry
 from .models.state import DashboardObjectList, HighLevelConfigMap
 from .topology import device_connector_uuid, device_station_serial, is_connector, safe_str
@@ -74,9 +75,9 @@ async def dashboard_discover_topologies(
             topology.control_location_id,
             topology.control_function_type,
             topology.measurement_location_ids,
-            topology.charging_station_serial,
-            topology.site_gateway_serial,
-            topology.control_gateway_serial,
+            anonymize_uuid(topology.charging_station_serial),
+            anonymize_uuid(topology.site_gateway_serial),
+            anonymize_uuid(topology.control_gateway_serial),
         )
     return topologies
 
@@ -231,7 +232,9 @@ async def fetch_dashboard_connector_mapping(
             ValueError,
         ) as err:
             _LOGGER.warning(
-                "Dashboard charging station details failed for %s: %s", station_serial, err
+                "Dashboard charging station details failed for %s: %s",
+                anonymize_uuid(station_serial),
+                err,
             )
             continue
         if not isinstance(details, dict):

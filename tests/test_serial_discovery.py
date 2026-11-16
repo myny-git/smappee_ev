@@ -1,5 +1,7 @@
 """Serial bootstrap regression coverage for accounts with empty service locations."""
 
+from dataclasses import replace
+import logging
 from unittest.mock import MagicMock, patch
 
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -324,3 +326,25 @@ async def test_reauth_preserves_serial_without_discovery(flow):
     assert entry.data[CONF_STATION_SERIAL] == "BASE123"
     automatic.assert_not_called()
     fallback.assert_not_called()
+
+
+async def test_topology_debug_line_masks_serial_numbers(client, caplog):
+    """Users paste debug logs into issues; serial numbers must not be readable there."""
+    topology = (await discovery.dashboard_discover_topologies_by_serial(client, "BASE123"))[0]
+    topology = replace(
+        topology,
+        charging_station_serial="6220012345",
+        site_gateway_serial="5130012345",
+        control_gateway_serial="5130067890",
+    )
+    client.async_get_service_locations_full_details.return_value = [{}]
+    with (
+        patch.object(discovery, "dashboard_client_configured", return_value=True),
+        patch.object(discovery, "build_topologies_from_full_details", return_value=[topology]),
+        caplog.at_level(logging.DEBUG, logger=discovery.__name__),
+    ):
+        assert await discovery.dashboard_discover_topologies(client) == [topology]
+
+    assert "station_serial=6220****2345" in caplog.text
+    for serial in ("6220012345", "5130012345", "5130067890"):
+        assert serial not in caplog.text
