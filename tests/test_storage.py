@@ -18,6 +18,7 @@ from custom_components.smappee_ev.models.state import SiteData, SiteState
 from custom_components.smappee_ev.mqtt_setup import _build_mqtt_routes
 from custom_components.smappee_ev.mqtt_specs import _split_highlevel_configs_by_scope
 from tests.factories import make_config_entry, make_runtime_data, make_site_runtime
+from tests.helpers import site_sensor
 
 TOPIC = "servicelocation/test/power"
 
@@ -389,7 +390,7 @@ async def test_all_battery_topics_must_be_fresh_despite_grid_traffic(hass, monke
     clock.now.return_value += timedelta(minutes=6)
     coord.apply_mqtt_properties("grid", {"activePowerData": [100]})
     coord.last_real_power_rx = datetime.now(UTC)
-    assert sensor.StationGridPower(coord, None, 1, "site-1").native_value == 100
+    assert site_sensor("grid_power")(coord, None, 1, "site-1").native_value == 100
     coord.apply_mqtt_properties("second", {"activePowerData": [500]})
     assert not power.available
     listener = MagicMock()

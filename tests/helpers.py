@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from custom_components.smappee_ev import sensor
 from custom_components.smappee_ev.const import DOMAIN
 
 
@@ -39,3 +40,29 @@ def raises_translated(
         yield caught
     assert caught.value.translation_domain == DOMAIN
     assert caught.value.translation_key == translation_key
+
+
+def site_sensor(key: str) -> Callable[..., sensor.SiteMeasurementSensor]:
+    """Build a plain site measurement sensor by its description key."""
+    description = next(item for item in sensor.SITE_MEASUREMENTS if item.key == key)
+
+    def build(
+        coordinator: Any, _api: Any, sid: int, _station_uuid: str
+    ) -> sensor.SiteMeasurementSensor:
+        return sensor.SiteMeasurementSensor(coordinator, sid, description)
+
+    return build
+
+
+def connector_sensor(key: str) -> Callable[..., sensor.ConnectorMeasurementSensor]:
+    """Build a plain connector measurement sensor by its description key."""
+    description = next(item for item in sensor.CONNECTOR_MEASUREMENTS if item.key == key)
+
+    def build(
+        coordinator: Any, api: Any, sid: int, station_uuid: str, connector_uuid: str
+    ) -> sensor.ConnectorMeasurementSensor:
+        return sensor.ConnectorMeasurementSensor(
+            coordinator, api, sid, station_uuid, connector_uuid, description
+        )
+
+    return build

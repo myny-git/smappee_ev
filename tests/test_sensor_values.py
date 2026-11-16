@@ -13,9 +13,6 @@ from custom_components.smappee_ev.coordinators.freshness import MeasurementFresh
 from custom_components.smappee_ev.entity import SmappeeConnectorEntity
 from custom_components.smappee_ev.models.state import ConnectorState, IntegrationData, StationState
 from custom_components.smappee_ev.sensor import (
-    ConnCurrentL1,
-    ConnCurrentL2,
-    ConnCurrentL3,
     ConnectorCurrentASensor,
     ConnectorPowerSensor,
     ConnectorSessionEnergySensor,
@@ -24,27 +21,15 @@ from custom_components.smappee_ev.sensor import (
     SmappeeEVCCStateSensor,
     SmappeeEvseStatusSensor,
     SmappeeSupportGridSensor,
-    StationAlwaysOnPower,
-    StationGridCurrentL1,
-    StationGridCurrentL2,
-    StationGridCurrentL3,
     StationGridCurrents,
     StationGridEnergyExport,
     StationGridEnergyImport,
-    StationGridPower,
-    StationGridVoltageL1,
-    StationGridVoltageL2,
-    StationGridVoltageL3,
-    StationHouseConsumptionPower,
-    StationPvCurrentL1,
-    StationPvCurrentL2,
-    StationPvCurrentL3,
     StationPvCurrents,
     StationPvEnergyImport,
-    StationPvPower,
     _nested_value,
     _session_ts_to_datetime,
 )
+from tests.helpers import connector_sensor, site_sensor
 
 
 def _api(connector_number: int | None = 1) -> MagicMock:
@@ -76,22 +61,22 @@ def _coordinator(
 @pytest.mark.parametrize(
     ("sensor_cls", "expected"),
     [
-        (StationAlwaysOnPower, 111.0),
-        (StationGridPower, 123.0),
-        (StationHouseConsumptionPower, 456.0),
-        (StationPvPower, 789.0),
+        (site_sensor("always_on_power"), 111.0),
+        (site_sensor("grid_power"), 123.0),
+        (site_sensor("house_consumption_power"), 456.0),
+        (site_sensor("pv_power"), 789.0),
         (StationGridEnergyImport, 10.5),
         (StationGridEnergyExport, 1.2),
         (StationPvEnergyImport, 3.4),
-        (StationGridCurrentL1, 1.1),
-        (StationGridCurrentL2, 2.2),
-        (StationGridCurrentL3, 3.3),
-        (StationPvCurrentL1, 4.4),
-        (StationPvCurrentL2, 5.5),
-        (StationPvCurrentL3, 6.6),
-        (StationGridVoltageL1, 230.0),
-        (StationGridVoltageL2, 231.0),
-        (StationGridVoltageL3, 232.0),
+        (site_sensor("grid_current_l1"), 1.1),
+        (site_sensor("grid_current_l2"), 2.2),
+        (site_sensor("grid_current_l3"), 3.3),
+        (site_sensor("pv_current_l1"), 4.4),
+        (site_sensor("pv_current_l2"), 5.5),
+        (site_sensor("pv_current_l3"), 6.6),
+        (site_sensor("grid_voltage_l1"), 230.0),
+        (site_sensor("grid_voltage_l2"), 231.0),
+        (site_sensor("grid_voltage_l3"), 232.0),
     ],
 )
 def test_station_sensor_native_values(sensor_cls, expected):
@@ -178,9 +163,9 @@ def test_station_phase_total_sensors_include_phase_attributes():
 @pytest.mark.parametrize(
     ("sensor_cls", "expected"),
     [
-        (ConnCurrentL1, 7.0),
-        (ConnCurrentL2, 8.0),
-        (ConnCurrentL3, 9.0),
+        (connector_sensor("current_l1"), 7.0),
+        (connector_sensor("current_l2"), 8.0),
+        (connector_sensor("current_l3"), 9.0),
         (ConnectorPowerSensor, 7200.0),
         (ConnectorCurrentASensor, 24.0),
         (ConnEnergyImport, 15.25),

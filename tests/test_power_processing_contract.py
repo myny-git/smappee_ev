@@ -12,6 +12,7 @@ from custom_components.smappee_ev.coordinators.freshness import MqttApplyResult
 from custom_components.smappee_ev.models.state import ConnectorState
 from custom_components.smappee_ev.mqtt_setup import _setup_mqtt
 from tests import test_mqtt_bootstrap as bootstrap
+from tests.helpers import connector_sensor, site_sensor
 
 entry = bootstrap.entry
 online = bootstrap.online
@@ -67,31 +68,31 @@ def power_payload():
 
 
 SITE_SENSORS = [
-    (sensor.StationGridPower, 250),
-    (sensor.StationPvPower, 789),
-    (sensor.StationHouseConsumptionPower, 456),
-    (sensor.StationAlwaysOnPower, 111),
+    (site_sensor("grid_power"), 250),
+    (site_sensor("pv_power"), 789),
+    (site_sensor("house_consumption_power"), 456),
+    (site_sensor("always_on_power"), 111),
     (sensor.StationGridEnergyImport, 3),
     (sensor.StationGridEnergyExport, 0.6),
     (sensor.StationPvEnergyImport, 6),
     (sensor.StationGridCurrents, 6.006),
     (sensor.StationPvCurrents, 15.015),
-    (sensor.StationGridCurrentL1, 1.001),
-    (sensor.StationGridCurrentL2, 2.002),
-    (sensor.StationGridCurrentL3, 3.003),
-    (sensor.StationPvCurrentL1, 4.004),
-    (sensor.StationPvCurrentL2, 5.005),
-    (sensor.StationPvCurrentL3, 6.006),
-    (sensor.StationGridVoltageL1, 230),
-    (sensor.StationGridVoltageL2, 231),
-    (sensor.StationGridVoltageL3, 232),
+    (site_sensor("grid_current_l1"), 1.001),
+    (site_sensor("grid_current_l2"), 2.002),
+    (site_sensor("grid_current_l3"), 3.003),
+    (site_sensor("pv_current_l1"), 4.004),
+    (site_sensor("pv_current_l2"), 5.005),
+    (site_sensor("pv_current_l3"), 6.006),
+    (site_sensor("grid_voltage_l1"), 230),
+    (site_sensor("grid_voltage_l2"), 231),
+    (site_sensor("grid_voltage_l3"), 232),
 ]
 CONNECTOR_SENSORS = [
     (sensor.ConnectorPowerSensor, 2400),
     (sensor.ConnectorCurrentASensor, 24.024),
-    (sensor.ConnCurrentL1, 7.007),
-    (sensor.ConnCurrentL2, 8.008),
-    (sensor.ConnCurrentL3, 9.009),
+    (connector_sensor("current_l1"), 7.007),
+    (connector_sensor("current_l2"), 8.008),
+    (connector_sensor("current_l3"), 9.009),
     (sensor.ConnEnergyImport, 3),
 ]
 
@@ -166,7 +167,7 @@ def test_partial_current_message_does_not_refresh_power_or_energy(
     assert state.pv_power_total == before.pv_power_total
     assert state.grid_energy_import_kwh == before.grid_energy_import_kwh
     assert state.grid_current_phases == [4, 4, 4]
-    assert not sensor.StationGridPower(coord, None, 1, "site-1").available
+    assert not site_sensor("grid_power")(coord, None, 1, "site-1").available
     assert sensor.StationGridCurrents(coord, None, 1, "site-1").available
     if scope == "station":
         assert result.connector_fields == {"connector-1": {"current_phases"}}
@@ -201,13 +202,13 @@ def test_duplicate_measurements_renew_freshness_and_preserve_publication_contrac
         clock = MagicMock(wraps=datetime)
         clock.now.return_value = datetime.now(UTC) + timedelta(minutes=10)
         monkeypatch.setattr("custom_components.smappee_ev.coordinators.freshness.datetime", clock)
-        assert not sensor.StationGridPower(coord, None, 1, "site-1").available
+        assert not site_sensor("grid_power")(coord, None, 1, "site-1").available
         listener.reset_mock()
         coord.apply_mqtt_properties(TOPIC, power_payload)
         listener.assert_called_once_with()
         assert coord.measurement_freshness.is_fresh("grid_power_total")
         # Fresh telemetry must not hide the coordinator's REST failure.
-        assert not sensor.StationGridPower(coord, None, 1, "site-1").available
+        assert not site_sensor("grid_power")(coord, None, 1, "site-1").available
         assert coord.last_update_success is False
         assert coord._unsub_refresh is deadline
     finally:

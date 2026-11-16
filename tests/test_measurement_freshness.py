@@ -12,9 +12,9 @@ from custom_components.smappee_ev.sensor import (
     ConnectorPowerSensor,
     SmappeeChargingStateSensor,
     StationGridCurrents,
-    StationGridPower,
 )
 from tests import test_mqtt_bootstrap as bootstrap
+from tests.helpers import site_sensor
 
 entry = bootstrap.entry
 online = bootstrap.online
@@ -57,7 +57,7 @@ async def test_only_valid_power_renews_power_freshness(hass, online, monkeypatch
     )
     mqtt._on_conn(True)
     if scope == "site":
-        power = StationGridPower(coord, None, 1, "site-1")
+        power = site_sensor("grid_power")(coord, None, 1, "site-1")
         current = StationGridCurrents(coord, None, 1, "site-1")
     else:
         client = bucket.connectors["connector-1"].connector_client
@@ -206,7 +206,7 @@ async def test_measurements_expire_without_traffic_and_remove_timer(
     coord.update_interval = None
     coord.apply_mqtt_properties(bootstrap.TOPIC, {"activePowerData": [0, 3200]})
     if scope == "site":
-        entity = StationGridPower(coord, None, 1, "site-1")
+        entity = site_sensor("grid_power")(coord, None, 1, "site-1")
     else:
         client = bucket.connectors["connector-1"].connector_client
         entity = ConnectorPowerSensor(coord, client, 1, "station-1", "connector-1")

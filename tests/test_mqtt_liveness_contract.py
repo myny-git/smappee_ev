@@ -20,9 +20,9 @@ from custom_components.smappee_ev.sensor import (
     ConnectorPowerSensor,
     ConnEnergyImport,
     SmappeeChargingStateSensor,
-    StationGridPower,
 )
 from tests import test_mqtt_bootstrap as bootstrap
+from tests.helpers import site_sensor
 
 entry = bootstrap.entry
 online = bootstrap.online
@@ -92,7 +92,7 @@ def test_connected_transport_and_heartbeats_do_not_validate_measurements(livenes
         assert coord.mqtt_transport_connected
         assert not coord.measurement_freshness.received
         assert coord.last_real_power_rx is None
-    assert not StationGridPower(ctx.site, None, 1, "site-1").available
+    assert not site_sensor("grid_power")(ctx.site, None, 1, "site-1").available
     assert not _sensor(ctx, ConnectorPowerSensor).available
     assert _sensor(ctx, SmappeeChargingStateSensor).available is (not monitoring)
     assert SmappeeMqttConnectivity(ctx.site, 1).is_on
@@ -200,7 +200,7 @@ def test_unchanged_zero_power_renews_clocks_then_expires_despite_heartbeats(live
     ctx.mqtt._on_properties(HEARTBEAT, {})
     assert ctx.coord.mqtt_transport_connected
     assert not _sensor(ctx, ConnectorPowerSensor).available
-    assert not StationGridPower(ctx.site, None, 1, "site-1").available
+    assert not site_sensor("grid_power")(ctx.site, None, 1, "site-1").available
     assert ctx.coord._smartdevice_poll_interval() == timedelta(minutes=5)
 
 
