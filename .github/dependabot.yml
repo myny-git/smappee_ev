@@ -24,6 +24,9 @@ updates:
         patterns:
           - "*"
     ignore:
+      # The test plugin pins one exact Home Assistant release. Bump both by hand,
+      # together, once a plugin release supports the newer Home Assistant.
+      - dependency-name: "homeassistant"
       - dependency-name: "pytest-homeassistant-custom-component"
         update-types:
           - "version-update:semver-major"
