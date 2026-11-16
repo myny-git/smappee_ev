@@ -530,6 +530,14 @@ class SmappeeStationCoordinator(
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    def control_observation(self, connector_uuid: str | None) -> dict[str, str] | None:
+        """Return the last complete control packet received for a connector."""
+        return self._complete_control.get(connector_uuid) if connector_uuid else None
+
+    def session_queried_at(self, connector_uuid: str) -> float | None:
+        """Return when the session query last succeeded for a connector, in epoch seconds."""
+        return self._session_query_success.get(connector_uuid)
+
     def record_confirmed_write(self, connector_uuid: str | None, changes: dict[str, Any]) -> None:
         """Protect confirmed command fields from older in-flight responses."""
         self._state_confirmations.record(connector_uuid, changes)

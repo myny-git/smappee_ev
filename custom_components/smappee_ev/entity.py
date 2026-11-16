@@ -184,7 +184,6 @@ class SmappeeStationEntity(SmappeeBaseEntity[SmappeeCoordinator]):
         sid: int,
         station_uuid: str,
         unique_suffix: str = "entity",
-        name: str | None = None,
         *,
         device_scope: str = "station",
     ) -> None:
@@ -195,8 +194,6 @@ class SmappeeStationEntity(SmappeeBaseEntity[SmappeeCoordinator]):
             unique_suffix=unique_suffix,
             device_scope=device_scope,
         )
-        if name is not None:
-            self._attr_name = name
 
 
 class SmappeeSiteEntity(SmappeeBaseEntity[CoordinatorT]):
@@ -303,7 +300,6 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
         station_uuid: str,
         connector_uuid: str,
         unique_suffix: str,
-        name: str | None = None,
     ) -> None:
         self._connector_uuid = connector_uuid
         self._api = api
@@ -317,8 +313,6 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
             connector_label=connector_label,
             device_scope="connector",
         )
-        if name is not None:
-            self._attr_name = name
 
     # Convenience accessors
     @property

@@ -919,9 +919,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
         st = self._conn_state
         if st:
             return {
-                "control_observation": getattr(self.coordinator, "_complete_control", {}).get(
-                    self._connector_key
-                ),
+                "control_observation": self.coordinator.control_observation(self._connector_key),
                 "measurement_received": (
                     received.isoformat()
                     if (
@@ -1253,7 +1251,7 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, RestoreSensor):
         """Return the state attributes of the sensor."""
         session, connector_matched = self._session_to_report()
         queried_at = _session_ts_to_datetime(
-            getattr(self.coordinator, "_session_query_success", {}).get(str(self.connector_uuid))
+            self.coordinator.session_queried_at(str(self.connector_uuid))
         )
         attrs: dict[str, Any] = {
             "session_queried_at": queried_at.isoformat() if queried_at else None

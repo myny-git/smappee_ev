@@ -281,14 +281,11 @@ class TestSmappeeStationEntity:
     @patch("custom_components.smappee_ev.entity.make_unique_id", return_value="unique-id")
     def test_init(self, mock_make_unique_id, mock_coordinator):
         """Test entity initialization."""
-        entity = SmappeeStationEntity(
-            mock_coordinator, 12345, "station-uuid", "test-suffix", "Test Entity"
-        )
+        entity = SmappeeStationEntity(mock_coordinator, 12345, "station-uuid", "test-suffix")
 
         assert entity._sid == 12345
         assert entity._station_uuid == "station-uuid"
         assert entity._attr_unique_id == "unique-id"
-        assert entity._attr_name == "Test Entity"
 
         # Verify make_unique_id called with correct parameters
         mock_make_unique_id.assert_called_once_with(
@@ -301,9 +298,7 @@ class TestSmappeeStationEntity:
             led_brightness=50,
             api_available=False,
         )
-        entity = SmappeeStationEntity(
-            mock_coordinator, 12345, "station-uuid", "test-suffix", "Test Entity"
-        )
+        entity = SmappeeStationEntity(mock_coordinator, 12345, "station-uuid", "test-suffix")
 
         assert entity.available is True
 
@@ -317,17 +312,13 @@ class TestSmappeeStationRestEntity:
             led_brightness=50,
             api_available=False,
         )
-        entity = SmappeeStationRestEntity(
-            mock_coordinator, 12345, "station-uuid", "test-suffix", "Test Entity"
-        )
+        entity = SmappeeStationRestEntity(mock_coordinator, 12345, "station-uuid", "test-suffix")
 
         assert entity.available is False
 
     def test_available_false_without_data_or_station(self, mock_coordinator):
         """REST station entities fail closed when coordinator data is incomplete."""
-        entity = SmappeeStationRestEntity(
-            mock_coordinator, 12345, "station-uuid", "test-suffix", "Test Entity"
-        )
+        entity = SmappeeStationRestEntity(mock_coordinator, 12345, "station-uuid", "test-suffix")
 
         mock_coordinator.data = None
         assert entity.available is False
@@ -352,7 +343,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "connector-uuid",
             "test-suffix",
-            "Test Connector",
         )
 
         assert entity._sid == 12345
@@ -360,7 +350,6 @@ class TestSmappeeConnectorEntity:
         assert entity._connector_uuid == "connector-uuid"
         assert entity.connector_uuid == "connector-uuid"
         assert entity._attr_unique_id == "connector-unique-id"
-        assert entity._attr_name == "Test Connector"
 
         # Verify make_unique_id called with correct parameters
         mock_make_unique_id.assert_called_once_with(
@@ -376,7 +365,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "connector-uuid",
             "test-suffix",
-            "Test Connector",
         )
 
         assert entity.connector_uuid == "connector-uuid"
@@ -390,7 +378,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "connector-uuid",
             "test-suffix",
-            "Test Connector",
         )
 
         conn_state = entity._conn_state
@@ -410,7 +397,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "connector-uuid",
             "test-suffix",
-            "Test Connector",
         )
 
         conn_state = entity._conn_state
@@ -426,7 +412,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "different-uuid",
             "test-suffix",
-            "Test Connector",
         )
 
         conn_state = entity._conn_state
@@ -445,7 +430,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "connector-uuid",
             "test-suffix",
-            "Test Connector",
         )
 
         assert entity.available is False
@@ -459,7 +443,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "missing-connector",
             "test-suffix",
-            "Test Connector",
         )
 
         assert entity.available is False
@@ -478,7 +461,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "connector-uuid",
             "mqtt-power",
-            "Power",
         )
 
         assert entity.available is True
@@ -495,7 +477,6 @@ class TestSmappeeConnectorEntity:
             "station-uuid",
             "missing-connector",
             "mqtt-power",
-            "Power",
         )
 
         assert entity.available is False

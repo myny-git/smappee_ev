@@ -114,7 +114,6 @@ class SmappeeStationActionButton(SmappeeStationRestEntity, ButtonEntity):
         sid: int,
         station_uuid: str,
         action: str,
-        name: str | None = None,
     ) -> None:
         SmappeeStationRestEntity.__init__(
             self,
@@ -124,8 +123,6 @@ class SmappeeStationActionButton(SmappeeStationRestEntity, ButtonEntity):
             unique_suffix=f"button:{action}",
         )
         self._attr_translation_key = action
-        if name is not None:
-            self._attr_name = name
         self.api_client = api_client
         self._action = action
 
@@ -156,7 +153,6 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
         station_uuid: str,
         connector_uuid: str,
         action: str,
-        name: str | None = None,
     ) -> None:
         # Build unique id via base class
         SmappeeConnectorEntity.__init__(
@@ -169,8 +165,6 @@ class SmappeeActionButton(SmappeeConnectorEntity, ButtonEntity):
             unique_suffix=f"button:{action}",
         )
         self._attr_translation_key = action
-        if name is not None:
-            self._attr_name = name
         self.api_client = api_client
         self._action = action
 

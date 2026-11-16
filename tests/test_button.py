@@ -105,11 +105,10 @@ async def test_button_attributes(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Test Button",
         action="start_charging",
     )
 
-    assert button.name == "Test Button"
+    assert button.translation_key == "start_charging"
     assert button.unique_id.endswith("button:start_charging")
     assert button.api_client == api_client
     assert button._action == "start_charging"
@@ -125,7 +124,6 @@ async def test_station_button_press_restart_charging_station(mock_coordinator):
         api_client=api_client,
         sid=1,
         station_uuid="station1",
-        name="Restart charging station",
         action="restart_charging_station",
     )
 
@@ -193,7 +191,6 @@ async def test_button_press_start_charging(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Start Charging",
         action="start_charging",
     )
 
@@ -222,7 +219,6 @@ async def test_button_press_start_charging_derives_percentage_from_slider_limit(
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Start Charging",
         action="start_charging",
     )
 
@@ -250,7 +246,6 @@ async def test_button_press_start_charging_keeps_a_low_current_setpoint(mock_coo
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Start Charging",
         action="start_charging",
     )
 
@@ -270,7 +265,6 @@ async def test_button_press_start_charging_no_connector(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="non_existent",  # This connector doesn't exist in data
-        name="Start Charging",
         action="start_charging",
     )
 
@@ -293,7 +287,6 @@ async def test_button_press_start_charging_no_coordinator_data(mock_coordinator)
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Start Charging",
         action="start_charging",
     )
 
@@ -349,7 +342,6 @@ async def test_button_press_pause_charging():
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Pause Charging",
         action="pause_charging",
     )
 
@@ -370,7 +362,6 @@ async def test_button_press_stop_charging():
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Stop Charging",
         action="stop_charging",
     )
 
@@ -391,7 +382,6 @@ async def test_button_press_resume_charging(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Resume Charging",
         action="resume_charging",
     )
 
@@ -416,7 +406,6 @@ async def test_button_press_resume_charging_no_selected_mode(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Resume Charging",
         action="resume_charging",
     )
 
@@ -440,7 +429,6 @@ async def test_button_press_resume_charging_uses_solar_mode(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Resume Charging",
         action="resume_charging",
     )
 
@@ -465,7 +453,6 @@ async def test_button_press_resume_charging_no_modes(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Resume Charging",
         action="resume_charging",
     )
 
@@ -486,7 +473,6 @@ async def test_button_press_resume_charging_no_connector(mock_coordinator):
         sid=1,
         station_uuid="station1",
         connector_uuid="non_existent",  # This connector doesn't exist in data
-        name="Resume Charging",
         action="resume_charging",
     )
 
@@ -510,7 +496,6 @@ async def test_button_press_resume_charging_no_coordinator_data(mock_coordinator
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Resume Charging",
         action="resume_charging",
     )
 
@@ -530,7 +515,6 @@ async def test_button_press_unknown_action():
         sid=1,
         station_uuid="station1",
         connector_uuid="conn1",
-        name="Unknown Action",
         action="unknown_action",
     )
 
