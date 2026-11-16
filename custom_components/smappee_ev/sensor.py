@@ -48,7 +48,7 @@ from .helpers import (
     safe_sum,
 )
 from .models.runtime_data import RuntimeMode, SmappeeEvConfigEntry
-from .models.state import ConnectorState, SiteState, StationState
+from .models.state import ConnectorState, IntegrationData, SiteData, SiteState, StationState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -189,10 +189,11 @@ class SmappeeActiveIncidentsSensor(CoordinatorEntity[SmappeeStatusCoordinator], 
 def _site_state(
     coordinator: SmappeeSiteCoordinator | SmappeeCoordinator,
 ) -> SiteState | StationState | None:
-    data = getattr(coordinator, "data", None)
+    # Home Assistant types coordinator data as always set; it is None before the first refresh.
+    data: SiteData | IntegrationData | None = coordinator.data
     if data is None:
         return None
-    return getattr(data, "site", None) or getattr(data, "station", None)
+    return data.site if isinstance(data, SiteData) else data.station
 
 
 def _safe_write_ha_state(entity: SensorEntity) -> None:
@@ -521,7 +522,7 @@ class StationGridEnergyImport(RestoredEnergyStationSensor):
     @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
-        return self._total_increasing_value(getattr(st, "grid_energy_import_kwh", None))
+        return self._total_increasing_value(st.grid_energy_import_kwh if st else None)
 
 
 class StationGridEnergyExport(RestoredEnergyStationSensor):
@@ -546,7 +547,7 @@ class StationGridEnergyExport(RestoredEnergyStationSensor):
     @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
-        return self._total_increasing_value(getattr(st, "grid_energy_export_kwh", None))
+        return self._total_increasing_value(st.grid_energy_export_kwh if st else None)
 
 
 class StationPvEnergyImport(RestoredEnergyStationSensor):
@@ -571,7 +572,7 @@ class StationPvEnergyImport(RestoredEnergyStationSensor):
     @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
-        return self._total_increasing_value(getattr(st, "pv_energy_import_kwh", None))
+        return self._total_increasing_value(st.pv_energy_import_kwh if st else None)
 
 
 class SiteBatteryPower(SmappeeSitePowerEntity, SensorEntity):
@@ -595,7 +596,7 @@ class SiteBatteryPower(SmappeeSitePowerEntity, SensorEntity):
     @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
-        return getattr(st, "storage_power_total", None)
+        return st.storage_power_total if isinstance(st, SiteState) else None
 
 
 class SiteBatteryEnergy(RestoredEnergyStationSensor):
@@ -604,15 +605,19 @@ class SiteBatteryEnergy(RestoredEnergyStationSensor):
     def __init__(self, coordinator: SmappeeSiteCoordinator, sid: int, *, charging: bool) -> None:
         direction = "charged" if charging else "discharged"
         self._attr_translation_key = f"battery_{direction}_energy"
-        self._state_field = f"storage_{direction}_energy_kwh"
-        self._mqtt_field = self._state_field
+        self._charging = charging
+        self._mqtt_field = f"storage_{direction}_energy_kwh"
         super().__init__(coordinator, sid, unique_suffix=f"sensor:battery_{direction}_energy_kwh")
 
     @property
     @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
-        return self._total_increasing_value(getattr(st, self._state_field, None))
+        if not isinstance(st, SiteState):
+            return self._total_increasing_value(None)
+        return self._total_increasing_value(
+            st.storage_charged_energy_kwh if self._charging else st.storage_discharged_energy_kwh
+        )
 
 
 # --------------- Connector sensors ---------------
@@ -648,7 +653,7 @@ class ConnectorPowerSensor(SmappeeConnectorMqttEntity, SensorEntity):
     @override
     def native_value(self) -> float | None:
         st = self._conn_state
-        v = getattr(st, "power_total", None) if st else None
+        v = st.power_total if st else None
         return float(v) if isinstance(v, int | float) else None
 
     @property
@@ -684,7 +689,7 @@ class ConnectorCurrentASensor(SmappeeConnectorMqttEntity, SensorEntity):
     @override
     def native_value(self) -> float | None:
         st = self._conn_state
-        vals = getattr(st, "current_phases", None) if st else None
+        vals = st.current_phases if st else None
         if isinstance(vals, list) and vals:
             with suppress(TypeError, ValueError):
                 return float(sum(float(x) for x in vals))
@@ -716,7 +721,7 @@ class SmappeeSupportGridSensor(SmappeeConnectorEntity, SensorEntity):
     @override
     def native_value(self) -> float | None:
         st = self._conn_state
-        v = getattr(st, "support_grid", None) if st else None
+        v = st.support_grid if st else None
         return float(v) if isinstance(v, int | float) else None
 
 
@@ -747,7 +752,7 @@ class ConnEnergyImport(RestoredEnergyConnectorSensor):
     @override
     def native_value(self) -> float | None:
         st = self._conn_state
-        return self._total_increasing_value(getattr(st, "energy_import_kwh", None) if st else None)
+        return self._total_increasing_value(st.energy_import_kwh if st else None)
 
 
 class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
@@ -775,7 +780,7 @@ class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
     @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
-        vals = getattr(st, "grid_current_phases", None) if st else None
+        vals = st.grid_current_phases if st else None
         total = safe_sum(vals)
         return round(total, 3) if isinstance(total, float) else None
 
@@ -783,7 +788,7 @@ class StationGridCurrents(SmappeeSitePowerEntity, SensorEntity):
     @override
     def extra_state_attributes(self) -> dict[str, Any]:
         st = _site_state(self.coordinator)
-        vals = getattr(st, "grid_current_phases", None) if st else None
+        vals = st.grid_current_phases if st else None
         return (
             {"L1": vals[0], "L2": vals[1], "L3": vals[2]}
             if isinstance(vals, list) and len(vals) >= 3
@@ -816,7 +821,7 @@ class StationPvCurrents(SmappeeSitePowerEntity, SensorEntity):
     @override
     def native_value(self) -> float | None:
         st = _site_state(self.coordinator)
-        vals = getattr(st, "pv_current_phases", None) if st else None
+        vals = st.pv_current_phases if st else None
         total = safe_sum(vals)
         return round(total, 3) if isinstance(total, float) else None
 
@@ -824,7 +829,7 @@ class StationPvCurrents(SmappeeSitePowerEntity, SensorEntity):
     @override
     def extra_state_attributes(self) -> dict[str, Any]:
         st = _site_state(self.coordinator)
-        vals = getattr(st, "pv_current_phases", None) if st else None
+        vals = st.pv_current_phases if st else None
         return (
             {"L1": vals[0], "L2": vals[1], "L3": vals[2]}
             if isinstance(vals, list) and len(vals) >= 3
@@ -865,7 +870,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
         if st is None:
             return None
 
-        value = getattr(st, "session_state", None)
+        value = st.session_state
         normalized = str(value).strip().lower() if value is not None else None
         return normalized if normalized in self._attr_options else None
 
@@ -873,7 +878,7 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
     @override
     def extra_state_attributes(self) -> dict[str, object] | None:
         st = self._conn_state
-        value = getattr(st, "session_state", None) if st else None
+        value = st.session_state if st else None
         return {"raw_status": value} if value is not None else None
 
 
@@ -901,7 +906,7 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     @override
     def native_value(self) -> str | None:
         st = self._conn_state
-        value = getattr(st, "evcc_state", None) if st else None
+        value = st.evcc_state if st else None
         if value is not None:
             return str(value)
         if not self._dashboard_available:
@@ -926,12 +931,12 @@ class SmappeeEVCCStateSensor(SmappeeConnectorMqttEntity, RestoreSensor):
                     )
                     else None
                 ),
-                "iec_status": getattr(st, "iec_status", None),
-                "session_state": getattr(st, "session_state", None),
-                "charging_mode": getattr(st, "raw_charging_mode", None),
-                "optimization_strategy": getattr(st, "optimization_strategy", None),
-                "paused": getattr(st, "paused", None),
-                "status_current": getattr(st, "status_current", None),
+                "iec_status": st.iec_status,
+                "session_state": st.session_state,
+                "charging_mode": st.raw_charging_mode,
+                "optimization_strategy": st.optimization_strategy,
+                "paused": st.paused,
+                "status_current": st.status_current,
             }
         # Return restored attributes if we have them and no current state
         if self._restored_attributes:
@@ -999,7 +1004,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     @override
     def native_value(self) -> str | None:
         st = self._conn_state
-        value = getattr(st, "status_current", None) if st else None
+        value = st.status_current if st else None
         if value is not None:
             normalized = str(value).strip().lower()
             return normalized if normalized in self._attr_options else None
@@ -1011,7 +1016,7 @@ class SmappeeEvseStatusSensor(SmappeeConnectorMqttEntity, RestoreSensor):
     @override
     def extra_state_attributes(self) -> dict[str, object] | None:
         st = self._conn_state
-        value = getattr(st, "status_current", None) if st else None
+        value = st.status_current if st else None
         return {"raw_status": value} if value is not None else None
 
     @override

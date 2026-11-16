@@ -23,6 +23,7 @@ from .models.runtime_data import (
     SmappeeEvConfigEntry,
     SmappeeStationRuntime,
 )
+from .models.state import IntegrationData
 from .mqtt_setup import _mqtt_routing_diagnostics
 
 REDACT_KEYS = {
@@ -817,10 +818,8 @@ async def async_get_config_entry_diagnostics(
 
     def _station_connected(bucket: SmappeeStationRuntime) -> bool:
         coord = bucket.station_coordinator
-        if not coord or not getattr(coord, "data", None):
-            return False
-        st = getattr(coord.data, "station", None)
-        return bool(getattr(st, "mqtt_connected", False))
+        data: IntegrationData | None = coord.data if coord else None
+        return bool(data and data.station.mqtt_connected)
 
     for site_id, site in (sites or {}).items():
         stations = site.stations
@@ -864,7 +863,8 @@ async def async_get_config_entry_diagnostics(
             connector_clients = {
                 key: connector.connector_client for key, connector in bucket.connectors.items()
             }
-            data = getattr(coord, "data", None) if coord else None
+            # Coordinator data is None until the first refresh, whatever its type says.
+            data: IntegrationData | None = coord.data if coord else None
             st = data.station if data else None
             stations_out.append(
                 {
@@ -872,20 +872,18 @@ async def async_get_config_entry_diagnostics(
                     "service_location_id": _obfuscate(site_id),
                     "station_uuid": _obfuscate(st_uuid),
                     "station_handle": _handle_info(st_client),
-                    "available": getattr(st, "available", None) if st else None,
-                    "api_available": getattr(st, "api_available", None) if st else None,
-                    "dashboard_available": getattr(st, "dashboard_available", None) if st else None,
-                    "led_brightness": getattr(st, "led_brightness", None) if st else None,
+                    "available": st.available if st else None,
+                    "api_available": st.api_available if st else None,
+                    "dashboard_available": st.dashboard_available if st else None,
+                    "led_brightness": st.led_brightness if st else None,
                     "dashboard_led_device_id": _obfuscate(
-                        getattr(st, "dashboard_led_device_id", None) if st else None
+                        st.dashboard_led_device_id if st else None
                     ),
-                    "grid_power_total": getattr(st, "grid_power_total", None) if st else None,
-                    "pv_power_total": getattr(st, "pv_power_total", None) if st else None,
-                    "house_consumption_power": getattr(st, "house_consumption_power", None)
-                    if st
-                    else None,
-                    "mqtt_connected": getattr(st, "mqtt_connected", None) if st else None,
-                    "last_mqtt_rx": getattr(st, "last_mqtt_rx", None) if st else None,
+                    "grid_power_total": st.grid_power_total if st else None,
+                    "pv_power_total": st.pv_power_total if st else None,
+                    "house_consumption_power": st.house_consumption_power if st else None,
+                    "mqtt_connected": st.mqtt_connected if st else None,
+                    "last_mqtt_rx": st.last_mqtt_rx if st else None,
                     "connector_client_count": len(connector_clients),
                     "connector_state_count": len((data.connectors or {}) if data else {}),
                     "power_mapping": _power_mapping_info(coord),
@@ -902,61 +900,41 @@ async def async_get_config_entry_diagnostics(
                         "connector_uuid": _obfuscate(cuuid),
                         "connector_handle": _handle_info(client),
                         "has_state": cstate is not None,
-                        "connector_number": getattr(cstate, "connector_number", None)
+                        "connector_number": cstate.connector_number
                         if cstate
                         else getattr(client, "connector_number", None),
-                        "available": getattr(cstate, "available", None) if cstate else None,
-                        "api_available": getattr(cstate, "api_available", None) if cstate else None,
-                        "session_state": getattr(cstate, "session_state", None) if cstate else None,
-                        "session_cause": getattr(cstate, "session_cause", None) if cstate else None,
-                        "stopped_by_cloud": getattr(cstate, "stopped_by_cloud", None)
+                        "available": cstate.available if cstate else None,
+                        "api_available": cstate.api_available if cstate else None,
+                        "session_state": cstate.session_state if cstate else None,
+                        "session_cause": cstate.session_cause if cstate else None,
+                        "stopped_by_cloud": cstate.stopped_by_cloud if cstate else None,
+                        "raw_charging_mode": cstate.raw_charging_mode if cstate else None,
+                        "optimization_strategy": cstate.optimization_strategy if cstate else None,
+                        "ui_mode_base": cstate.ui_mode_base if cstate else None,
+                        "paused": cstate.paused if cstate else None,
+                        "selected_current_limit": cstate.selected_current_limit if cstate else None,
+                        "selected_percentage_limit": cstate.selected_percentage_limit
                         if cstate
                         else None,
-                        "raw_charging_mode": getattr(cstate, "raw_charging_mode", None)
-                        if cstate
-                        else None,
-                        "optimization_strategy": getattr(cstate, "optimization_strategy", None)
-                        if cstate
-                        else None,
-                        "ui_mode_base": getattr(cstate, "ui_mode_base", None) if cstate else None,
-                        "paused": getattr(cstate, "paused", None) if cstate else None,
-                        "selected_current_limit": getattr(cstate, "selected_current_limit", None)
-                        if cstate
-                        else None,
-                        "selected_percentage_limit": getattr(
-                            cstate, "selected_percentage_limit", None
-                        )
-                        if cstate
-                        else None,
-                        "min_current": getattr(cstate, "min_current", None) if cstate else None,
-                        "max_current": getattr(cstate, "max_current", None) if cstate else None,
-                        "min_surpluspct": getattr(cstate, "min_surpluspct", None)
-                        if cstate
-                        else None,
+                        "min_current": cstate.min_current if cstate else None,
+                        "max_current": cstate.max_current if cstate else None,
+                        "min_surpluspct": cstate.min_surpluspct if cstate else None,
                         "dashboard_device_id": _obfuscate(
-                            getattr(cstate, "dashboard_device_id", None) if cstate else None
+                            cstate.dashboard_device_id if cstate else None
                         ),
                         "dashboard_device_uuid": _obfuscate(
-                            getattr(cstate, "dashboard_device_uuid", None) if cstate else None
+                            cstate.dashboard_device_uuid if cstate else None
                         ),
                         "dashboard_device_name_present": bool(
-                            getattr(cstate, "dashboard_device_name", None) if cstate else None
+                            cstate.dashboard_device_name if cstate else None
                         ),
-                        "status_current": getattr(cstate, "status_current", None)
-                        if cstate
-                        else None,
-                        "evcc_state": getattr(cstate, "evcc_state", None) if cstate else None,
-                        "evcc_state_code": getattr(cstate, "evcc_state_code", None)
-                        if cstate
-                        else None,
-                        "power_total": getattr(cstate, "power_total", None) if cstate else None,
-                        "energy_import_kwh": getattr(cstate, "energy_import_kwh", None)
-                        if cstate
-                        else None,
-                        "power_phases": getattr(cstate, "power_phases", None) if cstate else None,
-                        "current_phases": getattr(cstate, "current_phases", None)
-                        if cstate
-                        else None,
+                        "status_current": cstate.status_current if cstate else None,
+                        "evcc_state": cstate.evcc_state if cstate else None,
+                        "evcc_state_code": cstate.evcc_state_code if cstate else None,
+                        "power_total": cstate.power_total if cstate else None,
+                        "energy_import_kwh": cstate.energy_import_kwh if cstate else None,
+                        "power_phases": cstate.power_phases if cstate else None,
+                        "current_phases": cstate.current_phases if cstate else None,
                     }
                 )
 
@@ -981,9 +959,9 @@ async def async_get_config_entry_diagnostics(
         for site in (sites or {}).values():
             for bucket in site.stations.values():
                 coord = bucket.station_coordinator
-                data = getattr(coord, "data", None) if coord else None
-                if data and isinstance(getattr(data, "recent_sessions", None), list):
-                    recent_sessions.extend(data.recent_sessions)
+                session_data: IntegrationData | None = coord.data if coord else None
+                if session_data and isinstance(session_data.recent_sessions, list):
+                    recent_sessions.extend(session_data.recent_sessions)
         out["meta"]["recent_sessions_total"] = len(recent_sessions)
 
     out["dashboard"] = _dashboard_info(rt)
