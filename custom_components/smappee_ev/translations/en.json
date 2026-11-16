@@ -48,6 +48,7 @@
       "invalid_station_serial": "No usable charging station was found for this serial number. Check the serial number and account access."
     },
     "abort": {
+      "already_configured": "This Smappee account is already configured.",
       "wrong_account": "The credentials belong to a different Smappee account."
     }
   },
@@ -270,7 +271,7 @@
   "entity": {
     "binary_sensor": {
       "mqtt_connected": {
-        "name": "MQTT Connected"
+        "name": "MQTT connected"
       },
       "service_status": {
         "name": "{subsystem}"
@@ -295,7 +296,7 @@
     },
     "number": {
       "min_surpluspct": {
-        "name": "Min Surplus Percentage"
+        "name": "Min surplus percentage"
       },
       "max_charging_speed": {
         "name": "Charging current limit"

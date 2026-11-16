@@ -8,8 +8,8 @@
           "password": "Ihr Passwort im Smappee-Dashboard"
         },
         "data_description": {
-          "username": "Der Benutzername fuer die Anmeldung am Smappee Dashboard.",
-          "password": "Das Passwort fuer die Anmeldung am Smappee Dashboard."
+          "username": "Der Benutzername für die Anmeldung am Smappee Dashboard.",
+          "password": "Das Passwort für die Anmeldung am Smappee Dashboard."
         }
       },
       "reauth_confirm": {
@@ -31,7 +31,7 @@
         },
         "data_description": {
           "username": "Der Benutzername des bestehenden Smappee EV config entry.",
-          "password": "Das Smappee Dashboard-Passwort, das fuer diesen config entry gespeichert wird."
+          "password": "Das Smappee Dashboard-Passwort, das für diesen config entry gespeichert wird."
         }
       },
       "station_serial": {
@@ -48,7 +48,8 @@
       "invalid_station_serial": "Keine nutzbare Ladestation für diese Seriennummer gefunden. Prüfe die Seriennummer und die Zugriffsrechte des Kontos."
     },
     "abort": {
-      "wrong_account": "Die Zugangsdaten gehoeren zu einem anderen Smappee-Konto."
+      "already_configured": "Dieses Smappee-Konto ist bereits konfiguriert.",
+      "wrong_account": "Die Zugangsdaten gehören zu einem anderen Smappee-Konto."
     }
   },
   "exceptions": {

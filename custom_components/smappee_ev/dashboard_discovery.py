@@ -7,6 +7,7 @@ import logging
 from aiohttp import ClientError, ClientSession
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.util.hass_dict import HassKey
 
 from .api.dashboard_client import DashboardMaintenanceState, SmappeeDashboardClient
 from .api.discovery import SmappeeLocationTopology, build_topologies_from_full_details
@@ -22,7 +23,10 @@ from .models.state import DashboardObjectList, HighLevelConfigMap
 from .topology import _connector_uuid, _is_connector, _safe_str, _station_serial
 
 _LOGGER = logging.getLogger(__name__)
-_MAINTENANCE_STATES = "smappee_ev_dashboard_maintenance"
+# Kept outside runtime_data: the state must survive failed setups and reloads.
+_MAINTENANCE_STATES: HassKey[dict[str, DashboardMaintenanceState]] = HassKey(
+    "smappee_ev_dashboard_maintenance"
+)
 
 
 def _dashboard_client_configured(dashboard_client: SmappeeDashboardClient | None) -> bool:

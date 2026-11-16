@@ -159,7 +159,7 @@ def _schedule_reload(
     hass: HomeAssistant, entry: SmappeeEvConfigEntry, runtime: RuntimeData
 ) -> None:
     if not runtime.stopping and not hass.is_stopping and entry.runtime_data is runtime:
-        hass.async_create_task(hass.config_entries.async_reload(entry.entry_id))
+        hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
 def _validate_rest_recovery(runtime: RuntimeData) -> None:

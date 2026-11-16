@@ -48,6 +48,7 @@
       "invalid_station_serial": "Er werd geen bruikbaar laadstation gevonden voor dit serienummer. Controleer het serienummer en de toegang van je account."
     },
     "abort": {
+      "already_configured": "Dit Smappee-account is al geconfigureerd.",
       "wrong_account": "De inloggegevens horen bij een ander Smappee-account."
     }
   },
@@ -295,7 +296,7 @@
     },
     "number": {
       "min_surpluspct": {
-        "name": "Minimale overschotpercentage"
+        "name": "Minimaal overschotpercentage"
       },
       "max_charging_speed": {
         "name": "Laadstroomlimiet"

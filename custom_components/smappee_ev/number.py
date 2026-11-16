@@ -399,7 +399,7 @@ class SmappeeConnectorMaxCurrentNumber(SmappeeConnectorEntity, _BaseNumber):
 
 
 class SmappeeMinSurplusPctNumber(SmappeeConnectorEntity, _BaseNumber):
-    """Min Surplus Percentage (connector-level)."""
+    """Min surplus percentage (connector-level)."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "min_surpluspct"

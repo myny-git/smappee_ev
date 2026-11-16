@@ -8,8 +8,8 @@
           "password": "Votre mot de passe sur le tableau de bord Smappee"
         },
         "data_description": {
-          "username": "Le nom d'utilisateur utilise pour se connecter au Smappee Dashboard.",
-          "password": "Le mot de passe utilise pour se connecter au Smappee Dashboard."
+          "username": "Le nom d'utilisateur utilisé pour se connecter au Smappee Dashboard.",
+          "password": "Le mot de passe utilisé pour se connecter au Smappee Dashboard."
         }
       },
       "reauth_confirm": {
@@ -20,7 +20,7 @@
         },
         "data_description": {
           "username": "Le nom d'utilisateur de la config entry Smappee EV existante.",
-          "password": "Le mot de passe Smappee Dashboard mis a jour."
+          "password": "Le mot de passe Smappee Dashboard mis à jour."
         }
       },
       "reconfigure": {
@@ -31,7 +31,7 @@
         },
         "data_description": {
           "username": "Le nom d'utilisateur de la config entry Smappee EV existante.",
-          "password": "Le mot de passe Smappee Dashboard a enregistrer pour cette config entry."
+          "password": "Le mot de passe Smappee Dashboard à enregistrer pour cette config entry."
         }
       },
       "station_serial": {
@@ -48,7 +48,8 @@
       "invalid_station_serial": "Aucune borne de recharge utilisable pour ce numéro de série. Vérifiez le numéro et les droits d’accès du compte."
     },
     "abort": {
-      "wrong_account": "Les identifiants appartiennent a un autre compte Smappee."
+      "already_configured": "Ce compte Smappee est déjà configuré.",
+      "wrong_account": "Les identifiants appartiennent à un autre compte Smappee."
     }
   },
   "exceptions": {
