@@ -82,7 +82,7 @@ per-field freshness clock.
 | `configuration_errors` | MQTT | |
 | `available` | MQTT | Read by diagnostics only. |
 | `api_available` | Poll | |
-| `rest_session_state_confirmed` | Poll | Whether the last poll reported `chargingState` itself. Only then may the charging state sensor stay available on REST while MQTT is down. |
+| `rest_session_state` | Poll | `chargingState` as the last poll reported it, `None` when left out or `Initialize`. Never written by MQTT. While MQTT is down the charging state sensor stays available on REST only when this equals `session_state`. |
 | `dashboard_device_id`, `dashboard_device_uuid`, `dashboard_device_name` | Dashboard | |
 | `power_total`, `power_phases`, `current_phases` | MQTT | Cleared when a session ends. The poll ends a session only while MQTT is not live. |
 | `energy_import_kwh` | MQTT | |

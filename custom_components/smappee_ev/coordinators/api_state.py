@@ -187,7 +187,7 @@ class StationApiMixin(CoordinatorMixin):
             if rest_state.support_grid is not None
             else prev.support_grid,
             api_available=rest_state.api_available,
-            rest_session_state_confirmed=rest_state.rest_session_state_confirmed,
+            rest_session_state=rest_state.rest_session_state,
         )
         merged.paused = charging_session_paused(
             merged.raw_charging_mode,
@@ -237,7 +237,7 @@ class StationApiMixin(CoordinatorMixin):
     ) -> ConnectorRestSnapshot:
         """Read one connector's properties/config from its smartdevice."""
         session_state = "Initialize"
-        session_state_reported = False
+        rest_session_state: str | None = None
         selected_percentage: int | None = None
         reported_min_current: int | None = None
         reported_max_current: int | None = None
@@ -254,7 +254,8 @@ class StationApiMixin(CoordinatorMixin):
             val = prop.get("value")
             if name == "chargingState":
                 session_state = val or session_state
-                session_state_reported = bool(val) and val != "Initialize"
+                if val and val != "Initialize":
+                    rest_session_state = str(val)
             elif name == "percentageLimit":
                 with suppress(TypeError, ValueError):
                     selected_percentage = int(val)
@@ -292,7 +293,7 @@ class StationApiMixin(CoordinatorMixin):
                 min_surpluspct=min_surpluspct,
                 support_grid=support_grid,
                 api_available=True,
-                rest_session_state_confirmed=session_state_reported,
+                rest_session_state=rest_session_state,
             ),
             reported_min_current=reported_min_current,
             reported_max_current=reported_max_current,

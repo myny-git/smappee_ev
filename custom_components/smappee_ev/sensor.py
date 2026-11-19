@@ -879,16 +879,19 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
         Outside monitoring-only mode the coordinator keeps refreshing the
         session state through REST, so losing MQTT alone must not hide it from
         automations waiting for "started". The REST fallback only counts when
-        the last poll reported the state itself; a poll without it would
-        otherwise keep an old "started" looking current.
+        the last poll reported the very state that is shown. A poll without
+        it, a value kept from live MQTT over a different poll answer, or an
+        MQTT change after the poll must not look confirmed by REST.
         """
         if super().available:
             return True
         if getattr(self.coordinator, "monitoring_only", False) is True:
             return False
         conn = self._conn_state
+        if conn is None or not self._rest_available or conn.rest_session_state is None:
+            return False
         return (
-            self._rest_available and conn is not None and conn.rest_session_state_confirmed is True
+            conn.rest_session_state.strip().casefold() == str(conn.session_state).strip().casefold()
         )
 
     @property

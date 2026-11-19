@@ -874,45 +874,57 @@ class TestSmappeeCoordinator:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("properties", "confirmed"),
+        ("rest_value", "keep_mqtt_value", "mqtt_after_poll", "available"),
         [
-            ([{"spec": {"name": "chargingState"}, "value": "Started"}], True),
-            ([{"spec": {"name": "chargingState"}, "value": "Initialize"}], False),
-            ([{"spec": {"name": "chargingState"}, "value": None}], False),
-            ([], False),
+            ("Started", False, None, True),
+            ("Initialize", False, None, False),
+            (None, False, None, False),
+            ("missing", False, None, False),
+            # Live MQTT kept "Started" over a lagging REST "Stopped".
+            ("Stopped", True, None, False),
+            # MQTT changed the state after the poll that confirmed "Started".
+            ("Started", False, "Stopped", False),
         ],
     )
-    async def test_rest_without_charging_state_does_not_keep_old_state_current(
-        self, coordinator, properties, confirmed
+    async def test_rest_fallback_needs_rest_to_report_the_shown_state(
+        self, coordinator, rest_value, keep_mqtt_value, mqtt_after_poll, available
     ):
-        """A poll that omits chargingState must not keep an old "started" available.
+        """After MQTT drops, REST may only keep the charging state it reported itself.
 
-        With MQTT down the merge keeps the previous session state when the poll
-        does not report one. The charging state sensor may only rely on REST
-        when the last poll reported the state itself.
+        Otherwise an old "started" stays available: from a poll that left the
+        field out, from a live MQTT value REST disagreed with, or from an MQTT
+        change after the poll.
         """
+        properties = (
+            []
+            if rest_value == "missing"
+            else [{"spec": {"name": "chargingState"}, "value": rest_value}]
+        )
         client = coordinator.connector_clients["test_uuid"]
         client.async_get_smartdevice = AsyncMock(
             return_value={"properties": properties, "configurationProperties": []}
         )
+        previous = replace(
+            coordinator.data.connectors["test_uuid"],
+            session_state="Started",
+            rest_session_state="Started",
+        )
+
+        snapshot = await coordinator._fetch_connector_state(client)
+        merged = coordinator._merge_connector_rest_state(
+            previous, snapshot, keep_session_state=keep_mqtt_value
+        )
+        if mqtt_after_poll is not None:
+            merged.session_state = mqtt_after_poll
+        coordinator.data.connectors["test_uuid"] = merged
+        # MQTT is down now.
         coordinator.monitoring_only = False
         coordinator.mqtt_transport_connected = False
         coordinator.last_connector_rx = {}
         coordinator.data.station.mqtt_connected = False
-        previous = replace(
-            coordinator.data.connectors["test_uuid"],
-            session_state="Started",
-            rest_session_state_confirmed=True,
-        )
-
-        snapshot = await coordinator._fetch_connector_state(client)
-        merged = coordinator._merge_connector_rest_state(previous, snapshot)
-        coordinator.data.connectors["test_uuid"] = merged
         sensor = SmappeeChargingStateSensor(coordinator, client, 12345, "station-uuid", "test_uuid")
 
-        assert merged.session_state == "Started"
-        assert merged.rest_session_state_confirmed is confirmed
-        assert sensor.available is confirmed
+        assert sensor.available is available
 
     @pytest.mark.asyncio
     async def test_fetch_connector_state_supports_values_payload(self, coordinator):

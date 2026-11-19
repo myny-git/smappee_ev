@@ -224,22 +224,24 @@ def test_charging_state_supports_documented_session_states(raw_session_state, ex
 
 
 @pytest.mark.parametrize(
-    ("monitoring_only", "rest_reachable", "rest_confirmed", "expected"),
+    ("monitoring_only", "rest_reachable", "rest_value", "expected"),
     [
-        (False, True, True, True),
-        (False, True, False, False),
-        (False, False, True, False),
-        (True, True, True, False),
+        (False, True, "Started", True),
+        (False, True, "STARTED", True),
+        (False, True, None, False),
+        (False, True, "Stopped", False),
+        (False, False, "Started", False),
+        (True, True, "Started", False),
     ],
 )
 def test_charging_state_survives_mqtt_loss_on_valid_rest_data(
-    monitoring_only, rest_reachable, rest_confirmed, expected
+    monitoring_only, rest_reachable, rest_value, expected
 ):
     """An automation waiting for "started" must still see it while MQTT is down.
 
     Outside monitoring-only mode REST keeps refreshing the session state, so a
-    connector whose last poll reported it stays available. A poll without
-    chargingState only keeps the old value, so it must not keep "started"
+    connector whose last poll reported the shown state stays available. A poll
+    without chargingState, or with another state, must not keep "started"
     looking current; neither may an unreachable REST or cached monitoring mode.
     """
     coordinator = _coordinator(
@@ -249,7 +251,7 @@ def test_charging_state_survives_mqtt_loss_on_valid_rest_data(
             session_state="Started",
             evcc_state="C",
             api_available=rest_reachable,
-            rest_session_state_confirmed=rest_confirmed,
+            rest_session_state=rest_value,
         ),
     )
     coordinator.monitoring_only = monitoring_only

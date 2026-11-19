@@ -43,9 +43,9 @@ where the bug report, testing notes or design discussion can be found.
   afterwards still cannot pull it back.
 - The charging state sensor stays available when MQTT drops while the REST poll
   still reports the session state. Automations waiting for `started` no longer
-  miss it during an MQTT outage. A poll that does not report the state keeps
-  the sensor unavailable, so an old `started` cannot look current. In cached
-  monitoring mode the sensor still becomes unavailable.
+  miss it during an MQTT outage. The sensor only relies on REST when the last
+  poll reported the same state it shows, so an old `started` cannot look
+  current. In cached monitoring mode the sensor still becomes unavailable.
 
 ### Entities and actions
 

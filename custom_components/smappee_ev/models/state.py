@@ -64,9 +64,11 @@ class ConnectorState:
     iec_status: str | None = None  # "A1" / "B1" / "C1"
     available: bool = True  # Smappee domain status: connector available for charging
     api_available: bool = True  # HA reachability: last connector REST fetch succeeded
-    # The last REST fetch reported chargingState itself (not the "Initialize"
-    # placeholder), so session_state is confirmed by REST, not only kept.
-    rest_session_state_confirmed: bool = False
+    # chargingState as the last REST fetch reported it; None when that fetch
+    # left it out or only gave the "Initialize" placeholder. Kept apart from
+    # session_state, which live MQTT may own, so REST only vouches for the
+    # value it actually reported.
+    rest_session_state: str | None = None
     session_cause: str | None = None
     stopped_by_cloud: bool | None = None
 
