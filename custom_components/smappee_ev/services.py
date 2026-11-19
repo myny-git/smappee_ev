@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -17,7 +18,10 @@ from .const import CHARGING_MODES, DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOM
 from .helpers import connector_percentage_setpoint, dashboard_mode
 from .models.runtime_data import RuntimeData, RuntimeMode, SmappeeSiteRuntime
 from .models.state import ConnectorState
-from .state_updates import async_write
+from .state_updates import async_write, update_connector
+
+if TYPE_CHECKING:
+    from .coordinator import SmappeeStationCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 DASHBOARD_CHARGING_MODES = {mode.upper() for mode in CHARGING_MODES}
@@ -213,10 +217,10 @@ def get_connector_client(
     return None
 
 
-def _get_connector_state(
+def _connector_coordinator(
     rt: RuntimeData | None, client: SmappeeDeviceHandle
-) -> ConnectorState | None:
-    """Return the live ConnectorState for *client* from its coordinator, or None."""
+) -> SmappeeStationCoordinator | None:
+    """Return the station coordinator whose data holds *client*'s connector, or None."""
     if not rt:
         return None
     uuid = getattr(client, "smart_device_uuid", None)
@@ -225,11 +229,19 @@ def _get_connector_state(
     for site in rt.sites.values():
         for bucket in site.stations.values():
             coord = bucket.station_coordinator
-            if coord and coord.data:
-                conn = coord.data.connectors.get(uuid)
-                if conn is not None:
-                    return conn
+            if coord and coord.data and uuid in coord.data.connectors:
+                return coord
     return None
+
+
+def _get_connector_state(
+    rt: RuntimeData | None, client: SmappeeDeviceHandle
+) -> ConnectorState | None:
+    """Return the live ConnectorState for *client* from its coordinator, or None."""
+    coord = _connector_coordinator(rt, client)
+    if coord is None:
+        return None
+    return coord.data.connectors.get(client.smart_device_uuid)
 
 
 def _schedule_dashboard_refresh_for_client(
@@ -327,8 +339,8 @@ async def _async_call_connector_client(
     client: SmappeeDeviceHandle,
     method_name: str,
     extra_args: dict | None = None,
-) -> None:
-    """Call a connector method on an already resolved client."""
+) -> object:
+    """Call a connector method on an already resolved client and return its result."""
     method = getattr(client, method_name, None)
     if not method:
         raise _service_validation_error(
@@ -336,7 +348,7 @@ async def _async_call_connector_client(
             method_name=method_name,
         )
     try:
-        await async_write(
+        return await async_write(
             method(**(extra_args or {})),
             lambda: _schedule_dashboard_refresh_for_client(hass, client),
         )
@@ -448,12 +460,24 @@ async def handle_set_current(call: ServiceCall) -> None:
             min_current=min_c,
             max_current=max_c,
         )
-    await _async_call_connector_client(
+    result = await _async_call_connector_client(
         call.hass,
         client,
         "set_current",
         {"current": current, "min_current": min_c, "max_current": max_c},
     )
+    # Publish the confirmed setpoint now, like the current-limit number does.
+    # start_charging resends the stored percentage, so a stale value would undo
+    # this write when an automation starts charging right after it.
+    coord = _connector_coordinator(rt, client)
+    if coord is not None and isinstance(result, tuple):
+        confirmed_current, confirmed_percentage = result
+        update_connector(
+            coord,
+            client.smart_device_uuid,
+            selected_current_limit=confirmed_current,
+            selected_percentage_limit=confirmed_percentage,
+        )
 
 
 # ----------------------------

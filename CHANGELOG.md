@@ -38,10 +38,25 @@ where the bug report, testing notes or design discussion can be found.
   session, or an older energy value of the current one, is ignored, so it
   cannot be counted twice. This also holds right after a restart. When the
   Dashboard lists several sessions, the one that started last is reported,
-  whatever order the Dashboard uses.
+  whatever order the Dashboard uses. A Dashboard record of the current session
+  without an energy value keeps the last reported energy, so a delayed answer
+  afterwards still cannot pull it back.
+- The charging state sensor stays available when MQTT drops while the REST poll
+  still reports the session state. Automations waiting for `started` no longer
+  miss it during an MQTT outage. In cached monitoring mode the sensor still
+  becomes unavailable.
 
 ### Entities and actions
 
+- The `set_current` action now updates the connector's setpoint as soon as
+  Smappee confirms it, like the current slider already did. An automation that
+  lowered the limit and then called `start_charging` could start at the old
+  limit, for example back at 32 A.
+- Changing the capacity or overload protection limit no longer switches that
+  protection on when its on/off state was not read yet. The integration now
+  reads the current state from Smappee first and refuses the change if that
+  fails. The offline charging switch and failsafe current do the same instead
+  of sending 3 A or "enabled" as a guess.
 - Starting or pausing charging with the charging switch now reports a failure
   as a translated error instead of a raw Smappee or connection error.
 - When Smappee rejects the stored credentials during an entity action (a
@@ -90,6 +105,12 @@ where the bug report, testing notes or design discussion can be found.
 - A confirmed command, a restored value or a session refresh no longer reports
   a failed Smappee connection as recovered, which made entities available for
   a moment and unavailable again.
+- With several batteries on separate MQTT topics, a battery energy total only
+  counts as freshly measured when every battery reported recently. One
+  battery's old counter no longer keeps the sensor available.
+- The periodic Dashboard refresh no longer requests the appliance list, which
+  the integration never used. A successful answer to only that request could
+  delay the next read of the charging station settings by about 30 minutes.
 
 ## [2026.11.0] - 2026-11-02
 

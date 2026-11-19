@@ -80,7 +80,6 @@ class DashboardMixin(CoordinatorMixin):
                 "high-level configuration": self.dashboard_client.async_get_highlevel_configuration(
                     service_location_id
                 ),
-                "appliances": self.dashboard_client.async_get_appliances(service_location_id),
             }
             results = await asyncio.gather(*calls.values(), return_exceptions=True)
 
@@ -94,7 +93,6 @@ class DashboardMixin(CoordinatorMixin):
                     ("capacity protection", dict),
                     ("overload protection", dict),
                     ("high-level configuration", dict),
-                    ("appliances", list),
                 )
             )
             if usable_response:

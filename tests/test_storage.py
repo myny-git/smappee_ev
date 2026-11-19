@@ -211,6 +211,54 @@ def test_multiple_batteries_on_separate_topics_wait_for_complete_total():
     assert site.storage_power_total == -318
 
 
+def test_energy_total_is_fresh_only_when_every_battery_topic_is_recent(monkeypatch):
+    """One battery's old counter must not let the combined total look freshly measured.
+
+    The sum stays a valid lower bound of the cumulative energy, so its value
+    still updates; only marking it as a new measurement waits for every topic.
+    """
+    clock = MagicMock()
+    clock.now.return_value = datetime.now(UTC)
+    monkeypatch.setattr(storage_module, "datetime", clock)
+    energy = {
+        "importActiveEnergyData": [0, 0, 0, 1000],
+        "exportActiveEnergyData": [0, 0, 0, 0],
+    }
+    cfg = {
+        "measurements": [
+            {
+                "type": "STORAGE",
+                "updateChannels": {
+                    "meterReadings": channel(
+                        ("$.importActiveEnergyData[3]", 1),
+                        ("$.exportActiveEnergyData[3]", -1),
+                        topic=topic,
+                    )
+                },
+            }
+            for topic in (TOPIC, "second")
+        ]
+    }
+    storage = StorageMeasurements({1: cfg})
+    site = SiteState()
+
+    def apply(topic, payload):
+        accepted: set[str] = set()
+        storage.apply(site, topic, payload, accepted)
+        return accepted
+
+    apply(TOPIC, energy)
+    assert "storage_discharged_energy_kwh" in apply("second", energy)
+    assert site.storage_discharged_energy_kwh == 2.0
+
+    clock.now.return_value += timedelta(hours=2)
+    later = {**energy, "importActiveEnergyData": [0, 0, 0, 2000]}
+    assert "storage_discharged_energy_kwh" not in apply(TOPIC, later)
+    assert site.storage_discharged_energy_kwh == 3.0
+
+    assert "storage_discharged_energy_kwh" in apply("second", energy)
+
+
 def test_energy_paths_have_independent_indexes_and_follow_configured_direction():
     cfg = storage_config()
     cfg["measurements"][0]["updateChannels"]["meterReadings"] = channel(

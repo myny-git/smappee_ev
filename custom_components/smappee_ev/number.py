@@ -24,12 +24,23 @@ from .const import DEFAULT_MAX_CURRENT, DEFAULT_MIN_CURRENT, DOMAIN
 from .coordinator import SmappeeCoordinator
 from .entity import SmappeeConnectorEntity, SmappeeSiteEntity, SmappeeStationRestEntity
 from .models.runtime_data import SmappeeEvConfigEntry, SmappeeSiteRuntime
-from .models.state import ConnectorState, IntegrationData, StationState
+from .models.state import ConnectorState, DashboardObject, IntegrationData, StationState
 from .registry import async_migrate_site_setting_ids, site_setting_unique_id
 from .state_updates import async_write, update_connector, update_station
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
+
+
+_COMMAND_ERRORS = (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError)
+
+
+def _service_failed(method: str, err: object, *, connector: bool = False) -> HomeAssistantError:
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="connector_service_failed" if connector else "station_service_failed",
+        translation_placeholders={"method_name": method, "error": str(err)},
+    )
 
 
 async def _async_number_write[T](
@@ -38,17 +49,39 @@ async def _async_number_write[T](
     """Translate command failures while preserving authentication and cancellation."""
     try:
         return await async_write(action, refresh)
-    except (SmappeeError, ClientError, TimeoutError, RuntimeError, ValueError) as err:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="connector_service_failed" if connector else "station_service_failed",
-            translation_placeholders={"method_name": method, "error": str(err)},
-        ) from err
+    except _COMMAND_ERRORS as err:
+        raise _service_failed(method, err, connector=connector) from err
 
 
-def _active_or_true(value: bool | None) -> bool:
-    """Default to active for value-only Dashboard writes when state is unknown."""
-    return bool(value) if value is not None else True
+async def _async_protection_active(
+    dashboard: Any, sid: int, known: bool | None, method: str
+) -> bool:
+    """Return whether a protection is on, reading it from Smappee when unknown.
+
+    The Dashboard write always carries ``active``. Guessing it would switch the
+    protection on or off as a side effect of changing its limit.
+    """
+    if known is not None:
+        return known
+    if getattr(dashboard, "monitoring_only", False) is True:
+        # The write is refused anyway; do not spend a cloud request first.
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="mqtt_only")
+    try:
+        payload: DashboardObject | None = await getattr(dashboard, method)(sid)
+    except _COMMAND_ERRORS as err:
+        raise _service_failed(method, err) from err
+    active = payload.get("active") if isinstance(payload, dict) else None
+    if not isinstance(active, bool):
+        raise _service_failed(method, "Dashboard did not report whether the protection is on")
+    return active
+
+
+async def _async_offline_charging_config(api_client: SmappeeDeviceHandle) -> tuple[bool, int]:
+    """Read the offline charging settings, translating failures for the UI."""
+    try:
+        return await api_client.get_offline_charging_config()
+    except _COMMAND_ERRORS as err:
+        raise _service_failed("get_offline_charging_config", err) from err
 
 
 def _dashboard_coord_for_site(site: SmappeeSiteRuntime) -> SmappeeCoordinator | None:
@@ -527,13 +560,21 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
                 translation_key="station_unavailable",
             )
         power_kw = round(max(0.0, float(value)), 1)
-        active = _active_or_true(st.capacity_protection_active)
+        active = await _async_protection_active(
+            dashboard, self._sid, st.capacity_protection_active, "async_get_capacity_protection"
+        )
         await _async_number_write(
             dashboard.async_set_capacity_protection(self._sid, active, power_kw),
             self.coordinator.async_schedule_dashboard_refresh,
             "async_set_capacity_protection",
         )
-        update_station(self.coordinator, capacity_maximum_power_kw=power_kw)
+        # Smappee just confirmed this on/off state with the write; keep it so a
+        # next change does not have to read it again.
+        update_station(
+            self.coordinator,
+            capacity_maximum_power_kw=power_kw,
+            capacity_protection_active=active,
+        )
 
 
 class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _BaseNumber):
@@ -593,13 +634,19 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
                 translation_key="station_unavailable",
             )
         maximum_load_a = max(0, int(round(value)))
-        active = _active_or_true(st.overload_protection_active)
+        active = await _async_protection_active(
+            dashboard, self._sid, st.overload_protection_active, "async_get_overload_protection"
+        )
         await _async_number_write(
             dashboard.async_set_overload_protection(self._sid, active, maximum_load_a),
             self.coordinator.async_schedule_dashboard_refresh,
             "async_set_overload_protection",
         )
-        update_station(self.coordinator, overload_maximum_load_a=maximum_load_a)
+        update_station(
+            self.coordinator,
+            overload_maximum_load_a=maximum_load_a,
+            overload_protection_active=active,
+        )
 
 
 class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationRestEntity, _BaseNumber):
@@ -660,9 +707,9 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationRestEntity, _BaseNumber)
                 translation_key="station_unavailable",
             )
         failsafe = max(0, int(round(value)))
-        enabled = (
-            bool(st.offline_charging_enabled) if st.offline_charging_enabled is not None else True
-        )
+        enabled = st.offline_charging_enabled
+        if enabled is None:
+            enabled, _ = await _async_offline_charging_config(self.api_client)
         await _async_number_write(
             self.api_client.set_offline_charging_config(enabled, failsafe),
             self.coordinator.async_schedule_dashboard_refresh,

@@ -921,6 +921,41 @@ class TestServiceHandlers:
         coord_b.async_schedule_dashboard_refresh.assert_not_called()
         site_b_client.set_current.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_start_right_after_set_current_keeps_the_new_limit(self, mock_hass):
+        """An automation that lowers the limit and then starts must not restart at 32 A.
+
+        start_charging resends the stored percentage. Before any MQTT or poll
+        update arrives, that must already be the setpoint set_current confirmed.
+        """
+        client = make_connector_client(
+            service_location_id=55555, connector_number=1, smart_device_uuid="connector-seq"
+        )
+        client.set_current.return_value = (6.0, 0)
+        runtime = make_runtime_for_connector(55555, client)
+        coordinator = runtime.sites[55555].stations["station_55555"].station_coordinator
+        conn_state = coordinator.data.connectors["connector-seq"]
+        conn_state.selected_current_limit = 32.0
+        conn_state.selected_percentage_limit = 100
+        configure_loaded_entries(mock_hass, [make_loaded_config_entry("entry", runtime)])
+
+        def call(service, **data):
+            return ServiceCall(
+                domain="smappee_ev",
+                service=service,
+                data={"service_location_id": 55555, "connector_id": 1, **data},
+                hass=mock_hass,
+            )
+
+        await services.handle_set_current(call("set_current", current=6))
+        await services.handle_start_charging(call("start_charging"))
+
+        client.start_charging.assert_awaited_once_with(percentage=0)
+        assert conn_state.selected_current_limit == 6.0
+        coordinator.record_confirmed_write.assert_called_once_with(
+            "connector-seq", {"selected_current_limit": 6.0, "selected_percentage_limit": 0}
+        )
+
 
 class TestServiceRegistration:
     """Test cases for service registration."""

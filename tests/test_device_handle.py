@@ -7,11 +7,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 from aiohttp import ClientError
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 import pytest
 
 from custom_components.smappee_ev.api.device_handle import SmappeeDeviceHandle
-from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError
+from custom_components.smappee_ev.api.errors import SmappeeAuthenticationError, SmappeeProtocolError
 
 
 class RecordingDashboard:
@@ -405,6 +405,46 @@ async def test_offline_charging_error_paths():
     dashboard.async_set_offline_charging = AsyncMock(return_value=False)
     with pytest.raises(RuntimeError, match="offline charging returned no success"):
         await client.set_offline_charging_config(True, 6)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("details", "expected"),
+    [
+        ({"offlineCharging": {"enabled": False, "failSafe": 9}}, (False, 9)),
+        ({"offlineCharging": {"enabled": True, "failSafe": 6.0}}, (True, 6)),
+        (None, None),
+        ({}, None),
+        ({"offlineCharging": {"enabled": "yes", "failSafe": 9}}, None),
+        ({"offlineCharging": {"enabled": True, "failSafe": True}}, None),
+        ({"offlineCharging": {"enabled": True}}, None),
+    ],
+)
+async def test_offline_charging_config_is_read_exactly_or_refused(details, expected):
+    """A toggle sends both fields back, so a malformed answer must never become a guess."""
+    dashboard = RecordingDashboard()
+    dashboard.async_get_charging_station_details = AsyncMock(return_value=details)
+    client = make_client(station_serial="STATION", dashboard=dashboard)
+
+    if expected is None:
+        with pytest.raises(SmappeeProtocolError, match="did not report the offline charging"):
+            await client.get_offline_charging_config()
+    else:
+        assert await client.get_offline_charging_config() == expected
+    dashboard.async_get_charging_station_details.assert_awaited_once_with("STATION")
+
+
+@pytest.mark.asyncio
+async def test_offline_charging_config_read_is_blocked_in_mqtt_only_mode():
+    """The read only serves a write, so MQTT-only mode refuses it without a cloud call."""
+    dashboard = RecordingDashboard()
+    dashboard.monitoring_only = True
+    dashboard.async_get_charging_station_details = AsyncMock()
+    client = make_client(station_serial="STATION", dashboard=dashboard)
+
+    with pytest.raises(HomeAssistantError):
+        await client.get_offline_charging_config()
+    dashboard.async_get_charging_station_details.assert_not_awaited()
 
 
 @pytest.mark.asyncio

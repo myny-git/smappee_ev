@@ -72,7 +72,6 @@ async def test_dashboard_throttle_advances_only_for_usable_response(hass):
         "async_get_capacity_protection",
         "async_get_overload_protection",
         "async_get_highlevel_configuration",
-        "async_get_appliances",
     ):
         setattr(dashboard, method, AsyncMock(return_value=None))
     dashboard.async_get_load_management = AsyncMock(return_value=None)
@@ -88,7 +87,7 @@ async def test_dashboard_throttle_advances_only_for_usable_response(hass):
     await coordinator._maybe_refresh_dashboard_data(coordinator.data, force=True)
     assert coordinator._last_dashboard_refresh == 0.0
 
-    dashboard.async_get_appliances.return_value = []
+    dashboard.async_get_highlevel_configuration.return_value = {}
     await coordinator._maybe_refresh_dashboard_data(coordinator.data, force=True)
     assert coordinator._last_dashboard_refresh > 0.0
 

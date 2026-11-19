@@ -864,6 +864,21 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
 
     @property
     @override
+    def available(self) -> bool:
+        """Stay available on a valid REST or MQTT observation.
+
+        Outside monitoring-only mode the coordinator keeps refreshing the
+        session state through REST, so losing MQTT alone must not hide it from
+        automations waiting for "started".
+        """
+        if super().available:
+            return True
+        return getattr(self.coordinator, "monitoring_only", False) is not True and (
+            self._rest_available
+        )
+
+    @property
+    @override
     def native_value(self) -> str | None:
         """Return the current session state."""
         st = self._conn_state
@@ -1199,6 +1214,8 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, RestoreSensor):
         A late Dashboard answer can still list the previous session, or an older
         energy value of the current one. With last_reset, reporting the previous
         session again would count its energy as a new cycle in the statistics.
+        A record of the same session without energy keeps the last confirmed
+        energy value.
         """
         session, matched = self._active_session_match()
         reported = self._reported_session
@@ -1210,13 +1227,13 @@ class ConnectorSessionEnergySensor(SmappeeConnectorEntity, RestoreSensor):
                     return reported
                 energy = _coerce_float(session.get("energy"))
                 reported_energy = _coerce_float(reported[0].get("energy"))
-                if (
-                    start == reported_start
-                    and energy is not None
-                    and reported_energy is not None
-                    and energy < reported_energy
-                ):
-                    return reported
+                if start == reported_start and reported_energy is not None:
+                    if energy is None:
+                        # A record without energy must not erase the reference
+                        # that stops a later, delayed answer from going back.
+                        session = {**session, "energy": reported[0]["energy"]}
+                    elif energy < reported_energy:
+                        return reported
         if session:
             self._reported_session = (session, matched)
         return session, matched

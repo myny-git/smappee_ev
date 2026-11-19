@@ -62,7 +62,6 @@ def _dashboard(**overrides) -> MagicMock:
         return_value={"active": True, "maximumLoad": 40}
     )
     dashboard.async_get_highlevel_configuration = AsyncMock(return_value=None)
-    dashboard.async_get_appliances = AsyncMock(return_value=[])
     dashboard.async_get_load_management = AsyncMock(return_value=None)
     for name, side_effect in overrides.items():
         getattr(dashboard, name).side_effect = side_effect
@@ -143,7 +142,6 @@ async def test_all_requests_in_maintenance_retry_on_next_poll(hass):
         async_get_capacity_protection=maintenance,
         async_get_overload_protection=maintenance,
         async_get_highlevel_configuration=maintenance,
-        async_get_appliances=maintenance,
     )
     coord.dashboard_client = dashboard
 

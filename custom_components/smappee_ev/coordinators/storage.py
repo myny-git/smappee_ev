@@ -55,6 +55,7 @@ class StorageMeasurements:
         self.paths: dict[str, list[StoragePath]] = {}
         self._values: dict[tuple[str, str], float] = {}
         self.last_power_rx_by_topic: dict[str, datetime] = {}
+        self._energy_rx: dict[tuple[str, str], datetime] = {}
         for sid, config in configs.items():
             for spec in parse_mqtt_channel_specs_from_highlevel(sid, config):
                 self._add_spec(spec)
@@ -116,15 +117,28 @@ class StorageMeasurements:
             total = self._group_total(group, payload, energy=metric != "power")
             if total is None:
                 continue
+            now = datetime.now(UTC)
             if metric == "power":
-                self.last_power_rx_by_topic[topic] = datetime.now(UTC)
+                self.last_power_rx_by_topic[topic] = now
+            else:
+                self._energy_rx[metric, topic] = now
             self._values[metric, topic] = total
             topics = {path.topic for path in paths}
             if any((metric, source) not in self._values for source in topics):
                 continue
             value = sum(self._values[metric, source] for source in topics)
             attr = "storage_power_total" if metric == "power" else f"storage_{metric}_kwh"
-            if accepted is not None:
+            # power_available already requires every power topic to be recent.
+            # An energy total only counts as received when every battery topic
+            # in it is recent; an old counter of another battery keeps the sum
+            # a valid lower bound, but not a fresh measurement.
+            if accepted is not None and (
+                metric == "power"
+                or all(
+                    now - self._energy_rx[metric, source] <= MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+                    for source in topics
+                )
+            ):
                 accepted.add(attr)
             if metric != "power":
                 value = round(value / 1000, 3)

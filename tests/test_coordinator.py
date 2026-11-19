@@ -350,7 +350,6 @@ class TestSmappeeCoordinator:
             return_value={"active": True, "maximumLoad": 25}
         )
         dashboard.async_get_highlevel_configuration = AsyncMock(return_value={})
-        dashboard.async_get_appliances = AsyncMock(return_value=[])
         coordinator.dashboard_client = dashboard
         coordinator.station_client.service_location_id = 317443
         coordinator.station_client.site_location_id = 317418
@@ -397,7 +396,8 @@ class TestSmappeeCoordinator:
         dashboard.async_get_capacity_protection.assert_awaited_once_with(317418)
         dashboard.async_get_overload_protection.assert_awaited_once_with(317418)
         dashboard.async_get_highlevel_configuration.assert_awaited_once_with(317443)
-        dashboard.async_get_appliances.assert_awaited_once_with(317443)
+        # The appliance list is unused; asking for it only costs a cloud request.
+        dashboard.async_get_appliances.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_dashboard_refresh_is_throttled(self, coordinator):
@@ -407,7 +407,6 @@ class TestSmappeeCoordinator:
         dashboard.async_get_capacity_protection = AsyncMock(return_value={})
         dashboard.async_get_overload_protection = AsyncMock(return_value={})
         dashboard.async_get_highlevel_configuration = AsyncMock(return_value={})
-        dashboard.async_get_appliances = AsyncMock(return_value=[])
         coordinator.dashboard_client = dashboard
         coordinator.station_client.charging_station_serial = "STATION123"
         coordinator.station_client.serial = "GATEWAY123"
@@ -430,7 +429,6 @@ class TestSmappeeCoordinator:
         dashboard.async_get_capacity_protection = AsyncMock(return_value=None)
         dashboard.async_get_overload_protection = AsyncMock(return_value=None)
         dashboard.async_get_highlevel_configuration = AsyncMock(return_value=None)
-        dashboard.async_get_appliances = AsyncMock(return_value=None)
         coordinator.dashboard_client = dashboard
         coordinator.station_client.charging_station_serial = "STATION123"
         coordinator.station_client.serial = "GATEWAY123"
@@ -449,7 +447,6 @@ class TestSmappeeCoordinator:
         dashboard.async_get_capacity_protection = AsyncMock(return_value={})
         dashboard.async_get_overload_protection = AsyncMock(return_value={})
         dashboard.async_get_highlevel_configuration = AsyncMock(return_value={})
-        dashboard.async_get_appliances = AsyncMock(return_value=[])
         coordinator.dashboard_client = dashboard
         coordinator.station_client.charging_station_serial = "STATION123"
         coordinator.station_client.serial = "GATEWAY123"

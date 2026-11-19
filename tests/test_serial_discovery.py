@@ -280,6 +280,22 @@ async def test_flow_discovery_errors_do_not_prompt(flow, error, expected):
     assert result["errors"] == {"base": expected}
 
 
+async def test_unreadable_discovery_reports_unknown_and_recovers(flow):
+    """An unreadable discovery answer is not "no charger found".
+
+    Asking for a station serial would send the user hunting for a number that
+    cannot help; the form must report the error and accept a retry instead.
+    """
+    with patch.object(flow_module, "dashboard_discover_topologies", return_value=None):
+        result = await flow.async_step_user(DATA)
+    assert result["step_id"] == "user"
+    assert result["errors"] == {"base": "unknown"}
+
+    with patch.object(flow_module, "dashboard_discover_topologies", return_value=[object()]):
+        result = await flow.async_step_user(DATA)
+    assert result["type"] == "create_entry"
+
+
 @pytest.mark.parametrize(("stored", "valid"), [(None, False), ("BASE123", True), ("old", False)])
 async def test_reconfigure_reuses_or_replaces_serial(flow, stored, valid):
     data = dict(DATA)

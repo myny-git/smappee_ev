@@ -292,24 +292,89 @@ async def test_connector_max_current_number_api_error_preserves_state(coordinato
     coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
 
+_PROTECTIONS = {
+    "capacity": (
+        SmappeeCapacityMaximumPowerNumber,
+        "async_get_capacity_protection",
+        "async_set_capacity_protection",
+        "capacity_protection_active",
+        "capacity_maximum_power_kw",
+        5.06,
+        5.1,
+    ),
+    "overload": (
+        SmappeeOverloadMaximumLoadNumber,
+        "async_get_overload_protection",
+        "async_set_overload_protection",
+        "overload_protection_active",
+        "overload_maximum_load_a",
+        24.6,
+        25,
+    ),
+}
+
+
 @pytest.mark.asyncio
-async def test_capacity_maximum_power_rounds_to_one_decimal_and_defaults_active_true(
-    coordinator, dashboard_client
+@pytest.mark.parametrize("kind", list(_PROTECTIONS))
+@pytest.mark.parametrize("reported", [True, False])
+async def test_protection_limit_reads_unknown_flag_instead_of_switching_it_on(
+    coordinator, dashboard_client, kind, reported
 ):
+    """Changing a limit must not switch a disabled protection on as a side effect.
+
+    The Dashboard write always carries ``active``; when the integration has not
+    read that flag yet it asks Smappee first and sends back what it reports.
+    Once confirmed by the write, the flag is kept for the next change.
+    """
+    cls, read, write, flag, field, value, rounded = _PROTECTIONS[kind]
     coordinator.dashboard_client = dashboard_client
-    coordinator.data.station.capacity_protection_active = None
-    number = SmappeeCapacityMaximumPowerNumber(
-        coordinator=coordinator,
-        sid=1,
-        station_uuid="station",
-    )
+    setattr(coordinator.data.station, flag, None)
+    setattr(dashboard_client, read, AsyncMock(return_value={"active": reported}))
+    number = cls(coordinator=coordinator, sid=1, station_uuid="station")
 
-    await number.async_set_native_value(5.06)
+    await number.async_set_native_value(value)
 
-    dashboard_client.async_set_capacity_protection.assert_awaited_once_with(1, True, 5.1)
-    assert coordinator.data.station.capacity_maximum_power_kw == 5.1
-    coordinator.async_update_listeners.assert_called_once_with()
+    getattr(dashboard_client, read).assert_awaited_once_with(1)
+    getattr(dashboard_client, write).assert_awaited_once_with(1, reported, rounded)
+    assert getattr(coordinator.data.station, field) == rounded
+    assert getattr(coordinator.data.station, flag) is reported
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
+
+    # The confirmed state is kept, so a second change does not read it again.
+    await number.async_set_native_value(value)
+    getattr(dashboard_client, read).assert_awaited_once_with(1)
+    assert getattr(dashboard_client, write).await_args_list[-1].args == (1, reported, rounded)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(_PROTECTIONS))
+@pytest.mark.parametrize(
+    "answer", [RuntimeError("dashboard down"), None, {"maximumLoad": 16}, {"active": "yes"}]
+)
+async def test_protection_limit_refuses_write_when_flag_stays_unknown(
+    coordinator, dashboard_client, kind, answer
+):
+    """Without a confirmed on/off state the limit write is refused, not guessed."""
+    cls, read, write, flag, field, value, _rounded = _PROTECTIONS[kind]
+    coordinator.dashboard_client = dashboard_client
+    station = coordinator.data.station
+    setattr(station, flag, None)
+    previous = getattr(station, field)
+    mock = (
+        AsyncMock(side_effect=answer)
+        if isinstance(answer, Exception)
+        else AsyncMock(return_value=answer)
+    )
+    setattr(dashboard_client, read, mock)
+    number = cls(coordinator=coordinator, sid=1, station_uuid="station")
+
+    with pytest.raises(HomeAssistantError) as caught:
+        await number.async_set_native_value(value)
+
+    assert caught.value.translation_key == "station_service_failed"
+    getattr(dashboard_client, write).assert_not_awaited()
+    assert getattr(station, field) == previous
+    coordinator.async_update_listeners.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -350,26 +415,6 @@ async def test_capacity_maximum_power_api_error_preserves_previous_value(
     assert station.capacity_maximum_power_kw == 4.2
     coordinator.async_update_listeners.assert_not_called()
     coordinator.async_schedule_dashboard_refresh.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_overload_maximum_load_rounds_to_integer_and_defaults_active_true(
-    coordinator, dashboard_client
-):
-    coordinator.dashboard_client = dashboard_client
-    coordinator.data.station.overload_protection_active = None
-    number = SmappeeOverloadMaximumLoadNumber(
-        coordinator=coordinator,
-        sid=1,
-        station_uuid="station",
-    )
-
-    await number.async_set_native_value(24.6)
-
-    dashboard_client.async_set_overload_protection.assert_awaited_once_with(1, True, 25)
-    assert coordinator.data.station.overload_maximum_load_a == 25
-    coordinator.async_update_listeners.assert_called_once_with()
-    coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
 
 
 @pytest.mark.asyncio
@@ -534,13 +579,16 @@ async def test_offline_failsafe_set_native_value(coordinator, api_client, dashbo
 
 
 @pytest.mark.asyncio
-async def test_offline_failsafe_defaults_enabled_and_clamps_negative_current(
-    coordinator, api_client, dashboard_client
+@pytest.mark.parametrize("reported", [True, False])
+async def test_offline_failsafe_reads_unknown_enabled_flag_and_clamps_negative_current(
+    coordinator, api_client, dashboard_client, reported
 ):
+    """Changing the failsafe current must not switch offline charging on by guessing."""
     coordinator.dashboard_client = dashboard_client
     station = coordinator.data.station
     station.offline_charging_enabled = None
     station.offline_failsafe_current_a = 12
+    api_client.get_offline_charging_config = AsyncMock(return_value=(reported, 12))
     api_client.set_offline_charging_config = AsyncMock()
     number = SmappeeOfflineFailsafeCurrentNumber(
         coordinator=coordinator,
@@ -551,11 +599,36 @@ async def test_offline_failsafe_defaults_enabled_and_clamps_negative_current(
 
     await number.async_set_native_value(-3)
 
-    api_client.set_offline_charging_config.assert_awaited_once_with(True, 0)
-    assert station.offline_charging_enabled is True
+    api_client.set_offline_charging_config.assert_awaited_once_with(reported, 0)
+    assert station.offline_charging_enabled is reported
     assert station.offline_failsafe_current_a == 0
     coordinator.async_update_listeners.assert_called_once_with()
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_offline_failsafe_refuses_write_when_enabled_flag_stays_unknown(
+    coordinator, api_client, dashboard_client
+):
+    """A failed read of the offline charging settings blocks the write."""
+    coordinator.dashboard_client = dashboard_client
+    station = coordinator.data.station
+    station.offline_charging_enabled = None
+    station.offline_failsafe_current_a = 12
+    api_client.get_offline_charging_config = AsyncMock(side_effect=RuntimeError("no details"))
+    api_client.set_offline_charging_config = AsyncMock()
+    number = SmappeeOfflineFailsafeCurrentNumber(
+        coordinator=coordinator,
+        api_client=api_client,
+        sid=1,
+        station_uuid="station",
+    )
+
+    with pytest.raises(HomeAssistantError):
+        await number.async_set_native_value(6)
+
+    api_client.set_offline_charging_config.assert_not_awaited()
+    assert station.offline_failsafe_current_a == 12
 
 
 @pytest.mark.asyncio

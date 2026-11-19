@@ -10,6 +10,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 
 from ..const import DOMAIN
 from ..helpers import anonymize_uuid
+from .errors import SmappeeProtocolError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -360,6 +361,30 @@ class SmappeeDeviceHandle:
             _LOGGER.debug("Restarted charging station successfully via Dashboard v11")
             return
         raise RuntimeError("Dashboard API is not configured for charging station restart")
+
+    async def get_offline_charging_config(self) -> tuple[bool, int]:
+        """Read the station's offline charging settings from the Dashboard.
+
+        The offline charging write always sends both fields, so a caller that
+        changes one of them needs the current value of the other. It only
+        serves such a write, so it is refused wherever that write would be.
+        """
+        self._check_write_allowed()
+        dashboard = self.dashboard_client
+        if not self._dashboard_configured() or dashboard is None:
+            raise RuntimeError("Dashboard API is not configured for offline charging")
+        station_serial = self.charging_station_serial or self.serial
+        details = await dashboard.async_get_charging_station_details(station_serial)
+        offline = details.get("offlineCharging") if isinstance(details, dict) else None
+        enabled = offline.get("enabled") if isinstance(offline, dict) else None
+        failsafe = offline.get("failSafe") if isinstance(offline, dict) else None
+        if (
+            not isinstance(enabled, bool)
+            or isinstance(failsafe, bool)
+            or not isinstance(failsafe, int | float)
+        ):
+            raise SmappeeProtocolError("Dashboard did not report the offline charging settings")
+        return enabled, int(failsafe)
 
     async def set_offline_charging_config(self, enabled: bool, failsafe_amps: int) -> None:
         self._check_write_allowed()

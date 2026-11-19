@@ -627,6 +627,7 @@ class TestSmappeeOfflineChargingSwitch:
         coordinator.data = data
         api_client = MagicMock()
         api_client.set_offline_charging_config = AsyncMock()
+        api_client.get_offline_charging_config = AsyncMock(return_value=(True, 7))
         offline_switch = switch.SmappeeOfflineChargingSwitch(
             coordinator=coordinator,
             api_client=api_client,
@@ -662,7 +663,8 @@ class TestSmappeeOfflineChargingSwitch:
         coordinator.async_schedule_dashboard_refresh.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_turn_off_defaults_missing_failsafe(self, mock_integration_data):
+    async def test_turn_off_reads_missing_failsafe_instead_of_guessing(self, mock_integration_data):
+        """Toggling must keep the user's failsafe current, even before it was read."""
         mock_integration_data.station.offline_charging_enabled = True
         mock_integration_data.station.offline_failsafe_current_a = None
         offline_switch, _, api_client = self._make_switch(mock_integration_data)
@@ -670,7 +672,24 @@ class TestSmappeeOfflineChargingSwitch:
         await offline_switch.async_turn_off()
 
         assert mock_integration_data.station.offline_charging_enabled is False
-        api_client.set_offline_charging_config.assert_awaited_once_with(False, 3)
+        assert mock_integration_data.station.offline_failsafe_current_a == 7
+        api_client.set_offline_charging_config.assert_awaited_once_with(False, 7)
+
+    @pytest.mark.asyncio
+    async def test_turn_off_refuses_when_failsafe_stays_unknown(self, mock_integration_data):
+        """Without the current failsafe value the toggle is refused, not sent with 3 A."""
+        mock_integration_data.station.offline_charging_enabled = True
+        mock_integration_data.station.offline_failsafe_current_a = None
+        offline_switch, coordinator, api_client = self._make_switch(mock_integration_data)
+        api_client.get_offline_charging_config.side_effect = RuntimeError("no details")
+
+        with pytest.raises(HomeAssistantError) as err:
+            await offline_switch.async_turn_off()
+
+        assert err.value.translation_key == "station_service_failed"
+        api_client.set_offline_charging_config.assert_not_awaited()
+        assert mock_integration_data.station.offline_charging_enabled is True
+        coordinator.async_update_listeners.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_turn_on_preserves_state_on_error(self, mock_integration_data):

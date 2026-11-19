@@ -323,6 +323,11 @@ class SmappeeConnectorEntity(SmappeeBaseEntity[SmappeeCoordinator]):
     @override
     def available(self) -> bool:
         """Return True when coordinator and connector REST reachability are available."""
+        return self._rest_available
+
+    @property
+    def _rest_available(self) -> bool:
+        """Return True when the connector's REST/Dashboard state can be trusted."""
         if not self._dashboard_available or not super().available:
             return False
         conn = self._conn_state

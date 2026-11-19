@@ -223,6 +223,40 @@ def test_charging_state_supports_documented_session_states(raw_session_state, ex
     assert entity.extra_state_attributes == {"raw_status": raw_session_state}
 
 
+@pytest.mark.parametrize(
+    ("monitoring_only", "rest_reachable", "expected"),
+    [(False, True, True), (False, False, False), (True, True, False)],
+)
+def test_charging_state_survives_mqtt_loss_on_valid_rest_data(
+    monitoring_only, rest_reachable, expected
+):
+    """An automation waiting for "started" must still see it while MQTT is down.
+
+    Outside monitoring-only mode REST keeps refreshing the session state, so a
+    reachable connector stays available. Without REST, or in cached monitoring
+    mode where nothing refreshes it, the sensor must not show stale state.
+    """
+    coordinator = _coordinator(
+        station=StationState(mqtt_connected=False),
+        connector=ConnectorState(
+            connector_number=1,
+            session_state="Started",
+            evcc_state="C",
+            api_available=rest_reachable,
+        ),
+    )
+    coordinator.monitoring_only = monitoring_only
+    coordinator.mqtt_transport_connected = False
+    coordinator.last_connector_rx = {}
+    charging_state = SmappeeChargingStateSensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+    evcc_state = SmappeeEVCCStateSensor(coordinator, _api(), 42, "station-uuid", "conn-1")
+
+    assert charging_state.available is expected
+    assert charging_state.native_value == "started"
+    # The EVCC state only comes from MQTT and keeps following its liveness.
+    assert evcc_state.available is False
+
+
 def test_charging_state_default_connector_state_is_supported():
     """A brand-new ConnectorState() (before any API fetch) must not crash the sensor."""
     coordinator = _coordinator(connector=ConnectorState(connector_number=1))
@@ -418,6 +452,15 @@ def test_session_energy_ignores_late_answers_with_older_session_data():
     coordinator.data.recent_sessions = [{**current, "energy": 1.5}]
     assert entity.native_value == 1.5
     coordinator.data.recent_sessions = [{**current, "energy": 0.9}]
+    assert (entity.native_value, entity.last_reset) == (1.5, current_reset)
+
+    # A record of the same session without energy keeps the reference, so a
+    # later delayed answer still cannot pull the value back.
+    metadata_only = {key: value for key, value in current.items() if key != "energy"}
+    coordinator.data.recent_sessions = [{**metadata_only, "to": 1_700_150_000_000}]
+    assert (entity.native_value, entity.last_reset) == (1.5, current_reset)
+    assert entity.extra_state_attributes["session_ended_at"] is not None
+    coordinator.data.recent_sessions = [{**current, "energy": 1.1}]
     assert (entity.native_value, entity.last_reset) == (1.5, current_reset)
 
     # The next session still takes over.

@@ -391,14 +391,6 @@ class SmappeeDashboardClient:
         )
         return data if isinstance(data, dict) else None
 
-    async def async_get_appliances(
-        self, service_location_id: int | str
-    ) -> DashboardObjectList | None:
-        data = await self._request(
-            "GET", f"v10/servicelocation/{service_location_id}/appliances", return_json=True
-        )
-        return data if isinstance(data, list) else None
-
     async def async_get_charging_station_details(self, serial: str) -> DashboardObject | None:
         data = await self._request(
             "GET", f"v10/chargingstations/{serial}?includeDetails=true", return_json=True

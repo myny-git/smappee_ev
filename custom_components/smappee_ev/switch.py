@@ -363,11 +363,12 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
                 translation_key="station_unavailable",
             )
 
-        failsafe = st.offline_failsafe_current_a
-        if failsafe is None:
-            failsafe = 3
-
         try:
+            failsafe = st.offline_failsafe_current_a
+            if failsafe is None:
+                # The write always carries failSafe; never replace the user's
+                # setting with a guess just because it was not read yet.
+                _, failsafe = await self.api_client.get_offline_charging_config()
             await async_write(
                 self.api_client.set_offline_charging_config(enabled, failsafe),
                 self.coordinator.async_schedule_dashboard_refresh,
@@ -395,4 +396,8 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
                 },
             ) from err
 
-        update_station(self.coordinator, offline_charging_enabled=enabled)
+        update_station(
+            self.coordinator,
+            offline_charging_enabled=enabled,
+            offline_failsafe_current_a=failsafe,
+        )

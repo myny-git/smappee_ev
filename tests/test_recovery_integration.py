@@ -30,7 +30,6 @@ def recovery_dashboard():
     client = _FakeDashboard()
     client.async_get_capacity_protection = AsyncMock(return_value={})
     client.async_get_overload_protection = AsyncMock(return_value={})
-    client.async_get_appliances = AsyncMock(return_value=[])
     client.async_get_load_management = AsyncMock(return_value={"optimizationStrategy": "NONE"})
     return client
 

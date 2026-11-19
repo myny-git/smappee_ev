@@ -131,7 +131,6 @@ async def test_station_dashboard_refresh_handles_partial_errors_and_auth_failure
         return_value={"active": True, "maximumLoad": 25}
     )
     dashboard.async_get_highlevel_configuration = AsyncMock(return_value=None)
-    dashboard.async_get_appliances = AsyncMock(return_value=[])
     dashboard.async_get_load_management = AsyncMock(
         return_value={"optimizationStrategy": "EXCESS_ONLY"}
     )

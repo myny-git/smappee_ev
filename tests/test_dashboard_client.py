@@ -885,7 +885,6 @@ async def test_dashboard_list_and_dict_methods_ignore_malformed_response_shapes(
         side_effect=[
             {"unexpected": "dict"},
             ["unexpected-list"],
-            {"unexpected": "dict"},
             ["unexpected-list"],
             {"unexpected": "dict"},
             ["unexpected-list"],
@@ -897,7 +896,6 @@ async def test_dashboard_list_and_dict_methods_ignore_malformed_response_shapes(
 
     assert await client.async_get_service_locations_full_details() is None
     assert await client.async_get_highlevel_configuration(236259) is None
-    assert await client.async_get_appliances(236259) is None
     assert await client.async_get_charging_station_details("SERIAL") is None
     assert await client.async_get_smart_devices(236259) is None
     assert await client.async_get_load_management(236259, "device-1") is None

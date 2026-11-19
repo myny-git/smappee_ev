@@ -26,7 +26,9 @@ def make_data():
     return IntegrationData(
         station=StationState(
             capacity_maximum_power_kw=2.0,
+            capacity_protection_active=False,
             overload_maximum_load_a=16,
+            overload_protection_active=False,
             offline_charging_enabled=False,
             offline_failsafe_current_a=3,
             available=False,
