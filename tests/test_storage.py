@@ -374,6 +374,52 @@ async def test_battery_power_freshness_and_energy_restore(hass, monkeypatch):
     assert energy.native_value == 16.317
 
 
+async def test_battery_energy_entity_follows_its_oldest_topic(hass, monkeypatch):
+    """The energy sensor turns unavailable as soon as one battery topic is stale.
+
+    Battery B reports at minute 0 and A at minute 4. At minute 6 only A reports
+    again: B is past the freshness limit, so the total is no longer current,
+    even though the previous total was accepted only two minutes earlier.
+    """
+    clock = MagicMock()
+    clock.now.return_value = datetime.now(UTC)
+    monkeypatch.setattr(storage_module, "datetime", clock)
+    monkeypatch.setattr("custom_components.smappee_ev.coordinators.freshness.datetime", clock)
+    cfg = {
+        "measurements": [
+            {
+                "type": "STORAGE",
+                "updateChannels": {
+                    "meterReadings": channel(
+                        ("$.importActiveEnergyData[3]", 1),
+                        ("$.exportActiveEnergyData[3]", -1),
+                        topic=topic,
+                    )
+                },
+            }
+            for topic in (TOPIC, "second")
+        ]
+    }
+    coord = coordinator(hass, cfg)
+    await coord._ensure_power_index_map()
+    energy = sensor.SiteBatteryEnergy(coord, 1, charging=False)
+    payload = {"importActiveEnergyData": [0, 0, 0, 1000], "exportActiveEnergyData": [0] * 4}
+
+    coord.apply_mqtt_properties("second", payload)
+    clock.now.return_value += timedelta(minutes=4)
+    coord.apply_mqtt_properties(TOPIC, payload)
+    assert energy.available
+    assert energy.native_value == 2.0
+
+    clock.now.return_value += timedelta(minutes=2)
+    coord.apply_mqtt_properties(TOPIC, {**payload, "importActiveEnergyData": [0, 0, 0, 2000]})
+    assert not energy.available
+
+    coord.apply_mqtt_properties("second", payload)
+    assert energy.available
+    assert energy.native_value == 3.0
+
+
 @pytest.mark.parametrize(
     "missing_field", ["importActiveEnergyData", "exportActiveEnergyData", "both"]
 )

@@ -607,7 +607,16 @@ class SiteBatteryEnergy(RestoredEnergyStationSensor):
         self._attr_translation_key = f"battery_{direction}_energy"
         self._charging = charging
         self._mqtt_field = f"storage_{direction}_energy_kwh"
+        self._storage_metric = f"{direction}_energy"
         super().__init__(coordinator, sid, unique_suffix=f"sensor:battery_{direction}_energy_kwh")
+
+    @property
+    @override
+    def available(self) -> bool:
+        """The total is only current while every battery topic in it is recent."""
+        return super().available and self.coordinator.storage_measurements.energy_available(
+            self._storage_metric
+        )
 
     @property
     @override
@@ -869,12 +878,17 @@ class SmappeeChargingStateSensor(SmappeeConnectorMqttEntity, SensorEntity):
 
         Outside monitoring-only mode the coordinator keeps refreshing the
         session state through REST, so losing MQTT alone must not hide it from
-        automations waiting for "started".
+        automations waiting for "started". The REST fallback only counts when
+        the last poll reported the state itself; a poll without it would
+        otherwise keep an old "started" looking current.
         """
         if super().available:
             return True
-        return getattr(self.coordinator, "monitoring_only", False) is not True and (
-            self._rest_available
+        if getattr(self.coordinator, "monitoring_only", False) is True:
+            return False
+        conn = self._conn_state
+        return (
+            self._rest_available and conn is not None and conn.rest_session_state_confirmed is True
         )
 
     @property

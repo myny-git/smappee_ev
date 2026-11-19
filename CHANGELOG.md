@@ -43,8 +43,9 @@ where the bug report, testing notes or design discussion can be found.
   afterwards still cannot pull it back.
 - The charging state sensor stays available when MQTT drops while the REST poll
   still reports the session state. Automations waiting for `started` no longer
-  miss it during an MQTT outage. In cached monitoring mode the sensor still
-  becomes unavailable.
+  miss it during an MQTT outage. A poll that does not report the state keeps
+  the sensor unavailable, so an old `started` cannot look current. In cached
+  monitoring mode the sensor still becomes unavailable.
 
 ### Entities and actions
 
@@ -53,10 +54,12 @@ where the bug report, testing notes or design discussion can be found.
   lowered the limit and then called `start_charging` could start at the old
   limit, for example back at 32 A.
 - Changing the capacity or overload protection limit no longer switches that
-  protection on when its on/off state was not read yet. The integration now
-  reads the current state from Smappee first and refuses the change if that
-  fails. The offline charging switch and failsafe current do the same instead
-  of sending 3 A or "enabled" as a guess.
+  protection on or off. Smappee needs the on/off state with every limit change.
+  The integration used to send a guess when it did not know the state yet, or
+  the state from its last refresh, which could undo a change made in the
+  Smappee app. It now reads the current state from Smappee right before each
+  change and refuses the change if that fails. The offline charging switch and
+  failsafe current do the same for each other's setting.
 - Starting or pausing charging with the charging switch now reports a failure
   as a translated error instead of a raw Smappee or connection error.
 - When Smappee rejects the stored credentials during an entity action (a
@@ -105,9 +108,9 @@ where the bug report, testing notes or design discussion can be found.
 - A confirmed command, a restored value or a session refresh no longer reports
   a failed Smappee connection as recovered, which made entities available for
   a moment and unavailable again.
-- With several batteries on separate MQTT topics, a battery energy total only
-  counts as freshly measured when every battery reported recently. One
-  battery's old counter no longer keeps the sensor available.
+- With several batteries on separate MQTT topics, the battery energy sensors
+  are only available while every battery has reported recently, like battery
+  power. One battery's old counter no longer keeps them available.
 - The periodic Dashboard refresh no longer requests the appliance list, which
   the integration never used. A successful answer to only that request could
   delay the next read of the charging station settings by about 30 minutes.

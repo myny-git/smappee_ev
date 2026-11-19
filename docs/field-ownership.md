@@ -40,7 +40,7 @@ and are written the same way.
 | `pv_power_phases`, `pv_current_phases`, `pv_energy_import_kwh` | MQTT | |
 | `pv_power_total` | MQTT, twice per message | **Rule:** the scalar `solarPower` is applied after the phase sum and replaces it. |
 | `house_consumption_power`, `always_on_power` | MQTT | Scalars `consumptionPower` and `alwaysOn`. |
-| `storage_power_total`, `storage_charged_energy_kwh`, `storage_discharged_energy_kwh` | MQTT | Site only. Published once every battery topic has reported. |
+| `storage_power_total`, `storage_charged_energy_kwh`, `storage_discharged_energy_kwh` | MQTT | Site only. Published once every battery topic has reported. Available only while every battery topic is fresh. |
 | `mqtt_connected` | MQTT connection callbacks, any delivered payload | Cached bootstrap seeds `False`. |
 | `last_mqtt_rx` | Any delivered payload | Diagnostic only. |
 
@@ -57,9 +57,9 @@ per-field freshness clock.
 | `dashboard_available` | Dashboard | Shown by the availability switch only while `available` is `None`. |
 | `api_available` | Poll | Cached bootstrap seeds `False`. |
 | `cable_locked` | Dashboard, Command | Dashboard writes only when the key is present. |
-| `offline_charging_enabled`, `offline_failsafe_current_a` | Dashboard, Command | |
+| `offline_charging_enabled`, `offline_failsafe_current_a` | Dashboard, Command | The write carries both; a command reads both from Smappee first and changes only its own. |
 | `capacity_maximum_power_kw`, `overload_maximum_load_a` | Dashboard, Command | |
-| `capacity_protection_active`, `overload_protection_active` | Dashboard | |
+| `capacity_protection_active`, `overload_protection_active` | Dashboard, Command | A limit command reads the flag from Smappee first and sends it back unchanged. |
 | `station_features`, `maximum_capacity_a`, `dashboard_charging_station_details` | Dashboard | |
 
 ## Connector
@@ -72,7 +72,7 @@ per-field freshness clock.
 | `ui_mode_base`, `selected_mode` | Derived, Command, Restore | Derived from `raw_charging_mode` and `optimization_strategy` whenever either is written. A command sets `selected_mode` only. |
 | `paused` | Derived | Recomputed after each MQTT charging-state message and each poll. |
 | `evcc_state`, `evcc_state_code` | Derived | From `iec_status`. |
-| `selected_percentage_limit` | MQTT, Poll, Command, Restore | MQTT applies it only while the strategy is `NONE`. |
+| `selected_percentage_limit` | MQTT, Poll, Command, Restore | MQTT applies it only while the strategy is `NONE`. The current slider and the `set_current` action publish the confirmed value at once. |
 | `selected_current_limit` | Derived, Command, Restore | From the percentage and the current range, only while the strategy is `NONE`. |
 | `min_current`, `max_current` | MQTT, Poll, Dashboard, Command | Every writer goes through `resolve_connector_current_range`. The command writes the maximum only. |
 | `min_surpluspct` | MQTT, Poll, Dashboard, Command, Restore | |
@@ -82,6 +82,7 @@ per-field freshness clock.
 | `configuration_errors` | MQTT | |
 | `available` | MQTT | Read by diagnostics only. |
 | `api_available` | Poll | |
+| `rest_session_state_confirmed` | Poll | Whether the last poll reported `chargingState` itself. Only then may the charging state sensor stay available on REST while MQTT is down. |
 | `dashboard_device_id`, `dashboard_device_uuid`, `dashboard_device_name` | Dashboard | |
 | `power_total`, `power_phases`, `current_phases` | MQTT | Cleared when a session ends. The poll ends a session only while MQTT is not live. |
 | `energy_import_kwh` | MQTT | |
@@ -104,13 +105,13 @@ confirmed defect.
    site coordinator ignores `consumptionPower`, `solarPower` and `alwaysOn` when
    the payload's `serviceLocationId` belongs to another location. The station
    coordinator applies them without that check.
-3. **Actions do not publish their confirmed value.** The current-limit number
-   entity applies the confirmed value at once through `update_connector`. The
-   `set_current` action and the other actions in `services.py` only schedule a
-   refresh, so entities show the old value until MQTT or the refresh reports.
-   Measured on one station on 2026-11-16: MQTT reported each change 70 to 170 ms
-   after the write, before the REST call had returned. The delay only shows
-   while MQTT is down.
+3. **Most actions do not publish their confirmed value.** The current-limit
+   number entity and the `set_current` action apply the confirmed value at once
+   through `update_connector`; `start_charging` resends that stored percentage.
+   The other actions in `services.py` only schedule a refresh, so entities show
+   the old value until MQTT or the refresh reports. Measured on one station on
+   2026-11-16: MQTT reported each change 70 to 170 ms after the write, before
+   the REST call had returned. The delay only shows while MQTT is down.
 4. **Restored values are not recorded as confirmed.** `number.py` and
    `select.py` write a restored value straight into an empty field. A poll in
    flight is kept from overwriting it by the snapshot comparison alone (mutation

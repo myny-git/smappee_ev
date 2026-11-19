@@ -89,12 +89,15 @@ def api_client():
     client.set_brightness = AsyncMock()
     client.set_min_surpluspct = AsyncMock()
     client.set_connector_max_current = AsyncMock()
+    client.get_offline_charging_config = AsyncMock(return_value=(True, 6))
     return client
 
 
 @pytest.fixture
 def dashboard_client():
     client = MagicMock()
+    client.async_get_capacity_protection = AsyncMock(return_value={"active": True})
+    client.async_get_overload_protection = AsyncMock(return_value={"active": True})
     client.async_set_capacity_protection = AsyncMock()
     client.async_set_overload_protection = AsyncMock()
     return client
@@ -317,18 +320,19 @@ _PROTECTIONS = {
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", list(_PROTECTIONS))
 @pytest.mark.parametrize("reported", [True, False])
-async def test_protection_limit_reads_unknown_flag_instead_of_switching_it_on(
-    coordinator, dashboard_client, kind, reported
+@pytest.mark.parametrize("cached", ["unknown", "stale"])
+async def test_protection_limit_sends_back_the_flag_smappee_reports_now(
+    coordinator, dashboard_client, kind, reported, cached
 ):
-    """Changing a limit must not switch a disabled protection on as a side effect.
+    """Changing a limit must not switch the protection on or off as a side effect.
 
-    The Dashboard write always carries ``active``; when the integration has not
-    read that flag yet it asks Smappee first and sends back what it reports.
-    Once confirmed by the write, the flag is kept for the next change.
+    The Dashboard write always carries ``active``. The flag is read right before
+    every write: neither a guess nor a value cached since a change in the
+    Smappee app may be sent back.
     """
     cls, read, write, flag, field, value, rounded = _PROTECTIONS[kind]
     coordinator.dashboard_client = dashboard_client
-    setattr(coordinator.data.station, flag, None)
+    setattr(coordinator.data.station, flag, None if cached == "unknown" else not reported)
     setattr(dashboard_client, read, AsyncMock(return_value={"active": reported}))
     number = cls(coordinator=coordinator, sid=1, station_uuid="station")
 
@@ -339,11 +343,6 @@ async def test_protection_limit_reads_unknown_flag_instead_of_switching_it_on(
     assert getattr(coordinator.data.station, field) == rounded
     assert getattr(coordinator.data.station, flag) is reported
     coordinator.async_schedule_dashboard_refresh.assert_called_once_with()
-
-    # The confirmed state is kept, so a second change does not read it again.
-    await number.async_set_native_value(value)
-    getattr(dashboard_client, read).assert_awaited_once_with(1)
-    assert getattr(dashboard_client, write).await_args_list[-1].args == (1, reported, rounded)
 
 
 @pytest.mark.asyncio
@@ -399,8 +398,8 @@ async def test_capacity_maximum_power_api_error_preserves_previous_value(
 ):
     coordinator.dashboard_client = dashboard_client
     station = coordinator.data.station
-    station.capacity_protection_active = False
     station.capacity_maximum_power_kw = 4.2
+    dashboard_client.async_get_capacity_protection.return_value = {"active": False}
     dashboard_client.async_set_capacity_protection.side_effect = RuntimeError("offline")
     number = SmappeeCapacityMaximumPowerNumber(
         coordinator=coordinator,
@@ -580,13 +579,18 @@ async def test_offline_failsafe_set_native_value(coordinator, api_client, dashbo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reported", [True, False])
-async def test_offline_failsafe_reads_unknown_enabled_flag_and_clamps_negative_current(
-    coordinator, api_client, dashboard_client, reported
+@pytest.mark.parametrize("cached", ["unknown", "stale"])
+async def test_offline_failsafe_sends_back_current_enabled_flag_and_clamps_negative_current(
+    coordinator, api_client, dashboard_client, reported, cached
 ):
-    """Changing the failsafe current must not switch offline charging on by guessing."""
+    """Changing the failsafe current must not switch offline charging on or off.
+
+    The flag is read from Smappee right before the write, so neither a guess nor
+    a value changed in the app since the last refresh is sent back.
+    """
     coordinator.dashboard_client = dashboard_client
     station = coordinator.data.station
-    station.offline_charging_enabled = None
+    station.offline_charging_enabled = None if cached == "unknown" else not reported
     station.offline_failsafe_current_a = 12
     api_client.get_offline_charging_config = AsyncMock(return_value=(reported, 12))
     api_client.set_offline_charging_config = AsyncMock()

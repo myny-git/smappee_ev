@@ -364,11 +364,9 @@ class SmappeeOfflineChargingSwitch(SmappeeStationRestEntity, SwitchEntity):
             )
 
         try:
-            failsafe = st.offline_failsafe_current_a
-            if failsafe is None:
-                # The write always carries failSafe; never replace the user's
-                # setting with a guess just because it was not read yet.
-                _, failsafe = await self.api_client.get_offline_charging_config()
+            # The write always carries failSafe. Read it now: a guess, or a value
+            # changed in the app since the last refresh, would overwrite it.
+            _, failsafe = await self.api_client.get_offline_charging_config()
             await async_write(
                 self.api_client.set_offline_charging_config(enabled, failsafe),
                 self.coordinator.async_schedule_dashboard_refresh,

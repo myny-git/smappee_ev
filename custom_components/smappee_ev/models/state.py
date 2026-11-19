@@ -64,6 +64,9 @@ class ConnectorState:
     iec_status: str | None = None  # "A1" / "B1" / "C1"
     available: bool = True  # Smappee domain status: connector available for charging
     api_available: bool = True  # HA reachability: last connector REST fetch succeeded
+    # The last REST fetch reported chargingState itself (not the "Initialize"
+    # placeholder), so session_state is confirmed by REST, not only kept.
+    rest_session_state_confirmed: bool = False
     session_cause: str | None = None
     stopped_by_cloud: bool | None = None
 

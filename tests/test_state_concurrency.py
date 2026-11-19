@@ -49,6 +49,10 @@ def make_data():
 
 
 def make_entity(kind, coord, api):
+    # Writes that carry a second setting read it from Smappee first.
+    api.async_get_capacity_protection = AsyncMock(return_value={"active": False})
+    api.async_get_overload_protection = AsyncMock(return_value={"active": False})
+    api.get_offline_charging_config = AsyncMock(return_value=(False, 3))
     station = {"coordinator": coord, "api_client": api, "sid": 1, "station_uuid": "station"}
     connector = {**station, "connector_uuid": "c"}
     cases = {

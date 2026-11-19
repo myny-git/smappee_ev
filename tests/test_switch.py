@@ -648,9 +648,10 @@ class TestSmappeeOfflineChargingSwitch:
         assert offline_switch.is_on is False
 
     @pytest.mark.asyncio
-    async def test_turn_on_uses_existing_failsafe_and_schedules_refresh(
+    async def test_turn_on_keeps_current_failsafe_from_smappee_and_schedules_refresh(
         self, mock_integration_data
     ):
+        """A failsafe changed in the app since the last refresh is not overwritten."""
         mock_integration_data.station.offline_charging_enabled = False
         mock_integration_data.station.offline_failsafe_current_a = 9
         offline_switch, coordinator, api_client = self._make_switch(mock_integration_data)
@@ -658,7 +659,8 @@ class TestSmappeeOfflineChargingSwitch:
         await offline_switch.async_turn_on()
 
         assert mock_integration_data.station.offline_charging_enabled is True
-        api_client.set_offline_charging_config.assert_awaited_once_with(True, 9)
+        assert mock_integration_data.station.offline_failsafe_current_a == 7
+        api_client.set_offline_charging_config.assert_awaited_once_with(True, 7)
         coordinator.async_update_listeners.assert_called_with()
         coordinator.async_schedule_dashboard_refresh.assert_called_once()
 

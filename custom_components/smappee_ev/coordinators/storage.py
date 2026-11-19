@@ -84,6 +84,20 @@ class StorageMeasurements:
             for topic in topics
         )
 
+    def energy_available(self, metric: str) -> bool:
+        """Require a recent energy reading from every battery topic in the total.
+
+        Like power, the oldest topic decides: one battery's old counter keeps
+        the sum a valid lower bound, but not a current measurement.
+        """
+        topics = {path.topic for path in self.paths.get(metric, [])}
+        now = datetime.now(UTC)
+        return bool(topics) and all(
+            (metric, topic) in self._energy_rx
+            and now - self._energy_rx[metric, topic] <= MQTT_REAL_POWER_FRESHNESS_TIMEOUT
+            for topic in topics
+        )
+
     def _add_spec(self, spec: MqttChannelSpec) -> None:
         if spec.role != "storage":
             return
@@ -128,17 +142,9 @@ class StorageMeasurements:
                 continue
             value = sum(self._values[metric, source] for source in topics)
             attr = "storage_power_total" if metric == "power" else f"storage_{metric}_kwh"
-            # power_available already requires every power topic to be recent.
-            # An energy total only counts as received when every battery topic
-            # in it is recent; an old counter of another battery keeps the sum
-            # a valid lower bound, but not a fresh measurement.
-            if accepted is not None and (
-                metric == "power"
-                or all(
-                    now - self._energy_rx[metric, source] <= MQTT_REAL_POWER_FRESHNESS_TIMEOUT
-                    for source in topics
-                )
-            ):
+            # Availability also checks every topic (power_available and
+            # energy_available); this only records the total as received.
+            if accepted is not None and (metric == "power" or self.energy_available(metric)):
                 accepted.add(attr)
             if metric != "power":
                 value = round(value / 1000, 3)

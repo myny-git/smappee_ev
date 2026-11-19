@@ -53,16 +53,13 @@ async def _async_number_write[T](
         raise _service_failed(method, err, connector=connector) from err
 
 
-async def _async_protection_active(
-    dashboard: Any, sid: int, known: bool | None, method: str
-) -> bool:
-    """Return whether a protection is on, reading it from Smappee when unknown.
+async def _async_protection_active(dashboard: Any, sid: int, method: str) -> bool:
+    """Return whether a protection is on right now, read from Smappee.
 
-    The Dashboard write always carries ``active``. Guessing it would switch the
-    protection on or off as a side effect of changing its limit.
+    The Dashboard write always carries ``active``. A guess, or a value cached
+    since the last refresh, would switch the protection on or off as a side
+    effect of changing its limit, for example after it was changed in the app.
     """
-    if known is not None:
-        return known
     if getattr(dashboard, "monitoring_only", False) is True:
         # The write is refused anyway; do not spend a cloud request first.
         raise HomeAssistantError(translation_domain=DOMAIN, translation_key="mqtt_only")
@@ -561,15 +558,14 @@ class SmappeeCapacityMaximumPowerNumber(SmappeeSiteEntity[SmappeeCoordinator], _
             )
         power_kw = round(max(0.0, float(value)), 1)
         active = await _async_protection_active(
-            dashboard, self._sid, st.capacity_protection_active, "async_get_capacity_protection"
+            dashboard, self._sid, "async_get_capacity_protection"
         )
         await _async_number_write(
             dashboard.async_set_capacity_protection(self._sid, active, power_kw),
             self.coordinator.async_schedule_dashboard_refresh,
             "async_set_capacity_protection",
         )
-        # Smappee just confirmed this on/off state with the write; keep it so a
-        # next change does not have to read it again.
+        # Show the on/off state Smappee just reported and the write confirmed.
         update_station(
             self.coordinator,
             capacity_maximum_power_kw=power_kw,
@@ -635,7 +631,7 @@ class SmappeeOverloadMaximumLoadNumber(SmappeeSiteEntity[SmappeeCoordinator], _B
             )
         maximum_load_a = max(0, int(round(value)))
         active = await _async_protection_active(
-            dashboard, self._sid, st.overload_protection_active, "async_get_overload_protection"
+            dashboard, self._sid, "async_get_overload_protection"
         )
         await _async_number_write(
             dashboard.async_set_overload_protection(self._sid, active, maximum_load_a),
@@ -707,9 +703,9 @@ class SmappeeOfflineFailsafeCurrentNumber(SmappeeStationRestEntity, _BaseNumber)
                 translation_key="station_unavailable",
             )
         failsafe = max(0, int(round(value)))
-        enabled = st.offline_charging_enabled
-        if enabled is None:
-            enabled, _ = await _async_offline_charging_config(self.api_client)
+        # The write also carries "enabled"; read it now rather than trusting a
+        # value that may have changed in the app since the last refresh.
+        enabled, _ = await _async_offline_charging_config(self.api_client)
         await _async_number_write(
             self.api_client.set_offline_charging_config(enabled, failsafe),
             self.coordinator.async_schedule_dashboard_refresh,
