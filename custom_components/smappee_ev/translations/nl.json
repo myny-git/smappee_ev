@@ -38,6 +38,9 @@
         "description": "Er werd automatisch geen laadstation gevonden. Vul het serienummer van een Smappee-laadstation in om de bijbehorende servicelocatie te vinden.",
         "data": {
           "station_serial": "Serienummer van het laadstation"
+        },
+        "data_description": {
+          "station_serial": "Het serienummer van het laadstation zelf, niet van de Smappee-gateway. Eén laadstation volstaat om de bijbehorende servicelocatie te vinden."
         }
       }
     },

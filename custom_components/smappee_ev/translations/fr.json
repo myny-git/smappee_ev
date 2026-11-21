@@ -38,6 +38,9 @@
         "description": "Aucune borne de recharge n’a été détectée automatiquement. Saisissez le numéro de série d’une borne Smappee pour trouver son emplacement de service.",
         "data": {
           "station_serial": "Numéro de série de la borne de recharge"
+        },
+        "data_description": {
+          "station_serial": "Le numéro de série de la borne de recharge elle-même, pas de la passerelle Smappee. Une seule borne suffit pour trouver son emplacement de service."
         }
       }
     },

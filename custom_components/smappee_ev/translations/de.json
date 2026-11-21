@@ -38,6 +38,9 @@
         "description": "Es wurde automatisch keine Ladestation gefunden. Gib die Seriennummer einer Smappee-Ladestation ein, um ihren Servicestandort zu finden.",
         "data": {
           "station_serial": "Seriennummer der Ladestation"
+        },
+        "data_description": {
+          "station_serial": "Die Seriennummer der Ladestation selbst, nicht des Smappee-Gateways. Eine Ladestation genügt, um ihren Servicestandort zu finden."
         }
       }
     },

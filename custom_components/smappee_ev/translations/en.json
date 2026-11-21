@@ -38,6 +38,9 @@
         "description": "No charging station could be discovered automatically. Enter one Smappee charging-station serial number to find its service location.",
         "data": {
           "station_serial": "Charging-station serial number"
+        },
+        "data_description": {
+          "station_serial": "The serial number of the charging station itself, not of the Smappee gateway. One charging station is enough to find its service location."
         }
       }
     },
