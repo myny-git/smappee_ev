@@ -7,14 +7,17 @@ from __future__ import annotations
 
 from collections.abc import Sized
 from contextlib import suppress
+from datetime import datetime, timedelta
 from hashlib import sha256
 import re
+import time
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
+from .api.dashboard_client import DashboardRequestStats
 from .api.discovery import measurement_role
 from .models.mqtt_diagnostics import MqttRouteDiagnosticTarget, MqttRoutingDiagnostics
 from .models.runtime_data import (
@@ -23,7 +26,7 @@ from .models.runtime_data import (
     SmappeeEvConfigEntry,
     SmappeeStationRuntime,
 )
-from .models.state import IntegrationData
+from .models.state import IntegrationData, StationState
 from .mqtt_setup import mqtt_routing_diagnostics
 
 REDACT_KEYS = {
@@ -73,22 +76,179 @@ _SERVICE_LOCATION_TOPIC_RE = re.compile(r"(?<=servicelocation/)[^/]+")
 _DEVICE_TOPIC_RE = re.compile(r"(?<=devices/)[^/]+")
 
 
+def _topic_alias(prefix: str, value: str) -> str:
+    """Return the stable hash alias used for identifiers inside MQTT topics."""
+    digest = sha256(value.encode()).hexdigest()[:10]
+    return f"{prefix}_{digest}"
+
+
 def _diagnostic_topic(topic: str) -> str:
     """Return a correlatable MQTT topic without retaining identifier fragments."""
-
-    def alias(prefix: str, value: str) -> str:
-        digest = sha256(value.encode()).hexdigest()[:10]
-        return f"{prefix}_{digest}"
-
     redacted, location_count = _SERVICE_LOCATION_TOPIC_RE.subn(
-        lambda match: alias("location", match.group(0)), topic
+        lambda match: _topic_alias("location", match.group(0)), topic
     )
     redacted, device_count = _DEVICE_TOPIC_RE.subn(
-        lambda match: alias("device", match.group(0)), redacted
+        lambda match: _topic_alias("device", match.group(0)), redacted
     )
     if location_count or device_count:
         return redacted
-    return alias("topic", topic)
+    return _topic_alias("topic", topic)
+
+
+def _age_seconds(value: object, now: float) -> int | None:
+    """Return the whole seconds since an epoch float or aware datetime, if known."""
+    if isinstance(value, datetime):
+        stamp = value.timestamp()
+    elif isinstance(value, int | float) and not isinstance(value, bool) and value > 0:
+        stamp = float(value)
+    else:
+        return None
+    return round(now - stamp)
+
+
+# Dashboard payload paths whose values may describe connectivity or faults.
+_STATUS_PATH_RE = re.compile(
+    r"online|offline|connect|status|state|seen|contact|heartbeat|communicat|error|fault"
+    r"|alarm|health|alive|reach|avail|emergency|fail|problem|update|timestamp",
+    re.IGNORECASE,
+)
+# Leaf keys that hold identifiers or free text, never status.
+_FREE_TEXT_KEY_RE = re.compile(r"uuid|serial|name|label|description|email|address", re.I)
+_MAX_STATUS_TEXT = 64
+
+
+def _is_identifier_key(key: str) -> bool:
+    """Return True for ``id``/``deviceId``-style keys and free-text fields."""
+    return key.lower() == "id" or key.endswith("Id") or bool(_FREE_TEXT_KEY_RE.search(key))
+
+
+_MAX_STATUS_FIELDS = 200
+
+
+def _status_value(value: object) -> tuple[bool, object]:
+    """Return whether a payload value is a short scalar status, and that value."""
+    if value is None or isinstance(value, bool | int | float):
+        return True, value
+    if isinstance(value, str):
+        # Topics, URLs and long text can carry identifiers; status codes cannot.
+        return len(value) <= _MAX_STATUS_TEXT and "/" not in value, value
+    if isinstance(value, list) and len(value) <= 10:
+        items = [_status_value(item) for item in value]
+        if all(ok and not isinstance(item, list) for ok, item in items):
+            return True, [item for _ok, item in items]
+    return False, None
+
+
+def _walk_dashboard_payload(
+    value: object,
+    path: str,
+    key_paths: set[str],
+    status_fields: dict[str, object],
+) -> None:
+    """Collect every key path, plus short status-like leaf values."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else str(key)
+            key_paths.add(re.sub(r"\[\d+\]", "[]", child_path))
+            if isinstance(child, dict | list) and not (
+                isinstance(child, list) and _status_value(child)[0]
+            ):
+                _walk_dashboard_payload(child, child_path, key_paths, status_fields)
+                continue
+            if (
+                len(status_fields) < _MAX_STATUS_FIELDS
+                and _STATUS_PATH_RE.search(child_path)
+                and not _is_identifier_key(str(key))
+            ):
+                ok, status = _status_value(child)
+                if ok:
+                    status_fields[child_path] = status
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            _walk_dashboard_payload(item, f"{path}[{index}]", key_paths, status_fields)
+
+
+def _payload_schema_info(details: object, sensitive_values: list[object]) -> dict[str, Any]:
+    """Describe a cached Dashboard payload without exporting identifiers.
+
+    Key names are schema, not personal data. Values are exported only for short
+    scalars under connectivity/fault-like paths, so a field such as an online
+    flag or a last-contact time becomes visible without dumping the payload.
+    """
+    if not isinstance(details, dict):
+        return {"present": False}
+    key_paths: set[str] = set()
+    status_fields: dict[str, object] = {}
+    _walk_dashboard_payload(details, "", key_paths, status_fields)
+    return {
+        "present": True,
+        "key_paths": sorted(key_paths),
+        "status_fields": _redact_nested_text_values(status_fields, sensitive_values),
+    }
+
+
+def _named_properties(props: object, value_key: str) -> dict[str, object] | object:
+    """Turn ``[{spec: {name}, <value_key>: v}]`` into ``{name: v}`` so names form paths."""
+    if not isinstance(props, list):
+        return props
+    named: dict[str, object] = {}
+    for prop in props:
+        spec = prop.get("spec") if isinstance(prop, dict) else None
+        name = spec.get("name") if isinstance(spec, dict) else None
+        if isinstance(name, str) and name:
+            named[name] = prop.get(value_key)
+    return named
+
+
+def _smartdevice_payload_info(
+    coord: object | None, connector_uuid: str, sensitive_values: list[object]
+) -> dict[str, Any]:
+    """Describe the last REST smartdevice payload of one connector."""
+    payloads = getattr(coord, "last_smartdevice_payloads", None)
+    payload = payloads.get(connector_uuid) if isinstance(payloads, dict) else None
+    if not isinstance(payload, dict):
+        return {"present": False}
+    flattened = dict(payload)
+    for key, value_key in (("properties", "value"), ("configurationProperties", "values")):
+        if key in payload:
+            flattened[key] = _named_properties(payload[key], value_key)
+    return _payload_schema_info(flattened, sensitive_values)
+
+
+def _station_connectivity_info(
+    coord: object | None, station: StationState | None, now: float
+) -> dict[str, Any]:
+    """Return the clocks that separate transport, telemetry and REST freshness."""
+    poll_interval = None
+    poll_fn = getattr(coord, "_smartdevice_poll_interval", None)
+    if callable(poll_fn):
+        with suppress(Exception):
+            interval = poll_fn()
+            if isinstance(interval, timedelta):
+                poll_interval = round(interval.total_seconds())
+    transport = getattr(coord, "mqtt_transport_connected", None)
+    monitoring_only = getattr(coord, "monitoring_only", None)
+    return {
+        "mqtt_transport_connected": transport if isinstance(transport, bool) else None,
+        "monitoring_only": monitoring_only if isinstance(monitoring_only, bool) else None,
+        "last_mqtt_rx_age_s": _age_seconds(station.last_mqtt_rx if station else None, now),
+        "heartbeat_age_s": _age_seconds(getattr(coord, "last_heartbeat_rx", None), now),
+        "charger_telemetry_age_s": _age_seconds(
+            getattr(coord, "last_valid_charger_telemetry_rx", None), now
+        ),
+        "real_power_age_s": _age_seconds(getattr(coord, "last_real_power_rx", None), now),
+        "dashboard_refresh_age_s": _age_seconds(
+            getattr(coord, "_last_dashboard_refresh", None), now
+        ),
+        "rest_poll_interval_s": poll_interval,
+    }
+
+
+def _connector_telemetry_age(coord: object | None, connector_uuid: str, now: float) -> int | None:
+    last_rx = getattr(coord, "last_connector_rx", None)
+    if not isinstance(last_rx, dict):
+        return None
+    return _age_seconds(last_rx.get(connector_uuid), now)
 
 
 def _safe_len(value: object) -> int:
@@ -241,14 +401,31 @@ def _mqtt_info(
     }
 
 
-def _dashboard_info(rt: RuntimeData | None) -> dict[str, Any]:
+def _request_stats_info(stats: object, now: float) -> dict[str, Any] | None:
+    """Return Dashboard request volume per endpoint since the client was created."""
+    if not isinstance(stats, DashboardRequestStats):
+        return None
+    window_s = max(now - stats.started_at, 0.0)
+    total = sum(stats.requests_by_endpoint.values())
+    return {
+        "window_s": round(window_s),
+        "requests_total": total,
+        "requests_per_hour": round(total * 3600 / window_s, 1) if window_s >= 60 else None,
+        "rate_limited": stats.rate_limited,
+        "requests_by_endpoint": dict(
+            sorted(stats.requests_by_endpoint.items(), key=lambda item: (-item[1], item[0]))
+        ),
+    }
+
+
+def _dashboard_info(rt: RuntimeData | None, now: float | None = None) -> dict[str, Any]:
     """Return redacted Dashboard client availability metadata."""
     dashboard = getattr(rt, "dashboard", None) if rt else None
     if dashboard is None:
         dashboard = getattr(rt, "api", None) if rt else None
     if dashboard is None:
         return {"configured": False}
-    return {
+    info: dict[str, Any] = {
         "configured": True,
         "client_type": type(dashboard).__name__,
         "username_present": bool(getattr(dashboard, "username", None)),
@@ -257,6 +434,12 @@ def _dashboard_info(rt: RuntimeData | None) -> dict[str, Any]:
         "access_token_present": bool(getattr(dashboard, "_token", None)),
         "token_expires_at_present": bool(getattr(dashboard, "_token_expires_at_ms", None)),
     }
+    stats = _request_stats_info(
+        getattr(dashboard, "request_stats", None), time.time() if now is None else now
+    )
+    if stats is not None:
+        info["request_stats"] = stats
+    return info
 
 
 def _mqtt_client_count(mqtt_by_site: object) -> int:
@@ -757,6 +940,8 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostics for a config entry."""
 
     out: dict[str, Any] = {}
+    # Reference point for every *_age_s field and the epoch *_rx fields.
+    now = time.time()
 
     rt: RuntimeData | None = getattr(entry, "runtime_data", None)
     out["runtime_mode"] = rt.mode.value if rt is not None else None
@@ -803,6 +988,7 @@ async def async_get_config_entry_diagnostics(
         "title": _redact_text_values(entry.title, sensitive_values),
         "state": state_name,
         "domain": entry.domain,
+        "generated_at": round(now),
         "version_manifest": manifest_version,
         "service_locations_total": len(sites or {}),
         "mqtt_clients_total": _mqtt_client_count(getattr(rt, "mqtt", {}) if rt else {}),
@@ -884,6 +1070,11 @@ async def async_get_config_entry_diagnostics(
                     "house_consumption_power": st.house_consumption_power if st else None,
                     "mqtt_connected": st.mqtt_connected if st else None,
                     "last_mqtt_rx": st.last_mqtt_rx if st else None,
+                    "connectivity": _station_connectivity_info(coord, st, now),
+                    "dashboard_details": _payload_schema_info(
+                        st.dashboard_charging_station_details if st else None,
+                        sensitive_values,
+                    ),
                     "connector_client_count": len(connector_clients),
                     "connector_state_count": len((data.connectors or {}) if data else {}),
                     "power_mapping": _power_mapping_info(coord),
@@ -900,6 +1091,20 @@ async def async_get_config_entry_diagnostics(
                         "connector_uuid": _obfuscate(cuuid),
                         "connector_handle": _handle_info(client),
                         "has_state": cstate is not None,
+                        # Same alias as the device segment in mqtt_routing topics.
+                        "mqtt_device_alias": _topic_alias("device", cuuid),
+                        "connection_status": cstate.connection_status if cstate else None,
+                        "configuration_errors": _redact_nested_text_values(
+                            cstate.configuration_errors, sensitive_values
+                        )
+                        if cstate
+                        else None,
+                        "iec_status": cstate.iec_status if cstate else None,
+                        "rest_session_state": cstate.rest_session_state if cstate else None,
+                        "telemetry_age_s": _connector_telemetry_age(coord, cuuid, now),
+                        "smartdevice_payload": _smartdevice_payload_info(
+                            coord, cuuid, sensitive_values
+                        ),
                         "connector_number": cstate.connector_number
                         if cstate
                         else getattr(client, "connector_number", None),
@@ -964,7 +1169,7 @@ async def async_get_config_entry_diagnostics(
                     recent_sessions.extend(session_data.recent_sessions)
         out["meta"]["recent_sessions_total"] = len(recent_sessions)
 
-    out["dashboard"] = _dashboard_info(rt)
+    out["dashboard"] = _dashboard_info(rt, now)
 
     out["sites_detail"] = sites_detail
     out["stations"] = stations_out

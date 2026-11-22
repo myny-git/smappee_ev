@@ -340,6 +340,8 @@ class SmappeeStationCoordinator(
         self.last_heartbeat_rx: datetime | None = None
         self._station_api_available: bool | None = None
         self._connector_api_available: dict[str, bool] = {}
+        # Last raw smartdevice payload per connector UUID; read by diagnostics only.
+        self.last_smartdevice_payloads: dict[str, DashboardObject] = {}
         self._connector_session_available: dict[str, bool] = {}
         self._session_query_success: dict[str, float] = {}
         self._complete_control: dict[str, dict[str, str]] = {}
@@ -473,6 +475,8 @@ class SmappeeStationCoordinator(
                         )
                 elif isinstance(res, ConnectorState | ConnectorRestSnapshot):
                     self._log_connector_api_transition(uuid, True)
+                    if isinstance(res, ConnectorRestSnapshot) and res.payload is not None:
+                        self.last_smartdevice_payloads[uuid] = res.payload
                     prev = (current.connectors or {}).get(uuid) if current else None
                     # A poll may lag behind MQTT; live charger state takes precedence.
                     connectors_state[uuid] = self._merge_connector_rest_state(

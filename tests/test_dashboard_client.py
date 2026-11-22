@@ -14,6 +14,7 @@ from custom_components.smappee_ev.api.errors import (
     SmappeeConnectionError,
     SmappeeNotFoundError,
     SmappeeProtocolError,
+    SmappeeRateLimitError,
     SmappeeServerError,
     SmappeeTransientError,
 )
@@ -1018,3 +1019,29 @@ async def test_dashboard_offline_charging_uses_v11_patch():
         json={"offlineCharging": {"enabled": True, "failSafe": 6}},
         expected=(200, 201, 204),
     )
+
+
+async def test_request_stats_count_endpoints_without_identifiers_and_rate_limits():
+    """Diagnostics must show the Dashboard load per endpoint without serials or UUIDs.
+
+    Large installations (many stations over many service locations) multiply
+    per-station polling; the counters make that visible in a diagnostics export,
+    so they must group by endpoint and never keep the identifiers in the path.
+    """
+    client = _client(
+        session=_Session(requests=[_Response(200, {}), _Response(200, {}), _Response(429)])
+    )
+    client.async_ensure_auth = AsyncMock(return_value=True)
+
+    await client.async_get_charging_station_details("5010012345")
+    await client.async_get_charging_station_details("5010067890")
+    with pytest.raises(SmappeeRateLimitError):
+        await client.async_get_smart_devices(236259)
+
+    stats = client.request_stats
+    assert stats.requests_by_endpoint == {
+        "GET v10/chargingstations/{}": 2,
+        "GET v10/servicelocation/{}/homecontrol/smart/devices": 1,
+    }
+    assert stats.rate_limited == 1
+    assert "5010012345" not in json.dumps(stats.requests_by_endpoint)

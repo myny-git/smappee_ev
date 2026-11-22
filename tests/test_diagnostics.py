@@ -1,5 +1,6 @@
 """Test the Smappee EV diagnostics."""
 
+from datetime import UTC, datetime, timedelta
 import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,7 @@ from custom_components.smappee_ev.coordinators.power import PowerMixin
 from custom_components.smappee_ev.diagnostics import (
     REDACT_KEYS,
     _dashboard_info,
+    _diagnostic_topic,
     _handle_info,
     _mqtt_client_count,
     _mqtt_info,
@@ -1040,3 +1042,94 @@ def test_mqtt_routing_info_exposes_duplicate_partial_and_replaced_setups():
     assert "station-secret-a" not in serialized
     assert "station-secret-b" not in serialized
     assert "PRIVATE-TOPIC-UUID" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_expose_station_connectivity_evidence_without_identifiers(
+    hass, mock_config_entry, mock_runtime_data, mock_integration
+):
+    """#339: a diagnostics export must show what can tell an offline station apart.
+
+    It needs per-connector connection status and telemetry age, the clocks that
+    separate our MQTT link from charger telemetry, and the status-like fields
+    Smappee sends in its Dashboard payloads, without leaking identifiers.
+    """
+    now = datetime.now(UTC)
+    bucket = mock_runtime_data.sites[12345].stations["station-uuid-1"]
+    coordinator = bucket.station_coordinator
+    coordinator.mqtt_transport_connected = True
+    coordinator.monitoring_only = False
+    coordinator.last_valid_charger_telemetry_rx = now - timedelta(minutes=40)
+    coordinator.last_heartbeat_rx = now - timedelta(seconds=30)
+    coordinator._smartdevice_poll_interval = MagicMock(return_value=timedelta(minutes=5))
+    coordinator.last_connector_rx = {"connector-uuid-1": now - timedelta(minutes=40)}
+    coordinator.last_smartdevice_payloads = {
+        "connector-uuid-1": {
+            "id": "connector-device-1",
+            "uuid": "connector-uuid-1",
+            "name": "Parking spot of Jane",
+            "properties": [
+                {"spec": {"name": "chargingState"}, "value": "AVAILABLE"},
+                {"spec": {"name": "percentageLimit"}, "value": 100},
+            ],
+        }
+    }
+    station = coordinator.data.station
+    station.dashboard_charging_station_details = {
+        "serialNumber": "STATION001",
+        "available": True,
+        "connectionState": "OFFLINE since reboot of STATION001",
+        "modules": [
+            {
+                "smartDevice": {
+                    "id": "connector-device-1",
+                    "carCharger": {
+                        "connectionStatus": "DISCONNECTED",
+                        "status": {"current": "ERROR", "stoppedByCloud": False},
+                        "chargingStateUpdateChannel": {
+                            "name": "servicelocation/test-uuid/etc/carcharger/state"
+                        },
+                    },
+                }
+            }
+        ],
+    }
+    connector = coordinator.data.connectors["connector-uuid-1"]
+    connector.connection_status = "CONNECTED"
+    connector.configuration_errors = ["ERROR3"]
+
+    with patch("homeassistant.loader.async_get_integration", return_value=mock_integration):
+        diagnostics = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    (station_out,) = diagnostics["stations"]
+    connectivity = station_out["connectivity"]
+    assert connectivity["mqtt_transport_connected"] is True
+    assert connectivity["heartbeat_age_s"] == pytest.approx(30, abs=5)
+    assert connectivity["charger_telemetry_age_s"] == pytest.approx(2400, abs=5)
+    assert connectivity["rest_poll_interval_s"] == 300
+
+    details = station_out["dashboard_details"]
+    status_fields = details["status_fields"]
+    # The Dashboard and MQTT may disagree; both must be visible to compare them.
+    assert status_fields["modules[0].smartDevice.carCharger.connectionStatus"] == "DISCONNECTED"
+    assert status_fields["modules[0].smartDevice.carCharger.status.current"] == "ERROR"
+    assert status_fields["connectionState"] == "OFFLINE since reboot of **REDACTED**"
+    assert "modules[].smartDevice.id" in details["key_paths"]
+    assert not any(path.endswith(("serialNumber", ".id", ".name")) for path in status_fields)
+
+    connector_out = next(c for c in diagnostics["connectors"] if c["connector_number"] == 1)
+    assert connector_out["connection_status"] == "CONNECTED"
+    assert connector_out["configuration_errors"] == ["ERROR3"]
+    assert connector_out["telemetry_age_s"] == pytest.approx(2400, abs=5)
+    # Correlates the connector with its MQTT topics in mqtt_routing.
+    assert connector_out["mqtt_device_alias"] in _diagnostic_topic(
+        "servicelocation/test-uuid/etc/carcharger/acchargingcontroller/v1/devices/"
+        "connector-uuid-1/state"
+    )
+    payload = connector_out["smartdevice_payload"]
+    assert payload["status_fields"] == {"properties.chargingState": "AVAILABLE"}
+    assert "properties.percentageLimit" in payload["key_paths"]
+
+    serialized = json.dumps(diagnostics, default=str)
+    for secret in ("STATION001", "connector-device-1", "Jane", "test-uuid/"):
+        assert secret not in serialized

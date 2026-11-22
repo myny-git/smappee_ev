@@ -115,6 +115,21 @@ where the bug report, testing notes or design discussion can be found.
   the integration never used. A successful answer to only that request could
   delay the next read of the charging station settings by about 30 minutes.
 
+### Diagnostics
+
+- Diagnostics now show, per connector, the connection status and
+  configuration errors that Smappee reports, and how long ago the connector
+  last sent telemetry. Per station they show separate ages for the MQTT
+  heartbeat, charger telemetry and the last Dashboard read, and the REST poll
+  interval in use. This is groundwork for a per-station connectivity sensor
+  ([#339](https://github.com/myny-git/smappee_ev/issues/339)).
+- Diagnostics list the field names of the Dashboard station and smartdevice
+  payloads, with the values of short status-like fields only. Identifiers,
+  names and topics stay out of the export.
+- Diagnostics count Dashboard requests per endpoint and rate-limit answers,
+  without serial numbers or IDs, so the API load of large installations
+  becomes visible.
+
 ## [2026.11.0] - 2026-11-02
 
 This release adds Smappee service-status diagnostics and prepares installation

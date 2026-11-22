@@ -20,7 +20,7 @@ from ..helpers import (
     percentage_to_current,
     resolve_connector_current_range,
 )
-from ..models.state import ConnectorState, StationState
+from ..models.state import ConnectorState, DashboardObject, StationState
 from .base import CoordinatorMixin
 from .power import to_int
 
@@ -39,6 +39,8 @@ class ConnectorRestSnapshot:
     state: ConnectorState
     reported_min_current: int | None
     reported_max_current: int | None
+    # The raw smartdevice payload, kept for diagnostics only.
+    payload: DashboardObject | None = None
 
 
 class StationApiMixin(CoordinatorMixin):
@@ -297,4 +299,5 @@ class StationApiMixin(CoordinatorMixin):
             ),
             reported_min_current=reported_min_current,
             reported_max_current=reported_max_current,
+            payload=data,
         )

@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 import json
 import logging
 from pathlib import Path
+import re
 import time
 from typing import Any
 
@@ -86,6 +87,31 @@ def _retry_after_seconds(value: object) -> float:
         return 30.0
 
 
+_LITERAL_PATH_SEGMENT_RE = re.compile(r"v\d+|[a-z]+")
+
+
+def endpoint_template(method: str, path: str) -> str:
+    """Return ``METHOD v10/chargingstations/{}``: the endpoint without ids or query."""
+    segments = path.split("?", 1)[0].strip("/").split("/")
+    template = "/".join(
+        segment if _LITERAL_PATH_SEGMENT_RE.fullmatch(segment) else "{}" for segment in segments
+    )
+    return f"{method.upper()} {template}"
+
+
+@dataclass
+class DashboardRequestStats:
+    """Count Dashboard requests per endpoint, for diagnostics only."""
+
+    started_at: float = field(default_factory=time.time)
+    requests_by_endpoint: dict[str, int] = field(default_factory=dict)
+    rate_limited: int = 0
+
+    def record(self, method: str, path: str) -> None:
+        key = endpoint_template(method, path)
+        self.requests_by_endpoint[key] = self.requests_by_endpoint.get(key, 0) + 1
+
+
 class _RefreshRefusedError(SmappeeProtocolError):
     """The Dashboard answered a token refresh with an unexpected HTTP status."""
 
@@ -116,6 +142,7 @@ class SmappeeDashboardClient:
         self._user_agent: str | None = None
         self.monitoring_only = False
         self._maintenance_state = maintenance_state or DashboardMaintenanceState()
+        self.request_stats = DashboardRequestStats()
 
     async def _async_user_agent(self) -> str:
         """Identify the integration release without account or device information."""
@@ -265,6 +292,7 @@ class SmappeeDashboardClient:
             async with context as response:
                 self._maintenance_state.check_response(await response.text())
                 if response.status == 429:
+                    self.request_stats.rate_limited += 1
                     delay = _retry_after_seconds(
                         getattr(response, "headers", {}).get("Retry-After")
                     )
@@ -306,6 +334,7 @@ class SmappeeDashboardClient:
         url = f"{DASHBOARD_API_URL}/{path.lstrip('/')}"
         user_agent = await self._async_user_agent()
         failed_token = self._token
+        self.request_stats.record(method, path)
         try:
             response_context = self._session.request(
                 method,

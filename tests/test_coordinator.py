@@ -1075,6 +1075,20 @@ class TestSmappeeCoordinator:
         assert connector.selected_current_limit == 14.0
 
     @pytest.mark.asyncio
+    async def test_rest_refresh_keeps_raw_smartdevice_payload_for_diagnostics(self, coordinator):
+        """#339: diagnostics can only inventory the smartdevice payload if a refresh keeps it."""
+        payload = {"properties": [{"spec": {"name": "chargingState"}, "value": "AVAILABLE"}]}
+        coordinator._fetch_station_state = AsyncMock(return_value=StationState(available=True))
+        coordinator.connector_clients["test_uuid"].async_get_smartdevice = AsyncMock(
+            return_value=payload
+        )
+        coordinator._ensure_power_index_map = AsyncMock()
+
+        await coordinator._async_update_data()
+
+        assert coordinator.last_smartdevice_payloads == {"test_uuid": payload}
+
+    @pytest.mark.asyncio
     async def test_invalid_partial_rest_range_keeps_previous_bounds(self, coordinator):
         """An invalid partial REST range must retain the complete previous range."""
         previous = coordinator.data.connectors["test_uuid"]
