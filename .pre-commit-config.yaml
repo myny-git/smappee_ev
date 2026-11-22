@@ -26,5 +26,5 @@ repos:
           - --config-file=mypy.ini
         additional_dependencies:
           - aiohttp
-          - "homeassistant>=2026.11.1"
+          - "homeassistant>=2026.11.2"
           - "aiomqtt>=2.5.0,<3.0.0"
